@@ -85,8 +85,8 @@ const Table = ({
                                 title={cell.value}
                                 {...cell.getCellProps()}
                                 style={{
-                                    background: row.isSelected ? 'lightblue' : 'white',
-                                    color: row.isSelected ? 'white' : 'black',
+                                    background: row.isSelected ? '#2d3748' : 'transparent',
+                                    color: row.isSelected ? '#e4e6ea' : '#c4cad4',
                                 }}
                             >
                                 {cell.render('Cell')}

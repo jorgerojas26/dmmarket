@@ -37,7 +37,7 @@ const buildDashboardQuery = ({ masterTable, slaveTable, idInvoice, hasCompare })
     ORDER BY totalSales DESC
     LIMIT 1`;
 
-  // Statement 3 — Top 10 productos por ganancia neta
+  // Statement 3 — Top 30 productos por ganancia neta
   const topProducts = `
     SELECT 
       productos.Descripcion as product,
@@ -51,9 +51,9 @@ const buildDashboardQuery = ({ masterTable, slaveTable, idInvoice, hasCompare })
     WHERE ${masterTable}.Fecha BETWEEN :from AND :to
     GROUP BY productos.IdProducto
     ORDER BY netProfit DESC
-    LIMIT 10`;
+    LIMIT 30`;
 
-  // Statement 4 — Top 10 clientes por total ventas
+  // Statement 4 — Top 30 clientes por total ventas
   const topClients = `
     SELECT 
       clientes.Empresa as client,
@@ -64,7 +64,7 @@ const buildDashboardQuery = ({ masterTable, slaveTable, idInvoice, hasCompare })
     WHERE ${masterTable}.Fecha BETWEEN :from AND :to
     GROUP BY clientes.IdCliente
     ORDER BY total_USD DESC
-    LIMIT 10`;
+    LIMIT 30`;
 
   // Statement 5 — KPIs comparativos
   const kpisCompare = hasCompare

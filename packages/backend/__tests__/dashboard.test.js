@@ -88,13 +88,13 @@ describe("GET /api/dashboard/sales", () => {
     expect(res.body.kpis.compareNetProfit).toBeNull();
   });
 
-  // 8. topProducts limitado a 10
-  it("topProducts no excede 10 elementos", async () => {
+  // 8. topProducts limitado a 30
+  it("topProducts no excede 30 elementos", async () => {
     const res = await request(app)
       .get("/api/dashboard/sales")
       .query({ from: "2026-01-01", to: "2026-12-31", showNoe: "false" });
 
-    expect(res.body.topProducts.length).toBeLessThanOrEqual(10);
+    expect(res.body.topProducts.length).toBeLessThanOrEqual(30);
   });
 
   // 9. showNoe=true alterna a tablas Noe — verifica que responde con la misma estructura
