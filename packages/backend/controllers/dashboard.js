@@ -53,17 +53,18 @@ const buildDashboardQuery = ({ masterTable, slaveTable, idInvoice, hasCompare })
     ORDER BY netProfit DESC
     LIMIT 30`;
 
-  // Statement 4 — Top 30 clientes por total ventas
+  // Statement 4 — Top 30 clientes por utilidad neta
   const topClients = `
     SELECT 
       clientes.Empresa as client,
-      ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as total_USD
+      ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as total_USD,
+      ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit
     FROM ${slaveTable}
     INNER JOIN ${masterTable} ON ${masterTable}.${idInvoice} = ${slaveTable}.${idInvoice} AND ${masterTable}.Anulada = 0
     INNER JOIN clientes ON clientes.IdCliente = ${masterTable}.IdCliente
     WHERE ${masterTable}.Fecha BETWEEN :from AND :to
     GROUP BY clientes.IdCliente
-    ORDER BY total_USD DESC
+    ORDER BY netProfit DESC
     LIMIT 30`;
 
   // Statement 5 — KPIs comparativos

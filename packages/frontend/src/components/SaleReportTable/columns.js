@@ -17,7 +17,7 @@ const columns = [
     Header: "Bruto",
     accessor: "rawProfit",
     Cell: ({ value }) => {
-      return value ? "$" + value.toLocaleString() : "";
+      return value != null ? "$" + value.toLocaleString() : "";
     },
     Footer: ({ data }) => {
       const total = data.reduce((acc, current) => {
@@ -30,7 +30,7 @@ const columns = [
     Header: "Utilidad",
     accessor: "netProfit",
     Cell: ({ value }) => {
-      return value ? "$" + value.toLocaleString() : "";
+      return value != null ? "$" + value.toLocaleString() : "";
     },
     Footer: ({ data }) => {
       const total = data.reduce((acc, current) => {

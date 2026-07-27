@@ -261,7 +261,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             <RankedList
                                 data={data?.topProducts || []}
                                 nameKey="product"
-                                valueKey="rawProfit"
+                                valueKey="netProfit"
                                 valueFormat={formatCurrency}
                                 secondary={{
                                     render: (item) =>
@@ -283,7 +283,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             <RankedList
                                 data={data?.topClients || []}
                                 nameKey="client"
-                                valueKey="total_USD"
+                                valueKey="netProfit"
                                 valueFormat={formatCurrency}
                             />
                         </div>
