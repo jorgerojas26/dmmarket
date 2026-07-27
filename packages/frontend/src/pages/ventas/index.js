@@ -1,94 +1,76 @@
-import { fetchInvoiceReport } from "api/invoice";
-import GroupSales from "components/Cards/GroupSales";
-import SaleReportCard from "components/Cards/SaleReport";
-import DateRangePicker from "components/DateRangePicker";
 import { ShowNoeContext } from "context/show_noe";
-import debounce from "lodash.debounce";
+import DateRangePicker from "components/DateRangePicker";
 import { DateTime } from "luxon";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState, useCallback } from "react";
 import Container from "react-bootstrap/Container";
+import Nav from "react-bootstrap/Nav";
 
 const VentasPage = () => {
-    const [data, setData] = useState({
-        filtered_invoices_report: [],
-        invoices_report: [],
-        group_sales_chart: [],
-    });
-    const [loading, setLoading] = useState(false);
-    const [dateRange, setDateRange] = useState({
-        from: DateTime.now().startOf("month").toISODate(),
-        to: DateTime.now().toISODate(),
-    });
+  const { showNoe } = useContext(ShowNoeContext);
+  const [activeView, setActiveView] = useState("dashboard");
+  const [dateRange, setDateRange] = useState({
+    from: DateTime.now().startOf("month").toISODate(),
+    to: DateTime.now().toISODate(),
+  });
 
-    const { showNoe } = useContext(ShowNoeContext);
+  const handleDateRangeChange = useCallback(async ({ from, to }) => {
+    setDateRange({ from, to });
+  }, []);
 
-    const onFilter = debounce((searchTerm) => {
-        const filteredData = data.invoices_report.filter((f) =>
-            f.product.toLowerCase().includes(searchTerm.toLowerCase()),
-        );
-        setData({ ...data, filtered_invoices_report: filteredData });
-    }, 500);
+  const views = {
+    dashboard: <div className="p-4 text-center text-white">Dashboard — próximamente (ticket 03)</div>,
+    categories: <div className="p-4 text-center text-white">Vista: Por Categoría — próximamente (ticket 04)</div>,
+    employees: <div className="p-4 text-center text-white">Vista: Por Vendedor — próximamente (ticket 04)</div>,
+    invoices: <div className="p-4 text-center text-white">Vista: Facturas — próximamente (ticket 04)</div>,
+  };
 
-    const handleDateRangeChange = async ({ from, to }) => {
-        setLoading(true);
-        setDateRange({ from, to });
-        const response = await fetchInvoiceReport({ from, to, showNoe });
-        const chartData = response.group_sales_chart_data.reduce(
-            (acc, current) => [
-                ...acc,
-                {
-                    id: current.categoria,
-                    label: current.categoria,
-                    value: current.rawProfit,
-                    netProfit: current.netProfit,
-                },
-            ],
-            [],
-        );
-        setData((prev) => ({
-            ...prev,
-            invoices_report: response.sales_report,
-            group_sales_chart: chartData,
-        }));
-        setLoading(false);
-    };
+  return (
+    <Container fluid className="clientes-layout p-0">
+      <div className="clientes-row">
+        {/* Sidebar */}
+        <div className="clients-sidebar mb-3 mb-md-0">
+          <Nav
+            variant="pills"
+            className="flex-row flex-md-column"
+            activeKey={activeView}
+            onSelect={setActiveView}
+          >
+            <Nav.Item>
+              <Nav.Link eventKey="dashboard">Dashboard</Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link eventKey="categories">Por Categoría</Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link eventKey="employees">Por Vendedor</Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link eventKey="invoices">Facturas</Nav.Link>
+            </Nav.Item>
+          </Nav>
+        </div>
 
-    useEffect(() => {
-        handleDateRangeChange(dateRange);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        {/* Content area */}
+        <div className="clientes-content p-4">
+          <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+            <h4 className="m-0 text-light">
+              {activeView === "dashboard" && "Dashboard de Ventas"}
+              {activeView === "categories" && "Ventas por Categoría"}
+              {activeView === "employees" && "Ventas por Vendedor"}
+              {activeView === "invoices" && "Facturas"}
+            </h4>
+            <DateRangePicker
+              initialFrom={DateTime.now().startOf("month").toISODate()}
+              initialTo={DateTime.now().toISODate()}
+              onChange={handleDateRangeChange}
+            />
+          </div>
 
-    return (
-        <Container fluid className="p-4">
-            <div className="d-flex justify-content-center mb-4">
-                <DateRangePicker
-                    initialFrom={DateTime.now().startOf("month").toISODate()}
-                    initialTo={DateTime.now().toISODate()}
-                    onChange={handleDateRangeChange}
-                />
-            </div>
-
-            <div className="d-flex flex-column flex-xl-row justify-content-center gap-3">
-                <div className="col-12 col-xl-6">
-                    <SaleReportCard
-                        data={
-                            data.filtered_invoices_report.length > 0
-                                ? data.filtered_invoices_report
-                                : data.invoices_report
-                        }
-                        onFilter={onFilter}
-                        loading={loading}
-                    />
-                </div>
-                <div className="col-12 col-xl-6">
-                    <GroupSales
-                        chartData={data.group_sales_chart}
-                        loading={loading}
-                    />
-                </div>
-            </div>
-        </Container>
-    );
+          {views[activeView]}
+        </div>
+      </div>
+    </Container>
+  );
 };
 
 export default VentasPage;
