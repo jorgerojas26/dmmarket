@@ -1,0 +1,67 @@
+import { useState, useEffect } from "react";
+import { getAllEmployees, getEmployeeSales } from "api/employees";
+import EmployeesTable from "employees/Table";
+import EmployeesSalesTable from "employees/Table/Sales";
+import CommissionModal from "employees/Modal/Commission";
+import { Button } from "react-bootstrap";
+
+const EmployeesView = ({ dateRange, showNoe, isActive }) => {
+  const [employees, setEmployees] = useState([]);
+  const [employeesLoading, setEmployeesLoading] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [employeeSales, setEmployeeSales] = useState([]);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [showCommissionModal, setShowCommissionModal] = useState(false);
+
+  useEffect(() => {
+    if (!isActive) return;
+    setEmployeesLoading(true);
+    getAllEmployees()
+      .then(setEmployees)
+      .catch(console.error)
+      .finally(() => setEmployeesLoading(false));
+  }, [isActive]);
+
+  useEffect(() => {
+    if (!isActive || !selectedEmployee) return;
+    setSalesLoading(true);
+    getEmployeeSales(selectedEmployee.id, dateRange, showNoe)
+      .then(setEmployeeSales)
+      .catch(console.error)
+      .finally(() => setSalesLoading(false));
+  }, [dateRange.from, dateRange.to, selectedEmployee, showNoe, isActive]);
+
+  const handleRowSelect = (employee) => setSelectedEmployee(employee);
+
+  return (
+    <div className="row g-3">
+      <div className="col-12">
+        <EmployeesTable
+          data={employees}
+          loading={employeesLoading}
+          selectedEmployee={selectedEmployee}
+          onRowSelect={handleRowSelect}
+        />
+      </div>
+      {selectedEmployee && (
+        <>
+          <div className="col-12">
+            <div className="d-flex justify-content-end mb-2">
+              <Button variant="primary" onClick={() => setShowCommissionModal(true)}>
+                Asignar comisión
+              </Button>
+            </div>
+            <EmployeesSalesTable data={employeeSales} loading={salesLoading} />
+          </div>
+          <CommissionModal
+            show={showCommissionModal}
+            onClose={() => setShowCommissionModal(false)}
+            employee={selectedEmployee}
+          />
+        </>
+      )}
+    </div>
+  );
+};
+
+export default EmployeesView;

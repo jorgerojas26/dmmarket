@@ -1,6 +1,9 @@
 import { ShowNoeContext } from "context/show_noe";
 import DateRangePicker from "components/DateRangePicker";
 import SalesDashboard from "components/Dashboard/SalesDashboard";
+import CategoriesView from "./CategoriesView";
+import EmployeesView from "./EmployeesView";
+import InvoicesView from "./InvoicesView";
 import { DateTime } from "luxon";
 import { useContext, useState, useCallback, useMemo } from "react";
 import Container from "react-bootstrap/Container";
@@ -25,17 +28,17 @@ const VentasPage = () => {
     },
     categories: {
       heading: 'Ventas por Categoría',
-      render: () => <div className="p-4 text-center text-white">Vista: Por Categoría — próximamente (ticket 04)</div>,
+      render: () => <CategoriesView dateRange={dateRange} showNoe={showNoe} isActive={activeView === "categories"} />,
     },
     employees: {
       heading: 'Ventas por Vendedor',
-      render: () => <div className="p-4 text-center text-white">Vista: Por Vendedor — próximamente (ticket 04)</div>,
+      render: () => <EmployeesView dateRange={dateRange} showNoe={showNoe} isActive={activeView === "employees"} />,
     },
     invoices: {
       heading: 'Facturas',
-      render: () => <div className="p-4 text-center text-white">Vista: Facturas — próximamente (ticket 04)</div>,
+      render: () => <InvoicesView dateRange={dateRange} showNoe={showNoe} isActive={activeView === "invoices"} />,
     },
-  }), [dateRange, showNoe]);
+  }), [dateRange, showNoe, activeView]);
 
   const currentView = VIEWS[activeView];
 
