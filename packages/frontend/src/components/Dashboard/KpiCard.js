@@ -46,7 +46,7 @@ const ACCENT_COLORS = {
   orange: { border: '#f97316', bg: 'rgba(249,115,22,0.08)',  icon: '#fb923c' },
 };
 
-const KpiCard = ({ label, value, comparison, loading, icon, accent }) => {
+const KpiCard = ({ label, value, comparison, icon, accent }) => {
   const palette = ACCENT_COLORS[accent] || ACCENT_COLORS.blue;
 
   const trendEl = comparison ? (
@@ -74,7 +74,6 @@ const KpiCard = ({ label, value, comparison, loading, icon, accent }) => {
           <span className="dashboard-kpi-label">{label}</span>
           <span className="dashboard-kpi-value">{value}</span>
           {trendEl}
-          {loading && <span className="spinner-border spinner-border-sm mt-1" role="status" />}
         </div>
       </div>
     </div>

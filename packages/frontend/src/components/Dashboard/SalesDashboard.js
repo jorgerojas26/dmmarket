@@ -2,9 +2,8 @@ import { fetchDashboardSales } from "api/dashboard";
 import { fetchInvoiceReport } from "api/invoice";
 import GroupSales from "components/Cards/GroupSales";
 import SaleReportCard from "components/Cards/SaleReport";
-import debounce from "lodash.debounce";
 import { DateTime } from "luxon";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     computeComparison,
     formatCurrency,
@@ -19,18 +18,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [salesReportData, setSalesReportData] = useState([]);
-    const [filteredSalesData, setFilteredSalesData] = useState([]);
     const [salesLoading, setSalesLoading] = useState(false);
-
-    const onFilter = useCallback(
-        debounce((searchTerm) => {
-            const filtered = salesReportData.filter((f) =>
-                f.product.toLowerCase().includes(searchTerm.toLowerCase()),
-            );
-            setFilteredSalesData(filtered);
-        }, 500),
-        [salesReportData],
-    );
 
     useEffect(() => {
         let cancelled = false;
@@ -81,7 +69,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                 });
                 if (!cancelled) {
                     setSalesReportData(report.sales_report || []);
-                    setFilteredSalesData([]);
                 }
             } catch (err) {
                 console.error(err);
@@ -107,19 +94,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
         [data?.groupSalesChart],
     );
 
-    if (loading && !data) {
-        return (
-            <div
-                className="d-flex justify-content-center align-items-center"
-                style={{ minHeight: 300 }}
-            >
-                <span
-                    className="spinner-border spinner-border-md"
-                    role="status"
-                />
-            </div>
-        );
-    }
+    const isBusy = loading || salesLoading;
+    const kpis = data?.kpis;
+    const bestEmployee = data?.bestEmployee;
 
     if (error) {
         return (
@@ -129,16 +106,33 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
         );
     }
 
-    const kpis = data?.kpis;
-    const bestEmployee = data?.bestEmployee;
-
     return (
-        <div>
+        <div style={{ position: "relative" }}>
+            {isBusy && (
+                <div
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        zIndex: 10,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backdropFilter: "blur(4px)",
+                        WebkitBackdropFilter: "blur(4px)",
+                        background: "rgba(33, 37, 41, 0.4)",
+                        borderRadius: 8,
+                    }}
+                >
+                    <span
+                        className="spinner-border spinner-border-md"
+                        role="status"
+                    />
+                </div>
+            )}
             <div className="row g-3 mb-4">
-                <div className="col-12 col-lg-8 d-flex flex-column">
+                <div className="col-12 col-lg-8">
                     <div
-                        className="dashboard-kpi-grid"
-                        style={{ flex: 1 }}
+                        className="dashboard-kpi-grid h-100"
                     >
                         <div>
                             <KpiCard
@@ -148,7 +142,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     kpis?.totalRawProfit,
                                     kpis?.compareRawProfit,
                                 )}
-                                loading={loading}
                                 icon="money"
                                 accent="blue"
                             />
@@ -161,7 +154,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     kpis?.totalNetProfit,
                                     kpis?.compareNetProfit,
                                 )}
-                                loading={loading}
+
                                 icon="chart"
                                 accent="green"
                             />
@@ -170,7 +163,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             <KpiCard
                                 label="Ticket Prom."
                                 value={formatCurrency(kpis?.avgTicket)}
-                                loading={loading}
                                 icon="ticket"
                                 accent="purple"
                             />
@@ -179,7 +171,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             <KpiCard
                                 label="Margen Prom."
                                 value={formatPercent(kpis?.avgMarginPercent)}
-                                loading={loading}
                                 icon="percent"
                                 accent="amber"
                             />
@@ -192,7 +183,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     kpis?.totalQuantity,
                                     kpis?.compareQuantity,
                                 )}
-                                loading={loading}
                                 icon="package"
                                 accent="cyan"
                             />
@@ -205,7 +195,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     kpis?.totalInvoices,
                                     kpis?.compareInvoices,
                                 )}
-                                loading={loading}
                                 icon="receipt"
                                 accent="pink"
                             />
@@ -246,14 +235,13 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                 </div>
                 <div className="col-12 col-lg-4">
                     <div
-                        className="dashboard-panel"
-                        style={{ padding: "16px 20px" }}
+                        className="dashboard-panel d-flex flex-column"
+                        style={{ padding: "16px 20px", height: "100%" }}
                     >
                         <div className="dashboard-inline-title">Categorías</div>
-                        <div style={{ height: 340 }}>
+                        <div style={{ flex: 1, minHeight: 0 }}>
                             <GroupSales
                                 chartData={chartData}
-                                loading={loading}
                             />
                         </div>
                     </div>
@@ -279,7 +267,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     render: (item) =>
                                         `${formatNumber(item.quantity)} un \u00B7 ${formatPercent(item.averageProfitPercent)}`,
                                 }}
-                                loading={loading}
                             />
                         </div>
                     </div>
@@ -298,7 +285,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                 nameKey="client"
                                 valueKey="total_USD"
                                 valueFormat={formatCurrency}
-                                loading={loading}
                             />
                         </div>
                     </div>
@@ -307,13 +293,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
 
             {/* ═══ Sales Report ═══ */}
             <SaleReportCard
-                data={
-                    filteredSalesData?.length
-                        ? filteredSalesData
-                        : salesReportData
-                }
-                loading={salesLoading}
-                onFilter={onFilter}
+                data={salesReportData}
             />
         </div>
     );

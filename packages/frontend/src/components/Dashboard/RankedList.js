@@ -3,15 +3,7 @@ const barColors = [
   '#ef4444', '#ec4899', '#6366f1', '#14b8a6', '#f97316',
 ];
 
-const RankedList = ({ data = [], valueKey, valueFormat, nameKey, secondary, loading, emptyMessage = 'Sin datos' }) => {
-  if (loading) {
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: 120 }}>
-        <span className="spinner-border spinner-border-sm" role="status" />
-      </div>
-    );
-  }
-
+const RankedList = ({ data = [], valueKey, valueFormat, nameKey, secondary, emptyMessage = 'Sin datos' }) => {
   if (!data.length) {
     return <div className="ranked-empty">{emptyMessage}</div>;
   }

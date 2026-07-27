@@ -100,6 +100,7 @@ table tfoot td {
     display: grid;
     gap: 1rem;
     grid-template-columns: repeat(1, 1fr);
+    grid-auto-rows: 1fr;
 }
 @media (min-width: 768px) {
     .dashboard-kpi-grid {
@@ -109,7 +110,6 @@ table tfoot td {
 @media (min-width: 1600px) {
     .dashboard-kpi-grid {
         grid-template-columns: repeat(3, 1fr);
-        grid-template-rows: 1fr 1fr 1fr;
     }
 }
 .dashboard-kpi-card {

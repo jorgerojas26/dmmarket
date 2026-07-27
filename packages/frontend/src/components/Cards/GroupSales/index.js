@@ -1,7 +1,7 @@
 import { ResponsivePie } from '@nivo/pie';
 
-const GroupSales = ({ chartData = [], loading }) => {
-  if (chartData.length === 0 && !loading) {
+const GroupSales = ({ chartData = [] }) => {
+  if (chartData.length === 0) {
     return (
       <div className="d-flex align-items-center justify-content-center h-100 text-muted small">
         Sin datos para el periodo seleccionado
@@ -43,11 +43,6 @@ const GroupSales = ({ chartData = [], loading }) => {
             </div>
           )}
         />
-      )}
-      {loading && (
-        <div className='position-absolute top-50 start-50 translate-middle'>
-          <span className='spinner-border spinner-border-md' role='status' aria-hidden='true' />
-        </div>
       )}
     </div>
   );
