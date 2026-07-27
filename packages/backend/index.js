@@ -10,6 +10,7 @@ const products_routes = require("./routes/products");
 const employees_routes = require("./routes/employees");
 const currency_rates_routes = require("./routes/currency_rates");
 const providers_routes = require("./routes/providers");
+const dashboard_routes = require("./routes/dashboard");
 
 //app.use(express.static(path.join(__dirname, "public")));
 
@@ -23,6 +24,7 @@ app.use("/api/products", products_routes);
 app.use("/api/employees", employees_routes);
 app.use("/api/currency_rates", currency_rates_routes);
 app.use("/api/providers", providers_routes);
+app.use("/api/dashboard", dashboard_routes);
 
 app.use("/api/*", (req, res) => {
   res.status(404).json({
@@ -38,6 +40,10 @@ app.get("/*", function (request, response) {
   response.sendFile(path.resolve(__dirname, "client/build", "index.html"));
 });
 
-app.listen(8000, () => {
-  console.log("server listening in port 8000");
-});
+if (require.main === module) {
+  app.listen(8000, () => {
+    console.log("server listening in port 8000");
+  });
+}
+
+module.exports = app;
