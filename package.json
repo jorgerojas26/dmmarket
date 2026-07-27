@@ -1,0 +1,22 @@
+{
+    "name": "dmmarket",
+    "version": "1.0.0",
+    "private": true,
+    "description": "DMMarket - Sistema de reportes de distribución de alimentos (monorepo)",
+    "scripts": {
+        "backend": "pnpm --filter @dmmarket/backend",
+        "frontend": "pnpm --filter @dmmarket/frontend",
+        "dev:backend": "pnpm --filter @dmmarket/backend start",
+        "dev:frontend": "NODE_OPTIONS='--openssl-legacy-provider' pnpm --filter @dmmarket/frontend start",
+        "dev": "pnpm run --parallel dev:backend dev:frontend",
+        "build:frontend": "pnpm --filter @dmmarket/frontend build",
+        "test:backend": "pnpm --filter @dmmarket/backend test",
+        "test:frontend": "pnpm --filter @dmmarket/frontend test",
+        "test": "pnpm run --parallel test:backend test:frontend"
+    },
+    "pnpm": {
+        "overrides": {
+            "react-error-overlay": "6.0.9"
+        }
+    }
+}

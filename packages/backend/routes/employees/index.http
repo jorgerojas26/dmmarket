@@ -1,0 +1,12 @@
+GET http://localhost:8000/api/employees/commissionInfo/0
+
+PUT http://localhost:8000/api/employees/commissionInfo/0
+Content-Type: application/json
+
+{
+  "commissionInfo": {
+    "0005": 1.75
+  }
+}
+
+GET http://localhost:8000/api/employees/sales/0?from=2021-10-01&to=2021-12-01

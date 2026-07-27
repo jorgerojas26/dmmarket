@@ -1,0 +1,29 @@
+ConfigFile = '/Users/jorgerojas/.config/lazysql/config.toml'
+LocalConfigFile = '/Users/jorgerojas/projects/DMMarket/.lazysql.toml'
+
+[application]
+DefaultPageSize = 300
+DisableSidebar = true
+SidebarOverlay = true
+MaxQueryHistoryPerConnection = 100
+TreeWidth = 30
+JSONViewerWordWrap = false
+EnterOpensJSONViewer = false
+
+[[database]]
+Name = 'DMMarket'
+URL = 'mysql://root:root@localhost:3307'
+Provider = 'mysql'
+Username = ''
+Password = ''
+Hostname = ''
+Port = ''
+DBName = ''
+URLParams = ''
+ReadOnly = false
+Schemas = []
+Commands = []
+
+[keymap]
+[keymap.Home]
+ToggleQueryHistory = 'Ctrl-]'
