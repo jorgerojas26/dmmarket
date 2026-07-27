@@ -3,7 +3,6 @@ import { getAllEmployees, getEmployeeSales } from "api/employees";
 import EmployeesTable from "employees/Table";
 import EmployeesSalesTable from "employees/Table/Sales";
 import CommissionModal from "employees/Modal/Commission";
-import { Button } from "react-bootstrap";
 
 const EmployeesView = ({ dateRange, showNoe, isActive }) => {
   const [employees, setEmployees] = useState([]);
@@ -32,6 +31,7 @@ const EmployeesView = ({ dateRange, showNoe, isActive }) => {
   }, [dateRange.from, dateRange.to, selectedEmployee, showNoe, isActive]);
 
   const handleRowSelect = (employee) => setSelectedEmployee(employee);
+  const handleSaleClick = () => setShowCommissionModal(true);
 
   return (
     <div className="row g-3">
@@ -44,21 +44,20 @@ const EmployeesView = ({ dateRange, showNoe, isActive }) => {
         />
       </div>
       {selectedEmployee && (
-        <>
-          <div className="col-12">
-            <div className="d-flex justify-content-end mb-2">
-              <Button variant="primary" onClick={() => setShowCommissionModal(true)}>
-                Asignar comisión
-              </Button>
-            </div>
-            <EmployeesSalesTable data={employeeSales} loading={salesLoading} />
-          </div>
-          <CommissionModal
-            show={showCommissionModal}
-            onClose={() => setShowCommissionModal(false)}
-            employee={selectedEmployee}
+        <div className="col-12">
+          <EmployeesSalesTable
+            data={employeeSales}
+            loading={salesLoading}
+            onRowSelect={handleSaleClick}
           />
-        </>
+        </div>
+      )}
+      {showCommissionModal && selectedEmployee && (
+        <CommissionModal
+          show={showCommissionModal}
+          onClose={() => setShowCommissionModal(false)}
+          employee={selectedEmployee}
+        />
       )}
     </div>
   );

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import Table from 'components/Table';
 import columns from './columns';
 
-const EmployeeSalesTable = ({ data, loading }) => {
+const EmployeeSalesTable = ({ data, loading, onRowSelect }) => {
   const memoizedColumns = useMemo(() => columns, []);
 
   return (
@@ -12,7 +12,7 @@ const EmployeeSalesTable = ({ data, loading }) => {
           <h2>Reporte de ventas</h2>
         </div>
         <div className='card-body'>
-          <Table data={data} columns={memoizedColumns} loading={loading} showFooter maxHeight={400} />
+          <Table data={data} columns={memoizedColumns} loading={loading} onRowSelect={onRowSelect} showFooter maxHeight={400} />
         </div>
       </div>
     </>

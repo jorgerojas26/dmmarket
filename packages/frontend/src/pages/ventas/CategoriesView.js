@@ -75,7 +75,7 @@ const CategoriesView = ({ dateRange, showNoe, isActive }) => {
         </div>
       ) : (
         <div className="text-center text-muted py-5">
-          Seleccione una categoría para ver las ventas
+          Seleccione una categoría...
         </div>
       )}
     </div>
