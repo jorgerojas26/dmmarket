@@ -1,9 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { DateTime } from "luxon";
+import debounce from "lodash.debounce";
 import { fetchDashboardSales } from "api/dashboard";
+import { fetchInvoiceReport } from "api/invoice";
 import { formatCurrency, formatNumber, formatPercent, computeComparison } from "utils/format";
 import KpiCard from "./KpiCard";
 import GroupSales from "components/Cards/GroupSales";
+import SaleReportCard from "components/Cards/SaleReport";
 import Table from "components/Table";
 
 const topProductsColumns = [
@@ -23,6 +26,19 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [salesReportData, setSalesReportData] = useState([]);
+  const [filteredSalesData, setFilteredSalesData] = useState([]);
+  const [salesLoading, setSalesLoading] = useState(false);
+
+  const onFilter = useCallback(
+    debounce((searchTerm) => {
+      const filtered = salesReportData.filter((f) =>
+        f.product.toLowerCase().includes(searchTerm.toLowerCase()),
+      );
+      setFilteredSalesData(filtered);
+    }, 500),
+    [salesReportData],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +69,32 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     };
 
     load();
+    return () => { cancelled = true; };
+  }, [dateRange.from, dateRange.to, showNoe]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSalesReport = async () => {
+      setSalesLoading(true);
+      try {
+        const report = await fetchInvoiceReport({
+          from: dateRange.from,
+          to: dateRange.to,
+          showNoe,
+        });
+        if (!cancelled) {
+          setSalesReportData(report.sales_report || []);
+          setFilteredSalesData([]);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) setSalesLoading(false);
+      }
+    };
+
+    loadSalesReport();
     return () => { cancelled = true; };
   }, [dateRange.from, dateRange.to, showNoe]);
 
@@ -163,6 +205,17 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
               <Table data={data?.topClients || []} columns={topClientsColumns} loading={loading} maxHeight={400} />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Fila 5: Tabla de Ventas */}
+      <div className="row g-3">
+        <div className="col-12">
+          <SaleReportCard
+            data={filteredSalesData?.length ? filteredSalesData : salesReportData}
+            loading={salesLoading}
+            onFilter={onFilter}
+          />
         </div>
       </div>
     </div>

@@ -13,7 +13,7 @@ const VentasPage = () => {
   const { showNoe } = useContext(ShowNoeContext);
   const [activeView, setActiveView] = useState("dashboard");
   const [dateRange, setDateRange] = useState({
-    from: DateTime.now().startOf("month").toISODate(),
+    from: DateTime.now().startOf("year").toISODate(),
     to: DateTime.now().toISODate(),
   });
 
@@ -73,7 +73,7 @@ const VentasPage = () => {
           <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
             <h4 className="m-0 text-light">{currentView.heading}</h4>
             <DateRangePicker
-              initialFrom={DateTime.now().startOf("month").toISODate()}
+              initialFrom={DateTime.now().startOf("year").toISODate()}
               initialTo={DateTime.now().toISODate()}
               onChange={handleDateRangeChange}
             />
