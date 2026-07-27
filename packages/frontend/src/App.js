@@ -1,7 +1,5 @@
 import { ShowNoeContext } from "context/show_noe";
 import ClientesPage from "pages/clientes";
-import EmployeesPage from "pages/employees";
-import InvoicesPage from "pages/invoices";
 import ProductosPage from "pages/productos";
 import VentasPage from "pages/ventas";
 import { useContext, useEffect } from "react";
@@ -11,7 +9,6 @@ import Navbar from "react-bootstrap/Navbar";
 import { Link, Route, Switch, useLocation } from "react-router-dom";
 import { fetchCurrencyRates } from "./api/currency_rates";
 import { CurrencyRateContext } from "./context/currency_rate";
-import CategoriesPage from "./pages/categories";
 import ProveedoresPage from "./pages/proveedores";
 
 function App() {
@@ -42,7 +39,8 @@ function App() {
                     variant="dark"
                     className={
                         "app-navbar" +
-                        (location.pathname.includes("/clientes") ||
+                        (location.pathname.includes("/ventas") ||
+                        location.pathname.includes("/clientes") ||
                         location.pathname.includes("/proveedores")
                             ? " has-clients-sidebar"
                             : "")
@@ -60,12 +58,9 @@ function App() {
                             >
                                 <Nav className="me-auto">
                                     {[
-                                        "facturas",
                                         "ventas",
                                         "clientes",
                                         "productos",
-                                        "vendedores",
-                                        "categorias",
                                         "proveedores",
                                     ].map((route, index) => {
                                         return (
@@ -135,12 +130,9 @@ function App() {
                     className="d-flex flex-column flex-grow-1 overflow-hidden p-0"
                 >
                     <Switch>
-                        <Route path="/categorias" component={CategoriesPage} />
-                        <Route path="/facturas" component={InvoicesPage} />
                         <Route path="/ventas" component={VentasPage} />
                         <Route path="/clientes" component={ClientesPage} />
                         <Route path="/productos" component={ProductosPage} />
-                        <Route path="/vendedores" component={EmployeesPage} />
                         <Route path="/proveedores" component={ProveedoresPage} />
                     </Switch>
                 </Container>
