@@ -1,5 +1,6 @@
 ## Rules
 - Always use pnpm as the package manager.
+- This is a monorepo using pnpm workspaces. See `pnpm-workspace.yaml`.
 
 ## Agent skills
 

@@ -16,7 +16,8 @@
     },
     "pnpm": {
         "overrides": {
-            "react-error-overlay": "6.0.9"
+            "react-error-overlay": "6.0.9",
+            "@babel/core": ">=7.22.0"
         }
     }
 }

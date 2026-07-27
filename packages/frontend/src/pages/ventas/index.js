@@ -1,5 +1,6 @@
 import { ShowNoeContext } from "context/show_noe";
 import DateRangePicker from "components/DateRangePicker";
+import SalesDashboard from "components/Dashboard/SalesDashboard";
 import { DateTime } from "luxon";
 import { useContext, useState, useCallback } from "react";
 import Container from "react-bootstrap/Container";
@@ -18,7 +19,7 @@ const VentasPage = () => {
   }, []);
 
   const views = {
-    dashboard: <div className="p-4 text-center text-white">Dashboard — próximamente (ticket 03)</div>,
+    dashboard: <SalesDashboard dateRange={dateRange} showNoe={showNoe} />,
     categories: <div className="p-4 text-center text-white">Vista: Por Categoría — próximamente (ticket 04)</div>,
     employees: <div className="p-4 text-center text-white">Vista: Por Vendedor — próximamente (ticket 04)</div>,
     invoices: <div className="p-4 text-center text-white">Vista: Facturas — próximamente (ticket 04)</div>,
