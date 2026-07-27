@@ -119,21 +119,24 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                         justifyContent: "center",
                         backdropFilter: "blur(4px)",
                         WebkitBackdropFilter: "blur(4px)",
-                        background: "rgba(33, 37, 41, 0.4)",
+                        background: "rgba(33,37,41,0.4)",
                         borderRadius: 8,
                     }}
                 >
                     <span
-                        className="spinner-border spinner-border-md"
+                        className="spinner-border"
                         role="status"
+                        style={{
+                            width: "3rem",
+                            height: "3rem",
+                            color: "#e4e6ea",
+                        }}
                     />
                 </div>
             )}
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-8">
-                    <div
-                        className="dashboard-kpi-grid h-100"
-                    >
+                    <div className="dashboard-kpi-grid h-100">
                         <div>
                             <KpiCard
                                 label="Venta Bruta"
@@ -154,7 +157,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     kpis?.totalNetProfit,
                                     kpis?.compareNetProfit,
                                 )}
-
                                 icon="chart"
                                 accent="green"
                             />
@@ -225,7 +227,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     </div>
                                     <div className="dashboard-best-employee-sales">
                                         {bestEmployee
-                                            ? formatCurrency(bestEmployee.totalSales)
+                                            ? formatCurrency(
+                                                  bestEmployee.totalSales,
+                                              )
                                             : ""}
                                     </div>
                                 </div>
@@ -240,9 +244,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                     >
                         <div className="dashboard-inline-title">Categorías</div>
                         <div style={{ flex: 1, minHeight: 0 }}>
-                            <GroupSales
-                                chartData={chartData}
-                            />
+                            <GroupSales chartData={chartData} />
                         </div>
                     </div>
                 </div>
@@ -292,9 +294,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             </div>
 
             {/* ═══ Sales Report ═══ */}
-            <SaleReportCard
-                data={salesReportData}
-            />
+            <SaleReportCard data={salesReportData} />
         </div>
     );
 };
