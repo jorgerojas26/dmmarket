@@ -8,15 +8,15 @@ describe("KpiCard", () => {
     expect(screen.getByText("$12,450,000")).toBeInTheDocument();
   });
 
-  it("muestra ▲ verde cuando comparison es positivo", () => {
-    render(<KpiCard label="Venta Bruta" value="$100" comparison={{ current: 100, previous: 80 }} />);
+  it("muestra ▲ verde cuando comparison.isPositive es true", () => {
+    render(<KpiCard label="Venta Bruta" value="$100" comparison={{ pct: "25.0", isPositive: true }} />);
     const indicator = screen.getByText(/▲/);
     expect(indicator).toBeInTheDocument();
     expect(indicator).toHaveClass("text-success");
   });
 
-  it("muestra ▼ rojo cuando comparison es negativo", () => {
-    render(<KpiCard label="Venta Bruta" value="$80" comparison={{ current: 80, previous: 100 }} />);
+  it("muestra ▼ rojo cuando comparison.isPositive es false", () => {
+    render(<KpiCard label="Venta Bruta" value="$80" comparison={{ pct: "20.0", isPositive: false }} />);
     const indicator = screen.getByText(/▼/);
     expect(indicator).toBeInTheDocument();
     expect(indicator).toHaveClass("text-danger");
@@ -28,8 +28,8 @@ describe("KpiCard", () => {
     expect(screen.queryByText(/▼/)).not.toBeInTheDocument();
   });
 
-  it("no muestra indicador si previous es 0", () => {
-    render(<KpiCard label="Venta Bruta" value="$100" comparison={{ current: 100, previous: 0 }} />);
+  it("no muestra indicador si comparison es null", () => {
+    render(<KpiCard label="Venta Bruta" value="$100" comparison={null} />);
     expect(screen.queryByText(/▲/)).not.toBeInTheDocument();
     expect(screen.queryByText(/▼/)).not.toBeInTheDocument();
   });

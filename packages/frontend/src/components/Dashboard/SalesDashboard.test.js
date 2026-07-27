@@ -46,7 +46,7 @@ describe("SalesDashboard", () => {
     await waitFor(() => expect(screen.getByText(/Error al cargar/)).toBeInTheDocument());
   });
 
-  it("muestra KPIs en 0 y mensaje vacío cuando no hay datos", async () => {
+  it("renderiza KPIs en $0 cuando no hay datos", async () => {
     dashboardApi.fetchDashboardSales.mockResolvedValue({
       kpis: { totalRawProfit: 0, totalNetProfit: 0, totalQuantity: 0, totalInvoices: 0, avgTicket: 0, avgMarginPercent: 0, compareRawProfit: null, compareNetProfit: null, compareQuantity: null, compareInvoices: null },
       bestEmployee: null,
@@ -55,7 +55,8 @@ describe("SalesDashboard", () => {
       groupSalesChart: [],
     });
     render(<SalesDashboard dateRange={{ from: "2000-01-01", to: "2000-01-02" }} showNoe={false} />);
-    await waitFor(() => expect(screen.getByText(/Sin datos/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Venta Bruta")).toBeInTheDocument());
+    expect(screen.getAllByText("$0,00").length).toBeGreaterThan(0);
   });
 
   it("calcula compareFrom/compareTo y los envía al endpoint", async () => {

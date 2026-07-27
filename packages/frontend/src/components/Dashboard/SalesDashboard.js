@@ -1,14 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { DateTime } from "luxon";
 import { fetchDashboardSales } from "api/dashboard";
+import { formatCurrency, formatNumber, formatPercent, computeComparison } from "utils/format";
 import KpiCard from "./KpiCard";
 import GroupSales from "components/Cards/GroupSales";
 import Table from "components/Table";
 
-const formatCurrency = (val) =>
-  `$${Number(val).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const formatNumber = (val) => Number(val).toLocaleString('es-VE');
-const formatPercent = (val) => `${Number(val).toFixed(1)}%`;
+const topProductsColumns = [
+  { header: 'Producto', accessor: 'product' },
+  { header: 'Cantidad', accessor: 'quantity', Cell: ({ value }) => formatNumber(value) },
+  { header: 'Venta Bruta', accessor: 'rawProfit', Cell: ({ value }) => formatCurrency(value) },
+  { header: 'Ganancia Neta', accessor: 'netProfit', Cell: ({ value }) => formatCurrency(value) },
+  { header: 'Margen %', accessor: 'averageProfitPercent', Cell: ({ value }) => formatPercent(value) },
+];
+
+const topClientsColumns = [
+  { header: 'Cliente', accessor: 'client' },
+  { header: 'Total USD', accessor: 'total_USD', Cell: ({ value }) => formatCurrency(value) },
+];
 
 const SalesDashboard = ({ dateRange, showNoe }) => {
   const [data, setData] = useState(null);
@@ -47,11 +56,14 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     return () => { cancelled = true; };
   }, [dateRange.from, dateRange.to, showNoe]);
 
-  const hasData = data && (
-    data.topProducts?.length > 0 ||
-    data.topClients?.length > 0 ||
-    data.groupSalesChart?.length > 0 ||
-    (data.kpis && data.kpis.totalRawProfit > 0)
+  const chartData = useMemo(() =>
+    (data?.groupSalesChart || []).map(item => ({
+      id: item.categoria,
+      label: item.categoria,
+      value: item.rawProfit,
+      netProfit: item.netProfit,
+    })),
+    [data?.groupSalesChart]
   );
 
   if (loading && !data) {
@@ -66,79 +78,56 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     return <div className="alert alert-danger">Error al cargar el dashboard: {error}</div>;
   }
 
-  if (!hasData) {
-    return <div className="alert alert-info">Sin datos</div>;
-  }
-
   const kpis = data?.kpis;
   const bestEmployee = data?.bestEmployee;
-  const chartData = (data?.groupSalesChart || []).map(item => ({
-    id: item.categoria,
-    label: item.categoria,
-    value: item.rawProfit,
-    netProfit: item.netProfit,
-  }));
-
-  const topProductsColumns = [
-    { header: 'Producto', accessor: 'product' },
-    { header: 'Cantidad', accessor: 'quantity', Cell: ({ value }) => formatNumber(value) },
-    { header: 'Venta Bruta', accessor: 'rawProfit', Cell: ({ value }) => formatCurrency(value) },
-    { header: 'Ganancia Neta', accessor: 'netProfit', Cell: ({ value }) => formatCurrency(value) },
-    { header: 'Margen %', accessor: 'averageProfitPercent', Cell: ({ value }) => formatPercent(value) },
-  ];
-
-  const topClientsColumns = [
-    { header: 'Cliente', accessor: 'client' },
-    { header: 'Total USD', accessor: 'total_USD', Cell: ({ value }) => formatCurrency(value) },
-  ];
 
   return (
     <div>
       {/* Fila 1: 4 KPIs */}
       <div className="row g-3 mb-3">
-        <div className="col-6 col-md-3">
+        <div className="col-12 col-sm-6 col-md-3">
           <KpiCard
             label="Venta Bruta"
             value={formatCurrency(kpis?.totalRawProfit)}
-            comparison={kpis?.compareRawProfit != null ? { current: kpis.totalRawProfit, previous: kpis.compareRawProfit } : null}
+            comparison={computeComparison(kpis?.totalRawProfit, kpis?.compareRawProfit)}
             loading={loading}
           />
         </div>
-        <div className="col-6 col-md-3">
+        <div className="col-12 col-sm-6 col-md-3">
           <KpiCard
             label="Ganancia Neta"
             value={formatCurrency(kpis?.totalNetProfit)}
-            comparison={kpis?.compareNetProfit != null ? { current: kpis.totalNetProfit, previous: kpis.compareNetProfit } : null}
+            comparison={computeComparison(kpis?.totalNetProfit, kpis?.compareNetProfit)}
             loading={loading}
           />
         </div>
-        <div className="col-6 col-md-3">
+        <div className="col-12 col-sm-6 col-md-3">
           <KpiCard label="Ticket Promedio" value={formatCurrency(kpis?.avgTicket)} loading={loading} />
         </div>
-        <div className="col-6 col-md-3">
+        <div className="col-12 col-sm-6 col-md-3">
           <KpiCard label="Margen Promedio" value={formatPercent(kpis?.avgMarginPercent)} loading={loading} />
         </div>
       </div>
 
       {/* Fila 2: 3 KPIs + Mejor Vendedor */}
       <div className="row g-3 mb-4">
-        <div className="col-6 col-md-3">
+        <div className="col-12 col-sm-6 col-md-3">
           <KpiCard
             label="Unidades Vendidas"
             value={formatNumber(kpis?.totalQuantity)}
-            comparison={kpis?.compareQuantity != null ? { current: kpis.totalQuantity, previous: kpis.compareQuantity } : null}
+            comparison={computeComparison(kpis?.totalQuantity, kpis?.compareQuantity)}
             loading={loading}
           />
         </div>
-        <div className="col-6 col-md-3">
+        <div className="col-12 col-sm-6 col-md-3">
           <KpiCard
             label="# Transacciones"
             value={formatNumber(kpis?.totalInvoices)}
-            comparison={kpis?.compareInvoices != null ? { current: kpis.totalInvoices, previous: kpis.compareInvoices } : null}
+            comparison={computeComparison(kpis?.totalInvoices, kpis?.compareInvoices)}
             loading={loading}
           />
         </div>
-        <div className="col-6 col-md-3">
+        <div className="col-12 col-sm-6 col-md-3">
           <div className="card h-100">
             <div className="card-body text-center">
               <div className="text-muted small text-uppercase">Mejor Vendedor</div>
@@ -147,7 +136,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             </div>
           </div>
         </div>
-        <div className="col-6 col-md-3" />
+        <div className="col-12 col-sm-6 col-md-3" />
       </div>
 
       {/* Fila 3: Gráfico + Top Productos */}

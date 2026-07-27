@@ -1,14 +1,9 @@
 const KpiCard = ({ label, value, comparison, loading }) => {
-  let comparisonEl = null;
-  if (comparison && comparison.previous > 0) {
-    const pct = ((comparison.current - comparison.previous) / comparison.previous) * 100;
-    const isPositive = pct >= 0;
-    comparisonEl = (
-      <div className={`small ${isPositive ? 'text-success' : 'text-danger'}`}>
-        {isPositive ? '▲' : '▼'} {Math.abs(pct).toFixed(1)}% vs anterior
-      </div>
-    );
-  }
+  const comparisonEl = comparison ? (
+    <div className={`small ${comparison.isPositive ? 'text-success' : 'text-danger'}`}>
+      {comparison.isPositive ? '▲' : '▼'} {comparison.pct}% vs anterior
+    </div>
+  ) : null;
 
   return (
     <div className="card h-100">
