@@ -1,3 +1,6 @@
+## Rules
+- Always use pnpm as the package manager.
+
 ## Agent skills
 
 ### Issue tracker
