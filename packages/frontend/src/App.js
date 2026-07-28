@@ -67,22 +67,15 @@ function App() {
                                             <Link
                                                 key={index}
                                                 to={`/${route}`}
-                                                className={`text-decoration-none mx-1 text-secondary nav-link rounded ${
-                                                    (location.pathname.includes(
+                                                className={`text-decoration-none nav-link${
+                                                    location.pathname.includes(
                                                         route,
-                                                    ) &&
-                                                        "active text-dark") ||
-                                                    ""
+                                                    )
+                                                        ? " active"
+                                                        : ""
                                                 }`}
                                             >
-                                                <span
-                                                    style={{
-                                                        textTransform:
-                                                            "capitalize",
-                                                    }}
-                                                >
-                                                    {route}
-                                                </span>
+                                                {route}
                                             </Link>
                                         );
                                     })}

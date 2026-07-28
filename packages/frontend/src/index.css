@@ -575,6 +575,30 @@ input:checked + .slider:before {
     position: relative;
 }
 
+/* ── Top Navbar Links ── */
+.app-navbar .nav-link {
+    color: #88909a;
+    font-weight: 500;
+    font-size: 0.85rem;
+    padding: 8px 16px;
+    border-radius: 6px 6px 0 0;
+    margin: 0 2px;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    text-transform: capitalize;
+    border-bottom: 2px solid transparent;
+}
+
+.app-navbar .nav-link:hover {
+    color: #c8cdd4;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.app-navbar .nav-link.active {
+    color: #ffffff;
+    font-weight: 600;
+    border-bottom-color: #3b82f6;
+}
+
 .navbar::after {
     content: "";
     position: absolute;
