@@ -154,4 +154,102 @@ const GET_DASHBOARD_SALES = async (req, res) => {
   }
 };
 
-module.exports = { GET_DASHBOARD_SALES };
+const GET_DASHBOARD_PARETO = async (req, res) => {
+  const { from, to } = req.query;
+  const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
+
+  if (!from || !to) {
+    return res.status(400).json({ error: "from and to are required" });
+  }
+
+  try {
+    const rows = await knex
+      .select(
+        "productos.Descripcion as product",
+        knex.raw(
+          `ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`
+        ),
+        knex.raw(
+          `ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`
+        ),
+        knex.raw(
+          `ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`
+        ),
+      )
+      .from(slaveTable)
+      .innerJoin(masterTable, function () {
+        this.on(
+          `${masterTable}.${idInvoice}`,
+          `${slaveTable}.${idInvoice}`,
+        ).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .innerJoin(
+        "productos",
+        "productos.IdProducto",
+        `${slaveTable}.IdProducto`,
+      )
+      .whereBetween(`${masterTable}.Fecha`, [from, to])
+      .groupBy("productos.IdProducto")
+      .orderBy("netProfit", "DESC");
+
+    // Calcular acumulados en JS
+    const total = rows.reduce(
+      (sum, r) => sum + Number(r.netProfit || 0),
+      0,
+    );
+    let cumulative = 0;
+    const products = rows.map((r, i) => {
+      cumulative += Number(r.netProfit || 0);
+      const cumulativePercent =
+        total > 0 ? Math.round((cumulative / total) * 10000) / 100 : 0;
+      return {
+        ...r,
+        rank: i + 1,
+        cumulativeProfit: Math.round(cumulative * 100) / 100,
+        cumulativePercent,
+        abcClass:
+          cumulativePercent <= 80
+            ? "A"
+            : cumulativePercent <= 95
+              ? "B"
+              : "C",
+      };
+    });
+
+    // Resumen ABC
+    const classA = products.filter((d) => d.abcClass === "A");
+    const classB = products.filter((d) => d.abcClass === "B");
+    const classC = products.filter((d) => d.abcClass === "C");
+
+    const lastA = classA.length > 0
+      ? classA[classA.length - 1].cumulativePercent
+      : 0;
+    const lastB = classB.length > 0
+      ? classB[classB.length - 1].cumulativePercent
+      : lastA;
+
+    res.status(200).json({
+      products,
+      summary: {
+        classA: {
+          count: classA.length,
+          profitPercent: lastA,
+        },
+        classB: {
+          count: classB.length,
+          profitPercent: Math.round((lastB - lastA) * 100) / 100,
+        },
+        classC: {
+          count: classC.length,
+          profitPercent: Math.round((100 - lastB) * 100) / 100,
+        },
+        totalProducts: products.length,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+module.exports = { GET_DASHBOARD_SALES, GET_DASHBOARD_PARETO };

@@ -27,6 +27,7 @@ const mockData = {
 describe("SalesDashboard", () => {
   beforeEach(() => {
     dashboardApi.fetchDashboardSales.mockResolvedValue(mockData);
+    dashboardApi.fetchDashboardPareto.mockResolvedValue({ products: [], summary: null });
     invoiceApi.fetchInvoiceReport.mockResolvedValue({ sales_report: [] });
   });
 

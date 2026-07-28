@@ -1,4 +1,4 @@
-import { fetchDashboardSales } from "api/dashboard";
+import { fetchDashboardPareto, fetchDashboardSales } from "api/dashboard";
 import { fetchInvoiceReport } from "api/invoice";
 import GroupSales from "components/Cards/GroupSales";
 import SaleReportCard from "components/Cards/SaleReport";
@@ -11,6 +11,7 @@ import {
     formatPercent,
 } from "utils/format";
 import KpiCard from "./KpiCard";
+import ParetoChart from "./ParetoChart";
 import RankedList from "./RankedList";
 
 const REPORT_LIMIT = 20;
@@ -21,6 +22,10 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     const [error, setError] = useState(null);
     const [salesReportData, setSalesReportData] = useState([]);
     const [salesLoading, setSalesLoading] = useState(false);
+
+    // ── Pareto ──
+    const [paretoData, setParetoData] = useState(null);
+    const [paretoLoading, setParetoLoading] = useState(false);
 
     // ── Sales report pagination + sorting ──
     const [reportPage, setReportPage] = useState(1);
@@ -112,6 +117,32 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
         reportPage,
         reportSortBy,
     ]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadPareto = async () => {
+            setParetoLoading(true);
+            try {
+                const result = await fetchDashboardPareto({
+                    from: dateRange.from,
+                    to: dateRange.to,
+                    showNoe,
+                });
+                if (!cancelled) setParetoData(result);
+            } catch (err) {
+                console.error(err);
+                if (!cancelled) setParetoData(null);
+            } finally {
+                if (!cancelled) setParetoLoading(false);
+            }
+        };
+
+        loadPareto();
+        return () => {
+            cancelled = true;
+        };
+    }, [dateRange.from, dateRange.to, showNoe]);
 
     const chartData = useMemo(
         () =>
@@ -331,6 +362,17 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             />
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* ═══ Pareto Analysis ═══ */}
+            <div className="row g-3 mb-4">
+                <div className="col-12">
+                    <ParetoChart
+                        products={paretoData?.products || []}
+                        summary={paretoData?.summary || null}
+                        loading={paretoLoading}
+                    />
                 </div>
             </div>
 
