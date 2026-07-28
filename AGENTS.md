@@ -1,8 +1,10 @@
 ## Rules
 - Always use pnpm as the package manager.
 - This is a monorepo using pnpm workspaces. See `pnpm-workspace.yaml`.
-- The project uses an older `react-scripts` that doesn't support Node.js ≥17 OpenSSL. Always prefix `react-scripts build` and `react-scripts start` with `NODE_OPTIONS=--openssl-legacy-provider`:  
-  `NODE_OPTIONS=--openssl-legacy-provider npx react-scripts build`
+- The project uses an older `react-scripts` that doesn't support Node.js ≥17 OpenSSL. Always prefix `react-scripts build` and `react-scripts start` with `NODE_OPTIONS=--openssl-legacy-provider`.
+- `react-scripts` is hoisted to the monorepo root `node_modules`, not the frontend package. Run build/start from `packages/frontend`:
+  `NODE_OPTIONS=--openssl-legacy-provider ../../node_modules/.bin/react-scripts build`
+  `NODE_OPTIONS=--openssl-legacy-provider ../../node_modules/.bin/react-scripts start`
 
 ## Agent skills
 

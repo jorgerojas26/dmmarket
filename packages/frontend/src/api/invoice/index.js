@@ -23,10 +23,29 @@ export const fetchInvoiceReport = async ({
     return report;
 };
 
-export const fetchInvoiceList = async ({ from, to, showNoe }) => {
-    const response = await fetch(`${BASE_URL}?from=${from}&to=${to}&showNoe=${showNoe}`);
-    const invoices = await response.json();
-    return invoices;
+export const fetchInvoiceList = async ({
+  from,
+  to,
+  showNoe,
+  page = 1,
+  limit = 20,
+  sortBy = "createdAt",
+  sortDir = "desc",
+  search,
+}) => {
+  const params = new URLSearchParams();
+  params.append("from", from);
+  params.append("to", to);
+  params.append("showNoe", String(showNoe));
+  params.append("page", String(page));
+  params.append("limit", String(limit));
+  params.append("sortBy", sortBy);
+  params.append("sortDir", sortDir);
+  if (search) params.append("search", search);
+
+  const response = await fetch(`${BASE_URL}?${params.toString()}`);
+  const invoices = await response.json();
+  return invoices;
 };
 
 export const fetchInvoiceDetail = async (invoiceId, showNoe) => {

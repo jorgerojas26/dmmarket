@@ -3,7 +3,7 @@ import { Card } from 'react-bootstrap';
 import { useMemo } from 'react';
 import columns from './columns';
 
-const InvoicesTable = ({ data, loading, onRowSelect }) => {
+const InvoicesTable = ({ data, loading, onRowSelect, sorting, pagination, search, print, maxHeight }) => {
   const memoizedColumns = useMemo(() => columns, []);
 
   return (
@@ -12,7 +12,18 @@ const InvoicesTable = ({ data, loading, onRowSelect }) => {
         <h3>Facturas</h3>
       </Card.Header>
       <Card.Body>
-        <Table data={data} columns={memoizedColumns} loading={loading} onRowSelect={onRowSelect} multiSelect />
+        <Table
+          data={data}
+          columns={memoizedColumns}
+          loading={loading}
+          onRowSelect={onRowSelect}
+          multiSelect
+          sorting={sorting}
+          pagination={pagination}
+          search={search}
+          print={print}
+          maxHeight={maxHeight}
+        />
       </Card.Body>
     </Card>
   );

@@ -16,6 +16,7 @@ const columns = [
   {
     Header: 'TOTAL',
     accessor: 'total',
+    disableSortBy: true,
     Cell: ({ value }) => `$${value ? value.toFixed(2) : ''}`,
   },
   {

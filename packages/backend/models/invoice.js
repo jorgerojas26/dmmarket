@@ -1,9 +1,66 @@
 const knex = require("../database");
 
-exports.GET_INVOICES = async ({ from, to, showNoe }) => {
+const buildSortColumn = (sortBy, masterTable, idInvoice) => {
+  const map = {
+    invoiceId: `${masterTable}.${idInvoice}`,
+    client: `${masterTable}.Nombre`,
+    createdAt: `${masterTable}.Fecha`,
+    rif: `${masterTable}.Rif`,
+  };
+  return map[sortBy] || `${masterTable}.Fecha`;
+};
+
+exports.GET_INVOICES = async ({
+  from,
+  to,
+  showNoe,
+  page = 1,
+  limit = 20,
+  sortBy = "createdAt",
+  sortDir = "desc",
+  search,
+}) => {
   const { masterTable, slaveTable, idInvoice } = showNoe;
+  const offset = (Number(page) - 1) * Number(limit);
+  const dbSortColumn = buildSortColumn(sortBy, masterTable, idInvoice);
 
   try {
+    // ── Step 1: Get paginated invoice IDs ──
+    const idQuery = knex
+      .select(`${masterTable}.${idInvoice} as invoiceId`)
+      .from(masterTable)
+      .where(`${masterTable}.Anulada`, 0)
+      .whereBetween(`${masterTable}.Fecha`, [from, to]);
+
+    if (search) {
+      idQuery.where(function () {
+        this.where(`${masterTable}.Nombre`, "like", `%${search}%`).orWhere(
+          `${masterTable}.${idInvoice}`,
+          "like",
+          `%${search}%`,
+        );
+      });
+    }
+
+    // Count total distinct invoices
+    const [{ total }] = await knex
+      .count("* as total")
+      .from(idQuery.clone().as("sq"));
+
+    // Get paginated invoice IDs
+    const invoiceIdRows = await idQuery
+      .clone()
+      .orderByRaw(`?? ${sortDir === "asc" ? "ASC" : "DESC"}`, [dbSortColumn])
+      .limit(Number(limit))
+      .offset(offset);
+
+    const invoiceIds = invoiceIdRows.map((r) => r.invoiceId);
+
+    if (invoiceIds.length === 0) {
+      return { data: [], pagination: { page: Number(page), limit: Number(limit), total: Number(total) } };
+    }
+
+    // ── Step 2: Get line items for those invoice IDs ──
     const response = await knex
       .select(
         `${masterTable}.${idInvoice} as invoiceId`,
@@ -28,8 +85,7 @@ exports.GET_INVOICES = async ({ from, to, showNoe }) => {
         `${slaveTable}.IdProducto`,
       )
       .innerJoin("grupos", "grupos.IdGrupo", "productos.Grupo")
-      .where(`${masterTable}.Anulada`, 0)
-      .whereBetween(`${masterTable}.Fecha`, [from, to])
+      .whereIn(`${masterTable}.${idInvoice}`, invoiceIds)
       .groupBy(
         `${masterTable}.${idInvoice}`,
         `${slaveTable}.IdProducto`,
@@ -37,9 +93,9 @@ exports.GET_INVOICES = async ({ from, to, showNoe }) => {
         `${slaveTable}.Cantidad`,
         `${slaveTable}.Precio`,
       )
-      .orderBy(`${masterTable}.${idInvoice}`, "DESC")
       .orderBy("productos.Descripcion", "DESC");
 
+    // ── Step 3: Group line items into invoices ──
     const invoices = {};
 
     response.forEach((invoice) => {
@@ -61,7 +117,7 @@ exports.GET_INVOICES = async ({ from, to, showNoe }) => {
       });
     });
 
-    //calculate invoice totals
+    // Calculate invoice totals
     Object.keys(invoices).forEach((invoiceId) => {
       const invoice = invoices[invoiceId];
       invoice.total = 0;
@@ -71,9 +127,16 @@ exports.GET_INVOICES = async ({ from, to, showNoe }) => {
       });
     });
 
-    let invoicesArray = Object.keys(invoices).map((key) => invoices[key]);
+    const invoicesArray = Object.keys(invoices).map((key) => invoices[key]);
 
-    return invoicesArray;
+    return {
+      data: invoicesArray,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total: Number(total),
+      },
+    };
   } catch (error) {
     throw error;
   }

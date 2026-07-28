@@ -8,7 +8,7 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
-const ProductsTable = ({ data, totalSummary }) => {
+const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
 
     const [showCurrencyModal, setShowCurrencyModal] = useState(false);
@@ -53,7 +53,7 @@ const ProductsTable = ({ data, totalSummary }) => {
                 </div>
             </Card.Header>
             <Card.Body>
-                <Table data={sortedData} columns={memoizedColumns} showFooter summaries={summaries} />
+                <Table data={sortedData} columns={memoizedColumns} showFooter summaries={summaries} maxHeight={maxHeight} />
             </Card.Body>
             {showCurrencyModal && (
                 <CurrencyModal

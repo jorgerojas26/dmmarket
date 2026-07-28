@@ -215,7 +215,28 @@ const Table = ({
     /* ── Per‑row print helpers ── */
     const hasPerRowPrint =
         print?.enabled && print?.perRowPrint && print?.onRowPrint;
-    const totalColSpan = columns.length + (hasPerRowPrint ? 1 : 0);
+    const hasSelectCol = !!onRowSelect;
+    const totalColSpan = columns.length + (hasPerRowPrint ? 1 : 0) + (hasSelectCol ? 1 : 0);
+
+    /* ── Select-all handler ── */
+    const handleToggleAll = useCallback(() => {
+        const allChecked = rows.length > 0 && rows.every((r) => r.isSelected);
+        if (allChecked) {
+            // Deselect all
+            rows.forEach((r) => {
+                if (r.isSelected) r.toggleRowSelected();
+            });
+            onRowSelect?.([]);
+        } else {
+            // Select all — capture original data before toggling
+            // (r.isSelected is stale after toggleRowSelected calls)
+            const allData = rows.map((r) => r.original);
+            rows.forEach((r) => {
+                if (!r.isSelected) r.toggleRowSelected();
+            });
+            onRowSelect?.(allData);
+        }
+    }, [rows, onRowSelect]);
 
     /* ── Row renderers ── */
 
@@ -387,11 +408,34 @@ const Table = ({
     };
 
     /* ── Table head ── */
-    const thead = (
-        <thead>
-            {headerGroups.map((hg) => (
-                <tr {...hg.getHeaderGroupProps()} key={hg.id}>
-                    {hg.headers.map((column) => {
+    const thead = (() => {
+        const allChecked = rows.length > 0 && rows.every((r) => r.isSelected);
+        const someChecked = rows.some((r) => r.isSelected) && !allChecked;
+
+        return (
+            <thead>
+                {headerGroups.map((hg) => (
+                    <tr {...hg.getHeaderGroupProps()} key={hg.id}>
+                        {hasSelectCol && (
+                            <th
+                                style={{
+                                    width: 40,
+                                    textAlign: "center",
+                                    cursor: "pointer",
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={allChecked}
+                                    ref={(el) => {
+                                        if (el) el.indeterminate = someChecked;
+                                    }}
+                                    onChange={handleToggleAll}
+                                    style={{ cursor: "pointer" }}
+                                />
+                            </th>
+                        )}
+                        {hg.headers.map((column) => {
                         const headerProps = sorting?.enabled
                             ? column.getHeaderProps(
                                   column.getSortByToggleProps(),
@@ -422,7 +466,8 @@ const Table = ({
                 </tr>
             ))}
         </thead>
-    );
+        );
+    })();
 
     /* ── Table body ── */
     const tbody = (
@@ -461,6 +506,7 @@ const Table = ({
                 return (
                     <tfoot>
                         <tr>
+                            {hasSelectCol && <td />}
                             {columns.map((col, idx) => {
                                 const summaryVal =
                                     typeof col.accessor === "string"
@@ -509,6 +555,7 @@ const Table = ({
                 <tfoot>
                     {footerGroups.map((group) => (
                         <tr {...group.getFooterGroupProps()} key={group.id}>
+                            {hasSelectCol && <td />}
                             {group.headers.map((column) => (
                                 <td
                                     {...column.getFooterProps()}
