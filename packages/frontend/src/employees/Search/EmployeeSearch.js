@@ -1,7 +1,7 @@
 import { getAllEmployees } from 'api/employees';
 import SearchInput from 'components/SearchInput';
 
-const EmployeeSearch = ({ onSelect }) => {
+const EmployeeSearch = ({ onSelect, defaultValue }) => {
     const loadEmployees = async (inputValue) => {
         const employees = await getAllEmployees({ filter: inputValue });
 
@@ -27,7 +27,14 @@ const EmployeeSearch = ({ onSelect }) => {
         }
     };
 
-    return <SearchInput loadOptions={loadEmployees} placeholder="Buscar vendedor..." onSelect={handleSelect} />;
+    return (
+        <SearchInput
+            loadOptions={loadEmployees}
+            placeholder="Buscar vendedor..."
+            onSelect={handleSelect}
+            defaultValue={defaultValue}
+        />
+    );
 };
 
 export default EmployeeSearch;

@@ -2,9 +2,10 @@ import SalesDashboard from 'components/Dashboard/SalesDashboard';
 import DateRangePicker from 'components/DateRangePicker';
 import { ShowNoeContext } from 'context/show_noe';
 import { DateTime } from 'luxon';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import Nav from 'react-bootstrap/Nav';
+import { useHistory, useLocation } from 'react-router-dom';
 import DesgloseView from './DesgloseView';
 import InvoicesView from './InvoicesView';
 
@@ -66,15 +67,44 @@ const ICONS = {
     ),
 };
 
+const VALID_VIEWS = ['dashboard', 'desglose', 'despacho'];
+const DEFAULT_FROM = DateTime.now().startOf('year').toISODate();
+const DEFAULT_TO = DateTime.now().toISODate();
+
 const VentasPage = () => {
     const { showNoe } = useContext(ShowNoeContext);
-    const [activeView, setActiveView] = useState('dashboard');
-    const [dateRange, setDateRange] = useState({
-        from: DateTime.now().startOf('year').toISODate(),
-        to: DateTime.now().toISODate(),
-    });
+    const history = useHistory();
+    const location = useLocation();
 
-    const handleDateRangeChange = useCallback(async ({ from, to }) => {
+    // --- Parse state from URL query params ---
+    const searchParams = new URLSearchParams(location.search);
+    const urlView = searchParams.get('view');
+    const urlFrom = searchParams.get('from');
+    const urlTo = searchParams.get('to');
+
+    const initialView = VALID_VIEWS.includes(urlView) ? urlView : 'dashboard';
+    const initialDateRange = {
+        from: urlFrom || DEFAULT_FROM,
+        to: urlTo || DEFAULT_TO,
+    };
+
+    const [activeView, setActiveView] = useState(initialView);
+    const [dateRange, setDateRange] = useState(initialDateRange);
+
+    // --- Sync state back to URL ---
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        params.set('view', activeView);
+        params.set('from', dateRange.from);
+        params.set('to', dateRange.to);
+        history.replace({ search: params.toString() });
+    }, [activeView, dateRange, history]);
+
+    const handleViewChange = useCallback((view) => {
+        setActiveView(view);
+    }, []);
+
+    const handleDateRangeChange = useCallback(({ from, to }) => {
         setDateRange({ from, to });
     }, []);
 
@@ -109,7 +139,7 @@ const VentasPage = () => {
                         variant="pills"
                         className="flex-row flex-md-column"
                         activeKey={activeView}
-                        onSelect={setActiveView}
+                        onSelect={handleViewChange}
                     >
                         <Nav.Item>
                             <Nav.Link eventKey="dashboard">
@@ -135,8 +165,8 @@ const VentasPage = () => {
                         <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
                             <h4 className="m-0 p-0 bg-red text-light">{currentView.heading}</h4>
                             <DateRangePicker
-                                initialFrom={DateTime.now().startOf('year').toISODate()}
-                                initialTo={DateTime.now().toISODate()}
+                                initialFrom={dateRange.from}
+                                initialTo={dateRange.to}
                                 onChange={handleDateRangeChange}
                             />
                         </div>

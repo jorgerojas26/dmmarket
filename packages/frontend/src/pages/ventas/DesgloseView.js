@@ -9,21 +9,78 @@ import SaleReportTable from 'components/SaleReportTable';
 import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
 import { DateTime } from 'luxon';
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useHistory, useLocation } from 'react-router-dom';
 
 const DesgloseView = ({ isActive }) => {
     const { showNoe } = useContext(ShowNoeContext);
+    const history = useHistory();
+    const location = useLocation();
+
+    // --- Parse filters from URL query params ---
+    const searchParams = new URLSearchParams(location.search);
+    const urlDFrom = searchParams.get('dFrom');
+    const urlDTo = searchParams.get('dTo');
+    const urlClientId = searchParams.get('clientId');
+    const urlClientName = searchParams.get('clientName');
+    const urlGroupId = searchParams.get('groupId');
+    const urlGroupName = searchParams.get('groupName');
+    const urlEmployeeId = searchParams.get('employeeId');
+    const urlEmployeeName = searchParams.get('employeeName');
+
+    const today = DateTime.now().toISODate();
+
+    const initialDateRange = {
+        from: urlDFrom || today,
+        to: urlDTo || today,
+    };
+
+    const initialClient = urlClientId ? { IdCliente: urlClientId, name: urlClientName || '' } : null;
+
+    const initialGroup = urlGroupId ? { groupId: urlGroupId, name: urlGroupName || '' } : null;
+
+    const initialEmployee = urlEmployeeId ? { id: urlEmployeeId, name: urlEmployeeName || '' } : null;
 
     // Date range — defaults to today
-    const [dateRange, setDateRange] = useState({
-        from: DateTime.now().toISODate(),
-        to: DateTime.now().toISODate(),
-    });
+    const [dateRange, setDateRange] = useState(initialDateRange);
 
     // Filters (shared)
-    const [selectedClient, setSelectedClient] = useState(null);
-    const [selectedGroup, setSelectedGroup] = useState(null);
-    const [selectedEmployee, setSelectedEmployee] = useState(null);
+    const [selectedClient, setSelectedClient] = useState(initialClient);
+    const [selectedGroup, setSelectedGroup] = useState(initialGroup);
+    const [selectedEmployee, setSelectedEmployee] = useState(initialEmployee);
+
+    // --- Sync filters back to URL ---
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        params.set('dFrom', dateRange.from);
+        params.set('dTo', dateRange.to);
+
+        if (selectedClient?.IdCliente) {
+            params.set('clientId', selectedClient.IdCliente);
+            params.set('clientName', selectedClient.name || '');
+        } else {
+            params.delete('clientId');
+            params.delete('clientName');
+        }
+
+        if (selectedGroup?.groupId) {
+            params.set('groupId', selectedGroup.groupId);
+            params.set('groupName', selectedGroup.name || '');
+        } else {
+            params.delete('groupId');
+            params.delete('groupName');
+        }
+
+        if (selectedEmployee?.id) {
+            params.set('employeeId', String(selectedEmployee.id));
+            params.set('employeeName', selectedEmployee.name || '');
+        } else {
+            params.delete('employeeId');
+            params.delete('employeeName');
+        }
+
+        history.replace({ search: params.toString() });
+    }, [dateRange, selectedClient, selectedGroup, selectedEmployee, history]);
 
     // ---- Facturas table state ----
     const [facturasData, setFacturasData] = useState([]);
@@ -56,6 +113,31 @@ const DesgloseView = ({ isActive }) => {
     // ---- Factura detail modal ----
     const [detailModalShow, setDetailModalShow] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState(null);
+
+    // --- Default values for search components (reconstructed from URL) ---
+    const clientDefaultValue = useMemo(
+        () =>
+            selectedClient
+                ? { key: selectedClient.IdCliente, label: selectedClient.name || '', value: selectedClient }
+                : null,
+        [selectedClient],
+    );
+
+    const groupDefaultValue = useMemo(
+        () =>
+            selectedGroup
+                ? { key: selectedGroup.groupId, label: selectedGroup.name || '', value: selectedGroup }
+                : null,
+        [selectedGroup],
+    );
+
+    const employeeDefaultValue = useMemo(
+        () =>
+            selectedEmployee
+                ? { key: selectedEmployee.id, label: selectedEmployee.name || '', value: selectedEmployee }
+                : null,
+        [selectedEmployee],
+    );
 
     // ---- Handlers ----
 
@@ -243,8 +325,8 @@ const DesgloseView = ({ isActive }) => {
             <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
                 <h4 className="m-0 p-0 bg-red text-light">Desglose de Ventas</h4>
                 <DateRangePicker
-                    initialFrom={DateTime.now().toISODate()}
-                    initialTo={DateTime.now().toISODate()}
+                    initialFrom={dateRange.from}
+                    initialTo={dateRange.to}
                     onChange={handleDateRangeChange}
                 />
             </div>
@@ -252,13 +334,13 @@ const DesgloseView = ({ isActive }) => {
             {/* Filter selectors */}
             <div className="d-flex flex-wrap gap-3 mb-3">
                 <div style={{ minWidth: '220px' }}>
-                    <ClientSearch onSelect={handleClientSelect} />
+                    <ClientSearch onSelect={handleClientSelect} defaultValue={clientDefaultValue} />
                 </div>
                 <div style={{ minWidth: '220px' }}>
-                    <GroupSearch onSelect={handleGroupSelect} />
+                    <GroupSearch onSelect={handleGroupSelect} defaultValue={groupDefaultValue} />
                 </div>
                 <div style={{ minWidth: '220px' }}>
-                    <EmployeeSearch onSelect={handleEmployeeSelect} />
+                    <EmployeeSearch onSelect={handleEmployeeSelect} defaultValue={employeeDefaultValue} />
                 </div>
             </div>
 

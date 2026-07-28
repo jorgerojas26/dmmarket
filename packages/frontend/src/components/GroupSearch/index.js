@@ -3,7 +3,7 @@ import SearchInput from 'components/SearchInput';
 import { ShowNoeContext } from 'context/show_noe';
 import { useContext } from 'react';
 
-const GroupSearch = ({ onSelect }) => {
+const GroupSearch = ({ onSelect, defaultValue }) => {
     const { showNoe } = useContext(ShowNoeContext);
 
     const loadGroups = async (inputValue) => {
@@ -38,6 +38,7 @@ const GroupSearch = ({ onSelect }) => {
                 placeholder="Buscar categoría..."
                 onSelect={handleSelect}
                 isSearchable={false}
+                defaultValue={defaultValue}
             />
         </div>
     );

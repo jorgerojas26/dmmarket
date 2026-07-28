@@ -1,7 +1,7 @@
 import { fetchClients } from 'api/clients';
 import SearchInput from 'components/SearchInput';
 
-const ClientSearch = ({ onSelect }) => {
+const ClientSearch = ({ onSelect, defaultValue }) => {
     const loadClients = async (inputValue) => {
         const clients = await fetchClients({ filter: inputValue });
 
@@ -33,6 +33,7 @@ const ClientSearch = ({ onSelect }) => {
             defaultOptions={false}
             placeholder="Buscar cliente..."
             onSelect={handleSelect}
+            defaultValue={defaultValue}
         />
     );
 };
