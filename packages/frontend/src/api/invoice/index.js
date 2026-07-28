@@ -28,3 +28,10 @@ export const fetchInvoiceList = async ({ from, to, showNoe }) => {
     const invoices = await response.json();
     return invoices;
 };
+
+export const fetchInvoiceDetail = async (invoiceId, showNoe) => {
+    const response = await fetch(
+        `${BASE_URL}/${invoiceId}/detail?showNoe=${showNoe}`,
+    );
+    return response.json();
+};

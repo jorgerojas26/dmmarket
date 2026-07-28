@@ -145,9 +145,66 @@ const GET_BY_GROUP = async (req, res) => {
   }
 };
 
+const GET_INVOICE_DETAIL = async (req, res) => {
+  const { invoiceId } = req.params;
+  const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
+
+  try {
+    const rows = await knex
+      .select(
+        knex.raw(`mf.?? as idFactura`, [idInvoice]),
+        "mf.Fecha as fecha",
+        "clientes.Empresa as cliente",
+        "vendedores.Empresa as vendedor",
+        "sf.Descripcion as descripcion",
+        "sf.Cantidad as cantidad",
+        "sf.Precio as precio",
+        knex.raw(
+          "ROUND(sf.Precio * sf.Cantidad, 2) as subtotal",
+        ),
+      )
+      .from(`${slaveTable} as sf`)
+      .innerJoin(`${masterTable} as mf`, function () {
+        this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
+      })
+      .innerJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
+      .innerJoin("vendedores", "vendedores.idVend", "mf.IdVend")
+      .where(`mf.${idInvoice}`, invoiceId);
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+
+    const total = rows.reduce(
+      (acc, row) => acc + Number(row.subtotal || 0),
+      0,
+    );
+
+    const detail = {
+      idFactura: rows[0].idFactura,
+      fecha: rows[0].fecha,
+      cliente: rows[0].cliente,
+      vendedor: rows[0].vendedor,
+      total: Math.round(total * 100) / 100,
+      productos: rows.map((r) => ({
+        descripcion: r.descripcion,
+        cantidad: Number(r.cantidad),
+        precio: Number(r.precio),
+        subtotal: Number(r.subtotal),
+      })),
+    };
+
+    res.status(200).json(detail);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 module.exports = {
   GET_INVOICES,
   GET_SALES,
   GET_BY_GROUP,
   GET_SALES_BY_CATEGORY,
+  GET_INVOICE_DETAIL,
 };

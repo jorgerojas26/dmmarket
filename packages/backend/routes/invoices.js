@@ -8,5 +8,6 @@ router
   .route("/sales/:categoryId")
   .get(showNoe, controller.GET_SALES_BY_CATEGORY);
 router.route("/group").get(showNoe, controller.GET_BY_GROUP);
+router.route("/:invoiceId/detail").get(showNoe, controller.GET_INVOICE_DETAIL);
 
 module.exports = router;

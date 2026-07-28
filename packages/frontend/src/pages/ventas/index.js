@@ -5,8 +5,7 @@ import { DateTime } from "luxon";
 import { useCallback, useContext, useMemo, useState } from "react";
 import Container from "react-bootstrap/Container";
 import Nav from "react-bootstrap/Nav";
-import CategoriesView from "./CategoriesView";
-import EmployeesView from "./EmployeesView";
+import DesgloseView from "./DesgloseView";
 import InvoicesView from "./InvoicesView";
 
 const NavIcon = ({ children }) => <span className="nav-icon">{children}</span>;
@@ -29,38 +28,6 @@ const ICONS = {
             <rect x="3" y="14" width="7" height="7" />
         </svg>
     ),
-    categories: (
-        <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-            <path d="M22 12A10 10 0 0 0 12 2v10z" />
-        </svg>
-    ),
-    employees: (
-        <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-    ),
     invoices: (
         <svg
             width="18"
@@ -77,6 +44,25 @@ const ICONS = {
             <line x1="16" y1="13" x2="8" y2="13" />
             <line x1="16" y1="17" x2="8" y2="17" />
             <polyline points="10 9 9 9 8 9" />
+        </svg>
+    ),
+    desglose: (
+        <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" />
+            <line x1="3" y1="12" x2="3.01" y2="12" />
+            <line x1="3" y1="18" x2="3.01" y2="18" />
         </svg>
     ),
 };
@@ -101,24 +87,10 @@ const VentasPage = () => {
                     <SalesDashboard dateRange={dateRange} showNoe={showNoe} />
                 ),
             },
-            categories: {
-                heading: "Ventas por Categoría",
+            desglose: {
+                heading: "Desglose de Ventas",
                 render: () => (
-                    <CategoriesView
-                        dateRange={dateRange}
-                        showNoe={showNoe}
-                        isActive={activeView === "categories"}
-                    />
-                ),
-            },
-            employees: {
-                heading: "Ventas por Vendedor",
-                render: () => (
-                    <EmployeesView
-                        dateRange={dateRange}
-                        showNoe={showNoe}
-                        isActive={activeView === "employees"}
-                    />
+                    <DesgloseView isActive={activeView === "desglose"} />
                 ),
             },
             invoices: {
@@ -154,15 +126,8 @@ const VentasPage = () => {
                             </Nav.Link>
                         </Nav.Item>
                         <Nav.Item>
-                            <Nav.Link eventKey="categories">
-                                <NavIcon>{ICONS.categories}</NavIcon> Por
-                                Categoría
-                            </Nav.Link>
-                        </Nav.Item>
-                        <Nav.Item>
-                            <Nav.Link eventKey="employees">
-                                <NavIcon>{ICONS.employees}</NavIcon> Por
-                                Vendedor
+                            <Nav.Link eventKey="desglose">
+                                <NavIcon>{ICONS.desglose}</NavIcon> Desglose
                             </Nav.Link>
                         </Nav.Item>
                         <Nav.Item>
@@ -175,18 +140,20 @@ const VentasPage = () => {
 
                 {/* Content area */}
                 <div className="clientes-content p-4 w-0">
-                    <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
-                        <h4 className="m-0 p-0 bg-red text-light">
-                            {currentView.heading}
-                        </h4>
-                        <DateRangePicker
-                            initialFrom={DateTime.now()
-                                .startOf("year")
-                                .toISODate()}
-                            initialTo={DateTime.now().toISODate()}
-                            onChange={handleDateRangeChange}
-                        />
-                    </div>
+                    {activeView !== "desglose" && (
+                        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+                            <h4 className="m-0 p-0 bg-red text-light">
+                                {currentView.heading}
+                            </h4>
+                            <DateRangePicker
+                                initialFrom={DateTime.now()
+                                    .startOf("year")
+                                    .toISODate()}
+                                initialTo={DateTime.now().toISODate()}
+                                onChange={handleDateRangeChange}
+                            />
+                        </div>
+                    )}
 
                     {currentView.render()}
                 </div>

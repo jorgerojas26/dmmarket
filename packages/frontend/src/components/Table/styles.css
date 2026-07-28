@@ -175,6 +175,12 @@ th.sortable-header:hover {
     font-weight: 500;
 }
 
+/* ── Clickable row ── */
+.table-row-clickable:hover td {
+    background: #2d3138;
+    transition: background 0.12s;
+}
+
 /* ── Summary row ── */
 .summary-value {
     font-weight: 700;

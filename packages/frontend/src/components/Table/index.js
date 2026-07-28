@@ -251,6 +251,7 @@ const Table = ({
         return (
             <tr
                 onClick={() => onClick(row.original)}
+                className="table-row-clickable"
                 style={{ cursor: "pointer" }}
             >
                 {row.cells.map((cell) => (
