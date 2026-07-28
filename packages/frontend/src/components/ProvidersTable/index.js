@@ -128,7 +128,7 @@ const ProvidersTable = ({ onRowSelect }) => {
                     data={data}
                     columns={columns}
                     loading={loading}
-                    onRowSelect={onRowSelect}
+                    onRowClick={onRowSelect}
                     className="providers-table"
                     emptyMessage="Sin datos"
                     maxHeight={620}

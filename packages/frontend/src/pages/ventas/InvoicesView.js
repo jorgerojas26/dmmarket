@@ -75,6 +75,7 @@ const InvoicesView = ({ dateRange, showNoe, isActive }) => {
                     data={invoices}
                     loading={loading}
                     onRowSelect={setSelectedRows}
+                    selectable
                     maxHeight="calc(100vh - 360px)"
                     sorting={{
                         enabled: true,

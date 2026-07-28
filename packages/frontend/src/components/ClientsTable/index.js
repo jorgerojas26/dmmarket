@@ -135,7 +135,7 @@ const ClientsTable = ({ onRowSelect }) => {
                     data={data}
                     columns={columns}
                     loading={loading}
-                    onRowSelect={onRowSelect}
+                    onRowClick={onRowSelect}
                     emptyMessage="Sin datos"
                     search={{
                         enabled: true,

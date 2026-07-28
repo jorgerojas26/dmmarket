@@ -21,7 +21,8 @@ import './styles.css';
  * @param {boolean}        [props.showFooter=false]                   - Show footer row.
  * @param {Object<string, (string|number)>} [props.summaries]         - Pre‑computed summary values keyed by column `accessor`.
  *
- * @param {Function}       [props.onRowSelect]                        - Row‑select callback `(rowData)`.
+ * @param {Function}       [props.onRowSelect]                        - Row‑select callback `(rowData)`. Without `selectable`, behaves like `onRowClick` (single row).
+ * @param {boolean}        [props.selectable=false]                    - Enable checkbox column + multi‑select mode (requires `onRowSelect`).
  * @param {boolean}        [props.multiSelect=false]                  - Multi‑select with Ctrl / Shift.
  * @param {Function}       [props.onRowClick]                         - Row‑click callback `(rowData)`.
  *
@@ -111,6 +112,7 @@ const Table = ({
 
     // ── row modes ──
     onRowSelect,
+    selectable = false,
     multiSelect = false,
     onRowClick,
 
@@ -130,9 +132,9 @@ const Table = ({
     const plugins = useMemo(() => {
         const list = [];
         if (sorting?.enabled) list.push(useSortBy);
-        if (onRowSelect) list.push(useRowSelect);
+        if (selectable && onRowSelect) list.push(useRowSelect);
         return list;
-    }, [sorting?.enabled, !!onRowSelect]);
+    }, [sorting?.enabled, selectable, !!onRowSelect]);
 
     /* ── Table options ── */
     const tableOptions = useMemo(() => {
@@ -158,7 +160,7 @@ const Table = ({
 
     /* ── Sync selection state → parent callback ── */
     useEffect(() => {
-        if (onRowSelect) {
+        if (selectable && onRowSelect) {
             const selected = rows.filter((r) => r.isSelected).map((r) => r.original);
             if (selected.length > 0) {
                 onRowSelect(selected);
@@ -214,7 +216,7 @@ const Table = ({
 
     /* ── Per‑row print helpers ── */
     const hasPerRowPrint = print?.enabled && print?.perRowPrint && print?.onRowPrint;
-    const hasSelectCol = !!onRowSelect;
+    const hasSelectCol = selectable && !!onRowSelect;
     const totalColSpan = columns.length + (hasPerRowPrint ? 1 : 0) + (hasSelectCol ? 1 : 0);
 
     /* ── Select-all handler ── */
@@ -330,11 +332,12 @@ const Table = ({
     const renderRow = useCallback(
         (row) => {
             prepareRow(row);
-            if (onRowSelect) return <SelectRow row={row} multiSelect={multiSelect} />;
+            if (selectable && onRowSelect) return <SelectRow row={row} multiSelect={multiSelect} />;
             if (onRowClick) return <ClickableRow row={row} onClick={onRowClick} />;
+            if (onRowSelect) return <ClickableRow row={row} onClick={onRowSelect} />;
             return <StaticRow row={row} />;
         },
-        [onRowSelect, onRowClick, prepareRow],
+        [selectable, onRowSelect, onRowClick, prepareRow],
     );
 
     /* ── Loading spinner ── */
