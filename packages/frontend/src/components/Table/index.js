@@ -40,7 +40,9 @@ import "./styles.css";
  * @param {boolean}         props.pagination.enabled
  * @param {number}          props.pagination.page                     - Current page (1‑based).
  * @param {number}          props.pagination.totalPages               - Total page count.
- * @param {Function}        props.pagination.onPageChange             - Callback `(page)` on prev/next click.
+ * @param {Function}        props.pagination.onPageChange             - Callback `(page)` on page change.
+ * @param {number}         [props.pagination.totalRows]               - Total row count across all pages (enables "Showing X‑Y of Z" label).
+ * @param {number}         [props.pagination.pageSize]                - Rows per page (for "Showing X‑Y of Z"; defaults to data.length).
  *
  * @param {object}         [props.search]                             - Server‑side search config.
  * @param {boolean}         props.search.enabled
@@ -54,6 +56,47 @@ import "./styles.css";
  * @param {boolean}        [props.print.perRowPrint=false]            - Show per‑row print button.
  * @param {Function}       [props.print.onRowPrint]                   - Per‑row print callback `(rowData)`.
  */
+/**
+ * Build a page-number array with ellipsis for large page counts.
+ * Examples for totalPages=20:
+ *   current=1  => [1, 2, 3, 4, 5, '...', 20]
+ *   current=6  => [1, '...', 5, 6, 7, '...', 20]
+ *   current=18 => [1, '...', 16, 17, 18, 19, 20]
+ */
+const getPageNumbers = (current, totalPages, windowSize = 5) => {
+    if (totalPages <= windowSize + 4) {
+        // Small set — show all
+        const pages = [];
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+        return pages;
+    }
+
+    const pages = [];
+    const leftBound = Math.max(2, current - Math.floor((windowSize - 1) / 2));
+    const rightBound = Math.min(totalPages - 1, leftBound + windowSize - 1);
+
+    // Always include first page
+    pages.push(1);
+
+    // Left ellipsis?
+    if (leftBound > 2) pages.push('...');
+    else if (leftBound === 2) pages.push(2);
+
+    // Middle window
+    for (let i = Math.max(leftBound, 3); i <= rightBound; i++) {
+        pages.push(i);
+    }
+
+    // Right ellipsis?
+    if (rightBound < totalPages - 1) pages.push('...');
+    else if (rightBound === totalPages - 1) pages.push(totalPages - 1);
+
+    // Always include last page
+    pages.push(totalPages);
+
+    return pages;
+};
+
 const Table = ({
     // ── core ──
     data = [],
@@ -529,25 +572,78 @@ const Table = ({
     );
 
     /* ── Pagination bar ── */
-    const paginationBar = pagination?.enabled && pagination.totalPages > 1 && (
-        <div className="table-pagination">
-            <button
-                disabled={pagination.page <= 1}
-                onClick={() => pagination.onPageChange(pagination.page - 1)}
-            >
-                Anterior
-            </button>
-            <span>
-                Página {pagination.page} de {pagination.totalPages}
-            </span>
-            <button
-                disabled={pagination.page >= pagination.totalPages}
-                onClick={() => pagination.onPageChange(pagination.page + 1)}
-            >
-                Siguiente
-            </button>
-        </div>
-    );
+    const paginationBar = pagination?.enabled &&
+        (pagination.totalPages > 1 || pagination.totalRows != null) && (() => {
+            const pg = pagination;
+            const pageSize = pg.pageSize ?? data.length;
+            const totalRows = pg.totalRows;
+            const totalPages = pg.totalPages || 1;
+            const page = pg.page || 1;
+
+            // Row-info label
+            const showRowInfo = totalRows != null && totalRows > 0;
+            let rowInfoLabel = '';
+            if (showRowInfo) {
+                const from = (page - 1) * pageSize + 1;
+                const to = Math.min(page * pageSize, totalRows);
+                rowInfoLabel = `Mostrando ${from}–${to} de ${totalRows} ${totalRows === 1 ? 'resultado' : 'resultados'}`;
+            }
+
+            const pageNumbers = getPageNumbers(page, totalPages, 5);
+
+            return (
+                <div className="table-pagination">
+                    {/* ── Row info ── */}
+                    {showRowInfo && (
+                        <span className="table-pagination-rowinfo">{rowInfoLabel}</span>
+                    )}
+
+                    {/* ── Page controls ── */}
+                    {totalPages > 1 && (
+                        <div className="table-pagination-controls">
+                            {/* Prev */}
+                            <button
+                                className="table-pagination-btn"
+                                disabled={page <= 1}
+                                onClick={() => pg.onPageChange(page - 1)}
+                                aria-label="Página anterior"
+                                title="Anterior"
+                            >
+                                <ChevronLeft />
+                            </button>
+
+                            {/* Page numbers */}
+                            {pageNumbers.map((p, idx) =>
+                                p === '...' ? (
+                                    <span key={`ellipsis-${idx}`} className="table-pagination-ellipsis">…</span>
+                                ) : (
+                                    <button
+                                        key={p}
+                                        className={`table-pagination-btn table-pagination-num${p === page ? ' active' : ''}`}
+                                        onClick={() => pg.onPageChange(p)}
+                                        aria-label={`Ir a página ${p}`}
+                                        aria-current={p === page ? 'page' : undefined}
+                                    >
+                                        {p}
+                                    </button>
+                                )
+                            )}
+
+                            {/* Next */}
+                            <button
+                                className="table-pagination-btn"
+                                disabled={page >= totalPages}
+                                onClick={() => pg.onPageChange(page + 1)}
+                                aria-label="Página siguiente"
+                                title="Siguiente"
+                            >
+                                <ChevronRight />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            );
+        })();
 
     /* ── Table element ── */
     const tableElement = (
@@ -590,6 +686,18 @@ const Table = ({
         </div>
     );
 };
+
+const ChevronLeft = () => (
+    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+    </svg>
+);
+
+const ChevronRight = () => (
+    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+    </svg>
+);
 
 const ChevronUp = () => (
     <svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10">

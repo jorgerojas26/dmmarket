@@ -613,6 +613,8 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
           enabled: true,
           page: tablePage,
           totalPages: pageCount,
+          totalRows: filteredProducts.length,
+          pageSize: PAGE_SIZE,
           onPageChange: handlePageChange,
         }}
         print={{

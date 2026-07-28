@@ -291,6 +291,8 @@ const DesgloseView = ({ isActive }) => {
                   totalPages: Math.ceil(
                     facturasPagination.total / facturasPagination.limit,
                   ),
+                  totalRows: facturasPagination.total,
+                  pageSize: facturasPagination.limit,
                   onPageChange: handleFacturasPageChange,
                 }}
                 search={{
@@ -325,6 +327,8 @@ const DesgloseView = ({ isActive }) => {
                   totalPages: Math.ceil(
                     productosPagination.total / productosPagination.limit,
                   ),
+                  totalRows: productosPagination.total,
+                  pageSize: productosPagination.limit,
                   onPageChange: handleProductosPageChange,
                 }}
                 search={{

@@ -29,6 +29,8 @@ const SaleReportCard = ({
                                   enabled: true,
                                   page: pagination.page,
                                   totalPages: pagination.totalPages,
+                                  totalRows: pagination.totalRows,
+                                  pageSize: pagination.pageSize,
                                   onPageChange,
                               }
                             : undefined

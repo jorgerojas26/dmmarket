@@ -381,6 +381,8 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
               enabled: true,
               page: salesPage,
               totalPages,
+              totalRows: salesData.total,
+              pageSize: LIMIT,
               onPageChange: setSalesPage,
             }}
           />

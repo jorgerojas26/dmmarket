@@ -72,6 +72,8 @@ const ProvidersTable = ({ onRowSelect }) => {
             enabled: true,
             page,
             totalPages,
+            totalRows: total,
+            pageSize: LIMIT,
             onPageChange: setPage,
           }}
         />

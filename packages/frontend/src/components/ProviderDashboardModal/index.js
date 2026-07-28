@@ -635,6 +635,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             enabled: true,
                             page: purchasesPage,
                             totalPages: purchasesTotalPages,
+                            totalRows: purchasesData.total,
+                            pageSize: LIMIT,
                             onPageChange: setPurchasesPage,
                         }}
                     />
@@ -673,6 +675,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             enabled: true,
                             page: salesPage,
                             totalPages: salesTotalPages,
+                            totalRows: salesData.total,
+                            pageSize: LIMIT,
                             onPageChange: setSalesPage,
                         }}
                     />
@@ -709,6 +713,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             enabled: true,
                             page: clientsPage,
                             totalPages: clientsTotalPages,
+                            totalRows: clientsData.total,
+                            pageSize: LIMIT,
                             onPageChange: setClientsPage,
                         }}
                     />
@@ -745,6 +751,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             enabled: true,
                             page: productsPage,
                             totalPages: productsTotalPages,
+                            totalRows: productsData.total,
+                            pageSize: LIMIT,
                             onPageChange: setProductsPage,
                         }}
                     />

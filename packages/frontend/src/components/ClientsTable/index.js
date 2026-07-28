@@ -84,6 +84,8 @@ const ClientsTable = ({ onRowSelect }) => {
                         enabled: true,
                         page,
                         totalPages,
+                        totalRows: total,
+                        pageSize: LIMIT,
                         onPageChange: setPage,
                     }}
                     maxHeight={700}
