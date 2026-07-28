@@ -167,6 +167,15 @@ const Table = ({
         state,
     } = useTable(tableOptions, ...plugins);
 
+    /* ── Sync selection state → parent callback ── */
+    useEffect(() => {
+        if (onRowSelect) {
+            const selected = rows.filter((r) => r.isSelected).map((r) => r.original);
+            onRowSelect(selected);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state.selectedRowIds]);
+
     /* ── Server‑side sort notifier ── */
     const prevSortByRef = useRef(null);
 
@@ -222,34 +231,25 @@ const Table = ({
     const handleToggleAll = useCallback(() => {
         const allChecked = rows.length > 0 && rows.every((r) => r.isSelected);
         if (allChecked) {
-            // Deselect all
             rows.forEach((r) => {
                 if (r.isSelected) r.toggleRowSelected();
             });
-            onRowSelect?.([]);
         } else {
-            // Select all — capture original data before toggling
-            // (r.isSelected is stale after toggleRowSelected calls)
-            const allData = rows.map((r) => r.original);
             rows.forEach((r) => {
                 if (!r.isSelected) r.toggleRowSelected();
             });
-            onRowSelect?.(allData);
         }
-    }, [rows, onRowSelect]);
+    }, [rows]);
 
     /* ── Row renderers ── */
 
-    const MemoizedSelectRow = React.memo(({ row, onRowSelect: onSel, multiSelect: multi }) => {
+    const SelectRow = ({ row, multiSelect: multi }) => {
         const handleClick = (e) => {
             const lastIdx = Object.keys(state.selectedRowIds).pop();
             const newIdx = row.index;
 
             if (e.ctrlKey && !e.shiftKey) {
                 row.toggleRowSelected();
-                if (multi) {
-                    onSel?.(rows.filter((r) => r.isSelected || r === row).map((r) => r.original));
-                }
             } else if (e.shiftKey && !e.ctrlKey) {
                 if (multi && lastIdx != null) {
                     const last = Number(lastIdx);
@@ -260,26 +260,40 @@ const Table = ({
                     for (let i = from; i <= to; i++) {
                         if (i !== last) rows[i].toggleRowSelected();
                     }
-                    onSel?.(rows.filter((r) => r.isSelected).map((r) => r.original));
                 }
             } else {
-                if (row.isSelected) {
-                    row.toggleRowSelected();
-                    if (!multi) onSel?.(null); // deselect
-                } else {
-                    state.selectedRowIds = {};
-                    row.toggleRowSelected();
-                    if (!multi) onSel?.(row.original);
-                    else onSel?.(rows.filter((r) => r.isSelected || r === row).map((r) => r.original));
-                }
+                state.selectedRowIds = {};
+                row.toggleRowSelected();
             }
         };
 
         return (
             <tr
                 {...row.getRowProps({ onClick: handleClick })}
-                {...row.getToggleRowSelectedProps({})}
+                className={row.isSelected ? "row-selected" : ""}
+                style={{
+                    background: row.isSelected ? "#2d3748" : "transparent",
+                    color: row.isSelected ? "#e4e6ea" : "#c4cad4",
+                    cursor: "pointer",
+                }}
             >
+                {hasSelectCol && (
+                    <td
+                        style={{
+                            width: 40,
+                            textAlign: "center",
+                            background: row.isSelected ? "#2d3748" : "transparent",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <input
+                            type="checkbox"
+                            checked={row.isSelected}
+                            readOnly
+                            style={{ cursor: "pointer", pointerEvents: "none" }}
+                        />
+                    </td>
+                )}
                 {row.cells.map((cell) => (
                     <td
                         key={cell.column.id}
@@ -304,7 +318,7 @@ const Table = ({
                 )}
             </tr>
         );
-    });
+    };
 
     const ClickableRow = React.memo(({ row, onClick }) => {
         return (
@@ -349,7 +363,7 @@ const Table = ({
     const renderRow = useCallback(
         (row) => {
             prepareRow(row);
-            if (onRowSelect) return <MemoizedSelectRow row={row} onRowSelect={onRowSelect} multiSelect={multiSelect} />;
+            if (onRowSelect) return <SelectRow row={row} multiSelect={multiSelect} />;
             if (onRowClick)
                 return <ClickableRow row={row} onClick={onRowClick} />;
             return <StaticRow row={row} />;
@@ -798,7 +812,7 @@ const RowActionCell = React.memo(({ onPrint, rowData, isSelected }) => {
                 <PrintIcon />
             </span>
         </td>
-    );
-});
+        );
+    });
 
 export default Table;

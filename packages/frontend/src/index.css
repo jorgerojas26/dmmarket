@@ -469,6 +469,13 @@ div.card-body {
     width: 100%;
 }
 
+/* ── Table row selection ── */
+.table-container tr.row-selected,
+.table-container tr.row-selected td {
+    background: #2d3748 !important;
+    color: #e4e6ea !important;
+}
+
 /* ── Sidebar Nav ── */
 .clients-sidebar .nav-link {
     color: #8b92a0;
