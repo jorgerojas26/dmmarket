@@ -22,6 +22,7 @@ const ProveedoresPage = () => {
     const [mode, setMode] = useState('ventas');
     const [selectedProvider, setSelectedProvider] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [modalKey, setModalKey] = useState(0);
 
     const { showNoe } = useContext(ShowNoeContext);
 
@@ -64,6 +65,7 @@ const ProveedoresPage = () => {
 
     const handleProviderSelect = useCallback((provider) => {
         setSelectedProvider(provider);
+        setModalKey((k) => k + 1);
         setShowModal(true);
     }, []);
 
@@ -118,6 +120,7 @@ const ProveedoresPage = () => {
             </div>
             {showModal && (
                 <ProviderDashboardModal
+                    key={modalKey}
                     show={showModal}
                     onClose={() => setShowModal(false)}
                     provider={selectedProvider}

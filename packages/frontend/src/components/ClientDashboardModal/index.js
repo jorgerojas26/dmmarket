@@ -132,17 +132,6 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
     const [chartLoading, setChartLoading] = useState(false);
     const [chartTooltip, setChartTooltip] = useState({ visible: false, x: 0, y: 0, point: null });
 
-    // Reset state when modal opens
-    useEffect(() => {
-        if (show) {
-            setDateRange({ from: oneYearAgo, to: today });
-            setSalesPage(1);
-            setSummary({ totalAmount: 0, totalCount: 0, avgTicket: null, avgDaysBetweenSales: null });
-            setSalesData({ data: [], total: 0 });
-            setChartData([]);
-        }
-    }, [show]);
-
     // Fetch summary
     useEffect(() => {
         if (!show || !client?.IdCliente) return;

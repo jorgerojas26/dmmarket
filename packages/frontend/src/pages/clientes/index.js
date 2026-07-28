@@ -16,6 +16,7 @@ const ClientesPage = () => {
     const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
     const [selectedClient, setSelectedClient] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [modalKey, setModalKey] = useState(0);
     const [activeView, setActiveView] = useState('dashboard');
 
     const { showNoe } = useContext(ShowNoeContext);
@@ -27,6 +28,7 @@ const ClientesPage = () => {
 
     const handleRowSelect = useCallback((client) => {
         setSelectedClient(client);
+        setModalKey((k) => k + 1);
         setShowModal(true);
     }, []);
 
@@ -68,7 +70,12 @@ const ClientesPage = () => {
                 </div>
             </div>
             {showModal && (
-                <ClientDashboardModal show={showModal} onClose={() => setShowModal(false)} client={selectedClient} />
+                <ClientDashboardModal
+                    key={modalKey}
+                    show={showModal}
+                    onClose={() => setShowModal(false)}
+                    client={selectedClient}
+                />
             )}
         </Container>
     );

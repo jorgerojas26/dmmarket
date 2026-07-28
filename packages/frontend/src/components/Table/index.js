@@ -160,7 +160,9 @@ const Table = ({
     useEffect(() => {
         if (onRowSelect) {
             const selected = rows.filter((r) => r.isSelected).map((r) => r.original);
-            onRowSelect(selected);
+            if (selected.length > 0) {
+                onRowSelect(selected);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state.selectedRowIds]);

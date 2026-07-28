@@ -160,41 +160,6 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const [saleDetailModalShow, setSaleDetailModalShow] = useState(false);
     const [selectedSale, setSelectedSale] = useState(null);
 
-    // Reset state when modal opens
-    useEffect(() => {
-        if (show) {
-            setDateRange({ from: oneMonthAgo, to: today });
-            setPurchasesPage(1);
-            setSalesPage(1);
-            setClientsPage(1);
-            setProductsPage(1);
-            setActiveTab('ventas');
-            setSummary({
-                totalCompras: 0,
-                numCompras: 0,
-                totalVentas: 0,
-                numVentas: 0,
-                bestSeller: null,
-            });
-            setPurchasesData({ data: [], total: 0 });
-            setSalesData({ data: [], total: 0 });
-            setClientsData({ data: [], total: 0 });
-            setProductsData({ data: [], total: 0 });
-            setPurchasesSearch('');
-            setSalesSearch('');
-            setClientsSearch('');
-            setProductsSearch('');
-            setPurchasesSort([{ id: 'fecha', desc: true }]);
-            setSalesSort([{ id: 'fecha', desc: true }]);
-            setClientsSort([{ id: 'totalVentas', desc: true }]);
-            setProductsSort([{ id: 'totalVentas', desc: true }]);
-            setDetailModalShow(false);
-            setSelectedPurchase(null);
-            setSaleDetailModalShow(false);
-            setSelectedSale(null);
-        }
-    }, [show]);
-
     // Fetch summary
     useEffect(() => {
         if (!show || !provider?.IdProveedor) return;
