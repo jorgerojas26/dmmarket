@@ -377,29 +377,14 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
             className='table'
             maxHeight={null}
             emptyMessage='Sin ventas en este período'
+            pagination={{
+              enabled: true,
+              page: salesPage,
+              totalPages,
+              onPageChange: setSalesPage,
+            }}
           />
         </div>
-        {totalPages > 1 && (
-          <div className='pagination-bar'>
-            <button
-              className='btn btn-sm btn-outline-light'
-              disabled={salesPage <= 1}
-              onClick={() => setSalesPage((p) => p - 1)}
-            >
-              Anterior
-            </button>
-            <span>
-              Página {salesPage} de {totalPages}
-            </span>
-            <button
-              className='btn btn-sm btn-outline-light'
-              disabled={salesPage >= totalPages}
-              onClick={() => setSalesPage((p) => p + 1)}
-            >
-              Siguiente
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

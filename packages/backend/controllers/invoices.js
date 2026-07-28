@@ -19,29 +19,72 @@ const GET_INVOICES = async (req, res) => {
 };
 
 const GET_SALES = async (req, res) => {
-  const { from, to } = req.query;
+  const {
+    from,
+    to,
+    page = 1,
+    limit = 20,
+    sortBy = "rawProfit",
+    sortDir = "desc",
+  } = req.query;
+  const offset = (Number(page) - 1) * Number(limit);
+
+  const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
 
   try {
-    const sales_report = await model.GET_SALES_QUERY({
+    // Count query — count distinct products in the grouped result
+    const [{ total }] = await knex
+      .count("* as total")
+      .from(
+        knex
+          .select("productos.IdProducto")
+          .from(slaveTable)
+          .innerJoin(masterTable, function () {
+            this.on(
+              `${masterTable}.${idInvoice}`,
+              `${slaveTable}.${idInvoice}`,
+            ).andOn(`${masterTable}.Anulada`, 0);
+          })
+          .innerJoin(
+            "productos",
+            "productos.IdProducto",
+            `${slaveTable}.IdProducto`,
+          )
+          .whereBetween(`${masterTable}.Fecha`, [from, to])
+          .groupBy("productos.IdProducto")
+          .as("sub"),
+      );
+
+    // Data query with sorting and pagination
+    const data = await model.GET_SALES_QUERY({
       from,
       to,
       showNoe: req.locals.showNoe,
+      sortBy,
+      sortDir,
+      limit: Number(limit),
+      offset: Number(offset),
     });
 
+    // Chart data (no pagination, needed by other consumers)
     const group_sales_chart_data = await model.GET_BY_GROUP_QUERY({
       from,
       to,
       showNoe: req.locals.showNoe,
     });
 
-    const response = {
-      sales_report,
+    res.status(200).json({
+      data,
       group_sales_chart_data,
-    };
-
-    res.status(200).json(response);
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total: Number(total),
+      },
+    });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 

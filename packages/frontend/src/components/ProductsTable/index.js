@@ -15,16 +15,12 @@ const ProductsTable = ({ data, totalSummary }) => {
 
     const quantityTotal = useMemo(() => {
         if (!data) return 0;
-
-        return data.reduce((acc, item) => {
-            return acc + item.quantity;
-        }, 0);
+        return data.reduce((acc, item) => acc + item.quantity, 0);
     }, [data]);
 
     const sortedData = useMemo(() => {
         if (!data) return [];
-
-        return data.sort((a, b) => {
+        return [...data].sort((a, b) => {
             return (
                 a.group.toLowerCase().localeCompare(b.group.toLowerCase()) ||
                 a.product.toLowerCase().localeCompare(b.product.toLowerCase())
@@ -34,43 +30,19 @@ const ProductsTable = ({ data, totalSummary }) => {
 
     const memoizedColumns = useMemo(
         () => [
-            {
-                Header: 'Categoría',
-                accessor: 'group',
-            },
-            {
-                Header: 'ID',
-                accessor: 'productId',
-            },
-            {
-                Header: 'Producto',
-                accessor: 'product',
-            },
-            {
-                Header: 'Cantidad',
-                accessor: 'quantity',
-                Footer: () => {
-                    return <span>{quantityTotal ? quantityTotal.toFixed(2) : ''}</span>;
-                },
-            },
-            {
-                Header: 'Total',
-                accessor: 'total',
-                Footer: () => {
-                    return <span>${totalSummary ? totalSummary.toFixed(2) : ''}</span>;
-                },
-            },
+            { Header: 'Categoría', accessor: 'group' },
+            { Header: 'ID', accessor: 'productId' },
+            { Header: 'Producto', accessor: 'product' },
+            { Header: 'Cantidad', accessor: 'quantity' },
+            { Header: 'Total', accessor: 'total' },
         ],
-        [totalSummary, quantityTotal]
+        []
     );
 
-    console.log(sortedData);
-
-    // const exportToPDF = () => {
-    //   const pdfData = pdf(sortedData, quantityTotal, totalSummary);
-    //
-    //   pdfMake.createPdf(pdfData).open();
-    // };
+    const summaries = useMemo(() => ({
+        quantity: quantityTotal ? quantityTotal.toFixed(2) : '',
+        total: totalSummary ? `$${totalSummary.toFixed(2)}` : '',
+    }), [quantityTotal, totalSummary]);
 
     return (
         <Card>
@@ -81,7 +53,7 @@ const ProductsTable = ({ data, totalSummary }) => {
                 </div>
             </Card.Header>
             <Card.Body>
-                <Table data={sortedData} columns={memoizedColumns} showFooter />
+                <Table data={sortedData} columns={memoizedColumns} showFooter summaries={summaries} />
             </Card.Body>
             {showCurrencyModal && (
                 <CurrencyModal

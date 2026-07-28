@@ -370,7 +370,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     }, [provider?.IdProveedor, showNoe]);
 
     const handlePrintPurchase = useCallback(async (purchase, e) => {
-        e.stopPropagation();
+        if (e?.stopPropagation) e.stopPropagation();
         try {
             const detail = await fetchPurchaseDetail(
                 provider.IdProveedor,
@@ -620,48 +620,25 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             { Header: 'IdFactura', accessor: 'idFactura' },
                             { Header: 'Fecha', accessor: 'fecha', Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }) },
                             { Header: 'Monto', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
-                            { Header: 'Imprimir', accessor: 'idFactura', Cell: ({ row }) => (
-                                <button
-                                    className='btn btn-sm btn-outline-light'
-                                    onClick={(e) => handlePrintPurchase(row.original, e)}
-                                    title='Imprimir factura'
-                                >
-                                    <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
-                                        <polyline points='6 9 6 2 18 2 18 9' />
-                                        <path d='M6 12H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2' />
-                                        <rect x='6' y='14' width='12' height='8' />
-                                    </svg>
-                                </button>
-                            )},
                         ]}
                         loading={purchasesLoading}
                         className='provider-table'
                         maxHeight={null}
                         onRowClick={handlePurchaseRowClick}
                         emptyMessage='Sin compras en este período'
+                        print={{
+                            enabled: true,
+                            perRowPrint: true,
+                            onRowPrint: (rowData) => handlePrintPurchase(rowData),
+                        }}
+                        pagination={{
+                            enabled: true,
+                            page: purchasesPage,
+                            totalPages: purchasesTotalPages,
+                            onPageChange: setPurchasesPage,
+                        }}
                     />
                 </div>
-                {purchasesTotalPages > 1 && (
-                    <div className="provider-pagination-bar">
-                        <button
-                            className="btn btn-sm btn-outline-light"
-                            disabled={purchasesPage <= 1}
-                            onClick={() => setPurchasesPage((p) => p - 1)}
-                        >
-                            Anterior
-                        </button>
-                        <span>
-                            Página {purchasesPage} de {purchasesTotalPages}
-                        </span>
-                        <button
-                            className="btn btn-sm btn-outline-light"
-                            disabled={purchasesPage >= purchasesTotalPages}
-                            onClick={() => setPurchasesPage((p) => p + 1)}
-                        >
-                            Siguiente
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     );
@@ -692,29 +669,14 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         maxHeight={null}
                         onRowClick={handleSaleRowClick}
                         emptyMessage='Sin ventas en este período'
+                        pagination={{
+                            enabled: true,
+                            page: salesPage,
+                            totalPages: salesTotalPages,
+                            onPageChange: setSalesPage,
+                        }}
                     />
                 </div>
-                {salesTotalPages > 1 && (
-                    <div className="provider-pagination-bar">
-                        <button
-                            className="btn btn-sm btn-outline-light"
-                            disabled={salesPage <= 1}
-                            onClick={() => setSalesPage((p) => p - 1)}
-                        >
-                            Anterior
-                        </button>
-                        <span>
-                            Página {salesPage} de {salesTotalPages}
-                        </span>
-                        <button
-                            className="btn btn-sm btn-outline-light"
-                            disabled={salesPage >= salesTotalPages}
-                            onClick={() => setSalesPage((p) => p + 1)}
-                        >
-                            Siguiente
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     );
@@ -743,29 +705,14 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         className='provider-table'
                         maxHeight={null}
                         emptyMessage='Sin clientes en este período'
+                        pagination={{
+                            enabled: true,
+                            page: clientsPage,
+                            totalPages: clientsTotalPages,
+                            onPageChange: setClientsPage,
+                        }}
                     />
                 </div>
-                {clientsTotalPages > 1 && (
-                    <div className="provider-pagination-bar">
-                        <button
-                            className="btn btn-sm btn-outline-light"
-                            disabled={clientsPage <= 1}
-                            onClick={() => setClientsPage((p) => p - 1)}
-                        >
-                            Anterior
-                        </button>
-                        <span>
-                            Página {clientsPage} de {clientsTotalPages}
-                        </span>
-                        <button
-                            className="btn btn-sm btn-outline-light"
-                            disabled={clientsPage >= clientsTotalPages}
-                            onClick={() => setClientsPage((p) => p + 1)}
-                        >
-                            Siguiente
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     );
@@ -794,29 +741,14 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         className='provider-table'
                         maxHeight={null}
                         emptyMessage='Sin productos en este período'
+                        pagination={{
+                            enabled: true,
+                            page: productsPage,
+                            totalPages: productsTotalPages,
+                            onPageChange: setProductsPage,
+                        }}
                     />
                 </div>
-                {productsTotalPages > 1 && (
-                    <div className="provider-pagination-bar">
-                        <button
-                            className="btn btn-sm btn-outline-light"
-                            disabled={productsPage <= 1}
-                            onClick={() => setProductsPage((p) => p - 1)}
-                        >
-                            Anterior
-                        </button>
-                        <span>
-                            Página {productsPage} de {productsTotalPages}
-                        </span>
-                        <button
-                            className="btn btn-sm btn-outline-light"
-                            disabled={productsPage >= productsTotalPages}
-                            onClick={() => setProductsPage((p) => p + 1)}
-                        >
-                            Siguiente
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     );

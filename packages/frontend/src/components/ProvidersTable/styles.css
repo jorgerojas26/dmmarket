@@ -46,7 +46,9 @@ input[type="search"].providers-table__input,
     color: #f8fafc;
     font-size: 0.9375rem;
     outline: none;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
 }
 
 .providers-table__input::placeholder {
@@ -64,11 +66,6 @@ input[type="search"].providers-table__input,
     border: 1px solid #2c3034;
     border-radius: 12px;
     overflow: hidden;
-}
-
-.providers-table__scroll {
-    max-height: 620px;
-    overflow: auto;
 }
 
 .providers-table {

@@ -1,0 +1,182 @@
+/* ── Table toolbar ── */
+.table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    height: 42px;
+    padding-bottom: 2px;
+}
+
+/* ── Search bar (inside toolbar) ── */
+.table-search-bar {
+    position: relative;
+    min-width: 200px;
+    height: 100%;
+    flex: 1 1 auto;
+}
+
+.table-search-icon {
+    position: absolute;
+    top: 50%;
+    left: 14px;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    color: #6b7280;
+    pointer-events: none;
+}
+
+input[type="search"].table-search-input,
+.table-search-input {
+    -webkit-appearance: none;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 6px 14px 6px 40px;
+    border: none;
+    background: #1a1d21;
+    color: #e4e6ea;
+    font-size: 0.875rem;
+    outline: none;
+    height: 100%;
+    transition:
+        background 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.table-search-input::placeholder {
+    color: #6b7280;
+}
+
+.table-search-input:focus {
+    background: #252830;
+    box-shadow: 0 0 0 2px rgba(100, 140, 200, 0.4), 0 0 12px rgba(100, 140, 200, 0.15);
+}
+
+.table-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.table-toolbar-btn {
+    background: #2d3138;
+    border: 1px solid #3a3f48;
+    color: #c4cad4;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+
+.table-toolbar-btn:hover {
+    background: #3a3f48;
+    border-color: #4a5060;
+    color: #e4e6ea;
+}
+
+/* ── Row action (print) button ── */
+.table-row-action {
+    background: none;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.85rem;
+    transition:
+        color 0.15s,
+        background 0.15s;
+}
+
+.table-row-action:hover {
+    color: #e4e6ea;
+    background: #2d3138;
+}
+
+/* ── Sortable header ── */
+th.sortable-header {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background 0.12s;
+}
+
+th.sortable-header:hover {
+    background: #2d3138;
+}
+
+.sort-header-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sort-chevron {
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 0;
+    opacity: 0.35;
+    transition: opacity 0.12s;
+}
+
+.sort-chevron.active {
+    opacity: 1;
+}
+
+.sort-chevron svg {
+    width: 10px;
+    height: 10px;
+}
+
+/* ── Pagination bar ── */
+.table-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 10px 8px 6px;
+    border-top: 1px solid #2d3138;
+}
+
+.table-pagination button {
+    background: #2d3138;
+    border: 1px solid #3a3f48;
+    color: #c4cad4;
+    padding: 4px 14px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+
+.table-pagination button:hover:not(:disabled) {
+    background: #3a3f48;
+    border-color: #4a5060;
+    color: #e4e6ea;
+}
+
+.table-pagination button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.table-pagination span {
+    color: #9ca3af;
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+
+/* ── Summary row ── */
+.summary-value {
+    font-weight: 700;
+    color: #e4e6ea;
+}

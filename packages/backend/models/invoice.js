@@ -79,10 +79,10 @@ exports.GET_INVOICES = async ({ from, to, showNoe }) => {
   }
 };
 
-exports.GET_SALES_QUERY = async ({ from, to, groupId, showNoe }) => {
+exports.GET_SALES_QUERY = async ({ from, to, groupId, showNoe, sortBy, sortDir, limit, offset }) => {
   const { masterTable, slaveTable, idInvoice } = showNoe;
   try {
-    const response = await knex
+    const query = knex
       .select(
         "productos.Descripcion as product",
         knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
@@ -120,8 +120,12 @@ exports.GET_SALES_QUERY = async ({ from, to, groupId, showNoe }) => {
         }
       })
       .groupBy("productos.IdProducto")
-      .orderBy("rawProfit", "DESC");
+      .orderBy(sortBy || "rawProfit", sortDir || "DESC");
 
+    if (limit) query.limit(Number(limit));
+    if (offset != null) query.offset(Number(offset));
+
+    const response = await query;
     return response;
   } catch (error) {
     return error;
