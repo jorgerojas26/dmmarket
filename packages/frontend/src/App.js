@@ -6,7 +6,7 @@ import { useContext, useEffect } from "react";
 import Container from "react-bootstrap/Container";
 import Nav from "react-bootstrap/Nav";
 import Navbar from "react-bootstrap/Navbar";
-import { Link, Route, Switch, useLocation } from "react-router-dom";
+import { Link, Redirect, Route, Switch, useLocation } from "react-router-dom";
 import { fetchCurrencyRates } from "./api/currency_rates";
 import { CurrencyRateContext } from "./context/currency_rate";
 import ProveedoresPage from "./pages/proveedores";
@@ -123,6 +123,7 @@ function App() {
                     className="d-flex flex-column flex-grow-1 overflow-hidden p-0"
                 >
                     <Switch>
+                        <Redirect exact from="/" to="/ventas" />
                         <Route path="/ventas" component={VentasPage} />
                         <Route path="/clientes" component={ClientesPage} />
                         <Route path="/productos" component={ProductosPage} />
