@@ -1,11 +1,11 @@
-import DateRangePicker from "components/DateRangePicker";
-import debounce from "lodash.debounce";
-import { useEffect, useMemo, useState } from "react";
-import { DateTime } from "luxon";
-import { fetchSalesByGroup } from "../../api/groups";
-import ProductChart from "../../components/Cards/ProductGraph";
-import SaleReportCard from "../../components/Cards/SaleReport";
-import GroupSearch from "../../components/GroupSearch";
+import DateRangePicker from 'components/DateRangePicker';
+import debounce from 'lodash.debounce';
+import { DateTime } from 'luxon';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchSalesByGroup } from '../../api/groups';
+import ProductChart from '../../components/Cards/ProductGraph';
+import SaleReportCard from '../../components/Cards/SaleReport';
+import GroupSearch from '../../components/GroupSearch';
 
 const Categories = () => {
     const [loading, setLoading] = useState(false);
@@ -37,9 +37,7 @@ const Categories = () => {
     }, [data, filteredData]);
 
     const onFilter = debounce((searchTerm) => {
-        const filteredData = data.filter((f) =>
-            f.product.toLowerCase().includes(searchTerm.toLowerCase()),
-        );
+        const filteredData = data.filter((f) => f.product.toLowerCase().includes(searchTerm.toLowerCase()));
         setFilteredData(filteredData);
     }, 500);
 
@@ -55,7 +53,7 @@ const Categories = () => {
                 });
                 setData(Array.isArray(response) ? response : []);
             } catch (error) {
-                console.log("error", error);
+                console.log('error', error);
             } finally {
                 setLoading(false);
             }

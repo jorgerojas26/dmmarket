@@ -1,8 +1,17 @@
-import { useMemo } from 'react';
 import Table from 'components/Table';
+import { useMemo } from 'react';
 import columns from './columns';
 
-const SaleReportTable = ({ data, loading, sorting, pagination, search, onRowClick, maxHeight, columns: customColumns }) => {
+const SaleReportTable = ({
+    data,
+    loading,
+    sorting,
+    pagination,
+    search,
+    onRowClick,
+    maxHeight,
+    columns: customColumns,
+}) => {
     const defaultColumns = useMemo(() => columns, []);
     const memoizedColumns = customColumns || defaultColumns;
 

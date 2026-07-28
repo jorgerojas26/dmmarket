@@ -1,15 +1,15 @@
-import { ShowNoeContext } from "context/show_noe";
-import ClientesPage from "pages/clientes";
-import ProductosPage from "pages/productos";
-import VentasPage from "pages/ventas";
-import { useContext, useEffect } from "react";
-import Container from "react-bootstrap/Container";
-import Nav from "react-bootstrap/Nav";
-import Navbar from "react-bootstrap/Navbar";
-import { Link, Redirect, Route, Switch, useLocation } from "react-router-dom";
-import { fetchCurrencyRates } from "./api/currency_rates";
-import { CurrencyRateContext } from "./context/currency_rate";
-import ProveedoresPage from "./pages/proveedores";
+import { ShowNoeContext } from 'context/show_noe';
+import ClientesPage from 'pages/clientes';
+import ProductosPage from 'pages/productos';
+import VentasPage from 'pages/ventas';
+import { useContext, useEffect } from 'react';
+import Container from 'react-bootstrap/Container';
+import Nav from 'react-bootstrap/Nav';
+import Navbar from 'react-bootstrap/Navbar';
+import { Link, Redirect, Route, Switch, useLocation } from 'react-router-dom';
+import { fetchCurrencyRates } from './api/currency_rates';
+import { CurrencyRateContext } from './context/currency_rate';
+import ProveedoresPage from './pages/proveedores';
 
 function App() {
     const location = useLocation();
@@ -19,31 +19,23 @@ function App() {
     useEffect(() => {
         fetchCurrencyRates().then((response) => {
             if (response.status === 200) {
-                setCurrencyRate(
-                    response.data.find(
-                        (currency) => currency.Simbolo === "BsS",
-                    ),
-                );
+                setCurrencyRate(response.data.find((currency) => currency.Simbolo === 'BsS'));
             }
         });
     }, []);
 
     return (
         <div className="App bg-dark">
-            <Container
-                fluid
-                id="main"
-                className="m-0 p-0 vh-100 d-flex flex-column"
-            >
+            <Container fluid id="main" className="m-0 p-0 vh-100 d-flex flex-column">
                 <Navbar
                     variant="dark"
                     className={
-                        "app-navbar" +
-                        (location.pathname.includes("/ventas") ||
-                        location.pathname.includes("/clientes") ||
-                        location.pathname.includes("/proveedores")
-                            ? " has-clients-sidebar"
-                            : "")
+                        'app-navbar' +
+                        (location.pathname.includes('/ventas') ||
+                        location.pathname.includes('/clientes') ||
+                        location.pathname.includes('/proveedores')
+                            ? ' has-clients-sidebar'
+                            : '')
                     }
                     expand="xl"
                 >
@@ -52,27 +44,15 @@ function App() {
 
                         <Navbar.Toggle aria-controls="basic-navbar-nav" />
                         <Navbar.Collapse id="basic-navbar-nav">
-                            <Container
-                                fluid
-                                className="d-flex gap-5 justify-content-between align-items-center"
-                            >
+                            <Container fluid className="d-flex gap-5 justify-content-between align-items-center">
                                 <Nav className="me-auto">
-                                    {[
-                                        "ventas",
-                                        "clientes",
-                                        "productos",
-                                        "proveedores",
-                                    ].map((route, index) => {
+                                    {['ventas', 'clientes', 'productos', 'proveedores'].map((route, index) => {
                                         return (
                                             <Link
                                                 key={index}
                                                 to={`/${route}`}
                                                 className={`text-decoration-none nav-link${
-                                                    location.pathname.includes(
-                                                        route,
-                                                    )
-                                                        ? " active"
-                                                        : ""
+                                                    location.pathname.includes(route) ? ' active' : ''
                                                 }`}
                                             >
                                                 {route}
@@ -82,9 +62,9 @@ function App() {
                                 </Nav>
                                 <div
                                     style={{
-                                        display: "flex",
-                                        alignItems: "center",
-                                        gap: "20px",
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '20px',
                                     }}
                                 >
                                     <span className="text-light">Facturas</span>
@@ -93,23 +73,16 @@ function App() {
                                             <input
                                                 type="checkbox"
                                                 checked={showNoe}
-                                                onChange={(e) =>
-                                                    setShowNoe(e.target.checked)
-                                                }
+                                                onChange={(e) => setShowNoe(e.target.checked)}
                                             />
                                             <span className="slider round"></span>
                                         </label>
                                     </div>
-                                    <span className="text-light">
-                                        Notas de entrega
-                                    </span>
+                                    <span className="text-light">Notas de entrega</span>
                                 </div>
                                 <div className="text-light">
                                     <span>
-                                        REF:{" "}
-                                        <span className="fw-bold text-info">
-                                            {currencyRate?.Cambio}
-                                        </span>{" "}
+                                        REF: <span className="fw-bold text-info">{currencyRate?.Cambio}</span>{' '}
                                         {currencyRate?.Simbolo}
                                     </span>
                                 </div>
@@ -118,10 +91,7 @@ function App() {
                     </Container>
                 </Navbar>
 
-                <Container
-                    fluid
-                    className="d-flex flex-column flex-grow-1 overflow-hidden p-0"
-                >
+                <Container fluid className="d-flex flex-column flex-grow-1 overflow-hidden p-0">
                     <Switch>
                         <Redirect exact from="/" to="/ventas" />
                         <Route path="/ventas" component={VentasPage} />

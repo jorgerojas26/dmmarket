@@ -1,22 +1,22 @@
-import ClientsDashboard from "components/Dashboard/ClientsDashboard";
-import ClientDashboardModal from "components/ClientDashboardModal";
-import ClientsTable from "components/ClientsTable";
-import DateRangePicker from "components/DateRangePicker";
-import { ShowNoeContext } from "context/show_noe";
-import { DateTime } from "luxon";
-import { useCallback, useContext, useState } from "react";
-import Container from "react-bootstrap/Container";
-import Nav from "react-bootstrap/Nav";
+import ClientDashboardModal from 'components/ClientDashboardModal';
+import ClientsTable from 'components/ClientsTable';
+import ClientsDashboard from 'components/Dashboard/ClientsDashboard';
+import DateRangePicker from 'components/DateRangePicker';
+import { ShowNoeContext } from 'context/show_noe';
+import { DateTime } from 'luxon';
+import { useCallback, useContext, useState } from 'react';
+import Container from 'react-bootstrap/Container';
+import Nav from 'react-bootstrap/Nav';
 
 const ClientesPage = () => {
     const [dateRange, setDateRange] = useState({
-        from: DateTime.now().startOf("month").toISODate(),
+        from: DateTime.now().startOf('month').toISODate(),
         to: DateTime.now().toISODate(),
     });
     const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
     const [selectedClient, setSelectedClient] = useState(null);
     const [showModal, setShowModal] = useState(false);
-    const [activeView, setActiveView] = useState("dashboard");
+    const [activeView, setActiveView] = useState('dashboard');
 
     const { showNoe } = useContext(ShowNoeContext);
 
@@ -49,44 +49,26 @@ const ClientesPage = () => {
                     </Nav>
                 </div>
                 <div className="clientes-content p-4">
-                    <div className={activeView === "clients" ? "" : "d-none"}>
+                    <div className={activeView === 'clients' ? '' : 'd-none'}>
                         <div className="clients-content-wrapper">
                             <ClientsTable onRowSelect={handleRowSelect} />
                         </div>
                     </div>
-                    <section
-                        className={
-                            activeView === "dashboard"
-                                ? "d-flex flex-column gap-3"
-                                : "d-none"
-                        }
-                    >
+                    <section className={activeView === 'dashboard' ? 'd-flex flex-column gap-3' : 'd-none'}>
                         <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
-                            <h4 className="m-0 text-light">
-                                Dashboard de Clientes
-                            </h4>
+                            <h4 className="m-0 text-light">Dashboard de Clientes</h4>
                             <DateRangePicker
-                                initialFrom={DateTime.now()
-                                    .startOf("month")
-                                    .toISODate()}
+                                initialFrom={DateTime.now().startOf('month').toISODate()}
                                 initialTo={DateTime.now().toISODate()}
                                 onChange={handleDateRangeChange}
                             />
                         </div>
-                        <ClientsDashboard
-                            key={dashboardRefreshKey}
-                            dateRange={dateRange}
-                            showNoe={showNoe}
-                        />
+                        <ClientsDashboard key={dashboardRefreshKey} dateRange={dateRange} showNoe={showNoe} />
                     </section>
                 </div>
             </div>
             {showModal && (
-                <ClientDashboardModal
-                    show={showModal}
-                    onClose={() => setShowModal(false)}
-                    client={selectedClient}
-                />
+                <ClientDashboardModal show={showModal} onClose={() => setShowModal(false)} client={selectedClient} />
             )}
         </Container>
     );

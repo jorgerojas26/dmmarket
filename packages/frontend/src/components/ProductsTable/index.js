@@ -1,11 +1,12 @@
-import { useMemo, useContext, useState } from 'react';
-import { CurrencyRateContext } from '../../context/currency_rate';
-import { Card, Button } from 'react-bootstrap';
-import Table from 'components/Table';
 import CurrencyModal from 'components/Modals/CurrencyModal';
-import pdf from './pdf';
+import Table from 'components/Table';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { useContext, useMemo, useState } from 'react';
+import { Button, Card } from 'react-bootstrap';
+import { CurrencyRateContext } from '../../context/currency_rate';
+import pdf from './pdf';
+
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 const ProductsTable = ({ data, totalSummary, maxHeight }) => {
@@ -36,24 +37,33 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
             { Header: 'Cantidad', accessor: 'quantity' },
             { Header: 'Total', accessor: 'total' },
         ],
-        []
+        [],
     );
 
-    const summaries = useMemo(() => ({
-        quantity: quantityTotal ? quantityTotal.toFixed(2) : '',
-        total: totalSummary ? `$${totalSummary.toFixed(2)}` : '',
-    }), [quantityTotal, totalSummary]);
+    const summaries = useMemo(
+        () => ({
+            quantity: quantityTotal ? quantityTotal.toFixed(2) : '',
+            total: totalSummary ? `$${totalSummary.toFixed(2)}` : '',
+        }),
+        [quantityTotal, totalSummary],
+    );
 
     return (
         <Card>
             <Card.Header>
-                <div className='d-flex w-100 justify-content-between'>
+                <div className="d-flex w-100 justify-content-between">
                     <h3>Productos</h3>
                     <Button onClick={() => setShowCurrencyModal(true)}>Imprimir</Button>
                 </div>
             </Card.Header>
             <Card.Body>
-                <Table data={sortedData} columns={memoizedColumns} showFooter summaries={summaries} maxHeight={maxHeight} />
+                <Table
+                    data={sortedData}
+                    columns={memoizedColumns}
+                    showFooter
+                    summaries={summaries}
+                    maxHeight={maxHeight}
+                />
             </Card.Body>
             {showCurrencyModal && (
                 <CurrencyModal

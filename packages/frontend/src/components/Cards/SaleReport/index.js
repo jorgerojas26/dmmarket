@@ -1,13 +1,6 @@
-import SaleReportTable from "components/SaleReportTable";
+import SaleReportTable from 'components/SaleReportTable';
 
-const SaleReportCard = ({
-    data,
-    loading,
-    sorting,
-    pagination,
-    onSort,
-    onPageChange,
-}) => {
+const SaleReportCard = ({ data, loading, sorting, pagination, onSort, onPageChange }) => {
     return (
         <div className="dashboard-panel mb-4">
             <div className="dashboard-panel-header">

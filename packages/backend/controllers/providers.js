@@ -18,17 +18,15 @@ const GET_PROVIDERS_LIST = async (req, res) => {
         knex.raw("COALESCE(purchase_data.total_compras, 0) as total_compras"),
         knex.raw("COALESCE(purchase_data.num_compras, 0) as num_compras"),
         knex.raw("COALESCE(sales_data.total_ventas, 0) as total_ventas"),
-        knex.raw("COALESCE(sales_data.num_ventas, 0) as num_ventas")
+        knex.raw("COALESCE(sales_data.num_ventas, 0) as num_ventas"),
       )
       .from("proveedores as p")
       .leftJoin(
         knex
           .select(
             "mc.IdProveedor",
-            knex.raw(
-              "ROUND(SUM(sc.Precio * sc.Cantidad), 2) as total_compras"
-            ),
-            knex.raw("COUNT(DISTINCT mc.IdFactura) as num_compras")
+            knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as total_compras"),
+            knex.raw("COUNT(DISTINCT mc.IdFactura) as num_compras"),
           )
           .from("mastercomp as mc")
           .leftJoin("slavecomp as sc", "sc.IdFactura", "mc.IdFactura")
@@ -36,35 +34,28 @@ const GET_PROVIDERS_LIST = async (req, res) => {
           .groupBy("mc.IdProveedor")
           .as("purchase_data"),
         "purchase_data.IdProveedor",
-        "p.IdProveedor"
+        "p.IdProveedor",
       )
       .leftJoin(
         knex
           .select(
             "pr.Proveedor",
-            knex.raw(
-              `ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_ventas`
-            ),
-            knex.raw(`COUNT(DISTINCT mf.${idInvoice}) as num_ventas`)
+            knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_ventas`),
+            knex.raw(`COUNT(DISTINCT mf.${idInvoice}) as num_ventas`),
           )
           .from("productos as pr")
           .leftJoin(`${slaveTable} as sf`, "sf.IdProducto", "pr.IdProducto")
           .leftJoin(`${masterTable} as mf`, function () {
-            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn(
-              "mf.Anulada",
-              0
-            );
+            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
           })
           .groupBy("pr.Proveedor")
           .as("sales_data"),
         "sales_data.Proveedor",
-        "p.IdProveedor"
+        "p.IdProveedor",
       );
 
     // Count query
-    const countQuery = knex
-      .countDistinct({ total: "p.IdProveedor" })
-      .from("proveedores as p");
+    const countQuery = knex.countDistinct({ total: "p.IdProveedor" }).from("proveedores as p");
 
     if (search) {
       dataQuery.where("p.Empresa", "like", `%${search}%`);
@@ -99,22 +90,13 @@ const GET_BEST_PROVIDERS = async (req, res) => {
       const response = await knex
         .select(
           "proveedores.Empresa as proveedor",
-          knex.raw(
-            "ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as monto"
-          )
+          knex.raw("ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as monto"),
         )
         .from("slavecomp")
         .innerJoin("mastercomp", function () {
-          this.on("mastercomp.IdFactura", "slavecomp.IdFactura").andOn(
-            "mastercomp.Anulada",
-            0
-          );
+          this.on("mastercomp.IdFactura", "slavecomp.IdFactura").andOn("mastercomp.Anulada", 0);
         })
-        .innerJoin(
-          "proveedores",
-          "proveedores.IdProveedor",
-          "mastercomp.IdProveedor"
-        )
+        .innerJoin("proveedores", "proveedores.IdProveedor", "mastercomp.IdProveedor")
         .whereBetween("mastercomp.Fecha", [from, to])
         .groupBy("proveedores.IdProveedor")
         .orderBy("monto", "desc");
@@ -129,27 +111,14 @@ const GET_BEST_PROVIDERS = async (req, res) => {
       const response = await knex
         .select(
           "proveedores.Empresa as proveedor",
-          knex.raw(
-            `ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`
-          )
+          knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`),
         )
         .from(`${slaveTable}`)
         .innerJoin(`${masterTable}`, function () {
-          this.on(
-            `${masterTable}.${idInvoice}`,
-            `${slaveTable}.${idInvoice}`
-          ).andOn(`${masterTable}.Anulada`, 0);
+          this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
         })
-        .innerJoin(
-          "productos",
-          "productos.IdProducto",
-          `${slaveTable}.IdProducto`
-        )
-        .innerJoin(
-          "proveedores",
-          "proveedores.IdProveedor",
-          "productos.Proveedor"
-        )
+        .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+        .innerJoin("proveedores", "proveedores.IdProveedor", "productos.Proveedor")
         .whereBetween(`${masterTable}.Fecha`, [from, to])
         .groupBy("proveedores.IdProveedor")
         .orderBy("monto", "desc");
@@ -173,12 +142,8 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
   try {
     const [comprasResult] = await knex
       .select(
-        knex.raw(
-          "COALESCE(ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2), 0) as totalCompras"
-        ),
-        knex.raw(
-          "COALESCE(COUNT(DISTINCT mastercomp.IdFactura), 0) as numCompras"
-        )
+        knex.raw("COALESCE(ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2), 0) as totalCompras"),
+        knex.raw("COALESCE(COUNT(DISTINCT mastercomp.IdFactura), 0) as numCompras"),
       )
       .from("slavecomp")
       .innerJoin("mastercomp", "mastercomp.IdFactura", "slavecomp.IdFactura")
@@ -188,17 +153,12 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
 
     const [ventasResult] = await knex
       .select(
-        knex.raw(
-          `COALESCE(ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2), 0) as totalVentas`
-        ),
-        knex.raw(
-          `COALESCE(COUNT(DISTINCT ${masterTable}.${idInvoice}), 0) as numVentas`
-        )
+        knex.raw(`COALESCE(ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2), 0) as totalVentas`),
+        knex.raw(`COALESCE(COUNT(DISTINCT ${masterTable}.${idInvoice}), 0) as numVentas`),
       )
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`)
-          .andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .where("productos.Proveedor", providerId)
@@ -207,14 +167,11 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
     const bestSellerResult = await knex
       .select(
         "vendedores.Empresa",
-        knex.raw(
-          `COALESCE(ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2), 0) as total`
-        )
+        knex.raw(`COALESCE(ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2), 0) as total`),
       )
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`)
-          .andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
@@ -248,11 +205,14 @@ const GET_PROVIDER_SALES = async (req, res) => {
 
   const sortCol = (() => {
     switch (sortBy) {
-      case "idFactura": return `${masterTable}.${idInvoice}`;
-      case "vendedor": return "vendedores.Empresa";
-      case "monto": return knex.raw(`SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad)`);
-      case "fecha":
-      default: return `${masterTable}.Fecha`;
+      case "idFactura":
+        return `${masterTable}.${idInvoice}`;
+      case "vendedor":
+        return "vendedores.Empresa";
+      case "monto":
+        return knex.raw(`SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad)`);
+      default:
+        return `${masterTable}.Fecha`;
     }
   })();
   const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
@@ -262,8 +222,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
       .countDistinct({ count: `${masterTable}.${idInvoice}` })
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`)
-          .andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .where("productos.Proveedor", providerId)
@@ -274,14 +233,11 @@ const GET_PROVIDER_SALES = async (req, res) => {
         `${masterTable}.${idInvoice} as idFactura`,
         "vendedores.Empresa as vendedor",
         `${masterTable}.Fecha as fecha`,
-        knex.raw(
-          `ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`
-        )
+        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`),
       )
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`)
-          .andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
@@ -295,12 +251,18 @@ const GET_PROVIDER_SALES = async (req, res) => {
     if (search) {
       countQuery.innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`);
       countQuery.where(function () {
-        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`)
-          .orWhere("vendedores.Empresa", "like", `%${search}%`);
+        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`).orWhere(
+          "vendedores.Empresa",
+          "like",
+          `%${search}%`,
+        );
       });
       dataQuery.where(function () {
-        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`)
-          .orWhere("vendedores.Empresa", "like", `%${search}%`);
+        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`).orWhere(
+          "vendedores.Empresa",
+          "like",
+          `%${search}%`,
+        );
       });
     }
 
@@ -330,10 +292,14 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
 
   const sortCol = (() => {
     switch (sortBy) {
-      case "cliente": return "clientes.Empresa";
-      case "totalVentas": return "totalVentas";
-      case "utilidad": return "utilidad";
-      default: return "totalVentas";
+      case "cliente":
+        return "clientes.Empresa";
+      case "totalVentas":
+        return "totalVentas";
+      case "utilidad":
+        return "utilidad";
+      default:
+        return "totalVentas";
     }
   })();
   const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
@@ -343,8 +309,7 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       .countDistinct({ count: "clientes.IdCliente" })
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`)
-          .andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
@@ -354,17 +319,12 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
     const dataQuery = knex
       .select(
         "clientes.Empresa as cliente",
-        knex.raw(
-          `ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`
-        ),
-        knex.raw(
-          `ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`
-        )
+        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
       )
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`)
-          .andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
@@ -406,10 +366,14 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
 
   const sortCol = (() => {
     switch (sortBy) {
-      case "producto": return "productos.Descripcion";
-      case "totalVentas": return "totalVentas";
-      case "utilidad": return "utilidad";
-      default: return "totalVentas";
+      case "producto":
+        return "productos.Descripcion";
+      case "totalVentas":
+        return "totalVentas";
+      case "utilidad":
+        return "utilidad";
+      default:
+        return "totalVentas";
     }
   })();
   const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
@@ -419,8 +383,7 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
       .countDistinct({ count: "productos.IdProducto" })
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`)
-          .andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .where("productos.Proveedor", providerId)
@@ -429,17 +392,12 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
     const dataQuery = knex
       .select(
         "productos.Descripcion as producto",
-        knex.raw(
-          `ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`
-        ),
-        knex.raw(
-          `ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`
-        )
+        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
       )
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`)
-          .andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .where("productos.Proveedor", providerId)
@@ -476,10 +434,12 @@ const GET_PROVIDER_PURCHASES = async (req, res) => {
 
   const sortCol = (() => {
     switch (sortBy) {
-      case "idFactura": return "mastercomp.IdFactura";
-      case "monto": return knex.raw("SUM(slavecomp.Precio * slavecomp.Cantidad)");
-      case "fecha":
-      default: return "mastercomp.Fecha";
+      case "idFactura":
+        return "mastercomp.IdFactura";
+      case "monto":
+        return knex.raw("SUM(slavecomp.Precio * slavecomp.Cantidad)");
+      default:
+        return "mastercomp.Fecha";
     }
   })();
   const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
@@ -496,9 +456,7 @@ const GET_PROVIDER_PURCHASES = async (req, res) => {
       .select(
         "mastercomp.IdFactura as idFactura",
         "mastercomp.Fecha as fecha",
-        knex.raw(
-          "ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as monto"
-        )
+        knex.raw("ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as monto"),
       )
       .from("mastercomp")
       .innerJoin("slavecomp", "slavecomp.IdFactura", "mastercomp.IdFactura")
@@ -534,10 +492,7 @@ const GET_PURCHASE_DETAIL = async (req, res) => {
   const { invoiceId } = req.params;
 
   try {
-    const [master] = await knex
-      .select("IdFactura", "Fecha")
-      .from("mastercomp")
-      .where("IdFactura", invoiceId);
+    const [master] = await knex.select("IdFactura", "Fecha").from("mastercomp").where("IdFactura", invoiceId);
 
     if (!master) {
       return res.status(404).json({ error: "Purchase invoice not found" });
@@ -548,16 +503,13 @@ const GET_PURCHASE_DETAIL = async (req, res) => {
         "productos.Descripcion as descripcion",
         "slavecomp.Cantidad as cantidad",
         "slavecomp.Precio as precio",
-        knex.raw("ROUND(slavecomp.Cantidad * slavecomp.Precio, 2) as subtotal")
+        knex.raw("ROUND(slavecomp.Cantidad * slavecomp.Precio, 2) as subtotal"),
       )
       .from("slavecomp")
       .innerJoin("productos", "productos.IdProducto", "slavecomp.IdProducto")
       .where("slavecomp.IdFactura", invoiceId);
 
-    const total = productos.reduce(
-      (sum, p) => sum + Number(p.subtotal || 0),
-      0
-    );
+    const total = productos.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
 
     res.status(200).json({
       idFactura: master.IdFactura,
@@ -580,7 +532,11 @@ const GET_SALE_DETAIL = async (req, res) => {
 
   try {
     const [master] = await knex
-      .select(`${masterTable}.${idInvoice} as idFactura`, `${masterTable}.Fecha as fecha`, "vendedores.Empresa as vendedor")
+      .select(
+        `${masterTable}.${idInvoice} as idFactura`,
+        `${masterTable}.Fecha as fecha`,
+        "vendedores.Empresa as vendedor",
+      )
       .from(masterTable)
       .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
       .where(`${masterTable}.${idInvoice}`, invoiceId)
@@ -595,17 +551,14 @@ const GET_SALE_DETAIL = async (req, res) => {
         "productos.Descripcion as descripcion",
         `${slaveTable}.Cantidad as cantidad`,
         `${slaveTable}.Precio as precio`,
-        knex.raw(`ROUND(${slaveTable}.Cantidad * ${slaveTable}.Precio, 2) as subtotal`)
+        knex.raw(`ROUND(${slaveTable}.Cantidad * ${slaveTable}.Precio, 2) as subtotal`),
       )
       .from(slaveTable)
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .where(`${slaveTable}.${idInvoice}`, invoiceId)
       .andWhere("productos.Proveedor", providerId);
 
-    const total = productos.reduce(
-      (sum, p) => sum + Number(p.subtotal || 0),
-      0
-    );
+    const total = productos.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
 
     res.status(200).json({
       idFactura: master.idFactura,

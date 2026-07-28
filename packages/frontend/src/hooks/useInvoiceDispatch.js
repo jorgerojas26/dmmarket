@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo } from 'react';
 
 /**
  * Aggregates products across selected invoices for dispatch/picking.
@@ -7,39 +7,36 @@ import { useMemo } from "react";
  * @returns {{ productsSummary: Array, invoicesTotalSummary: number }}
  */
 export const useInvoiceDispatch = (selectedRows) => {
-  const productsSummary = useMemo(() => {
-    if (!selectedRows || selectedRows.length === 0) return [];
+    const productsSummary = useMemo(() => {
+        if (!selectedRows || selectedRows.length === 0) return [];
 
-    const products = {};
+        const products = {};
 
-    selectedRows.forEach((row) => {
-      row.products.forEach((product) => {
-        if (!products[product.productId]) {
-          products[product.productId] = {
-            ...product,
-            quantity: 0,
-          };
-        }
-        products[product.productId].quantity += product.quantity;
-        products[product.productId].total = Number(
-          (
-            products[product.productId].quantity *
-            products[product.productId].price
-          ).toFixed(2)
-        );
-      });
-    });
+        selectedRows.forEach((row) => {
+            row.products.forEach((product) => {
+                if (!products[product.productId]) {
+                    products[product.productId] = {
+                        ...product,
+                        quantity: 0,
+                    };
+                }
+                products[product.productId].quantity += product.quantity;
+                products[product.productId].total = Number(
+                    (products[product.productId].quantity * products[product.productId].price).toFixed(2),
+                );
+            });
+        });
 
-    return Object.values(products);
-  }, [selectedRows]);
+        return Object.values(products);
+    }, [selectedRows]);
 
-  const invoicesTotalSummary = useMemo(
-    () =>
-      selectedRows && selectedRows.length > 0
-        ? selectedRows.reduce((total, inv) => total + (inv?.total || 0), 0)
-        : 0,
-    [selectedRows]
-  );
+    const invoicesTotalSummary = useMemo(
+        () =>
+            selectedRows && selectedRows.length > 0
+                ? selectedRows.reduce((total, inv) => total + (inv?.total || 0), 0)
+                : 0,
+        [selectedRows],
+    );
 
-  return { productsSummary, invoicesTotalSummary };
+    return { productsSummary, invoicesTotalSummary };
 };

@@ -1,11 +1,9 @@
 const knex = require("../database");
 const { GET_SALES_QUERY } = require("../models/invoice");
 
-const GET_GROUPS = async (req, res) => {
+const GET_GROUPS = async (_req, res) => {
   try {
-    const response = await knex
-      .select("IdGrupo as groupId", "Descripcion as name")
-      .from("grupos");
+    const response = await knex.select("IdGrupo as groupId", "Descripcion as name").from("grupos");
     res.status(200).json(response);
   } catch (error) {
     console.error(error);

@@ -1,6 +1,6 @@
 const knex = require("../database");
 
-const GET_CURRENCY_RATES = async (req, res) => {
+const GET_CURRENCY_RATES = async (_req, res) => {
   try {
     const currencyRates = await knex("divisas");
 

@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
 import Table from 'components/Table';
+import { useMemo } from 'react';
 import columns from './columns';
 
 const ClientReportTable = ({ data }) => {

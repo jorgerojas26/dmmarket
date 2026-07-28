@@ -1,4 +1,4 @@
-const showNoe = (req, res, next) => {
+const showNoe = (req, _res, next) => {
   const { showNoe } = req.query;
 
   const masterTable = showNoe === "true" ? "masternoe" : "masterfact";

@@ -1,32 +1,32 @@
 {
-    "name": "dmmarket",
-    "version": "1.0.0",
-    "private": true,
-    "description": "DMMarket - Sistema de reportes de distribución de alimentos (monorepo)",
-    "scripts": {
-        "backend": "pnpm --filter @dmmarket/backend",
-        "frontend": "pnpm --filter @dmmarket/frontend",
-        "dev:backend": "pnpm --filter @dmmarket/backend start",
-        "dev:frontend": "NODE_OPTIONS='--openssl-legacy-provider' pnpm --filter @dmmarket/frontend start",
-        "dev": "pnpm run --parallel dev:backend dev:frontend",
-        "build:frontend": "pnpm --filter @dmmarket/frontend build",
-        "test:backend": "pnpm --filter @dmmarket/backend test",
-        "test:frontend": "pnpm --filter @dmmarket/frontend test",
-        "test": "pnpm run --parallel test:backend test:frontend",
-        "check": "biome check",
-        "check:write": "biome check --write",
-        "check:unsafe": "biome check --write --unsafe",
-        "format": "biome format --write",
-        "lint": "biome lint",
-        "lint:write": "biome lint --write"
-    },
-    "pnpm": {
-        "overrides": {
-            "react-error-overlay": "6.0.9",
-            "@babel/core": ">=7.22.0"
-        }
-    },
-    "devDependencies": {
-        "@biomejs/biome": "^2.5.6"
+  "name": "dmmarket",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DMMarket - Sistema de reportes de distribución de alimentos (monorepo)",
+  "scripts": {
+    "backend": "pnpm --filter @dmmarket/backend",
+    "frontend": "pnpm --filter @dmmarket/frontend",
+    "dev:backend": "pnpm --filter @dmmarket/backend start",
+    "dev:frontend": "NODE_OPTIONS='--openssl-legacy-provider' pnpm --filter @dmmarket/frontend start",
+    "dev": "pnpm run --parallel dev:backend dev:frontend",
+    "build:frontend": "pnpm --filter @dmmarket/frontend build",
+    "test:backend": "pnpm --filter @dmmarket/backend test",
+    "test:frontend": "pnpm --filter @dmmarket/frontend test",
+    "test": "pnpm run --parallel test:backend test:frontend",
+    "check": "biome check",
+    "check:write": "biome check --write",
+    "check:unsafe": "biome check --write --unsafe",
+    "format": "biome format --write",
+    "lint": "biome lint",
+    "lint:write": "biome lint --write"
+  },
+  "pnpm": {
+    "overrides": {
+      "react-error-overlay": "6.0.9",
+      "@babel/core": ">=7.22.0"
     }
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.6"
+  }
 }

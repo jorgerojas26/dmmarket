@@ -4,9 +4,7 @@ const controller = require("../controllers/products");
 
 router.route("/").get(controller.GET_PRODUCTS);
 router.route("/group").get(controller.GET_BY_GROUP);
-router
-  .route("/cost-fluctuation/:productId")
-  .get(controller.GET_COST_FLUCTUATION);
+router.route("/cost-fluctuation/:productId").get(controller.GET_COST_FLUCTUATION);
 
 router.route("/stock/:productId").get(controller.GET_STOCK);
 router.route("/cost/group").get(controller.GET_COST_BY_GROUP);

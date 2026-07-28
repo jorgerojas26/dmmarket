@@ -2,7 +2,7 @@
  * Helper: creates a chainable knex query builder that resolves to `value` when awaited.
  */
 const makeBuilder = (value) => {
-  const resolved = typeof value === 'function' ? value : (() => value);
+  const resolved = typeof value === "function" ? value : () => value;
   const b = {
     select: jest.fn(() => b),
     from: jest.fn(() => b),
@@ -78,7 +78,7 @@ describe("GET_PROVIDERS_LIST", () => {
         total: 2,
         page: 1,
         limit: 20,
-      })
+      }),
     );
 
     const { data } = res.json.mock.calls[0][0];
@@ -112,10 +112,12 @@ describe("GET_PROVIDERS_LIST", () => {
   it("should return 500 on database error", async () => {
     jest.resetModules();
     jest.restoreAllMocks();
-    const failDb = makeBuilder(() => { throw new Error("DB error"); });
+    const failDb = makeBuilder(() => {
+      throw new Error("DB error");
+    });
     // Rejected promise on the count query
     failDb.then = jest.fn((_onFulfilled, onRejected) =>
-      Promise.reject(new Error("DB error")).catch(onRejected || (() => {}))
+      Promise.reject(new Error("DB error")).catch(onRejected || (() => {})),
     );
     jest.doMock("../database", () => failDb);
     controller = require("../controllers/providers");
@@ -136,9 +138,7 @@ describe("GET_PROVIDERS_LIST", () => {
 
     await controller.GET_PROVIDERS_LIST(req, res);
     expect(res.status).toHaveBeenCalledWith(200);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ data: [], total: 0 })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: [], total: 0 }));
   });
 
   it("should order by total_ventas DESC by default", async () => {
@@ -220,13 +220,15 @@ describe("GET_PROVIDER_SUMMARY", () => {
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ totalCompras: 100, totalVentas: 200, bestSeller: "V NOE" })
+      expect.objectContaining({ totalCompras: 100, totalVentas: 200, bestSeller: "V NOE" }),
     );
   });
 
   it("should handle errors gracefully", async () => {
     const db = makeBuilder([]);
-    db.select.mockImplementationOnce(() => { throw new Error("DB error"); });
+    db.select.mockImplementationOnce(() => {
+      throw new Error("DB error");
+    });
 
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");
@@ -284,9 +286,7 @@ describe("GET_PROVIDER_SALES", () => {
     controller = require("../controllers/providers");
     await controller.GET_PROVIDER_SALES(req, res);
 
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ data: [], total: 0 })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: [], total: 0 }));
   });
 
   it("should handle showNoe=true", async () => {
@@ -304,7 +304,9 @@ describe("GET_PROVIDER_SALES", () => {
 
   it("should handle errors gracefully", async () => {
     const db = makeBuilder([]);
-    db.countDistinct = jest.fn(() => { throw new Error("DB error"); });
+    db.countDistinct = jest.fn(() => {
+      throw new Error("DB error");
+    });
 
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");
@@ -362,14 +364,14 @@ describe("GET_PROVIDER_PURCHASES", () => {
     controller = require("../controllers/providers");
     await controller.GET_PROVIDER_PURCHASES(req, res);
 
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ data: [], total: 0 })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: [], total: 0 }));
   });
 
   it("should handle errors gracefully", async () => {
     const db = makeBuilder([]);
-    db.countDistinct = jest.fn(() => { throw new Error("DB error"); });
+    db.countDistinct = jest.fn(() => {
+      throw new Error("DB error");
+    });
 
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");
@@ -429,14 +431,14 @@ describe("GET_PURCHASE_DETAIL", () => {
     await controller.GET_PURCHASE_DETAIL(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.any(String) })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }));
   });
 
   it("should handle errors gracefully", async () => {
     const db = makeBuilder([]);
-    db.select.mockImplementationOnce(() => { throw new Error("DB error"); });
+    db.select.mockImplementationOnce(() => {
+      throw new Error("DB error");
+    });
 
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");

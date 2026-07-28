@@ -1,13 +1,7 @@
-import debounce from "lodash.debounce";
-import React, {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-} from "react";
-import { useRowSelect, useSortBy, useTable } from "react-table";
-import "./styles.css";
+import debounce from 'lodash.debounce';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRowSelect, useSortBy, useTable } from 'react-table';
+import './styles.css';
 
 /**
  * Shared Table component with opt‑in server‑side features.
@@ -102,7 +96,7 @@ const Table = ({
     data = [],
     loading,
     columns = [],
-    emptyMessage = "Sin datos",
+    emptyMessage = 'Sin datos',
     className,
     maxHeight = 350,
 
@@ -157,15 +151,10 @@ const Table = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sorting?.enabled, columns, data]);
 
-    const {
-        getTableProps,
-        getTableBodyProps,
-        headerGroups,
-        footerGroups,
-        rows,
-        prepareRow,
-        state,
-    } = useTable(tableOptions, ...plugins);
+    const { getTableProps, getTableBodyProps, headerGroups, footerGroups, rows, prepareRow, state } = useTable(
+        tableOptions,
+        ...plugins,
+    );
 
     /* ── Sync selection state → parent callback ── */
     useEffect(() => {
@@ -199,7 +188,7 @@ const Table = ({
     );
 
     /* ── Server‑side search ── */
-    const [searchTerm, setSearchTerm] = useState("");
+    const [searchTerm, setSearchTerm] = useState('');
 
     const onSearchDebounced = useCallback(
         debounce((value) => {
@@ -222,8 +211,7 @@ const Table = ({
     );
 
     /* ── Per‑row print helpers ── */
-    const hasPerRowPrint =
-        print?.enabled && print?.perRowPrint && print?.onRowPrint;
+    const hasPerRowPrint = print?.enabled && print?.perRowPrint && print?.onRowPrint;
     const hasSelectCol = !!onRowSelect;
     const totalColSpan = columns.length + (hasPerRowPrint ? 1 : 0) + (hasSelectCol ? 1 : 0);
 
@@ -253,10 +241,7 @@ const Table = ({
             } else if (e.shiftKey && !e.ctrlKey) {
                 if (multi && lastIdx != null) {
                     const last = Number(lastIdx);
-                    const [from, to] =
-                        last < newIdx
-                            ? [last, newIdx]
-                            : [newIdx, last];
+                    const [from, to] = last < newIdx ? [last, newIdx] : [newIdx, last];
                     for (let i = from; i <= to; i++) {
                         if (i !== last) rows[i].toggleRowSelected();
                     }
@@ -270,19 +255,19 @@ const Table = ({
         return (
             <tr
                 {...row.getRowProps({ onClick: handleClick })}
-                className={row.isSelected ? "row-selected" : ""}
+                className={row.isSelected ? 'row-selected' : ''}
                 style={{
-                    background: row.isSelected ? "#2d3748" : "transparent",
-                    color: row.isSelected ? "#e4e6ea" : "#c4cad4",
-                    cursor: "pointer",
+                    background: row.isSelected ? '#2d3748' : 'transparent',
+                    color: row.isSelected ? '#e4e6ea' : '#c4cad4',
+                    cursor: 'pointer',
                 }}
             >
                 {hasSelectCol && (
                     <td
                         style={{
                             width: 40,
-                            textAlign: "center",
-                            background: row.isSelected ? "#2d3748" : "transparent",
+                            textAlign: 'center',
+                            background: row.isSelected ? '#2d3748' : 'transparent',
                         }}
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -290,7 +275,7 @@ const Table = ({
                             type="checkbox"
                             checked={row.isSelected}
                             readOnly
-                            style={{ cursor: "pointer", pointerEvents: "none" }}
+                            style={{ cursor: 'pointer', pointerEvents: 'none' }}
                         />
                     </td>
                 )}
@@ -300,21 +285,15 @@ const Table = ({
                         title={cell.value}
                         {...cell.getCellProps()}
                         style={{
-                            background: row.isSelected
-                                ? "#2d3748"
-                                : "transparent",
-                            color: row.isSelected ? "#e4e6ea" : "#c4cad4",
+                            background: row.isSelected ? '#2d3748' : 'transparent',
+                            color: row.isSelected ? '#e4e6ea' : '#c4cad4',
                         }}
                     >
-                        {cell.render("Cell")}
+                        {cell.render('Cell')}
                     </td>
                 ))}
                 {hasPerRowPrint && (
-                    <RowActionCell
-                        onPrint={print.onRowPrint}
-                        rowData={row.original}
-                        isSelected={row.isSelected}
-                    />
+                    <RowActionCell onPrint={print.onRowPrint} rowData={row.original} isSelected={row.isSelected} />
                 )}
             </tr>
         );
@@ -322,22 +301,13 @@ const Table = ({
 
     const ClickableRow = React.memo(({ row, onClick }) => {
         return (
-            <tr
-                onClick={() => onClick(row.original)}
-                className="table-row-clickable"
-                style={{ cursor: "pointer" }}
-            >
+            <tr onClick={() => onClick(row.original)} className="table-row-clickable" style={{ cursor: 'pointer' }}>
                 {row.cells.map((cell) => (
                     <td key={cell.column.id} {...cell.getCellProps()}>
-                        {cell.render("Cell")}
+                        {cell.render('Cell')}
                     </td>
                 ))}
-                {hasPerRowPrint && (
-                    <RowActionCell
-                        onPrint={print.onRowPrint}
-                        rowData={row.original}
-                    />
-                )}
+                {hasPerRowPrint && <RowActionCell onPrint={print.onRowPrint} rowData={row.original} />}
             </tr>
         );
     });
@@ -347,15 +317,10 @@ const Table = ({
             <tr>
                 {row.cells.map((cell) => (
                     <td key={cell.column.id} {...cell.getCellProps()}>
-                        {cell.render("Cell")}
+                        {cell.render('Cell')}
                     </td>
                 ))}
-                {hasPerRowPrint && (
-                    <RowActionCell
-                        onPrint={print.onRowPrint}
-                        rowData={row.original}
-                    />
-                )}
+                {hasPerRowPrint && <RowActionCell onPrint={print.onRowPrint} rowData={row.original} />}
             </tr>
         );
     });
@@ -364,8 +329,7 @@ const Table = ({
         (row) => {
             prepareRow(row);
             if (onRowSelect) return <SelectRow row={row} multiSelect={multiSelect} />;
-            if (onRowClick)
-                return <ClickableRow row={row} onClick={onRowClick} />;
+            if (onRowClick) return <ClickableRow row={row} onClick={onRowClick} />;
             return <StaticRow row={row} />;
         },
         [onRowSelect, onRowClick, prepareRow],
@@ -396,23 +360,17 @@ const Table = ({
         const active = column.isSorted;
 
         return (
-            <span className={`sort-chevron ${active ? "active" : ""}`}>
+            <span className={`sort-chevron ${active ? 'active' : ''}`}>
                 <span
                     style={{
-                        color:
-                            active && !column.isSortedDesc
-                                ? "#e4e6ea"
-                                : undefined,
+                        color: active && !column.isSortedDesc ? '#e4e6ea' : undefined,
                     }}
                 >
                     <ChevronUp />
                 </span>
                 <span
                     style={{
-                        color:
-                            active && column.isSortedDesc
-                                ? "#e4e6ea"
-                                : undefined,
+                        color: active && column.isSortedDesc ? '#e4e6ea' : undefined,
                     }}
                 >
                     <ChevronDown />
@@ -434,8 +392,8 @@ const Table = ({
                             <th
                                 style={{
                                     width: 40,
-                                    textAlign: "center",
-                                    cursor: "pointer",
+                                    textAlign: 'center',
+                                    cursor: 'pointer',
                                 }}
                             >
                                 <input
@@ -445,41 +403,34 @@ const Table = ({
                                         if (el) el.indeterminate = someChecked;
                                     }}
                                     onChange={handleToggleAll}
-                                    style={{ cursor: "pointer" }}
+                                    style={{ cursor: 'pointer' }}
                                 />
                             </th>
                         )}
                         {hg.headers.map((column) => {
-                        const headerProps = sorting?.enabled
-                            ? column.getHeaderProps(
-                                  column.getSortByToggleProps(),
-                              )
-                            : column.getHeaderProps();
+                            const headerProps = sorting?.enabled
+                                ? column.getHeaderProps(column.getSortByToggleProps())
+                                : column.getHeaderProps();
 
-                        const sortCls =
-                            sorting?.enabled && column.canSort
-                                ? " sortable-header"
-                                : "";
+                            const sortCls = sorting?.enabled && column.canSort ? ' sortable-header' : '';
 
-                        return (
-                            <th
-                                key={column.id}
-                                {...headerProps}
-                                className={
-                                    (headerProps.className || "") + sortCls
-                                }
-                            >
-                                <span className="sort-header-content">
-                                    {column.render("Header")}
-                                    {renderSortChevron(column)}
-                                </span>
-                            </th>
-                        );
-                    })}
-                    {hasPerRowPrint && <th style={{ width: 40 }} />}
-                </tr>
-            ))}
-        </thead>
+                            return (
+                                <th
+                                    key={column.id}
+                                    {...headerProps}
+                                    className={(headerProps.className || '') + sortCls}
+                                >
+                                    <span className="sort-header-content">
+                                        {column.render('Header')}
+                                        {renderSortChevron(column)}
+                                    </span>
+                                </th>
+                            );
+                        })}
+                        {hasPerRowPrint && <th style={{ width: 40 }} />}
+                    </tr>
+                ))}
+            </thead>
         );
     })();
 
@@ -493,9 +444,9 @@ const Table = ({
                           <td
                               colSpan={totalColSpan}
                               style={{
-                                  textAlign: "center",
-                                  padding: "2.5rem",
-                                  color: "#94a3b8",
+                                  textAlign: 'center',
+                                  padding: '2.5rem',
+                                  color: '#94a3b8',
                               }}
                           >
                               {emptyMessage}
@@ -523,14 +474,9 @@ const Table = ({
                             {hasSelectCol && <td />}
                             {columns.map((col, idx) => {
                                 const summaryVal =
-                                    typeof col.accessor === "string"
-                                        ? summaries[col.accessor]
-                                        : undefined;
+                                    typeof col.accessor === 'string' ? summaries[col.accessor] : undefined;
 
-                                if (
-                                    col.Footer &&
-                                    typeof col.Footer === "function"
-                                ) {
+                                if (col.Footer && typeof col.Footer === 'function') {
                                     // Existing Footer renderer (receives { column, data, rows })
                                     return (
                                         <td key={col.accessor || idx}>
@@ -543,15 +489,10 @@ const Table = ({
                                     );
                                 }
 
-                                if (
-                                    summaryVal !== undefined &&
-                                    summaryVal !== null
-                                ) {
+                                if (summaryVal !== undefined && summaryVal !== null) {
                                     return (
                                         <td key={col.accessor || idx}>
-                                            <span className="summary-value">
-                                                {summaryVal}
-                                            </span>
+                                            <span className="summary-value">{summaryVal}</span>
                                         </td>
                                     );
                                 }
@@ -571,11 +512,8 @@ const Table = ({
                         <tr {...group.getFooterGroupProps()} key={group.id}>
                             {hasSelectCol && <td />}
                             {group.headers.map((column) => (
-                                <td
-                                    {...column.getFooterProps()}
-                                    key={column.id}
-                                >
-                                    {column.render("Footer")}
+                                <td {...column.getFooterProps()} key={column.id}>
+                                    {column.render('Footer')}
                                 </td>
                             ))}
                             {hasPerRowPrint && <td />}
@@ -610,7 +548,7 @@ const Table = ({
                     </svg>
                     <input
                         className="table-search-input"
-                        placeholder={search.placeholder || "Buscar..."}
+                        placeholder={search.placeholder || 'Buscar...'}
                         type="search"
                         value={searchTerm}
                         onChange={handleSearchChange}
@@ -621,11 +559,8 @@ const Table = ({
             )}
             {hasPrintBtn && (
                 <div className="table-toolbar-right">
-                    <button
-                        className="table-toolbar-btn"
-                        onClick={print.onGlobalPrint}
-                    >
-                        {print.globalPrintLabel || "Imprimir"}
+                    <button className="table-toolbar-btn" onClick={print.onGlobalPrint}>
+                        {print.globalPrintLabel || 'Imprimir'}
                     </button>
                 </div>
             )}
@@ -633,8 +568,10 @@ const Table = ({
     );
 
     /* ── Pagination bar ── */
-    const paginationBar = pagination?.enabled &&
-        (pagination.totalPages > 1 || pagination.totalRows != null) && (() => {
+    const paginationBar =
+        pagination?.enabled &&
+        (pagination.totalPages > 1 || pagination.totalRows != null) &&
+        (() => {
             const pg = pagination;
             const pageSize = pg.pageSize ?? data.length;
             const totalRows = pg.totalRows;
@@ -655,9 +592,7 @@ const Table = ({
             return (
                 <div className="table-pagination">
                     {/* ── Row info ── */}
-                    {showRowInfo && (
-                        <span className="table-pagination-rowinfo">{rowInfoLabel}</span>
-                    )}
+                    {showRowInfo && <span className="table-pagination-rowinfo">{rowInfoLabel}</span>}
 
                     {/* ── Page controls ── */}
                     {totalPages > 1 && (
@@ -676,7 +611,9 @@ const Table = ({
                             {/* Page numbers */}
                             {pageNumbers.map((p, idx) =>
                                 p === '...' ? (
-                                    <span key={`ellipsis-${idx}`} className="table-pagination-ellipsis">…</span>
+                                    <span key={`ellipsis-${idx}`} className="table-pagination-ellipsis">
+                                        …
+                                    </span>
                                 ) : (
                                     <button
                                         key={p}
@@ -687,7 +624,7 @@ const Table = ({
                                     >
                                         {p}
                                     </button>
-                                )
+                                ),
                             )}
 
                             {/* Next */}
@@ -724,21 +661,17 @@ const Table = ({
                         className="table-filter-input"
                         onChange={(e) => onFilterDebounced(e.target.value)}
                         placeholder={filterPlaceholder}
-                        autoFocus
                     />
                 </div>
             )}
             {tableToolbar}
             {maxHeight != null ? (
-                <div
-                    className="table-container"
-                    style={{ maxHeight, position: "relative" }}
-                >
+                <div className="table-container" style={{ maxHeight, position: 'relative' }}>
                     {tableElement}
                     {spinner}
                 </div>
             ) : (
-                <div style={{ position: "relative" }}>
+                <div style={{ position: 'relative' }}>
                     {tableElement}
                     {spinner}
                 </div>
@@ -799,20 +732,17 @@ const RowActionCell = React.memo(({ onPrint, rowData, isSelected }) => {
         <td
             onClick={handleClick}
             style={{
-                background: isSelected ? "#2d3748" : "transparent",
-                textAlign: "center",
+                background: isSelected ? '#2d3748' : 'transparent',
+                textAlign: 'center',
                 width: 40,
-                cursor: "pointer",
+                cursor: 'pointer',
             }}
         >
-            <span
-                className="table-row-action"
-                title="Imprimir"
-            >
+            <span className="table-row-action" title="Imprimir">
                 <PrintIcon />
             </span>
         </td>
-        );
-    });
+    );
+});
 
 export default Table;

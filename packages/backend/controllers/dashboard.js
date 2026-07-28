@@ -69,7 +69,7 @@ const buildDashboardQuery = ({ masterTable, slaveTable, idInvoice, hasCompare })
 
   // Statement 5 — KPIs comparativos
   const kpisCompare = hasCompare
-    ? kpisCurrent.replaceAll(':from', ':compareFrom').replaceAll(':to', ':compareTo')
+    ? kpisCurrent.replaceAll(":from", ":compareFrom").replaceAll(":to", ":compareTo")
     : `SELECT NULL as totalRawProfit, NULL as totalNetProfit, NULL as totalQuantity, NULL as totalInvoices`;
 
   // Statement 6 — Gráfico de categorías (torta)
@@ -85,19 +85,12 @@ const buildDashboardQuery = ({ masterTable, slaveTable, idInvoice, hasCompare })
     WHERE ${masterTable}.Fecha BETWEEN :from AND :to
     GROUP BY grupos.idGrupo`;
 
-  return [
-    kpisCurrent,
-    bestEmployee,
-    topProducts,
-    topClients,
-    kpisCompare,
-    groupSales,
-  ].join(';');
+  return [kpisCurrent, bestEmployee, topProducts, topClients, kpisCompare, groupSales].join(";");
 };
 
 const formatKpis = (currentResultSet, compareResultSet) => {
-  const c = (currentResultSet && currentResultSet[0]) ? currentResultSet[0] : {};
-  const p = (compareResultSet && compareResultSet[0]) ? compareResultSet[0] : {};
+  const c = currentResultSet?.[0] ? currentResultSet[0] : {};
+  const p = compareResultSet?.[0] ? compareResultSet[0] : {};
 
   return {
     totalRawProfit: Number(c.totalRawProfit) || 0,
@@ -166,53 +159,31 @@ const GET_DASHBOARD_PARETO = async (req, res) => {
     const rows = await knex
       .select(
         "productos.Descripcion as product",
-        knex.raw(
-          `ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`
-        ),
-        knex.raw(
-          `ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`
-        ),
-        knex.raw(
-          `ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`
-        ),
+        knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
+        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
       )
       .from(slaveTable)
       .innerJoin(masterTable, function () {
-        this.on(
-          `${masterTable}.${idInvoice}`,
-          `${slaveTable}.${idInvoice}`,
-        ).andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin(
-        "productos",
-        "productos.IdProducto",
-        `${slaveTable}.IdProducto`,
-      )
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .whereBetween(`${masterTable}.Fecha`, [from, to])
       .groupBy("productos.IdProducto")
       .orderBy("netProfit", "DESC");
 
     // Calcular acumulados en JS
-    const total = rows.reduce(
-      (sum, r) => sum + Number(r.netProfit || 0),
-      0,
-    );
+    const total = rows.reduce((sum, r) => sum + Number(r.netProfit || 0), 0);
     let cumulative = 0;
     const products = rows.map((r, i) => {
       cumulative += Number(r.netProfit || 0);
-      const cumulativePercent =
-        total > 0 ? Math.round((cumulative / total) * 10000) / 100 : 0;
+      const cumulativePercent = total > 0 ? Math.round((cumulative / total) * 10000) / 100 : 0;
       return {
         ...r,
         rank: i + 1,
         cumulativeProfit: Math.round(cumulative * 100) / 100,
         cumulativePercent,
-        abcClass:
-          cumulativePercent <= 80
-            ? "A"
-            : cumulativePercent <= 95
-              ? "B"
-              : "C",
+        abcClass: cumulativePercent <= 80 ? "A" : cumulativePercent <= 95 ? "B" : "C",
       };
     });
 
@@ -221,12 +192,8 @@ const GET_DASHBOARD_PARETO = async (req, res) => {
     const classB = products.filter((d) => d.abcClass === "B");
     const classC = products.filter((d) => d.abcClass === "C");
 
-    const lastA = classA.length > 0
-      ? classA[classA.length - 1].cumulativePercent
-      : 0;
-    const lastB = classB.length > 0
-      ? classB[classB.length - 1].cumulativePercent
-      : lastA;
+    const lastA = classA.length > 0 ? classA[classA.length - 1].cumulativePercent : 0;
+    const lastB = classB.length > 0 ? classB[classB.length - 1].cumulativePercent : lastA;
 
     res.status(200).json({
       products,

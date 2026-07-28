@@ -80,9 +80,7 @@
     left: auto;
 }
 
-.provider-dashboard-modal
-    .date-range-picker-wrapper
-    .rdrDateRangePickerWrapper {
+.provider-dashboard-modal .date-range-picker-wrapper .rdrDateRangePickerWrapper {
     border: none;
     background: transparent;
 }
@@ -213,10 +211,7 @@
     border-radius: 0;
 }
 
-.provider-dashboard-modal
-    .provider-tab-content
-    .provider-sales-card
-    .provider-card-header {
+.provider-dashboard-modal .provider-tab-content .provider-sales-card .provider-card-header {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
 }

@@ -1,13 +1,13 @@
-import SearchInput from 'components/SearchInput';
 import { fetchGroups } from 'api/groups';
-import { useContext } from 'react';
+import SearchInput from 'components/SearchInput';
 import { ShowNoeContext } from 'context/show_noe';
+import { useContext } from 'react';
 
 const GroupSearch = ({ onSelect }) => {
     const { showNoe } = useContext(ShowNoeContext);
 
     const loadGroups = async (inputValue) => {
-        let groups = await fetchGroups({ filter: inputValue, showNoe });
+        const groups = await fetchGroups({ filter: inputValue, showNoe });
 
         if (groups && groups.length > 0) {
             const records = groups.map((record) => {
@@ -35,7 +35,7 @@ const GroupSearch = ({ onSelect }) => {
         <div style={{ width: '100%' }}>
             <SearchInput
                 loadOptions={loadGroups}
-                placeholder='Buscar categoría...'
+                placeholder="Buscar categoría..."
                 onSelect={handleSelect}
                 isSearchable={false}
             />

@@ -2,15 +2,7 @@ const knex = require("../database");
 const model = require("../models/invoice");
 
 const GET_INVOICES = async (req, res) => {
-  const {
-    from,
-    to,
-    page = 1,
-    limit = 20,
-    sortBy = "createdAt",
-    sortDir = "desc",
-    search,
-  } = req.query;
+  const { from, to, page = 1, limit = 20, sortBy = "createdAt", sortDir = "desc", search } = req.query;
 
   try {
     const response = await model.GET_INVOICES({
@@ -32,41 +24,25 @@ const GET_INVOICES = async (req, res) => {
 };
 
 const GET_SALES = async (req, res) => {
-  const {
-    from,
-    to,
-    page = 1,
-    limit = 20,
-    sortBy = "rawProfit",
-    sortDir = "desc",
-  } = req.query;
+  const { from, to, page = 1, limit = 20, sortBy = "rawProfit", sortDir = "desc" } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
 
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
 
   try {
     // Count query — count distinct products in the grouped result
-    const [{ total }] = await knex
-      .count("* as total")
-      .from(
-        knex
-          .select("productos.IdProducto")
-          .from(slaveTable)
-          .innerJoin(masterTable, function () {
-            this.on(
-              `${masterTable}.${idInvoice}`,
-              `${slaveTable}.${idInvoice}`,
-            ).andOn(`${masterTable}.Anulada`, 0);
-          })
-          .innerJoin(
-            "productos",
-            "productos.IdProducto",
-            `${slaveTable}.IdProducto`,
-          )
-          .whereBetween(`${masterTable}.Fecha`, [from, to])
-          .groupBy("productos.IdProducto")
-          .as("sub"),
-      );
+    const [{ total }] = await knex.count("* as total").from(
+      knex
+        .select("productos.IdProducto")
+        .from(slaveTable)
+        .innerJoin(masterTable, function () {
+          this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+        })
+        .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+        .whereBetween(`${masterTable}.Fecha`, [from, to])
+        .groupBy("productos.IdProducto")
+        .as("sub"),
+    );
 
     // Data query with sorting and pagination
     const data = await model.GET_SALES_QUERY({
@@ -129,25 +105,14 @@ const GET_BY_GROUP = async (req, res) => {
     const response = await knex
       .select(
         "grupos.Descripcion as categoria",
-        knex.raw(
-          `ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`,
-        ),
-        knex.raw(
-          `ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`,
-        ),
+        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
       )
       .from(slaveTable)
       .innerJoin(masterTable, function () {
-        this.on(
-          `${masterTable}.${idInvoice}`,
-          `${slaveTable}.${idInvoice}`,
-        ).andOn(`${masterTable}.Anulada`, 0);
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin(
-        "productos",
-        "productos.IdProducto",
-        `${slaveTable}.IdProducto`,
-      )
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .innerJoin("grupos", "grupos.idGrupo", "productos.Grupo")
       .whereBetween(`${masterTable}.Fecha`, [from, to])
       .groupBy("grupos.idGrupo");
@@ -172,9 +137,7 @@ const GET_INVOICE_DETAIL = async (req, res) => {
         "sf.Descripcion as descripcion",
         "sf.Cantidad as cantidad",
         "sf.Precio as precio",
-        knex.raw(
-          "ROUND(sf.Precio * sf.Cantidad, 2) as subtotal",
-        ),
+        knex.raw("ROUND(sf.Precio * sf.Cantidad, 2) as subtotal"),
       )
       .from(`${slaveTable} as sf`)
       .innerJoin(`${masterTable} as mf`, function () {
@@ -188,10 +151,7 @@ const GET_INVOICE_DETAIL = async (req, res) => {
       return res.status(404).json({ error: "Invoice not found" });
     }
 
-    const total = rows.reduce(
-      (acc, row) => acc + Number(row.subtotal || 0),
-      0,
-    );
+    const total = rows.reduce((acc, row) => acc + Number(row.subtotal || 0), 0);
 
     const detail = {
       idFactura: rows[0].idFactura,

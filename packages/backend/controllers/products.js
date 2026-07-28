@@ -23,7 +23,7 @@ const GET_PRODUCTS = async (req, res) => {
   }
 };
 
-const GET_BY_GROUP = async (req, res) => {
+const GET_BY_GROUP = async (_req, res) => {
   try {
     const response = await knex
       .select(
@@ -31,7 +31,7 @@ const GET_BY_GROUP = async (req, res) => {
         "productos.Descripcion as product",
         "PrecioA as price",
         "Existencia as stock",
-        "grupos.Descripcion as groupId"
+        "grupos.Descripcion as groupId",
       )
       .from("productos")
       .innerJoin("grupos", "grupos.IdGrupo", "productos.Grupo");
@@ -79,28 +79,22 @@ const GET_COST_FLUCTUATION = async (req, res) => {
        COUNT(IF(MONTH(mastercomp.Fecha) = 11, slavecomp.IdFactura, NULL))  AS Noviembre_transactions,
        ROUND(AVG(IF(MONTH(mastercomp.Fecha) = 12, slavecomp.Precio, NULL)), 2) AS Diciembre,
        COUNT(IF(MONTH(mastercomp.Fecha) = 12, slavecomp.IdFactura, NULL))  AS Diciembre_transactions
-            `)
+            `),
       )
       .from("slavecomp")
       .innerJoin("mastercomp", function () {
-        this.on("mastercomp.IdFactura", "slavecomp.IdFactura").andOn(
-          "mastercomp.Anulada",
-          0
-        );
+        this.on("mastercomp.IdFactura", "slavecomp.IdFactura").andOn("mastercomp.Anulada", 0);
       })
       .where(knex.raw("YEAR(mastercomp.Fecha)"), knex.raw("YEAR(CURDATE())"))
       .andWhere("slavecomp.IdProducto", productId)
       .groupBy("slavecomp.IdProducto");
 
     response = response.reduce(
-      (acc, current) => ({
+      (_acc, current) => ({
         id: current.Descripcion,
-        data: Object.keys(MONTHS).map(
-          (month) => ({ x: MONTHS[month], y: current[month] }),
-          []
-        ),
+        data: Object.keys(MONTHS).map((month) => ({ x: MONTHS[month], y: current[month] }), []),
       }),
-      {}
+      {},
     );
     res.status(200).json(response);
   } catch (error) {
@@ -121,7 +115,7 @@ const GET_STOCK = async (req, res) => {
   }
 };
 
-const GET_PRICE_LIST = async (req, res) => {
+const GET_PRICE_LIST = async (_req, res) => {
   try {
     const response = await knex
       .select("Descripcion as name", "PrecioA as price", "Existencia as stock")
@@ -137,12 +131,7 @@ const GET_PRICE_LIST_BY_GROUP = async (req, res) => {
 
   try {
     const response = await knex
-      .select(
-        "Grupo",
-        "Descripcion as product",
-        "PrecioA as price",
-        knex.raw("ROUND(Existencia, 2) as stock")
-      )
+      .select("Grupo", "Descripcion as product", "PrecioA as price", knex.raw("ROUND(Existencia, 2) as stock"))
       .from("productos")
       .where("productos.Grupo", groupId);
 
@@ -152,15 +141,13 @@ const GET_PRICE_LIST_BY_GROUP = async (req, res) => {
   }
 };
 
-const GET_COST_BY_GROUP = async (req, res) => {
+const GET_COST_BY_GROUP = async (_req, res) => {
   try {
     const response = await knex
       .select(
         knex.raw("MIN(grupos.Descripcion) as group_name"),
         knex.raw("ROUND(SUM(productos.Existencia), 2) as stock"),
-        knex.raw(
-          "ROUND(SUM(productos.Existencia * productos.Costo), 2) as total_cost"
-        )
+        knex.raw("ROUND(SUM(productos.Existencia * productos.Costo), 2) as total_cost"),
       )
       .from("grupos")
       .innerJoin("productos", "productos.Grupo", "grupos.IdGrupo")

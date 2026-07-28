@@ -1,16 +1,11 @@
-import { fetchDashboardPareto, fetchDashboardSales } from "api/dashboard";
-import GroupSales from "components/Cards/GroupSales";
-import { DateTime } from "luxon";
-import { useEffect, useMemo, useState } from "react";
-import {
-    computeComparison,
-    formatCurrency,
-    formatNumber,
-    formatPercent,
-} from "utils/format";
-import KpiCard from "./KpiCard";
-import ParetoChart from "./ParetoChart";
-import RankedList from "./RankedList";
+import { fetchDashboardPareto, fetchDashboardSales } from 'api/dashboard';
+import GroupSales from 'components/Cards/GroupSales';
+import { DateTime } from 'luxon';
+import { useEffect, useMemo, useState } from 'react';
+import { computeComparison, formatCurrency, formatNumber, formatPercent } from 'utils/format';
+import KpiCard from './KpiCard';
+import ParetoChart from './ParetoChart';
+import RankedList from './RankedList';
 
 const SalesDashboard = ({ dateRange, showNoe }) => {
     const [data, setData] = useState(null);
@@ -30,11 +25,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             try {
                 const fromDt = DateTime.fromISO(dateRange.from);
                 const toDt = DateTime.fromISO(dateRange.to);
-                const days = toDt.diff(fromDt, "days").days;
+                const days = toDt.diff(fromDt, 'days').days;
                 const compareTo = fromDt.minus({ days: 1 }).toISODate();
-                const compareFrom = DateTime.fromISO(compareTo)
-                    .minus({ days })
-                    .toISODate();
+                const compareFrom = DateTime.fromISO(compareTo).minus({ days }).toISODate();
 
                 const result = await fetchDashboardSales({
                     from: dateRange.from,
@@ -99,27 +92,23 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     const bestEmployee = data?.bestEmployee;
 
     if (error) {
-        return (
-            <div className="alert alert-danger">
-                Error al cargar el dashboard: {error}
-            </div>
-        );
+        return <div className="alert alert-danger">Error al cargar el dashboard: {error}</div>;
     }
 
     return (
-        <div style={{ position: "relative" }}>
+        <div style={{ position: 'relative' }}>
             {isBusy && (
                 <div
                     style={{
-                        position: "absolute",
+                        position: 'absolute',
                         inset: 0,
                         zIndex: 10,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backdropFilter: "blur(4px)",
-                        WebkitBackdropFilter: "blur(4px)",
-                        background: "rgba(33,37,41,0.4)",
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backdropFilter: 'blur(4px)',
+                        WebkitBackdropFilter: 'blur(4px)',
+                        background: 'rgba(33,37,41,0.4)',
                         borderRadius: 8,
                     }}
                 >
@@ -127,9 +116,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                         className="spinner-border"
                         role="status"
                         style={{
-                            width: "3rem",
-                            height: "3rem",
-                            color: "#e4e6ea",
+                            width: '3rem',
+                            height: '3rem',
+                            color: '#e4e6ea',
                         }}
                     />
                 </div>
@@ -141,10 +130,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             <KpiCard
                                 label="Venta Bruta"
                                 value={formatCurrency(kpis?.totalRawProfit)}
-                                comparison={computeComparison(
-                                    kpis?.totalRawProfit,
-                                    kpis?.compareRawProfit,
-                                )}
+                                comparison={computeComparison(kpis?.totalRawProfit, kpis?.compareRawProfit)}
                                 icon="money"
                                 accent="blue"
                             />
@@ -153,10 +139,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             <KpiCard
                                 label="Ganancia Neta"
                                 value={formatCurrency(kpis?.totalNetProfit)}
-                                comparison={computeComparison(
-                                    kpis?.totalNetProfit,
-                                    kpis?.compareNetProfit,
-                                )}
+                                comparison={computeComparison(kpis?.totalNetProfit, kpis?.compareNetProfit)}
                                 icon="chart"
                                 accent="green"
                             />
@@ -181,10 +164,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             <KpiCard
                                 label="Unidades"
                                 value={formatNumber(kpis?.totalQuantity)}
-                                comparison={computeComparison(
-                                    kpis?.totalQuantity,
-                                    kpis?.compareQuantity,
-                                )}
+                                comparison={computeComparison(kpis?.totalQuantity, kpis?.compareQuantity)}
                                 icon="package"
                                 accent="cyan"
                             />
@@ -193,15 +173,12 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             <KpiCard
                                 label="Transacciones"
                                 value={formatNumber(kpis?.totalInvoices)}
-                                comparison={computeComparison(
-                                    kpis?.totalInvoices,
-                                    kpis?.compareInvoices,
-                                )}
+                                comparison={computeComparison(kpis?.totalInvoices, kpis?.compareInvoices)}
                                 icon="receipt"
                                 accent="pink"
                             />
                         </div>
-                        <div style={{ gridColumn: "1 / -1" }}>
+                        <div style={{ gridColumn: '1 / -1' }}>
                             <div className="dashboard-best-employee">
                                 <div className="dashboard-best-employee-icon">
                                     <svg
@@ -219,18 +196,10 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     </svg>
                                 </div>
                                 <div className="dashboard-best-employee-body">
-                                    <div className="dashboard-kpi-label">
-                                        Mejor Vendedor
-                                    </div>
-                                    <div className="dashboard-best-employee-name">
-                                        {bestEmployee?.name || "\u2014"}
-                                    </div>
+                                    <div className="dashboard-kpi-label">Mejor Vendedor</div>
+                                    <div className="dashboard-best-employee-name">{bestEmployee?.name || '\u2014'}</div>
                                     <div className="dashboard-best-employee-sales">
-                                        {bestEmployee
-                                            ? formatCurrency(
-                                                  bestEmployee.totalSales,
-                                              )
-                                            : ""}
+                                        {bestEmployee ? formatCurrency(bestEmployee.totalSales) : ''}
                                     </div>
                                 </div>
                             </div>
@@ -240,7 +209,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                 <div className="col-12 col-lg-4">
                     <div
                         className="dashboard-panel d-flex flex-column"
-                        style={{ padding: "16px 20px", height: "100%" }}
+                        style={{ padding: '16px 20px', height: '100%' }}
                     >
                         <div className="dashboard-inline-title">Categorías</div>
                         <div style={{ flex: 1, minHeight: 0 }}>
@@ -263,14 +232,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
 
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">
-                    <div
-                        className="dashboard-panel"
-                        style={{ padding: "16px 20px" }}
-                    >
-                        <div className="dashboard-inline-title">
-                            Top Productos
-                        </div>
-                        <div style={{ height: 340, overflowY: "auto" }}>
+                    <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
+                        <div className="dashboard-inline-title">Top Productos</div>
+                        <div style={{ height: 340, overflowY: 'auto' }}>
                             <RankedList
                                 data={data?.topProducts || []}
                                 nameKey="product"
@@ -285,14 +249,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                     </div>
                 </div>
                 <div className="col-12 col-lg-6">
-                    <div
-                        className="dashboard-panel"
-                        style={{ padding: "16px 20px" }}
-                    >
-                        <div className="dashboard-inline-title">
-                            Top Clientes
-                        </div>
-                        <div style={{ height: 340, overflowY: "auto" }}>
+                    <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
+                        <div className="dashboard-inline-title">Top Clientes</div>
+                        <div style={{ height: 340, overflowY: 'auto' }}>
                             <RankedList
                                 data={data?.topClients || []}
                                 nameKey="client"

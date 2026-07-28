@@ -1,7 +1,7 @@
-import CostFluctuationCard from "components/Cards/CostFluctuation";
-import GroupStock from "components/Cards/GroupStock";
-import ProductCostPerGroup from "components/ProductCostPerGroup/Card";
-import Container from "react-bootstrap/Container";
+import CostFluctuationCard from 'components/Cards/CostFluctuation';
+import GroupStock from 'components/Cards/GroupStock';
+import ProductCostPerGroup from 'components/ProductCostPerGroup/Card';
+import Container from 'react-bootstrap/Container';
 
 const ProductosPage = () => {
     return (

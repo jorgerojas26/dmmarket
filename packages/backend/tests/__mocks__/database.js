@@ -34,7 +34,7 @@ const buildBuilder = () => {
     countDistinct: jest.fn(() => builder),
     raw: jest.fn((x) => x),
     andOn: jest.fn(() => builder),
-    then: jest.fn(function (onFulfilled, onRejected) {
+    then: jest.fn((onFulfilled, onRejected) => {
       if (mockState.shouldReject) {
         return Promise.reject(new Error("DB error")).then(onFulfilled, onRejected);
       }
@@ -44,7 +44,7 @@ const buildBuilder = () => {
 
   // Override offset to return a thenable for the data query
   builder.offset = jest.fn(() => ({
-    then: jest.fn(function (onFulfilled, onRejected) {
+    then: jest.fn((onFulfilled, onRejected) => {
       if (mockState.shouldReject) {
         return Promise.reject(new Error("DB error")).then(onFulfilled, onRejected);
       }

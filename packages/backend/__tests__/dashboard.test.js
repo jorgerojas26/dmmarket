@@ -36,9 +36,7 @@ describe("GET /api/dashboard/sales", () => {
 
   // 3. Falta from → 400
   it("responde 400 si falta 'from'", async () => {
-    const res = await request(app)
-      .get("/api/dashboard/sales")
-      .query({ to: "2026-12-31", showNoe: "false" });
+    const res = await request(app).get("/api/dashboard/sales").query({ to: "2026-12-31", showNoe: "false" });
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -46,9 +44,7 @@ describe("GET /api/dashboard/sales", () => {
 
   // 4. Falta to → 400
   it("responde 400 si falta 'to'", async () => {
-    const res = await request(app)
-      .get("/api/dashboard/sales")
-      .query({ from: "2026-01-01", showNoe: "false" });
+    const res = await request(app).get("/api/dashboard/sales").query({ from: "2026-01-01", showNoe: "false" });
 
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
@@ -67,9 +63,13 @@ describe("GET /api/dashboard/sales", () => {
 
   // 6. KPIs comparativos cuando se envían compareFrom/compareTo
   it("incluye compare* cuando se envían fechas comparativas", async () => {
-    const res = await request(app)
-      .get("/api/dashboard/sales")
-      .query({ from: "2026-07-01", to: "2026-07-27", compareFrom: "2026-06-04", compareTo: "2026-06-30", showNoe: "false" });
+    const res = await request(app).get("/api/dashboard/sales").query({
+      from: "2026-07-01",
+      to: "2026-07-27",
+      compareFrom: "2026-06-04",
+      compareTo: "2026-06-30",
+      showNoe: "false",
+    });
 
     expect(res.status).toBe(200);
     expect(res.body.kpis).toHaveProperty("compareRawProfit");

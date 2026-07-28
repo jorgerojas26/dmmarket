@@ -2,11 +2,11 @@ import { ResponsivePie } from '@nivo/pie';
 
 const ProductChart = ({ chartData = [], loading }) => {
     return (
-        <div className='card'>
-            <div className='card-header'>
+        <div className="card">
+            <div className="card-header">
                 <h3>Productos más vendidos</h3>
             </div>
-            <div className='card-body'>
+            <div className="card-body">
                 {chartData.length > 0 && (
                     <ResponsivePie
                         data={chartData}
@@ -15,12 +15,10 @@ const ProductChart = ({ chartData = [], loading }) => {
                         padAngle={0.7}
                         cornerRadius={3}
                         activeOuterRadiusOffset={8}
-                        arcLabel={function (e) {
-                            return `${e.value} (${e.data.netProfit})`;
-                        }}
+                        arcLabel={(e) => `${e.value} (${e.data.netProfit})`}
                         borderWidth={1}
                         arcLinkLabelsSkipAngle={10}
-                        arcLinkLabelsTextColor='#333333'
+                        arcLinkLabelsTextColor="#333333"
                         arcLinkLabelsThickness={2}
                         arcLinkLabelsColor={{ from: 'color' }}
                         arcLabelsSkipAngle={10}
@@ -30,8 +28,8 @@ const ProductChart = ({ chartData = [], loading }) => {
                         }}
                         tooltip={({ datum }) => {
                             return (
-                                <div className='tooltip-container'>
-                                    <span className='small-square' style={{ background: datum.color }}></span>
+                                <div className="tooltip-container">
+                                    <span className="small-square" style={{ background: datum.color }}></span>
                                     <strong>{datum.label}</strong>
                                     <label>Bruto: </label>
                                     <span>${Number(datum.value).toLocaleString()}</span>
@@ -43,8 +41,8 @@ const ProductChart = ({ chartData = [], loading }) => {
                     />
                 )}
                 {loading && (
-                    <div className='position-absolute top-50 start-50 translate-middle'>
-                        <span className='spinner-border spinner-border-md' role='status' aria-hidden='true' />
+                    <div className="position-absolute top-50 start-50 translate-middle">
+                        <span className="spinner-border spinner-border-md" role="status" aria-hidden="true" />
                     </div>
                 )}
             </div>

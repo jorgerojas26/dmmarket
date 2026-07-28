@@ -1,12 +1,12 @@
-import SalesDashboard from "components/Dashboard/SalesDashboard";
-import DateRangePicker from "components/DateRangePicker";
-import { ShowNoeContext } from "context/show_noe";
-import { DateTime } from "luxon";
-import { useCallback, useContext, useMemo, useState } from "react";
-import Container from "react-bootstrap/Container";
-import Nav from "react-bootstrap/Nav";
-import DesgloseView from "./DesgloseView";
-import InvoicesView from "./InvoicesView";
+import SalesDashboard from 'components/Dashboard/SalesDashboard';
+import DateRangePicker from 'components/DateRangePicker';
+import { ShowNoeContext } from 'context/show_noe';
+import { DateTime } from 'luxon';
+import { useCallback, useContext, useMemo, useState } from 'react';
+import Container from 'react-bootstrap/Container';
+import Nav from 'react-bootstrap/Nav';
+import DesgloseView from './DesgloseView';
+import InvoicesView from './InvoicesView';
 
 const NavIcon = ({ children }) => <span className="nav-icon">{children}</span>;
 
@@ -68,9 +68,9 @@ const ICONS = {
 
 const VentasPage = () => {
     const { showNoe } = useContext(ShowNoeContext);
-    const [activeView, setActiveView] = useState("dashboard");
+    const [activeView, setActiveView] = useState('dashboard');
     const [dateRange, setDateRange] = useState({
-        from: DateTime.now().startOf("year").toISODate(),
+        from: DateTime.now().startOf('year').toISODate(),
         to: DateTime.now().toISODate(),
     });
 
@@ -81,25 +81,17 @@ const VentasPage = () => {
     const VIEWS = useMemo(
         () => ({
             dashboard: {
-                heading: "Dashboard de Ventas",
-                render: () => (
-                    <SalesDashboard dateRange={dateRange} showNoe={showNoe} />
-                ),
+                heading: 'Dashboard de Ventas',
+                render: () => <SalesDashboard dateRange={dateRange} showNoe={showNoe} />,
             },
             desglose: {
-                heading: "Desglose de Ventas",
-                render: () => (
-                    <DesgloseView isActive={activeView === "desglose"} />
-                ),
+                heading: 'Desglose de Ventas',
+                render: () => <DesgloseView isActive={activeView === 'desglose'} />,
             },
             despacho: {
-                heading: "Despacho",
+                heading: 'Despacho',
                 render: () => (
-                    <InvoicesView
-                        dateRange={dateRange}
-                        showNoe={showNoe}
-                        isActive={activeView === "despacho"}
-                    />
+                    <InvoicesView dateRange={dateRange} showNoe={showNoe} isActive={activeView === 'despacho'} />
                 ),
             },
         }),
@@ -139,15 +131,11 @@ const VentasPage = () => {
 
                 {/* Content area */}
                 <div className="clientes-content p-4 w-0">
-                    {activeView !== "desglose" && (
+                    {activeView !== 'desglose' && (
                         <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
-                            <h4 className="m-0 p-0 bg-red text-light">
-                                {currentView.heading}
-                            </h4>
+                            <h4 className="m-0 p-0 bg-red text-light">{currentView.heading}</h4>
                             <DateRangePicker
-                                initialFrom={DateTime.now()
-                                    .startOf("year")
-                                    .toISODate()}
+                                initialFrom={DateTime.now().startOf('year').toISODate()}
                                 initialTo={DateTime.now().toISODate()}
                                 onChange={handleDateRangeChange}
                             />

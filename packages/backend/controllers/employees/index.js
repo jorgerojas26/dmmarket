@@ -1,16 +1,10 @@
 const knex = require("../../database");
-const fs = require("fs");
+const fs = require("node:fs");
 
-const GET_EMPLOYEES = async (req, res) => {
+const GET_EMPLOYEES = async (_req, res) => {
   try {
     const response = await knex
-      .select(
-        "idVend as id",
-        "Empresa as name",
-        "Rif as rif",
-        "Ci as ci",
-        "Telfs as phone"
-      )
+      .select("idVend as id", "Empresa as name", "Rif as rif", "Ci as ci", "Telfs as phone")
       .from("vendedores");
     res.status(200).json(response);
   } catch (error) {
@@ -23,16 +17,12 @@ const GET_COMMISSION_INFO = async (req, res) => {
 
   try {
     const response = await knex
-      .select(
-        "grupos.IdGrupo as groupId",
-        "grupos.Descripcion as group",
-        "vendedor_comisiones.comision as commission"
-      )
+      .select("grupos.IdGrupo as groupId", "grupos.Descripcion as group", "vendedor_comisiones.comision as commission")
       .from("grupos")
       .leftJoin("vendedor_comisiones", function () {
         this.on("vendedor_comisiones.grupoId", "grupos.IdGrupo").andOn(
           "vendedor_comisiones.vendedorId",
-          Number(employeeId)
+          Number(employeeId),
         );
       });
     res.status(200).json(response);
@@ -53,17 +43,13 @@ const UPDATE_COMMISSION_INFO = async (req, res) => {
   const { commissionInfo } = req.body;
 
   if (!commissionInfo || Object.keys(commissionInfo).length === 0) {
-    res
-      .status(400)
-      .json({ error: { message: "Debe enviar la información comisiones" } });
+    res.status(400).json({ error: { message: "Debe enviar la información comisiones" } });
     return;
   }
 
   try {
     for (const [key, value] of Object.entries(commissionInfo)) {
-      const commission = await knex("vendedor_comisiones")
-        .where("grupoId", key)
-        .andWhere("vendedorId", employeeId);
+      const commission = await knex("vendedor_comisiones").where("grupoId", key).andWhere("vendedorId", employeeId);
       console.log("checking if commissionInfo exists in database", commission);
       if (commission.length) {
         console.log("yes, commission info exists!!!!!", value, key);
@@ -98,32 +84,22 @@ const GET_SALES = async (req, res) => {
         `${masterTable}.Nombre as client`,
         `${masterTable}.Rif as rif`,
         `${masterTable}.Fecha as createdAt`,
-        knex.raw(
-          `ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as invoiceTotal`
-        ),
+        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as invoiceTotal`),
         knex.raw(
           `ROUND(SUM(CASE WHEN ISNULL(fact_vendedor_comisiones.comision) 
                 THEN 0 
                 ELSE ${slaveTable}.Precio * ${slaveTable}.Cantidad * (fact_vendedor_comisiones.comision / 100)
                 END
-              ), 2) as commissionTotal`
-        )
+              ), 2) as commissionTotal`,
+        ),
       )
       .from(`${masterTable}`)
-      .innerJoin(
-        `${slaveTable}`,
-        `${slaveTable}.${idInvoice}`,
-        `${masterTable}.${idInvoice}`
-      )
-      .innerJoin(
-        "productos",
-        "productos.IdProducto",
-        `${slaveTable}.IdProducto`
-      )
+      .innerJoin(`${slaveTable}`, `${slaveTable}.${idInvoice}`, `${masterTable}.${idInvoice}`)
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("fact_vendedor_comisiones", function () {
         this.on("fact_vendedor_comisiones.grupoId", "productos.Grupo").andOn(
           "fact_vendedor_comisiones.masterfactId",
-          `${masterTable}.${idInvoice}`
+          `${masterTable}.${idInvoice}`,
         );
       })
       .whereBetween(`${masterTable}.Fecha`, [from, to])
@@ -143,12 +119,7 @@ const GET_SALES = async (req, res) => {
 };
 
 const FALLBACK_CREATE_TABLE = async (recursive_callback) => {
-  const migration = fs
-    .readFileSync(
-      "./controllers/employees/create-table-vendedor-comisiones.sql",
-      "utf8"
-    )
-    .toString();
+  const migration = fs.readFileSync("./controllers/employees/create-table-vendedor-comisiones.sql", "utf8").toString();
   await knex.raw(migration);
   recursive_callback();
 };

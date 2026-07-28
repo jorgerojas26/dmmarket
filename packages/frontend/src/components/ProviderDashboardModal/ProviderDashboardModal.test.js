@@ -1,10 +1,10 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
-import * as api from "api/providers";
-import { ShowNoeContext } from "context/show_noe";
-import ProviderDashboardModal from "./index";
+import { act, render, screen, waitFor } from '@testing-library/react';
+import * as api from 'api/providers';
+import { ShowNoeContext } from 'context/show_noe';
+import ProviderDashboardModal from './index';
 
 // Mock the API module
-jest.mock("api/providers", () => ({
+jest.mock('api/providers', () => ({
     fetchProviderSummary: jest.fn(),
     fetchProviderSales: jest.fn(),
     fetchProviderPurchases: jest.fn(),
@@ -12,15 +12,10 @@ jest.mock("api/providers", () => ({
 }));
 
 // Mock DateRangePicker to avoid react-date-range complexity
-jest.mock("components/DateRangePicker", () => {
+jest.mock('components/DateRangePicker', () => {
     return function MockDateRangePicker({ onChange }) {
         return (
-            <button
-                data-testid="mock-date-picker"
-                onClick={() =>
-                    onChange({ from: "2024-01-01", to: "2024-12-31" })
-                }
-            >
+            <button data-testid="mock-date-picker" onClick={() => onChange({ from: '2024-01-01', to: '2024-12-31' })}>
                 Date Picker
             </button>
         );
@@ -29,7 +24,7 @@ jest.mock("components/DateRangePicker", () => {
 
 const mockProvider = {
     IdProveedor: 1,
-    Empresa: "Proveedor Test",
+    Empresa: 'Proveedor Test',
 };
 
 const mockSummary = {
@@ -37,21 +32,21 @@ const mockSummary = {
     numCompras: 10,
     totalVentas: 8000,
     numVentas: 15,
-    bestSeller: "Vendedor Top",
+    bestSeller: 'Vendedor Top',
 };
 
 const mockPurchases = {
     data: [
-        { idFactura: "FAC-001", fecha: "2024-06-15", monto: 1500 },
-        { idFactura: "FAC-002", fecha: "2024-05-10", monto: 800 },
+        { idFactura: 'FAC-001', fecha: '2024-06-15', monto: 1500 },
+        { idFactura: 'FAC-002', fecha: '2024-05-10', monto: 800 },
     ],
     total: 2,
 };
 
 const mockSales = {
     data: [
-        { vendedor: "Vendor A", fecha: "2024-06-15", monto: 500 },
-        { vendedor: "Vendor B", fecha: "2024-05-10", monto: 300 },
+        { vendedor: 'Vendor A', fecha: '2024-06-15', monto: 500 },
+        { vendedor: 'Vendor B', fecha: '2024-05-10', monto: 300 },
     ],
     total: 2,
 };
@@ -59,16 +54,12 @@ const mockSales = {
 const renderModal = (show = true, provider = mockProvider, showNoe = false) => {
     return render(
         <ShowNoeContext.Provider value={{ showNoe, setShowNoe: jest.fn() }}>
-            <ProviderDashboardModal
-                show={show}
-                onClose={jest.fn()}
-                provider={provider}
-            />
+            <ProviderDashboardModal show={show} onClose={jest.fn()} provider={provider} />
         </ShowNoeContext.Provider>,
     );
 };
 
-describe("ProviderDashboardModal", () => {
+describe('ProviderDashboardModal', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         api.fetchProviderSummary.mockResolvedValue(mockSummary);
@@ -76,41 +67,41 @@ describe("ProviderDashboardModal", () => {
         api.fetchProviderSales.mockResolvedValue(mockSales);
     });
 
-    it("renders nothing when show is false", () => {
+    it('renders nothing when show is false', () => {
         const { container } = renderModal(false);
-        expect(container.innerHTML).toBe("");
+        expect(container.innerHTML).toBe('');
     });
 
-    it("renders modal with provider info when show is true", async () => {
+    it('renders modal with provider info when show is true', async () => {
         renderModal(true);
 
         await waitFor(() => {
-            expect(screen.getByText("Proveedor Test")).toBeInTheDocument();
+            expect(screen.getByText('Proveedor Test')).toBeInTheDocument();
         });
 
-        expect(screen.getByText("Proveedor #1")).toBeInTheDocument();
+        expect(screen.getByText('Proveedor #1')).toBeInTheDocument();
     });
 
-    it("renders 4 stat cards after loading summary", async () => {
+    it('renders 4 stat cards after loading summary', async () => {
         renderModal(true);
 
         await waitFor(() => {
-            expect(screen.getByText("Total Compras")).toBeInTheDocument();
-            expect(screen.getByText("# Compras")).toBeInTheDocument();
-            expect(screen.getByText("Total Ventas")).toBeInTheDocument();
-            expect(screen.getByText("Mejor Vendedor")).toBeInTheDocument();
+            expect(screen.getByText('Total Compras')).toBeInTheDocument();
+            expect(screen.getByText('# Compras')).toBeInTheDocument();
+            expect(screen.getByText('Total Ventas')).toBeInTheDocument();
+            expect(screen.getByText('Mejor Vendedor')).toBeInTheDocument();
         });
 
         // Check formatted values
         await waitFor(() => {
-            expect(screen.getByText("$5,000.00")).toBeInTheDocument();
-            expect(screen.getByText("10")).toBeInTheDocument();
-            expect(screen.getByText("$8,000.00")).toBeInTheDocument();
-            expect(screen.getByText("Vendedor Top")).toBeInTheDocument();
+            expect(screen.getByText('$5,000.00')).toBeInTheDocument();
+            expect(screen.getByText('10')).toBeInTheDocument();
+            expect(screen.getByText('$8,000.00')).toBeInTheDocument();
+            expect(screen.getByText('Vendedor Top')).toBeInTheDocument();
         });
     });
 
-    it("shows N/A for bestSeller when null", async () => {
+    it('shows N/A for bestSeller when null', async () => {
         api.fetchProviderSummary.mockResolvedValue({
             ...mockSummary,
             bestSeller: null,
@@ -119,55 +110,51 @@ describe("ProviderDashboardModal", () => {
         renderModal(true);
 
         await waitFor(() => {
-            expect(screen.getByText("N/A")).toBeInTheDocument();
+            expect(screen.getByText('N/A')).toBeInTheDocument();
         });
     });
 
-    it("renders purchases table with data", async () => {
+    it('renders purchases table with data', async () => {
         renderModal(true);
 
         await waitFor(() => {
-            expect(screen.getByText("Compras")).toBeInTheDocument();
-            expect(screen.getByText("FAC-001")).toBeInTheDocument();
-            expect(screen.getByText("FAC-002")).toBeInTheDocument();
+            expect(screen.getByText('Compras')).toBeInTheDocument();
+            expect(screen.getByText('FAC-001')).toBeInTheDocument();
+            expect(screen.getByText('FAC-002')).toBeInTheDocument();
         });
     });
 
-    it("renders sales table with data", async () => {
+    it('renders sales table with data', async () => {
         renderModal(true);
 
         await waitFor(() => {
-            expect(screen.getByText("Ventas")).toBeInTheDocument();
-            expect(screen.getByText("Vendor A")).toBeInTheDocument();
-            expect(screen.getByText("Vendor B")).toBeInTheDocument();
+            expect(screen.getByText('Ventas')).toBeInTheDocument();
+            expect(screen.getByText('Vendor A')).toBeInTheDocument();
+            expect(screen.getByText('Vendor B')).toBeInTheDocument();
         });
     });
 
-    it("shows empty state when purchases data is empty", async () => {
+    it('shows empty state when purchases data is empty', async () => {
         api.fetchProviderPurchases.mockResolvedValue({ data: [], total: 0 });
 
         renderModal(true);
 
         await waitFor(() => {
-            expect(
-                screen.getByText("Sin compras en este período"),
-            ).toBeInTheDocument();
+            expect(screen.getByText('Sin compras en este período')).toBeInTheDocument();
         });
     });
 
-    it("shows empty state when sales data is empty", async () => {
+    it('shows empty state when sales data is empty', async () => {
         api.fetchProviderSales.mockResolvedValue({ data: [], total: 0 });
 
         renderModal(true);
 
         await waitFor(() => {
-            expect(
-                screen.getByText("Sin ventas en este período"),
-            ).toBeInTheDocument();
+            expect(screen.getByText('Sin ventas en este período')).toBeInTheDocument();
         });
     });
 
-    it("calls fetchProviderSummary with correct params", async () => {
+    it('calls fetchProviderSummary with correct params', async () => {
         renderModal(true);
 
         await waitFor(() => {
@@ -179,7 +166,7 @@ describe("ProviderDashboardModal", () => {
         });
     });
 
-    it("calls fetchProviderSales with correct params when showNoe changes", async () => {
+    it('calls fetchProviderSales with correct params when showNoe changes', async () => {
         renderModal(true, mockProvider, true);
 
         await waitFor(() => {
@@ -193,11 +180,11 @@ describe("ProviderDashboardModal", () => {
         });
     });
 
-    it("renders pagination when there are more records than LIMIT", async () => {
+    it('renders pagination when there are more records than LIMIT', async () => {
         api.fetchProviderPurchases.mockResolvedValue({
             data: Array(20).fill({
-                idFactura: "FAC",
-                fecha: "2024-01-01",
+                idFactura: 'FAC',
+                fecha: '2024-01-01',
                 monto: 100,
             }),
             total: 50,
@@ -206,26 +193,20 @@ describe("ProviderDashboardModal", () => {
         renderModal(true);
 
         await waitFor(() => {
-            expect(screen.getByText("Página 1 de 3")).toBeInTheDocument();
+            expect(screen.getByText('Página 1 de 3')).toBeInTheDocument();
         });
     });
 
-    it("closes modal when onClose is called", async () => {
+    it('closes modal when onClose is called', async () => {
         const onClose = jest.fn();
         render(
-            <ShowNoeContext.Provider
-                value={{ showNoe: false, setShowNoe: jest.fn() }}
-            >
-                <ProviderDashboardModal
-                    show={true}
-                    onClose={onClose}
-                    provider={mockProvider}
-                />
+            <ShowNoeContext.Provider value={{ showNoe: false, setShowNoe: jest.fn() }}>
+                <ProviderDashboardModal show={true} onClose={onClose} provider={mockProvider} />
             </ShowNoeContext.Provider>,
         );
 
         // Find and click the close button
-        const closeButton = document.querySelector(".btn-close");
+        const closeButton = document.querySelector('.btn-close');
         if (closeButton) {
             act(() => {
                 closeButton.click();

@@ -7,9 +7,7 @@ const knex = require("../../database");
  * immediately before [from, to].
  */
 const getPreviousPeriod = (from, to) => {
-  const days = Math.round(
-    (new Date(to) - new Date(from)) / (1000 * 60 * 60 * 24),
-  );
+  const days = Math.round((new Date(to) - new Date(from)) / (1000 * 60 * 60 * 24));
   const prevFrom = new Date(from);
   prevFrom.setDate(prevFrom.getDate() - days);
   const prevTo = new Date(from);
@@ -73,11 +71,11 @@ const computeAbc = (sortedRevenues, grandTotal) => {
 
 const computeSegments = (revenues, grandTotal) => {
   const SEGMENT_THRESHOLDS = [
-    { key: "A: >100K",      min: 100000 },
-    { key: "B: 20K-100K",   min: 20000 },
-    { key: "C: 5K-20K",     min: 5000 },
-    { key: "D: 1K-5K",      min: 1000 },
-    { key: "E: <1K",        min: -Infinity },
+    { key: "A: >100K", min: 100000 },
+    { key: "B: 20K-100K", min: 20000 },
+    { key: "C: 5K-20K", min: 5000 },
+    { key: "D: 1K-5K", min: 1000 },
+    { key: "E: <1K", min: -Infinity },
   ];
 
   const map = new Map();
@@ -98,7 +96,7 @@ const computeSegments = (revenues, grandTotal) => {
       segment: s.segment,
       num_clients: s.num_clients,
       revenue: Math.round(s.revenue * 100) / 100,
-      revenue_pct: grandTotal > 0 ? Math.round(((s.revenue / grandTotal) * 100) * 10) / 10 : 0,
+      revenue_pct: grandTotal > 0 ? Math.round((s.revenue / grandTotal) * 100 * 10) / 10 : 0,
       avg_invoices: s.num_clients > 0 ? Math.round((s.total_invoices / s.num_clients) * 10) / 10 : 0,
     }))
     .filter((s) => s.num_clients > 0);
@@ -223,10 +221,7 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
 
       // 6. Revenue at risk (>60 days inactive)
       knex
-        .select(
-          knex.raw(`ROUND(SUM(total_usd), 2) as revenue_at_risk`),
-          knex.raw(`COUNT(*) as clients_at_risk`),
-        )
+        .select(knex.raw(`ROUND(SUM(total_usd), 2) as revenue_at_risk`), knex.raw(`COUNT(*) as clients_at_risk`))
         .from(
           knex
             .select(
@@ -269,7 +264,10 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
             .andWhere("mf.Anulada", 0)
             .whereIn(
               "mf.IdCliente",
-              knex(`${masterTable}`).distinct("IdCliente").whereBetween("Fecha", [prevPeriod.from, prevPeriod.to]).andWhere("Anulada", 0),
+              knex(`${masterTable}`)
+                .distinct("IdCliente")
+                .whereBetween("Fecha", [prevPeriod.from, prevPeriod.to])
+                .andWhere("Anulada", 0),
             )
             .first(),
 
@@ -289,7 +287,10 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
             .andWhere("Anulada", 0)
             .whereNotIn(
               "IdCliente",
-              knex(`${masterTable}`).distinct("IdCliente").whereBetween("Fecha", [prevPeriod.from, prevPeriod.to]).andWhere("Anulada", 0),
+              knex(`${masterTable}`)
+                .distinct("IdCliente")
+                .whereBetween("Fecha", [prevPeriod.from, prevPeriod.to])
+                .andWhere("Anulada", 0),
             )
             .first(),
         ]);

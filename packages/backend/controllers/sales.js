@@ -30,14 +30,11 @@ const GET_FACTURAS = async (req, res) => {
       case "utilidad":
         return knex.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)");
       case "promedio":
-        return knex.raw(
-          "AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100)",
-        );
+        return knex.raw("AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100)");
       case "cliente":
         return "clientes.Empresa";
       case "vendedor":
         return "vendedores.Empresa";
-      case "fecha":
       default:
         return "mf.Fecha";
     }
@@ -64,11 +61,7 @@ const GET_FACTURAS = async (req, res) => {
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
         if (search) {
           q.andWhere(function () {
-            this.where("clientes.Empresa", "like", `%${search}%`).orWhere(
-              `mf.${idInvoice}`,
-              "like",
-              `%${search}%`,
-            );
+            this.where("clientes.Empresa", "like", `%${search}%`).orWhere(`mf.${idInvoice}`, "like", `%${search}%`);
           });
         }
       });
@@ -82,15 +75,9 @@ const GET_FACTURAS = async (req, res) => {
         "mf.Fecha as fecha",
         "clientes.Empresa as cliente",
         "vendedores.Empresa as vendedor",
-        knex.raw(
-          "ROUND(SUM(sf.Precio * sf.Cantidad), 2) as monto",
-        ),
-        knex.raw(
-          "ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad",
-        ),
-        knex.raw(
-          "ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as promedio",
-        ),
+        knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as monto"),
+        knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad"),
+        knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as promedio"),
       )
       .from(`${slaveTable} as sf`)
       .innerJoin(`${masterTable} as mf`, function () {
@@ -107,11 +94,7 @@ const GET_FACTURAS = async (req, res) => {
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
         if (search) {
           q.andWhere(function () {
-            this.where("clientes.Empresa", "like", `%${search}%`).orWhere(
-              `mf.${idInvoice}`,
-              "like",
-              `%${search}%`,
-            );
+            this.where("clientes.Empresa", "like", `%${search}%`).orWhere(`mf.${idInvoice}`, "like", `%${search}%`);
           });
         }
       })
@@ -168,9 +151,7 @@ const GET_PRODUCTOS = async (req, res) => {
       case "netProfit":
         return knex.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)");
       case "averageProfitPercent":
-        return knex.raw(
-          "AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100)",
-        );
+        return knex.raw("AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100)");
       case "product":
         return "productos.Descripcion";
       default:
@@ -196,11 +177,7 @@ const GET_PRODUCTOS = async (req, res) => {
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
         if (search) {
-          q.andWhere(
-            "productos.Descripcion",
-            "like",
-            `%${search}%`,
-          );
+          q.andWhere("productos.Descripcion", "like", `%${search}%`);
         }
       });
 
@@ -211,15 +188,9 @@ const GET_PRODUCTOS = async (req, res) => {
       .select(
         "productos.Descripcion as product",
         knex.raw("ROUND(SUM(sf.Cantidad), 3) as quantity"),
-        knex.raw(
-          "ROUND(SUM(sf.Precio * sf.Cantidad), 2) as rawProfit",
-        ),
-        knex.raw(
-          "ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as netProfit",
-        ),
-        knex.raw(
-          "ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent",
-        ),
+        knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as rawProfit"),
+        knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as netProfit"),
+        knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent"),
       )
       .from(`${slaveTable} as sf`)
       .innerJoin(`${masterTable} as mf`, function () {
@@ -233,11 +204,7 @@ const GET_PRODUCTOS = async (req, res) => {
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
         if (search) {
-          q.andWhere(
-            "productos.Descripcion",
-            "like",
-            `%${search}%`,
-          );
+          q.andWhere("productos.Descripcion", "like", `%${search}%`);
         }
       })
       .groupBy("productos.IdProducto")

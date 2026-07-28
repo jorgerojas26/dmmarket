@@ -50,7 +50,9 @@ input[type="search"].table-search-input,
 
 .table-search-input:focus {
     background: #252830;
-    box-shadow: 0 0 0 2px rgba(100, 140, 200, 0.4), 0 0 12px rgba(100, 140, 200, 0.15);
+    box-shadow:
+        0 0 0 2px rgba(100, 140, 200, 0.4),
+        0 0 12px rgba(100, 140, 200, 0.15);
 }
 
 .table-toolbar-right {

@@ -1,9 +1,9 @@
-import SearchInput from 'components/SearchInput';
 import { fetchClients } from 'api/clients';
+import SearchInput from 'components/SearchInput';
 
 const ClientSearch = ({ onSelect }) => {
     const loadClients = async (inputValue) => {
-        let clients = await fetchClients({ filter: inputValue });
+        const clients = await fetchClients({ filter: inputValue });
 
         if (clients && clients.length > 0) {
             const records = clients.map((record) => {
@@ -21,9 +21,9 @@ const ClientSearch = ({ onSelect }) => {
 
     const handleSelect = (option, { action }) => {
         if (action === 'select-option') {
-            onSelect && onSelect(option.value, action);
+            onSelect?.(option.value, action);
         } else if (action === 'clear') {
-            onSelect && onSelect(null, action);
+            onSelect?.(null, action);
         }
     };
 
@@ -31,7 +31,7 @@ const ClientSearch = ({ onSelect }) => {
         <SearchInput
             loadOptions={loadClients}
             defaultOptions={false}
-            placeholder='Buscar cliente...'
+            placeholder="Buscar cliente..."
             onSelect={handleSelect}
         />
     );

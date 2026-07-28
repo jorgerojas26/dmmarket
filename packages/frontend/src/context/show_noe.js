@@ -1,17 +1,17 @@
-import React, { createContext, useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 
 // Crea el contexto con un valor inicial
 export const ShowNoeContext = createContext({
-  showNoe: false,
-  setShowNoe: () => {},
+    showNoe: false,
+    setShowNoe: () => {},
 });
 
 export const ShowNoesProvider = ({ children }) => {
-  const [showNoe, setShowNoe] = useState(localStorage.getItem('showNoe') === 'true');
+    const [showNoe, setShowNoe] = useState(localStorage.getItem('showNoe') === 'true');
 
-  useEffect(() => {
-    localStorage.setItem('showNoe', showNoe.toString() ?? false);
-  }, [showNoe]);
+    useEffect(() => {
+        localStorage.setItem('showNoe', showNoe.toString() ?? false);
+    }, [showNoe]);
 
-  return <ShowNoeContext.Provider value={{ showNoe, setShowNoe }}>{children}</ShowNoeContext.Provider>;
+    return <ShowNoeContext.Provider value={{ showNoe, setShowNoe }}>{children}</ShowNoeContext.Provider>;
 };
