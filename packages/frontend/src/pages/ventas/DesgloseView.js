@@ -253,7 +253,7 @@ const DesgloseView = ({ isActive }) => {
       </div>
 
       {/* Filter selectors */}
-      <div className="d-flex flex-wrap gap-2 mb-3">
+      <div className="d-flex flex-wrap gap-3 mb-3">
         <div style={{ minWidth: "220px" }}>
           <ClientSearch onSelect={handleClientSelect} />
         </div>

@@ -619,3 +619,112 @@ input:checked + .slider:before {
         background: #1a1d21;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   react-select dark theme (classNamePrefix="search-select")
+   ═══════════════════════════════════════════════════════════ */
+
+/* --- Control (input box) --- */
+.search-select__control {
+    background: #1a1d21 !important;
+    border-color: #373b3e !important;
+    border-radius: 6px !important;
+    min-height: 38px !important;
+    box-shadow: none !important;
+}
+
+.search-select__control--is-focused {
+    border-color: #4a5060 !important;
+    box-shadow: 0 0 0 1px rgba(100, 140, 200, 0.3) !important;
+}
+
+.search-select__control:hover {
+    border-color: #4a5060 !important;
+}
+
+/* --- Value / placeholder text --- */
+.search-select__single-value {
+    color: #e4e6ea !important;
+}
+
+.search-select__placeholder {
+    color: #6b7280 !important;
+}
+
+.search-select__input-container {
+    color: #e4e6ea !important;
+}
+
+/* --- Indicators (dropdown arrow, clear) --- */
+.search-select__indicator {
+    color: #6b7280 !important;
+}
+
+.search-select__indicator:hover {
+    color: #c4cad4 !important;
+}
+
+.search-select__indicator-separator {
+    background-color: #373b3e !important;
+}
+
+/* --- Menu (dropdown list) --- */
+.search-select__menu {
+    background: #1e2126 !important;
+    border: 1px solid #373b3e !important;
+    border-radius: 6px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+    z-index: 9999 !important;
+    margin-top: 4px !important;
+}
+
+/* --- Options --- */
+.search-select__option {
+    background: transparent !important;
+    color: #c4cad4 !important;
+    cursor: pointer;
+    padding: 8px 12px !important;
+}
+
+.search-select__option--is-focused {
+    background: #2d3138 !important;
+    color: #e4e6ea !important;
+}
+
+.search-select__option--is-selected {
+    background: #2d3748 !important;
+    color: #e4e6ea !important;
+}
+
+.search-select__option:active {
+    background: #3a3f48 !important;
+}
+
+/* --- No options / loading message --- */
+.search-select__menu-notice {
+    color: #6b7280 !important;
+}
+
+/* --- Menu portal (renders at document.body) --- */
+.search-select__menu-portal {
+    z-index: 9999 !important;
+}
+
+/* --- Multi-value (chips) --- */
+.search-select__multi-value {
+    background: #2d3138 !important;
+    border-radius: 4px !important;
+}
+
+.search-select__multi-value__label {
+    color: #e4e6ea !important;
+}
+
+.search-select__multi-value__remove {
+    color: #6b7280 !important;
+}
+
+.search-select__multi-value__remove:hover {
+    background: #c0392b !important;
+    color: #e4e6ea !important;
+}

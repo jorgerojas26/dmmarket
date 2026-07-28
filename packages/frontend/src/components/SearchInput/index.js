@@ -9,10 +9,12 @@ const SearchInput = ({ placeholder, loadOptions, defaultOptions = true, cacheOpt
       defaultOptions={defaultOptions}
       placeholder={placeholder}
       onChange={onSelect ? onSelect : null}
-      loadingMessage={() => {
-        return 'Cargando...';
-      }}
+      loadingMessage={() => 'Cargando...'}
+      noOptionsMessage={() => 'Sin resultados'}
       isClearable
+      classNamePrefix="search-select"
+      menuPortalTarget={document.body}
+      menuPlacement="auto"
     />
   );
 };
