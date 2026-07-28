@@ -40,6 +40,13 @@ export const fetchClientSummary = async (clientId, { from, to, showNoe }) => {
   return response.json();
 };
 
+export const fetchClientsDashboard = async (dateRange, showNoe) => {
+  const response = await fetch(
+    `${BASE_URL}/dashboard?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}`
+  );
+  return response.json();
+};
+
 export const fetchClientsList = async ({ search, page = 1, limit = 20, showNoe }) => {
   const params = new URLSearchParams();
   if (search) params.append('search', search);

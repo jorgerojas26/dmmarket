@@ -353,6 +353,8 @@ const GET_CLIENTS_LIST = async (req, res) => {
   }
 };
 
+const { GET_CLIENTS_DASHBOARD } = require("./clients/dashboard");
+
 module.exports = {
   GET_CLIENTS,
   GET_BEST_CLIENTS,
@@ -361,4 +363,5 @@ module.exports = {
   GET_CLIENT_SALES,
   GET_CLIENT_SUMMARY,
   GET_CLIENTS_LIST,
+  GET_CLIENTS_DASHBOARD,
 };

@@ -14,6 +14,7 @@ router
 router.route("/:clientId/sales").get(showNoe, controller.GET_CLIENT_SALES);
 router.route("/:clientId/summary").get(showNoe, controller.GET_CLIENT_SUMMARY);
 
+router.route("/dashboard").get(showNoe, controller.GET_CLIENTS_DASHBOARD);
 router.route("/list").get(showNoe, controller.GET_CLIENTS_LIST);
 
 module.exports = router;
