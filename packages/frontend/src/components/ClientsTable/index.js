@@ -53,20 +53,22 @@ const ClientsTable = ({ onRowSelect }) => {
                 accessor: "total_ventas",
                 Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
             },
+            {
+                Header: "Utilidad",
+                accessor: "utilidad",
+                Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
+            },
             { Header: "# Ventas", accessor: "num_ventas" },
         ],
         [],
     );
 
     return (
-        <div className="card">
-            <div className="card-header">
+        <div className="dashboard-panel">
+            <div className="dashboard-panel-header">
                 <h3>Clientes</h3>
             </div>
-            <div
-                className="card-body"
-                style={{ position: "relative", minHeight: 200 }}
-            >
+            <div className="dashboard-panel-body">
                 <Table
                     data={data}
                     columns={columns}

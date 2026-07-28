@@ -44,7 +44,7 @@ const ClientesPage = () => {
                             <Nav.Link eventKey="dashboard">Dashboard</Nav.Link>
                         </Nav.Item>
                         <Nav.Item>
-                            <Nav.Link eventKey="clients">Clientes</Nav.Link>
+                            <Nav.Link eventKey="clients">Desglose</Nav.Link>
                         </Nav.Item>
                     </Nav>
                 </div>

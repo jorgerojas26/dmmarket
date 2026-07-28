@@ -308,6 +308,9 @@ const GET_CLIENTS_LIST = async (req, res) => {
         ),
         knex.raw(
           `COUNT(DISTINCT ${masterTable}.${idInvoice}) as num_ventas`
+        ),
+        knex.raw(
+          `COALESCE(ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2), 0) as utilidad`
         )
       )
       .from("clientes")
