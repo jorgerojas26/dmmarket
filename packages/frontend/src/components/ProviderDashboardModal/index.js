@@ -142,6 +142,12 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const [productsData, setProductsData] = useState({ data: [], total: 0 });
     const [productsLoading, setProductsLoading] = useState(false);
 
+    // Search state per table
+    const [purchasesSearch, setPurchasesSearch] = useState("");
+    const [salesSearch, setSalesSearch] = useState("");
+    const [clientsSearch, setClientsSearch] = useState("");
+    const [productsSearch, setProductsSearch] = useState("");
+
     // Purchase detail sub-modal
     const [detailModalShow, setDetailModalShow] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState(null);
@@ -170,6 +176,10 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             setSalesData({ data: [], total: 0 });
             setClientsData({ data: [], total: 0 });
             setProductsData({ data: [], total: 0 });
+            setPurchasesSearch("");
+            setSalesSearch("");
+            setClientsSearch("");
+            setProductsSearch("");
             setDetailModalShow(false);
             setSelectedPurchase(null);
             setSaleDetailModalShow(false);
@@ -230,6 +240,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         to: dateRange.to,
                         page: purchasesPage,
                         limit: LIMIT,
+                        search: purchasesSearch || undefined,
                     },
                 );
                 setPurchasesData({
@@ -245,7 +256,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         };
 
         doFetch();
-    }, [show, provider?.IdProveedor, dateRange, purchasesPage]);
+    }, [show, provider?.IdProveedor, dateRange, purchasesPage, purchasesSearch]);
 
     // Fetch sales (paginated)
     useEffect(() => {
@@ -259,6 +270,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     to: dateRange.to,
                     page: salesPage,
                     limit: LIMIT,
+                    search: salesSearch || undefined,
                     showNoe,
                 });
                 setSalesData({
@@ -274,7 +286,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         };
 
         doFetch();
-    }, [show, provider?.IdProveedor, dateRange, salesPage, showNoe]);
+    }, [show, provider?.IdProveedor, dateRange, salesPage, salesSearch, showNoe]);
 
     // Fetch clients (paginated)
     useEffect(() => {
@@ -288,6 +300,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     to: dateRange.to,
                     page: clientsPage,
                     limit: LIMIT,
+                    search: clientsSearch || undefined,
                     showNoe,
                 });
                 setClientsData({
@@ -303,7 +316,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         };
 
         doFetch();
-    }, [show, provider?.IdProveedor, dateRange, clientsPage, showNoe]);
+    }, [show, provider?.IdProveedor, dateRange, clientsPage, clientsSearch, showNoe]);
 
     // Fetch products (paginated)
     useEffect(() => {
@@ -317,6 +330,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     to: dateRange.to,
                     page: productsPage,
                     limit: LIMIT,
+                    search: productsSearch || undefined,
                     showNoe,
                 });
                 setProductsData({
@@ -332,7 +346,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         };
 
         doFetch();
-    }, [show, provider?.IdProveedor, dateRange, productsPage, showNoe]);
+    }, [show, provider?.IdProveedor, dateRange, productsPage, productsSearch, showNoe]);
 
     const handleDateRangeChange = ({ from, to }) => {
         setDateRange({ from, to });
@@ -341,6 +355,23 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         setClientsPage(1);
         setProductsPage(1);
     };
+
+    const handlePurchasesSearch = useCallback((term) => {
+        setPurchasesSearch(term || "");
+        setPurchasesPage(1);
+    }, []);
+    const handleSalesSearch = useCallback((term) => {
+        setSalesSearch(term || "");
+        setSalesPage(1);
+    }, []);
+    const handleClientsSearch = useCallback((term) => {
+        setClientsSearch(term || "");
+        setClientsPage(1);
+    }, []);
+    const handleProductsSearch = useCallback((term) => {
+        setProductsSearch(term || "");
+        setProductsPage(1);
+    }, []);
 
     const handlePurchaseRowClick = useCallback(async (purchase) => {
         try {
@@ -455,6 +486,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 to: dateRange.to,
                 page: 1,
                 limit: purchasesData.total || 9999,
+                search: purchasesSearch || undefined,
             });
             const invoices = result.data || [];
 
@@ -539,7 +571,273 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         } catch (err) {
             console.error("Failed to print all purchases:", err);
         }
-    }, [provider?.IdProveedor, provider?.Empresa, dateRange, purchasesData.total]);
+    }, [provider?.IdProveedor, provider?.Empresa, dateRange, purchasesData.total, purchasesSearch]);
+
+    // ── Global print: Sales ──
+    const handlePrintSale = useCallback(async (sale, e) => {
+        if (e?.stopPropagation) e.stopPropagation();
+        try {
+            const detail = await fetchSaleDetail(
+                provider.IdProveedor,
+                sale.idFactura,
+                showNoe,
+            );
+            const rows = (detail.productos || []).map((p) => [
+                p.descripcion,
+                String(Number(p.cantidad)),
+                formatCurrency(p.precio),
+                formatCurrency(p.subtotal),
+            ]);
+            const docDef = {
+                content: [
+                    { text: "ALIMENTOS DM MARKET, C.A.", style: "header" },
+                    {
+                        text: "CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.",
+                        style: "header",
+                    },
+                    { text: "R.I.F.: J-41270446-0", style: "header" },
+                    {
+                        text: DateTime.fromISO(detail.fecha).toFormat("dd/MM/yyyy"),
+                        style: "header",
+                    },
+                    {
+                        text: `Factura: ${detail.idFactura}`,
+                        style: "subheader",
+                    },
+                    {
+                        text: `Cliente: ${detail.cliente || ""}`,
+                        style: "subheader",
+                        margin: [0, 0, 0, 12],
+                    },
+                    {
+                        style: "table",
+                        table: {
+                            widths: ["*", "auto", "auto", "auto"],
+                            body: [
+                                ["Descripción", "Cantidad", "Precio", "Subtotal"],
+                                ...rows,
+                                [
+                                    "",
+                                    "",
+                                    { text: "Total", bold: true },
+                                    { text: formatCurrency(detail.total), bold: true },
+                                ],
+                            ],
+                        },
+                    },
+                ],
+                styles: {
+                    header: { alignment: "center", fontSize: 10 },
+                    subheader: {
+                        alignment: "center",
+                        fontSize: 9,
+                        margin: [0, 4, 0, 2],
+                    },
+                    table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                },
+                pageMargins: 40,
+                pageSize: "LETTER",
+            };
+            pdfMake.createPdf(docDef).open();
+        } catch (err) {
+            console.error("Failed to print sale:", err);
+        }
+    }, [provider?.IdProveedor, showNoe]);
+
+    const handlePrintAllSales = useCallback(async () => {
+        try {
+            const result = await fetchProviderSales(provider.IdProveedor, {
+                from: dateRange.from,
+                to: dateRange.to,
+                page: 1,
+                limit: salesData.total || 9999,
+                search: salesSearch || undefined,
+                showNoe,
+            });
+            const rows = (result.data || []).map((s) => [
+                String(s.idFactura ?? ""),
+                s.vendedor ?? "",
+                DateTime.fromISO(s.fecha).toFormat("dd/MM/yyyy"),
+                formatCurrency(s.monto ?? 0),
+            ]);
+
+            const docDef = {
+                content: [
+                    { text: "ALIMENTOS DM MARKET, C.A.", style: "header" },
+                    {
+                        text: "CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.",
+                        style: "header",
+                    },
+                    { text: "R.I.F.: J-41270446-0", style: "header" },
+                    {
+                        text: `Ventas de: ${provider.Empresa}`,
+                        style: "subheader",
+                    },
+                    {
+                        text: `Período: ${DateTime.fromISO(dateRange.from).toFormat("dd/MM/yyyy")} — ${DateTime.fromISO(dateRange.to).toFormat("dd/MM/yyyy")}`,
+                        style: "subheader",
+                        margin: [0, 0, 0, 10],
+                    },
+                    {
+                        style: "table",
+                        table: {
+                            widths: ["auto", "*", "auto", "auto"],
+                            body: [
+                                ["Factura", "Vendedor", "Fecha", "Monto"],
+                                ...rows,
+                            ],
+                        },
+                    },
+                ],
+                styles: {
+                    header: { alignment: "center", fontSize: 9 },
+                    subheader: {
+                        alignment: "center",
+                        fontSize: 8,
+                        margin: [0, 4, 0, 2],
+                        bold: true,
+                    },
+                    table: { margin: [0, 10, 0, 0], fontSize: 7 },
+                },
+                pageMargins: 30,
+                pageSize: "LETTER",
+                pageOrientation: "landscape",
+            };
+            pdfMake.createPdf(docDef).open();
+        } catch (err) {
+            console.error("Failed to print all sales:", err);
+        }
+    }, [provider?.IdProveedor, provider?.Empresa, dateRange, salesData.total, salesSearch, showNoe]);
+
+    // ── Global print: Clients ──
+    const handlePrintAllClients = useCallback(async () => {
+        try {
+            const result = await fetchProviderClients(provider.IdProveedor, {
+                from: dateRange.from,
+                to: dateRange.to,
+                page: 1,
+                limit: clientsData.total || 9999,
+                search: clientsSearch || undefined,
+                showNoe,
+            });
+            const rows = (result.data || []).map((c) => [
+                c.cliente ?? "",
+                formatCurrency(c.totalVentas ?? 0),
+                formatCurrency(c.utilidad ?? 0),
+            ]);
+
+            const docDef = {
+                content: [
+                    { text: "ALIMENTOS DM MARKET, C.A.", style: "header" },
+                    {
+                        text: "CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.",
+                        style: "header",
+                    },
+                    { text: "R.I.F.: J-41270446-0", style: "header" },
+                    {
+                        text: `Clientes de: ${provider.Empresa}`,
+                        style: "subheader",
+                    },
+                    {
+                        text: `Período: ${DateTime.fromISO(dateRange.from).toFormat("dd/MM/yyyy")} — ${DateTime.fromISO(dateRange.to).toFormat("dd/MM/yyyy")}`,
+                        style: "subheader",
+                        margin: [0, 0, 0, 10],
+                    },
+                    {
+                        style: "table",
+                        table: {
+                            widths: ["*", "auto", "auto"],
+                            body: [
+                                ["Cliente", "Total Ventas", "Utilidad"],
+                                ...rows,
+                            ],
+                        },
+                    },
+                ],
+                styles: {
+                    header: { alignment: "center", fontSize: 9 },
+                    subheader: {
+                        alignment: "center",
+                        fontSize: 8,
+                        margin: [0, 4, 0, 2],
+                        bold: true,
+                    },
+                    table: { margin: [0, 10, 0, 0], fontSize: 7 },
+                },
+                pageMargins: 30,
+                pageSize: "LETTER",
+                pageOrientation: "landscape",
+            };
+            pdfMake.createPdf(docDef).open();
+        } catch (err) {
+            console.error("Failed to print all clients:", err);
+        }
+    }, [provider?.IdProveedor, provider?.Empresa, dateRange, clientsData.total, clientsSearch, showNoe]);
+
+    // ── Global print: Products ──
+    const handlePrintAllProducts = useCallback(async () => {
+        try {
+            const result = await fetchProviderProducts(provider.IdProveedor, {
+                from: dateRange.from,
+                to: dateRange.to,
+                page: 1,
+                limit: productsData.total || 9999,
+                search: productsSearch || undefined,
+                showNoe,
+            });
+            const rows = (result.data || []).map((p) => [
+                p.producto ?? "",
+                formatCurrency(p.totalVentas ?? 0),
+                formatCurrency(p.utilidad ?? 0),
+            ]);
+
+            const docDef = {
+                content: [
+                    { text: "ALIMENTOS DM MARKET, C.A.", style: "header" },
+                    {
+                        text: "CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.",
+                        style: "header",
+                    },
+                    { text: "R.I.F.: J-41270446-0", style: "header" },
+                    {
+                        text: `Productos de: ${provider.Empresa}`,
+                        style: "subheader",
+                    },
+                    {
+                        text: `Período: ${DateTime.fromISO(dateRange.from).toFormat("dd/MM/yyyy")} — ${DateTime.fromISO(dateRange.to).toFormat("dd/MM/yyyy")}`,
+                        style: "subheader",
+                        margin: [0, 0, 0, 10],
+                    },
+                    {
+                        style: "table",
+                        table: {
+                            widths: ["*", "auto", "auto"],
+                            body: [
+                                ["Producto", "Total Ventas", "Utilidad"],
+                                ...rows,
+                            ],
+                        },
+                    },
+                ],
+                styles: {
+                    header: { alignment: "center", fontSize: 9 },
+                    subheader: {
+                        alignment: "center",
+                        fontSize: 8,
+                        margin: [0, 4, 0, 2],
+                        bold: true,
+                    },
+                    table: { margin: [0, 10, 0, 0], fontSize: 7 },
+                },
+                pageMargins: 30,
+                pageSize: "LETTER",
+                pageOrientation: "landscape",
+            };
+            pdfMake.createPdf(docDef).open();
+        } catch (err) {
+            console.error("Failed to print all products:", err);
+        }
+    }, [provider?.IdProveedor, provider?.Empresa, dateRange, productsData.total, productsSearch, showNoe]);
 
     const purchasesTotalPages = Math.ceil(purchasesData.total / LIMIT);
     const salesTotalPages = Math.ceil(salesData.total / LIMIT);
@@ -583,35 +881,6 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     // Purchases table block
     const purchasesBlock = (
         <div className="provider-sales-card">
-            <div className="provider-card-header">
-                <h5>Compras</h5>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Badge bg="secondary" pill>
-                        {purchasesData.total} registros
-                    </Badge>
-                    <button
-                        className="btn btn-sm btn-outline-light"
-                        onClick={handlePrintAllPurchases}
-                        title="Imprimir todas las compras del período"
-                    >
-                        <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <polyline points="6 9 6 2 18 2 18 9" />
-                            <path d="M6 12H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2" />
-                            <rect x="6" y="14" width="12" height="8" />
-                        </svg>{" "}
-                        Imprimir
-                    </button>
-                </div>
-            </div>
             <div className="provider-card-body">
                 <div className="provider-table-container">
                     <Table
@@ -626,10 +895,17 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         maxHeight={null}
                         onRowClick={handlePurchaseRowClick}
                         emptyMessage='Sin compras en este período'
+                        search={{
+                            enabled: true,
+                            placeholder: "Buscar factura...",
+                            onSearch: handlePurchasesSearch,
+                        }}
                         print={{
                             enabled: true,
                             perRowPrint: true,
                             onRowPrint: (rowData) => handlePrintPurchase(rowData),
+                            onGlobalPrint: handlePrintAllPurchases,
+                            globalPrintLabel: "Imprimir",
                         }}
                         pagination={{
                             enabled: true,
@@ -648,14 +924,6 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     // Sales table block
     const salesBlock = (
         <div className="provider-sales-card">
-            <div className="provider-card-header">
-                <h5>Ventas</h5>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Badge bg="secondary" pill>
-                        {salesData.total} registros
-                    </Badge>
-                </div>
-            </div>
             <div className="provider-card-body">
                 <div className="provider-table-container">
                     <Table
@@ -671,6 +939,18 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         maxHeight={null}
                         onRowClick={handleSaleRowClick}
                         emptyMessage='Sin ventas en este período'
+                        search={{
+                            enabled: true,
+                            placeholder: "Buscar factura o vendedor...",
+                            onSearch: handleSalesSearch,
+                        }}
+                        print={{
+                            enabled: true,
+                            perRowPrint: true,
+                            onRowPrint: (rowData) => handlePrintSale(rowData),
+                            onGlobalPrint: handlePrintAllSales,
+                            globalPrintLabel: "Imprimir",
+                        }}
                         pagination={{
                             enabled: true,
                             page: salesPage,
@@ -688,14 +968,6 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     // Clients table block
     const clientsBlock = (
         <div className="provider-sales-card">
-            <div className="provider-card-header">
-                <h5>Clientes</h5>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Badge bg="secondary" pill>
-                        {clientsData.total} registros
-                    </Badge>
-                </div>
-            </div>
             <div className="provider-card-body">
                 <div className="provider-table-container">
                     <Table
@@ -709,6 +981,16 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         className='provider-table'
                         maxHeight={null}
                         emptyMessage='Sin clientes en este período'
+                        search={{
+                            enabled: true,
+                            placeholder: "Buscar cliente...",
+                            onSearch: handleClientsSearch,
+                        }}
+                        print={{
+                            enabled: true,
+                            onGlobalPrint: handlePrintAllClients,
+                            globalPrintLabel: "Imprimir",
+                        }}
                         pagination={{
                             enabled: true,
                             page: clientsPage,
@@ -726,14 +1008,6 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     // Products table block
     const productsBlock = (
         <div className="provider-sales-card">
-            <div className="provider-card-header">
-                <h5>Productos</h5>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Badge bg="secondary" pill>
-                        {productsData.total} registros
-                    </Badge>
-                </div>
-            </div>
             <div className="provider-card-body">
                 <div className="provider-table-container">
                     <Table
@@ -747,6 +1021,16 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         className='provider-table'
                         maxHeight={null}
                         emptyMessage='Sin productos en este período'
+                        search={{
+                            enabled: true,
+                            placeholder: "Buscar producto...",
+                            onSearch: handleProductsSearch,
+                        }}
+                        print={{
+                            enabled: true,
+                            onGlobalPrint: handlePrintAllProducts,
+                            globalPrintLabel: "Imprimir",
+                        }}
                         pagination={{
                             enabled: true,
                             page: productsPage,

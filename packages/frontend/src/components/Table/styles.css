@@ -82,13 +82,13 @@ input[type="search"].table-search-input,
 
 /* ── Row action (print) button ── */
 .table-row-action {
-    background: none;
-    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     color: #6b7280;
     cursor: pointer;
-    padding: 2px 6px;
+    padding: 4px;
     border-radius: 3px;
-    font-size: 0.85rem;
     transition:
         color 0.15s,
         background 0.15s;

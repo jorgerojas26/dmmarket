@@ -239,7 +239,7 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
 
 const GET_PROVIDER_SALES = async (req, res) => {
   const { providerId } = req.params;
-  const { from, to, page = 1, limit = 20 } = req.query;
+  const { from, to, page = 1, limit = 20, search } = req.query;
   const showNoeParam = req.query.showNoe === "true";
   const { masterTable, slaveTable, idInvoice } = showNoeParam
     ? { masterTable: "masternoe", slaveTable: "slavenoe", idInvoice: "IdNoe" }
@@ -247,7 +247,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
   const offset = (Number(page) - 1) * Number(limit);
 
   try {
-    const [{ count }] = await knex
+    const countQuery = knex
       .countDistinct({ count: `${masterTable}.${idInvoice}` })
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
@@ -258,7 +258,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
       .where("productos.Proveedor", providerId)
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
 
-    const data = await knex
+    const dataQuery = knex
       .select(
         `${masterTable}.${idInvoice} as idFactura`,
         "vendedores.Empresa as vendedor",
@@ -281,6 +281,21 @@ const GET_PROVIDER_SALES = async (req, res) => {
       .limit(Number(limit))
       .offset(Number(offset));
 
+    if (search) {
+      countQuery.innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`);
+      countQuery.where(function () {
+        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`)
+          .orWhere("vendedores.Empresa", "like", `%${search}%`);
+      });
+      dataQuery.where(function () {
+        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`)
+          .orWhere("vendedores.Empresa", "like", `%${search}%`);
+      });
+    }
+
+    const [{ count }] = await countQuery;
+    const data = await dataQuery;
+
     res.status(200).json({
       data,
       total: Number(count),
@@ -295,7 +310,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
 
 const GET_PROVIDER_CLIENTS = async (req, res) => {
   const { providerId } = req.params;
-  const { from, to, page = 1, limit = 20 } = req.query;
+  const { from, to, page = 1, limit = 20, search } = req.query;
   const showNoeParam = req.query.showNoe === "true";
   const { masterTable, slaveTable, idInvoice } = showNoeParam
     ? { masterTable: "masternoe", slaveTable: "slavenoe", idInvoice: "IdNoe" }
@@ -303,7 +318,7 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
   const offset = (Number(page) - 1) * Number(limit);
 
   try {
-    const [{ count }] = await knex
+    const countQuery = knex
       .countDistinct({ count: "clientes.IdCliente" })
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
@@ -315,7 +330,7 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       .where("productos.Proveedor", providerId)
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
 
-    const data = await knex
+    const dataQuery = knex
       .select(
         "clientes.Empresa as cliente",
         knex.raw(
@@ -339,6 +354,14 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       .limit(Number(limit))
       .offset(Number(offset));
 
+    if (search) {
+      countQuery.where("clientes.Empresa", "like", `%${search}%`);
+      dataQuery.where("clientes.Empresa", "like", `%${search}%`);
+    }
+
+    const [{ count }] = await countQuery;
+    const data = await dataQuery;
+
     res.status(200).json({
       data,
       total: Number(count),
@@ -353,7 +376,7 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
 
 const GET_PROVIDER_PRODUCTS = async (req, res) => {
   const { providerId } = req.params;
-  const { from, to, page = 1, limit = 20 } = req.query;
+  const { from, to, page = 1, limit = 20, search } = req.query;
   const showNoeParam = req.query.showNoe === "true";
   const { masterTable, slaveTable, idInvoice } = showNoeParam
     ? { masterTable: "masternoe", slaveTable: "slavenoe", idInvoice: "IdNoe" }
@@ -361,7 +384,7 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
   const offset = (Number(page) - 1) * Number(limit);
 
   try {
-    const [{ count }] = await knex
+    const countQuery = knex
       .countDistinct({ count: "productos.IdProducto" })
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
@@ -372,7 +395,7 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
       .where("productos.Proveedor", providerId)
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
 
-    const data = await knex
+    const dataQuery = knex
       .select(
         "productos.Descripcion as producto",
         knex.raw(
@@ -395,6 +418,14 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
       .limit(Number(limit))
       .offset(Number(offset));
 
+    if (search) {
+      countQuery.where("productos.Descripcion", "like", `%${search}%`);
+      dataQuery.where("productos.Descripcion", "like", `%${search}%`);
+    }
+
+    const [{ count }] = await countQuery;
+    const data = await dataQuery;
+
     res.status(200).json({
       data,
       total: Number(count),
@@ -409,18 +440,18 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
 
 const GET_PROVIDER_PURCHASES = async (req, res) => {
   const { providerId } = req.params;
-  const { from, to, page = 1, limit = 20 } = req.query;
+  const { from, to, page = 1, limit = 20, search } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
 
   try {
-    const [{ count }] = await knex
+    const countQuery = knex
       .countDistinct({ count: "mastercomp.IdFactura" })
       .from("mastercomp")
       .where("mastercomp.IdProveedor", providerId)
       .andWhere("mastercomp.Anulada", 0)
       .andWhereBetween("mastercomp.Fecha", [from, to]);
 
-    const data = await knex
+    const dataQuery = knex
       .select(
         "mastercomp.IdFactura as idFactura",
         "mastercomp.Fecha as fecha",
@@ -437,6 +468,14 @@ const GET_PROVIDER_PURCHASES = async (req, res) => {
       .orderBy("mastercomp.Fecha", "desc")
       .limit(Number(limit))
       .offset(Number(offset));
+
+    if (search) {
+      countQuery.where("mastercomp.IdFactura", "like", `%${search}%`);
+      dataQuery.where("mastercomp.IdFactura", "like", `%${search}%`);
+    }
+
+    const [{ count }] = await countQuery;
+    const data = await dataQuery;
 
     res.status(200).json({
       data,

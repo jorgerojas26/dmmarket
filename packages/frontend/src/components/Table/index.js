@@ -736,19 +736,20 @@ const RowActionCell = React.memo(({ onPrint, rowData, isSelected }) => {
 
     return (
         <td
+            onClick={handleClick}
             style={{
                 background: isSelected ? "#2d3748" : "transparent",
                 textAlign: "center",
                 width: 40,
+                cursor: "pointer",
             }}
         >
-            <button
+            <span
                 className="table-row-action"
                 title="Imprimir"
-                onClick={handleClick}
             >
                 <PrintIcon />
-            </button>
+            </span>
         </td>
     );
 });

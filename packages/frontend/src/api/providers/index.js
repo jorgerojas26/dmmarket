@@ -24,30 +24,57 @@ export const fetchProviderSummary = async (providerId, { from, to, showNoe }) =>
   return response.json();
 };
 
-export const fetchProviderSales = async (providerId, { from, to, page = 1, limit = 20, showNoe }) => {
+export const fetchProviderSales = async (providerId, { from, to, page = 1, limit = 20, search, showNoe }) => {
+  const params = new URLSearchParams();
+  params.append('from', from);
+  params.append('to', to);
+  params.append('page', page);
+  params.append('limit', limit);
+  params.append('showNoe', showNoe);
+  if (search) params.append('search', search);
   const response = await fetch(
-    `${BASE_URL}/${providerId}/sales?from=${from}&to=${to}&page=${page}&limit=${limit}&showNoe=${showNoe}`
+    `${BASE_URL}/${providerId}/sales?${params.toString()}`
   );
   return response.json();
 };
 
-export const fetchProviderClients = async (providerId, { from, to, page = 1, limit = 20, showNoe }) => {
+export const fetchProviderClients = async (providerId, { from, to, page = 1, limit = 20, search, showNoe }) => {
+  const params = new URLSearchParams();
+  params.append('from', from);
+  params.append('to', to);
+  params.append('page', page);
+  params.append('limit', limit);
+  params.append('showNoe', showNoe);
+  if (search) params.append('search', search);
   const response = await fetch(
-    `${BASE_URL}/${providerId}/clients?from=${from}&to=${to}&page=${page}&limit=${limit}&showNoe=${showNoe}`
+    `${BASE_URL}/${providerId}/clients?${params.toString()}`
   );
   return response.json();
 };
 
-export const fetchProviderProducts = async (providerId, { from, to, page = 1, limit = 20, showNoe }) => {
+export const fetchProviderProducts = async (providerId, { from, to, page = 1, limit = 20, search, showNoe }) => {
+  const params = new URLSearchParams();
+  params.append('from', from);
+  params.append('to', to);
+  params.append('page', page);
+  params.append('limit', limit);
+  params.append('showNoe', showNoe);
+  if (search) params.append('search', search);
   const response = await fetch(
-    `${BASE_URL}/${providerId}/products?from=${from}&to=${to}&page=${page}&limit=${limit}&showNoe=${showNoe}`
+    `${BASE_URL}/${providerId}/products?${params.toString()}`
   );
   return response.json();
 };
 
-export const fetchProviderPurchases = async (providerId, { from, to, page = 1, limit = 20 }) => {
+export const fetchProviderPurchases = async (providerId, { from, to, page = 1, limit = 20, search }) => {
+  const params = new URLSearchParams();
+  params.append('from', from);
+  params.append('to', to);
+  params.append('page', page);
+  params.append('limit', limit);
+  if (search) params.append('search', search);
   const response = await fetch(
-    `${BASE_URL}/${providerId}/purchases?from=${from}&to=${to}&page=${page}&limit=${limit}`
+    `${BASE_URL}/${providerId}/purchases?${params.toString()}`
   );
   return response.json();
 };
