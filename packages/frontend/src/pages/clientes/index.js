@@ -43,10 +43,48 @@ const ClientesPage = () => {
                         onSelect={setActiveView}
                     >
                         <Nav.Item>
-                            <Nav.Link eventKey="dashboard">Dashboard</Nav.Link>
+                            <Nav.Link eventKey="dashboard">
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    style={{ marginRight: 8, verticalAlign: 'middle' }}
+                                >
+                                    <rect x="3" y="3" width="7" height="7" />
+                                    <rect x="14" y="3" width="7" height="7" />
+                                    <rect x="14" y="14" width="7" height="7" />
+                                    <rect x="3" y="14" width="7" height="7" />
+                                </svg>
+                                Dashboard
+                            </Nav.Link>
                         </Nav.Item>
                         <Nav.Item>
-                            <Nav.Link eventKey="clients">Desglose</Nav.Link>
+                            <Nav.Link eventKey="clients">
+                                <svg
+                                    width="16"
+                                    height="16"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    style={{ marginRight: 8, verticalAlign: 'middle' }}
+                                >
+                                    <line x1="8" y1="6" x2="21" y2="6" />
+                                    <line x1="8" y1="12" x2="21" y2="12" />
+                                    <line x1="8" y1="18" x2="21" y2="18" />
+                                    <line x1="3" y1="6" x2="3.01" y2="6" />
+                                    <line x1="3" y1="12" x2="3.01" y2="12" />
+                                    <line x1="3" y1="18" x2="3.01" y2="18" />
+                                </svg>
+                                Desglose
+                            </Nav.Link>
                         </Nav.Item>
                     </Nav>
                 </div>
