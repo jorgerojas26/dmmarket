@@ -3,12 +3,19 @@ import { Modal, Spinner, Badge } from 'react-bootstrap';
 import { DateTime } from 'luxon';
 import { ResponsiveLine } from '@nivo/line';
 import DateRangePicker from 'components/DateRangePicker';
+import Table from 'components/Table';
 import { fetchClientSales, fetchClientSummary } from 'api/clients';
 import { ShowNoeContext } from 'context/show_noe';
 import './styles.css';
 
 const LIMIT = 20;
 const CHART_LIMIT = 1000;
+
+const formatCurrency = (value) => {
+  const num = Number(value);
+  if (isNaN(num)) return '$0.00';
+  return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const IconSales = () => (
   <svg width='38' height='38' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
@@ -198,12 +205,6 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
 
   const totalPages = Math.ceil(salesData.total / LIMIT);
 
-  const formatCurrency = (value) => {
-    const num = Number(value);
-    if (isNaN(num)) return '$0.00';
-    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
-
   const stats = useMemo(
     () => [
       {
@@ -365,46 +366,19 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
       </div>
       <div className='card-body'>
         <div className='table-container'>
-          <table className='table'>
-            <thead>
-              <tr>
-                <th>Vendedor</th>
-                <th>Fecha</th>
-                <th className='text-end'>Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {salesData.data.length > 0 ? (
-                salesData.data.map((sale, index) => (
-                  <tr key={index}>
-                    <td>{sale.vendedor}</td>
-                    <td>{DateTime.fromISO(sale.fecha).toFormat('dd MMM yyyy', { locale: 'es' })}</td>
-                    <td className='text-end amount'>{formatCurrency(sale.monto)}</td>
-                  </tr>
-                ))
-              ) : (
-                !salesLoading && (
-                  <tr>
-                    <td colSpan={3}>
-                      <div className='empty-state'>
-                        <svg width='40' height='40' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round'>
-                          <path d='M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z' />
-                          <polyline points='13 2 13 9 20 9' />
-                        </svg>
-                        <span>Sin ventas en este período</span>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              )}
-            </tbody>
-          </table>
+          <Table
+            data={salesData.data}
+            columns={[
+              { Header: 'Vendedor', accessor: 'vendedor' },
+              { Header: 'Fecha', accessor: 'fecha', Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }) },
+              { Header: 'Monto', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
+            ]}
+            loading={salesLoading}
+            className='table'
+            maxHeight={null}
+            emptyMessage='Sin ventas en este período'
+          />
         </div>
-        {salesLoading && (
-          <div className='loading-overlay'>
-            <Spinner animation='border' variant='light' />
-          </div>
-        )}
         {totalPages > 1 && (
           <div className='pagination-bar'>
             <button

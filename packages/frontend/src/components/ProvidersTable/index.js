@@ -1,6 +1,7 @@
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import { ShowNoeContext } from 'context/show_noe';
 import { fetchProvidersList } from 'api/providers';
+import Table from 'components/Table';
 import './styles.css';
 
 const LIMIT = 20;
@@ -13,9 +14,7 @@ const ProvidersTable = ({ onRowSelect }) => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [selectedId, setSelectedId] = useState(null);
 
-  // Debounce searchInput -> search (500ms)
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(searchInput);
@@ -45,15 +44,14 @@ const ProvidersTable = ({ onRowSelect }) => {
 
   const totalPages = Math.ceil(total / LIMIT);
 
-  const handleRowClick = (provider) => {
-    setSelectedId(provider.IdProveedor);
-    if (onRowSelect) onRowSelect(provider);
-  };
-
-  const formatCurrency = (value) => {
-    const num = Number(value);
-    return `$${num.toFixed(2)}`;
-  };
+  const columns = useMemo(() => [
+    { Header: 'IdProveedor', accessor: 'IdProveedor' },
+    { Header: 'Empresa', accessor: 'Empresa' },
+    { Header: 'Total Compras', accessor: 'total_compras', Cell: ({ value }) => `$${Number(value).toFixed(2)}` },
+    { Header: '# Compras', accessor: 'num_compras' },
+    { Header: 'Total Ventas', accessor: 'total_ventas', Cell: ({ value }) => `$${Number(value).toFixed(2)}` },
+    { Header: '# Ventas', accessor: 'num_ventas' },
+  ], []);
 
   return (
     <section className='providers-table-panel'>
@@ -86,55 +84,16 @@ const ProvidersTable = ({ onRowSelect }) => {
       </header>
       <div className='providers-table__body'>
         <div className='providers-table__scroll'>
-          <table className='providers-table'>
-            <thead>
-              <tr>
-                <th>IdProveedor</th>
-                <th>Empresa</th>
-                <th>Total Compras</th>
-                <th># Compras</th>
-                <th>Total Ventas</th>
-                <th># Ventas</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.length > 0 ? (
-                data.map((provider) => (
-                  <tr
-                    key={provider.IdProveedor}
-                    className={
-                      selectedId === provider.IdProveedor
-                        ? 'providers-table__row--selected'
-                        : undefined
-                    }
-                    onClick={() => handleRowClick(provider)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <td>{provider.IdProveedor}</td>
-                    <td>{provider.Empresa}</td>
-                    <td>{formatCurrency(provider.total_compras)}</td>
-                    <td>{provider.num_compras}</td>
-                    <td>{formatCurrency(provider.total_ventas)}</td>
-                    <td>{provider.num_ventas}</td>
-                  </tr>
-                ))
-              ) : (
-                !loading && (
-                  <tr>
-                    <td colSpan={6} className='providers-table__empty'>
-                      Sin datos
-                    </td>
-                  </tr>
-                )
-              )}
-            </tbody>
-          </table>
+          <Table
+            data={data}
+            columns={columns}
+            loading={loading}
+            onRowSelect={onRowSelect}
+            className='providers-table'
+            emptyMessage='Sin datos'
+            maxHeight={null}
+          />
         </div>
-        {loading && (
-          <div className='providers-table__loader'>
-            <span className='spinner-border spinner-border-md' role='status' />
-          </div>
-        )}
         {totalPages > 1 && (
           <div className='providers-table__footer'>
             <button

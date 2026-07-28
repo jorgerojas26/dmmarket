@@ -1,5 +1,6 @@
 import { Modal, Spinner } from 'react-bootstrap';
 import { DateTime } from 'luxon';
+import Table from 'components/Table';
 
 const formatCurrency = (value) => {
   const num = Number(value);
@@ -35,26 +36,18 @@ const SaleDetailModal = ({ show, onClose, sale }) => {
         ) : sale.productos && sale.productos.length > 0 ? (
           <>
             <div className='provider-table-container'>
-              <table className='provider-table'>
-                <thead>
-                  <tr>
-                    <th>Descripción</th>
-                    <th className='text-end'>Cantidad</th>
-                    <th className='text-end'>Precio</th>
-                    <th className='text-end'>Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sale.productos.map((prod, index) => (
-                    <tr key={index}>
-                      <td>{prod.descripcion}</td>
-                      <td className='text-end'>{Number(prod.cantidad).toLocaleString('en-US')}</td>
-                      <td className='text-end'>{formatCurrency(prod.precio)}</td>
-                      <td className='text-end provider-amount'>{formatCurrency(prod.subtotal)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Table
+                data={sale.productos}
+                columns={[
+                  { Header: 'Descripción', accessor: 'descripcion' },
+                  { Header: 'Cantidad', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString('en-US') },
+                  { Header: 'Precio', accessor: 'precio', Cell: ({ value }) => formatCurrency(value) },
+                  { Header: 'Subtotal', accessor: 'subtotal', Cell: ({ value }) => formatCurrency(value) },
+                ]}
+                className='provider-table'
+                maxHeight={null}
+                emptyMessage='Sin productos en esta venta'
+              />
             </div>
             <div className='purchase-total-row'>
               <span>Total</span>

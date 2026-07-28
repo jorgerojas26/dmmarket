@@ -8,11 +8,12 @@ import {
     fetchSaleDetail,
 } from "api/providers";
 import DateRangePicker from "components/DateRangePicker";
+import Table from "components/Table";
 import { ShowNoeContext } from "context/show_noe";
 import { DateTime } from "luxon";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { Badge, Modal, Spinner } from "react-bootstrap";
 import PurchaseDetailModal from "./PurchaseDetailModal";
 import SaleDetailModal from "./SaleDetailModal";
@@ -21,6 +22,12 @@ import "./styles.css";
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 const LIMIT = 20;
+
+const formatCurrency = (value) => {
+    const num = Number(value);
+    if (isNaN(num)) return "$0.00";
+    return `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const IconSales = () => (
     <svg
@@ -335,7 +342,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         setProductsPage(1);
     };
 
-    const handlePurchaseRowClick = async (purchase) => {
+    const handlePurchaseRowClick = useCallback(async (purchase) => {
         try {
             const detail = await fetchPurchaseDetail(
                 provider.IdProveedor,
@@ -346,9 +353,9 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         } catch (err) {
             console.error("Failed to fetch purchase detail:", err);
         }
-    };
+    }, [provider?.IdProveedor]);
 
-    const handleSaleRowClick = async (sale, e) => {
+    const handleSaleRowClick = useCallback(async (sale) => {
         try {
             const detail = await fetchSaleDetail(
                 provider.IdProveedor,
@@ -360,9 +367,9 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         } catch (err) {
             console.error("Failed to fetch sale detail:", err);
         }
-    };
+    }, [provider?.IdProveedor, showNoe]);
 
-    const handlePrintPurchase = async (purchase, e) => {
+    const handlePrintPurchase = useCallback(async (purchase, e) => {
         e.stopPropagation();
         try {
             const detail = await fetchPurchaseDetail(
@@ -439,9 +446,9 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         } catch (err) {
             console.error("Failed to print purchase:", err);
         }
-    };
+    }, [provider?.IdProveedor, provider?.Empresa]);
 
-    const handlePrintAllPurchases = async () => {
+    const handlePrintAllPurchases = useCallback(async () => {
         try {
             const result = await fetchProviderPurchases(provider.IdProveedor, {
                 from: dateRange.from,
@@ -532,18 +539,12 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         } catch (err) {
             console.error("Failed to print all purchases:", err);
         }
-    };
+    }, [provider?.IdProveedor, provider?.Empresa, dateRange, purchasesData.total]);
 
     const purchasesTotalPages = Math.ceil(purchasesData.total / LIMIT);
     const salesTotalPages = Math.ceil(salesData.total / LIMIT);
     const clientsTotalPages = Math.ceil(clientsData.total / LIMIT);
     const productsTotalPages = Math.ceil(productsData.total / LIMIT);
-
-    const formatCurrency = (value) => {
-        const num = Number(value);
-        if (isNaN(num)) return "$0.00";
-        return `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    };
 
     const stats = useMemo(
         () => [
@@ -613,108 +614,33 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             </div>
             <div className="provider-card-body">
                 <div className="provider-table-container">
-                    <table className="provider-table">
-                        <thead>
-                            <tr>
-                                <th>IdFactura</th>
-                                <th>Fecha</th>
-                                <th className="text-end">Monto</th>
-                                <th
-                                    className="text-center"
-                                    style={{ width: 50 }}
+                    <Table
+                        data={purchasesData.data}
+                        columns={[
+                            { Header: 'IdFactura', accessor: 'idFactura' },
+                            { Header: 'Fecha', accessor: 'fecha', Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }) },
+                            { Header: 'Monto', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
+                            { Header: 'Imprimir', accessor: 'idFactura', Cell: ({ row }) => (
+                                <button
+                                    className='btn btn-sm btn-outline-light'
+                                    onClick={(e) => handlePrintPurchase(row.original, e)}
+                                    title='Imprimir factura'
                                 >
-                                    Imprimir
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {purchasesData.data.length > 0
-                                ? purchasesData.data.map((purchase) => (
-                                      <tr
-                                          key={purchase.idFactura}
-                                          onClick={() =>
-                                              handlePurchaseRowClick(purchase)
-                                          }
-                                          style={{ cursor: "pointer" }}
-                                      >
-                                          <td>{purchase.idFactura}</td>
-                                          <td>
-                                              {DateTime.fromISO(
-                                                  purchase.fecha,
-                                              ).toFormat("dd MMM yyyy", {
-                                                  locale: "es",
-                                              })}
-                                          </td>
-                                          <td className="text-end provider-amount">
-                                              {formatCurrency(purchase.monto)}
-                                          </td>
-                                          <td className="text-center">
-                                              <button
-                                                  className="btn btn-sm btn-outline-light"
-                                                  onClick={(e) =>
-                                                      handlePrintPurchase(
-                                                          purchase,
-                                                          e,
-                                                      )
-                                                  }
-                                                  title="Imprimir factura"
-                                              >
-                                                  <svg
-                                                      width="14"
-                                                      height="14"
-                                                      viewBox="0 0 24 24"
-                                                      fill="none"
-                                                      stroke="currentColor"
-                                                      strokeWidth="2"
-                                                      strokeLinecap="round"
-                                                      strokeLinejoin="round"
-                                                  >
-                                                      <polyline points="6 9 6 2 18 2 18 9" />
-                                                      <path d="M6 12H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2" />
-                                                      <rect
-                                                          x="6"
-                                                          y="14"
-                                                          width="12"
-                                                          height="8"
-                                                      />
-                                                  </svg>
-                                              </button>
-                                          </td>
-                                      </tr>
-                                  ))
-                                : !purchasesLoading && (
-                                      <tr>
-                                          <td colSpan={4}>
-                                              <div className="provider-empty-state">
-                                                  <svg
-                                                      width="40"
-                                                      height="40"
-                                                      viewBox="0 0 24 24"
-                                                      fill="none"
-                                                      stroke="currentColor"
-                                                      strokeWidth="1.5"
-                                                      strokeLinecap="round"
-                                                      strokeLinejoin="round"
-                                                  >
-                                                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                                                      <polyline points="13 2 13 9 20 9" />
-                                                  </svg>
-                                                  <span>
-                                                      Sin compras en este
-                                                      período
-                                                  </span>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                  )}
-                        </tbody>
-                    </table>
+                                    <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                                        <polyline points='6 9 6 2 18 2 18 9' />
+                                        <path d='M6 12H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2' />
+                                        <rect x='6' y='14' width='12' height='8' />
+                                    </svg>
+                                </button>
+                            )},
+                        ]}
+                        loading={purchasesLoading}
+                        className='provider-table'
+                        maxHeight={null}
+                        onRowClick={handlePurchaseRowClick}
+                        emptyMessage='Sin compras en este período'
+                    />
                 </div>
-                {purchasesLoading && (
-                    <div className="provider-loading-overlay">
-                        <Spinner animation="border" variant="light" />
-                    </div>
-                )}
                 {purchasesTotalPages > 1 && (
                     <div className="provider-pagination-bar">
                         <button
@@ -753,71 +679,21 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             </div>
             <div className="provider-card-body">
                 <div className="provider-table-container">
-                    <table className="provider-table">
-                        <thead>
-                            <tr>
-                                <th>IdFactura</th>
-                                <th>Vendedor</th>
-                                <th>Fecha</th>
-                                <th className="text-end">Monto</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {salesData.data.length > 0
-                                ? salesData.data.map((sale, index) => (
-                                      <tr
-                                          key={index}
-                                          onClick={() =>
-                                              handleSaleRowClick(sale)
-                                          }
-                                          style={{ cursor: "pointer" }}
-                                      >
-                                          <td>{sale.idFactura}</td>
-                                          <td>{sale.vendedor}</td>
-                                          <td>
-                                              {DateTime.fromISO(
-                                                  sale.fecha,
-                                              ).toFormat("dd MMM yyyy", {
-                                                  locale: "es",
-                                              })}
-                                          </td>
-                                          <td className="text-end provider-amount">
-                                              {formatCurrency(sale.monto)}
-                                          </td>
-                                      </tr>
-                                  ))
-                                : !salesLoading && (
-                                      <tr>
-                                          <td colSpan={4}>
-                                              <div className="provider-empty-state">
-                                                  <svg
-                                                      width="40"
-                                                      height="40"
-                                                      viewBox="0 0 24 24"
-                                                      fill="none"
-                                                      stroke="currentColor"
-                                                      strokeWidth="1.5"
-                                                      strokeLinecap="round"
-                                                      strokeLinejoin="round"
-                                                  >
-                                                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                                                      <polyline points="13 2 13 9 20 9" />
-                                                  </svg>
-                                                  <span>
-                                                      Sin ventas en este período
-                                                  </span>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                  )}
-                        </tbody>
-                    </table>
+                    <Table
+                        data={salesData.data}
+                        columns={[
+                            { Header: 'IdFactura', accessor: 'idFactura' },
+                            { Header: 'Vendedor', accessor: 'vendedor' },
+                            { Header: 'Fecha', accessor: 'fecha', Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }) },
+                            { Header: 'Monto', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
+                        ]}
+                        loading={salesLoading}
+                        className='provider-table'
+                        maxHeight={null}
+                        onRowClick={handleSaleRowClick}
+                        emptyMessage='Sin ventas en este período'
+                    />
                 </div>
-                {salesLoading && (
-                    <div className="provider-loading-overlay">
-                        <Spinner animation="border" variant="light" />
-                    </div>
-                )}
                 {salesTotalPages > 1 && (
                     <div className="provider-pagination-bar">
                         <button
@@ -856,59 +732,19 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             </div>
             <div className="provider-card-body">
                 <div className="provider-table-container">
-                    <table className="provider-table">
-                        <thead>
-                            <tr>
-                                <th>Cliente</th>
-                                <th className="text-end">Total Ventas</th>
-                                <th className="text-end">Utilidad</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {clientsData.data.length > 0
-                                ? clientsData.data.map((client, index) => (
-                                      <tr key={index}>
-                                          <td>{client.cliente}</td>
-                                          <td className="text-end provider-amount">
-                                              {formatCurrency(client.totalVentas)}
-                                          </td>
-                                          <td className="text-end provider-amount">
-                                              {formatCurrency(client.utilidad)}
-                                          </td>
-                                      </tr>
-                                  ))
-                                : !clientsLoading && (
-                                      <tr>
-                                          <td colSpan={3}>
-                                              <div className="provider-empty-state">
-                                                  <svg
-                                                      width="40"
-                                                      height="40"
-                                                      viewBox="0 0 24 24"
-                                                      fill="none"
-                                                      stroke="currentColor"
-                                                      strokeWidth="1.5"
-                                                      strokeLinecap="round"
-                                                      strokeLinejoin="round"
-                                                  >
-                                                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                                                      <polyline points="13 2 13 9 20 9" />
-                                                  </svg>
-                                                  <span>
-                                                      Sin clientes en este período
-                                                  </span>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                  )}
-                        </tbody>
-                    </table>
+                    <Table
+                        data={clientsData.data}
+                        columns={[
+                            { Header: 'Cliente', accessor: 'cliente' },
+                            { Header: 'Total Ventas', accessor: 'totalVentas', Cell: ({ value }) => formatCurrency(value) },
+                            { Header: 'Utilidad', accessor: 'utilidad', Cell: ({ value }) => formatCurrency(value) },
+                        ]}
+                        loading={clientsLoading}
+                        className='provider-table'
+                        maxHeight={null}
+                        emptyMessage='Sin clientes en este período'
+                    />
                 </div>
-                {clientsLoading && (
-                    <div className="provider-loading-overlay">
-                        <Spinner animation="border" variant="light" />
-                    </div>
-                )}
                 {clientsTotalPages > 1 && (
                     <div className="provider-pagination-bar">
                         <button
@@ -947,59 +783,19 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             </div>
             <div className="provider-card-body">
                 <div className="provider-table-container">
-                    <table className="provider-table">
-                        <thead>
-                            <tr>
-                                <th>Producto</th>
-                                <th className="text-end">Total Ventas</th>
-                                <th className="text-end">Utilidad</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {productsData.data.length > 0
-                                ? productsData.data.map((product, index) => (
-                                      <tr key={index}>
-                                          <td>{product.producto}</td>
-                                          <td className="text-end provider-amount">
-                                              {formatCurrency(product.totalVentas)}
-                                          </td>
-                                          <td className="text-end provider-amount">
-                                              {formatCurrency(product.utilidad)}
-                                          </td>
-                                      </tr>
-                                  ))
-                                : !productsLoading && (
-                                      <tr>
-                                          <td colSpan={3}>
-                                              <div className="provider-empty-state">
-                                                  <svg
-                                                      width="40"
-                                                      height="40"
-                                                      viewBox="0 0 24 24"
-                                                      fill="none"
-                                                      stroke="currentColor"
-                                                      strokeWidth="1.5"
-                                                      strokeLinecap="round"
-                                                      strokeLinejoin="round"
-                                                  >
-                                                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                                                      <polyline points="13 2 13 9 20 9" />
-                                                  </svg>
-                                                  <span>
-                                                      Sin productos en este período
-                                                  </span>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                  )}
-                        </tbody>
-                    </table>
+                    <Table
+                        data={productsData.data}
+                        columns={[
+                            { Header: 'Producto', accessor: 'producto' },
+                            { Header: 'Total Ventas', accessor: 'totalVentas', Cell: ({ value }) => formatCurrency(value) },
+                            { Header: 'Utilidad', accessor: 'utilidad', Cell: ({ value }) => formatCurrency(value) },
+                        ]}
+                        loading={productsLoading}
+                        className='provider-table'
+                        maxHeight={null}
+                        emptyMessage='Sin productos en este período'
+                    />
                 </div>
-                {productsLoading && (
-                    <div className="provider-loading-overlay">
-                        <Spinner animation="border" variant="light" />
-                    </div>
-                )}
                 {productsTotalPages > 1 && (
                     <div className="provider-pagination-bar">
                         <button
