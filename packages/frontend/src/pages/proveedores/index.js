@@ -3,12 +3,12 @@ import DateRangePicker from 'components/DateRangePicker';
 import ProviderDashboardModal from 'components/ProviderDashboardModal';
 import ProviderReportCard from 'components/ProviderReportCard';
 import ProvidersTable from 'components/ProvidersTable';
+import Sidebar from 'components/Sidebar';
 import { ShowNoeContext } from 'context/show_noe';
 import debounce from 'lodash.debounce';
 import { DateTime } from 'luxon';
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
-import Nav from 'react-bootstrap/Nav';
 
 const ProveedoresPage = () => {
     const [data, setData] = useState([]);
@@ -69,41 +69,37 @@ const ProveedoresPage = () => {
         setShowModal(true);
     }, []);
 
+    const sidebarItems = useMemo(
+        () => [
+            {
+                eventKey: 'providers',
+                label: 'Desglose',
+                icon: (
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ marginRight: 8, verticalAlign: 'middle' }}
+                    >
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                        <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                ),
+            },
+        ],
+        [],
+    );
+
     return (
         <Container fluid className="clientes-layout p-0">
             <div className="clientes-row">
-                <div className="clients-sidebar mb-3 mb-md-0">
-                    <Nav
-                        variant="pills"
-                        className="flex-row flex-md-column"
-                        activeKey={activeView}
-                        onSelect={setActiveView}
-                    >
-                        <Nav.Item>
-                            <Nav.Link eventKey="providers">
-                                <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    style={{ marginRight: 8, verticalAlign: 'middle' }}
-                                >
-                                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                                    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                                    <line x1="12" y1="22.08" x2="12" y2="12" />
-                                </svg>
-                                Desglose
-                            </Nav.Link>
-                        </Nav.Item>
-                        {/* <Nav.Item> */}
-                        {/*     <Nav.Link eventKey="reports">Reportes</Nav.Link> */}
-                        {/* </Nav.Item> */}
-                    </Nav>
-                </div>
+                <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4">
                     <div className={activeView === 'providers' ? '' : 'd-none'}>
                         <div className="clients-content-wrapper">

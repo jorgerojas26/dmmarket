@@ -2,11 +2,11 @@ import ClientDashboardModal from 'components/ClientDashboardModal';
 import ClientsTable from 'components/ClientsTable';
 import ClientsDashboard from 'components/Dashboard/ClientsDashboard';
 import DateRangePicker from 'components/DateRangePicker';
+import Sidebar from 'components/Sidebar';
 import { ShowNoeContext } from 'context/show_noe';
 import { DateTime } from 'luxon';
-import { useCallback, useContext, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
-import Nav from 'react-bootstrap/Nav';
 
 const ClientesPage = () => {
     const [dateRange, setDateRange] = useState({
@@ -32,62 +32,62 @@ const ClientesPage = () => {
         setShowModal(true);
     }, []);
 
+    const sidebarItems = useMemo(
+        () => [
+            {
+                eventKey: 'dashboard',
+                label: 'Dashboard',
+                icon: (
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ marginRight: 8, verticalAlign: 'middle' }}
+                    >
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                ),
+            },
+            {
+                eventKey: 'clients',
+                label: 'Desglose',
+                icon: (
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ marginRight: 8, verticalAlign: 'middle' }}
+                    >
+                        <line x1="8" y1="6" x2="21" y2="6" />
+                        <line x1="8" y1="12" x2="21" y2="12" />
+                        <line x1="8" y1="18" x2="21" y2="18" />
+                        <line x1="3" y1="6" x2="3.01" y2="6" />
+                        <line x1="3" y1="12" x2="3.01" y2="12" />
+                        <line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                ),
+            },
+        ],
+        [],
+    );
+
     return (
         <Container fluid className="clientes-layout p-0">
             <div className="clientes-row">
-                <div className="clients-sidebar mb-3 mb-md-0">
-                    <Nav
-                        variant="pills"
-                        className="flex-row flex-md-column"
-                        activeKey={activeView}
-                        onSelect={setActiveView}
-                    >
-                        <Nav.Item>
-                            <Nav.Link eventKey="dashboard">
-                                <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    style={{ marginRight: 8, verticalAlign: 'middle' }}
-                                >
-                                    <rect x="3" y="3" width="7" height="7" />
-                                    <rect x="14" y="3" width="7" height="7" />
-                                    <rect x="14" y="14" width="7" height="7" />
-                                    <rect x="3" y="14" width="7" height="7" />
-                                </svg>
-                                Dashboard
-                            </Nav.Link>
-                        </Nav.Item>
-                        <Nav.Item>
-                            <Nav.Link eventKey="clients">
-                                <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    style={{ marginRight: 8, verticalAlign: 'middle' }}
-                                >
-                                    <line x1="8" y1="6" x2="21" y2="6" />
-                                    <line x1="8" y1="12" x2="21" y2="12" />
-                                    <line x1="8" y1="18" x2="21" y2="18" />
-                                    <line x1="3" y1="6" x2="3.01" y2="6" />
-                                    <line x1="3" y1="12" x2="3.01" y2="12" />
-                                    <line x1="3" y1="18" x2="3.01" y2="18" />
-                                </svg>
-                                Desglose
-                            </Nav.Link>
-                        </Nav.Item>
-                    </Nav>
-                </div>
+                <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4">
                     <div className={activeView === 'clients' ? '' : 'd-none'}>
                         <div className="clients-content-wrapper">
