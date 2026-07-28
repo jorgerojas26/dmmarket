@@ -24,7 +24,7 @@ export const fetchProviderSummary = async (providerId, { from, to, showNoe }) =>
   return response.json();
 };
 
-export const fetchProviderSales = async (providerId, { from, to, page = 1, limit = 20, search, showNoe }) => {
+export const fetchProviderSales = async (providerId, { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe }) => {
   const params = new URLSearchParams();
   params.append('from', from);
   params.append('to', to);
@@ -32,13 +32,15 @@ export const fetchProviderSales = async (providerId, { from, to, page = 1, limit
   params.append('limit', limit);
   params.append('showNoe', showNoe);
   if (search) params.append('search', search);
+  if (sortBy) params.append('sortBy', sortBy);
+  if (sortDir) params.append('sortDir', sortDir);
   const response = await fetch(
     `${BASE_URL}/${providerId}/sales?${params.toString()}`
   );
   return response.json();
 };
 
-export const fetchProviderClients = async (providerId, { from, to, page = 1, limit = 20, search, showNoe }) => {
+export const fetchProviderClients = async (providerId, { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe }) => {
   const params = new URLSearchParams();
   params.append('from', from);
   params.append('to', to);
@@ -46,13 +48,15 @@ export const fetchProviderClients = async (providerId, { from, to, page = 1, lim
   params.append('limit', limit);
   params.append('showNoe', showNoe);
   if (search) params.append('search', search);
+  if (sortBy) params.append('sortBy', sortBy);
+  if (sortDir) params.append('sortDir', sortDir);
   const response = await fetch(
     `${BASE_URL}/${providerId}/clients?${params.toString()}`
   );
   return response.json();
 };
 
-export const fetchProviderProducts = async (providerId, { from, to, page = 1, limit = 20, search, showNoe }) => {
+export const fetchProviderProducts = async (providerId, { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe }) => {
   const params = new URLSearchParams();
   params.append('from', from);
   params.append('to', to);
@@ -60,19 +64,23 @@ export const fetchProviderProducts = async (providerId, { from, to, page = 1, li
   params.append('limit', limit);
   params.append('showNoe', showNoe);
   if (search) params.append('search', search);
+  if (sortBy) params.append('sortBy', sortBy);
+  if (sortDir) params.append('sortDir', sortDir);
   const response = await fetch(
     `${BASE_URL}/${providerId}/products?${params.toString()}`
   );
   return response.json();
 };
 
-export const fetchProviderPurchases = async (providerId, { from, to, page = 1, limit = 20, search }) => {
+export const fetchProviderPurchases = async (providerId, { from, to, page = 1, limit = 20, search, sortBy, sortDir }) => {
   const params = new URLSearchParams();
   params.append('from', from);
   params.append('to', to);
   params.append('page', page);
   params.append('limit', limit);
   if (search) params.append('search', search);
+  if (sortBy) params.append('sortBy', sortBy);
+  if (sortDir) params.append('sortDir', sortDir);
   const response = await fetch(
     `${BASE_URL}/${providerId}/purchases?${params.toString()}`
   );

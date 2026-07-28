@@ -148,6 +148,12 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const [clientsSearch, setClientsSearch] = useState("");
     const [productsSearch, setProductsSearch] = useState("");
 
+    // Sort state per table
+    const [purchasesSort, setPurchasesSort] = useState([{ id: "fecha", desc: true }]);
+    const [salesSort, setSalesSort] = useState([{ id: "fecha", desc: true }]);
+    const [clientsSort, setClientsSort] = useState([{ id: "totalVentas", desc: true }]);
+    const [productsSort, setProductsSort] = useState([{ id: "totalVentas", desc: true }]);
+
     // Purchase detail sub-modal
     const [detailModalShow, setDetailModalShow] = useState(false);
     const [selectedPurchase, setSelectedPurchase] = useState(null);
@@ -180,6 +186,10 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             setSalesSearch("");
             setClientsSearch("");
             setProductsSearch("");
+            setPurchasesSort([{ id: "fecha", desc: true }]);
+            setSalesSort([{ id: "fecha", desc: true }]);
+            setClientsSort([{ id: "totalVentas", desc: true }]);
+            setProductsSort([{ id: "totalVentas", desc: true }]);
             setDetailModalShow(false);
             setSelectedPurchase(null);
             setSaleDetailModalShow(false);
@@ -241,6 +251,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         page: purchasesPage,
                         limit: LIMIT,
                         search: purchasesSearch || undefined,
+                        sortBy: purchasesSort[0]?.id,
+                        sortDir: purchasesSort[0]?.desc ? "desc" : "asc",
                     },
                 );
                 setPurchasesData({
@@ -256,7 +268,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         };
 
         doFetch();
-    }, [show, provider?.IdProveedor, dateRange, purchasesPage, purchasesSearch]);
+    }, [show, provider?.IdProveedor, dateRange, purchasesPage, purchasesSearch, purchasesSort]);
 
     // Fetch sales (paginated)
     useEffect(() => {
@@ -271,6 +283,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     page: salesPage,
                     limit: LIMIT,
                     search: salesSearch || undefined,
+                    sortBy: salesSort[0]?.id,
+                    sortDir: salesSort[0]?.desc ? "desc" : "asc",
                     showNoe,
                 });
                 setSalesData({
@@ -286,7 +300,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         };
 
         doFetch();
-    }, [show, provider?.IdProveedor, dateRange, salesPage, salesSearch, showNoe]);
+    }, [show, provider?.IdProveedor, dateRange, salesPage, salesSearch, salesSort, showNoe]);
 
     // Fetch clients (paginated)
     useEffect(() => {
@@ -301,6 +315,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     page: clientsPage,
                     limit: LIMIT,
                     search: clientsSearch || undefined,
+                    sortBy: clientsSort[0]?.id,
+                    sortDir: clientsSort[0]?.desc ? "desc" : "asc",
                     showNoe,
                 });
                 setClientsData({
@@ -316,7 +332,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         };
 
         doFetch();
-    }, [show, provider?.IdProveedor, dateRange, clientsPage, clientsSearch, showNoe]);
+    }, [show, provider?.IdProveedor, dateRange, clientsPage, clientsSearch, clientsSort, showNoe]);
 
     // Fetch products (paginated)
     useEffect(() => {
@@ -331,6 +347,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     page: productsPage,
                     limit: LIMIT,
                     search: productsSearch || undefined,
+                    sortBy: productsSort[0]?.id,
+                    sortDir: productsSort[0]?.desc ? "desc" : "asc",
                     showNoe,
                 });
                 setProductsData({
@@ -346,7 +364,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         };
 
         doFetch();
-    }, [show, provider?.IdProveedor, dateRange, productsPage, productsSearch, showNoe]);
+    }, [show, provider?.IdProveedor, dateRange, productsPage, productsSearch, productsSort, showNoe]);
 
     const handleDateRangeChange = ({ from, to }) => {
         setDateRange({ from, to });
@@ -371,6 +389,19 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const handleProductsSearch = useCallback((term) => {
         setProductsSearch(term || "");
         setProductsPage(1);
+    }, []);
+
+    const handlePurchasesSort = useCallback((sortBy) => {
+        setPurchasesSort(sortBy.length ? sortBy : [{ id: "fecha", desc: true }]);
+    }, []);
+    const handleSalesSort = useCallback((sortBy) => {
+        setSalesSort(sortBy.length ? sortBy : [{ id: "fecha", desc: true }]);
+    }, []);
+    const handleClientsSort = useCallback((sortBy) => {
+        setClientsSort(sortBy.length ? sortBy : [{ id: "totalVentas", desc: true }]);
+    }, []);
+    const handleProductsSort = useCallback((sortBy) => {
+        setProductsSort(sortBy.length ? sortBy : [{ id: "totalVentas", desc: true }]);
     }, []);
 
     const handlePurchaseRowClick = useCallback(async (purchase) => {
@@ -892,6 +923,11 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         ]}
                         loading={purchasesLoading}
                         className='provider-table'
+                        sorting={{
+                            enabled: true,
+                            sortBy: purchasesSort,
+                            onSort: handlePurchasesSort,
+                        }}
                         maxHeight={null}
                         onRowClick={handlePurchaseRowClick}
                         emptyMessage='Sin compras en este período'
@@ -936,6 +972,11 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         ]}
                         loading={salesLoading}
                         className='provider-table'
+                        sorting={{
+                            enabled: true,
+                            sortBy: salesSort,
+                            onSort: handleSalesSort,
+                        }}
                         maxHeight={null}
                         onRowClick={handleSaleRowClick}
                         emptyMessage='Sin ventas en este período'
@@ -979,6 +1020,11 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         ]}
                         loading={clientsLoading}
                         className='provider-table'
+                        sorting={{
+                            enabled: true,
+                            sortBy: clientsSort,
+                            onSort: handleClientsSort,
+                        }}
                         maxHeight={null}
                         emptyMessage='Sin clientes en este período'
                         search={{
@@ -1019,6 +1065,11 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         ]}
                         loading={productsLoading}
                         className='provider-table'
+                        sorting={{
+                            enabled: true,
+                            sortBy: productsSort,
+                            onSort: handleProductsSort,
+                        }}
                         maxHeight={null}
                         emptyMessage='Sin productos en este período'
                         search={{

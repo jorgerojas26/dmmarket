@@ -239,12 +239,23 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
 
 const GET_PROVIDER_SALES = async (req, res) => {
   const { providerId } = req.params;
-  const { from, to, page = 1, limit = 20, search } = req.query;
+  const { from, to, page = 1, limit = 20, search, sortBy = "fecha", sortDir = "desc" } = req.query;
   const showNoeParam = req.query.showNoe === "true";
   const { masterTable, slaveTable, idInvoice } = showNoeParam
     ? { masterTable: "masternoe", slaveTable: "slavenoe", idInvoice: "IdNoe" }
     : { masterTable: "masterfact", slaveTable: "slavefact", idInvoice: "IdFactura" };
   const offset = (Number(page) - 1) * Number(limit);
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "idFactura": return `${masterTable}.${idInvoice}`;
+      case "vendedor": return "vendedores.Empresa";
+      case "monto": return knex.raw(`SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad)`);
+      case "fecha":
+      default: return `${masterTable}.Fecha`;
+    }
+  })();
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
 
   try {
     const countQuery = knex
@@ -277,7 +288,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
       .where("productos.Proveedor", providerId)
       .andWhereBetween(`${masterTable}.Fecha`, [from, to])
       .groupBy(`${masterTable}.${idInvoice}`)
-      .orderBy(`${masterTable}.Fecha`, "desc")
+      .orderBy(sortCol, sortDirection)
       .limit(Number(limit))
       .offset(Number(offset));
 
@@ -310,12 +321,22 @@ const GET_PROVIDER_SALES = async (req, res) => {
 
 const GET_PROVIDER_CLIENTS = async (req, res) => {
   const { providerId } = req.params;
-  const { from, to, page = 1, limit = 20, search } = req.query;
+  const { from, to, page = 1, limit = 20, search, sortBy = "totalVentas", sortDir = "desc" } = req.query;
   const showNoeParam = req.query.showNoe === "true";
   const { masterTable, slaveTable, idInvoice } = showNoeParam
     ? { masterTable: "masternoe", slaveTable: "slavenoe", idInvoice: "IdNoe" }
     : { masterTable: "masterfact", slaveTable: "slavefact", idInvoice: "IdFactura" };
   const offset = (Number(page) - 1) * Number(limit);
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "cliente": return "clientes.Empresa";
+      case "totalVentas": return "totalVentas";
+      case "utilidad": return "utilidad";
+      default: return "totalVentas";
+    }
+  })();
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
 
   try {
     const countQuery = knex
@@ -350,7 +371,7 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       .where("productos.Proveedor", providerId)
       .andWhereBetween(`${masterTable}.Fecha`, [from, to])
       .groupBy("clientes.IdCliente")
-      .orderBy("totalVentas", "desc")
+      .orderBy(sortCol, sortDirection)
       .limit(Number(limit))
       .offset(Number(offset));
 
@@ -376,12 +397,22 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
 
 const GET_PROVIDER_PRODUCTS = async (req, res) => {
   const { providerId } = req.params;
-  const { from, to, page = 1, limit = 20, search } = req.query;
+  const { from, to, page = 1, limit = 20, search, sortBy = "totalVentas", sortDir = "desc" } = req.query;
   const showNoeParam = req.query.showNoe === "true";
   const { masterTable, slaveTable, idInvoice } = showNoeParam
     ? { masterTable: "masternoe", slaveTable: "slavenoe", idInvoice: "IdNoe" }
     : { masterTable: "masterfact", slaveTable: "slavefact", idInvoice: "IdFactura" };
   const offset = (Number(page) - 1) * Number(limit);
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "producto": return "productos.Descripcion";
+      case "totalVentas": return "totalVentas";
+      case "utilidad": return "utilidad";
+      default: return "totalVentas";
+    }
+  })();
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
 
   try {
     const countQuery = knex
@@ -414,7 +445,7 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
       .where("productos.Proveedor", providerId)
       .andWhereBetween(`${masterTable}.Fecha`, [from, to])
       .groupBy("productos.IdProducto")
-      .orderBy("totalVentas", "desc")
+      .orderBy(sortCol, sortDirection)
       .limit(Number(limit))
       .offset(Number(offset));
 
@@ -440,8 +471,18 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
 
 const GET_PROVIDER_PURCHASES = async (req, res) => {
   const { providerId } = req.params;
-  const { from, to, page = 1, limit = 20, search } = req.query;
+  const { from, to, page = 1, limit = 20, search, sortBy = "fecha", sortDir = "desc" } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "idFactura": return "mastercomp.IdFactura";
+      case "monto": return knex.raw("SUM(slavecomp.Precio * slavecomp.Cantidad)");
+      case "fecha":
+      default: return "mastercomp.Fecha";
+    }
+  })();
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
 
   try {
     const countQuery = knex
@@ -465,7 +506,7 @@ const GET_PROVIDER_PURCHASES = async (req, res) => {
       .andWhere("mastercomp.Anulada", 0)
       .andWhereBetween("mastercomp.Fecha", [from, to])
       .groupBy("mastercomp.IdFactura")
-      .orderBy("mastercomp.Fecha", "desc")
+      .orderBy(sortCol, sortDirection)
       .limit(Number(limit))
       .offset(Number(offset));
 
