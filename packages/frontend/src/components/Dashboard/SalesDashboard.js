@@ -1,9 +1,7 @@
 import { fetchDashboardPareto, fetchDashboardSales } from "api/dashboard";
-import { fetchInvoiceReport } from "api/invoice";
 import GroupSales from "components/Cards/GroupSales";
-import SaleReportCard from "components/Cards/SaleReport";
 import { DateTime } from "luxon";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     computeComparison,
     formatCurrency,
@@ -14,30 +12,14 @@ import KpiCard from "./KpiCard";
 import ParetoChart from "./ParetoChart";
 import RankedList from "./RankedList";
 
-const REPORT_LIMIT = 20;
-
 const SalesDashboard = ({ dateRange, showNoe }) => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [salesReportData, setSalesReportData] = useState([]);
-    const [salesLoading, setSalesLoading] = useState(false);
 
     // ── Pareto ──
     const [paretoData, setParetoData] = useState(null);
     const [paretoLoading, setParetoLoading] = useState(false);
-
-    // ── Sales report pagination + sorting ──
-    const [reportPage, setReportPage] = useState(1);
-    const [reportTotal, setReportTotal] = useState(0);
-    const [reportSortBy, setReportSortBy] = useState([
-        { id: "rawProfit", desc: true },
-    ]);
-
-    // Reset page on date / showNoe change
-    useEffect(() => {
-        setReportPage(1);
-    }, [dateRange.from, dateRange.to, showNoe]);
 
     useEffect(() => {
         let cancelled = false;
@@ -74,49 +56,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             cancelled = true;
         };
     }, [dateRange.from, dateRange.to, showNoe]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const loadSalesReport = async () => {
-            setSalesLoading(true);
-            try {
-                const sortCol = reportSortBy[0];
-                const report = await fetchInvoiceReport({
-                    from: dateRange.from,
-                    to: dateRange.to,
-                    showNoe,
-                    page: reportPage,
-                    limit: REPORT_LIMIT,
-                    sortBy: sortCol?.id || "rawProfit",
-                    sortDir: sortCol?.desc ? "desc" : "asc",
-                });
-                if (!cancelled) {
-                    setSalesReportData(report.data || []);
-                    setReportTotal(report.pagination?.total || 0);
-                }
-            } catch (err) {
-                console.error(err);
-                if (!cancelled) {
-                    setSalesReportData([]);
-                    setReportTotal(0);
-                }
-            } finally {
-                if (!cancelled) setSalesLoading(false);
-            }
-        };
-
-        loadSalesReport();
-        return () => {
-            cancelled = true;
-        };
-    }, [
-        dateRange.from,
-        dateRange.to,
-        showNoe,
-        reportPage,
-        reportSortBy,
-    ]);
 
     useEffect(() => {
         let cancelled = false;
@@ -158,17 +97,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     const isBusy = loading;
     const kpis = data?.kpis;
     const bestEmployee = data?.bestEmployee;
-
-    const reportTotalPages = Math.ceil(reportTotal / REPORT_LIMIT);
-
-    const handleReportSort = useCallback((newSortBy) => {
-        setReportSortBy(newSortBy.length ? newSortBy : [{ id: "rawProfit", desc: true }]);
-        setReportPage(1);
-    }, []);
-
-    const handleReportPageChange = useCallback((page) => {
-        setReportPage(page);
-    }, []);
 
     if (error) {
         return (
@@ -322,6 +250,17 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                 </div>
             </div>
 
+            {/* ═══ Pareto Analysis ═══ */}
+            <div className="row g-3 mb-4">
+                <div className="col-12">
+                    <ParetoChart
+                        products={paretoData?.products || []}
+                        summary={paretoData?.summary || null}
+                        loading={paretoLoading}
+                    />
+                </div>
+            </div>
+
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">
                     <div
@@ -364,30 +303,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                     </div>
                 </div>
             </div>
-
-            {/* ═══ Pareto Analysis ═══ */}
-            <div className="row g-3 mb-4">
-                <div className="col-12">
-                    <ParetoChart
-                        products={paretoData?.products || []}
-                        summary={paretoData?.summary || null}
-                        loading={paretoLoading}
-                    />
-                </div>
-            </div>
-
-            {/* ═══ Sales Report ═══ */}
-            <SaleReportCard
-                data={salesReportData}
-                loading={salesLoading}
-                sorting={reportSortBy}
-                pagination={{
-                    page: reportPage,
-                    totalPages: reportTotalPages,
-                }}
-                onSort={handleReportSort}
-                onPageChange={handleReportPageChange}
-            />
         </div>
     );
 };

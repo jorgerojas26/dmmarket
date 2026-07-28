@@ -185,7 +185,7 @@ const CumulativeLine = ({ bars, xScale, innerHeight, innerWidth, data }) => {
           key={`ra-${pct}`}
           x={innerWidth + 6}
           y={yPct(pct) + 4}
-          fill="#6b7280"
+          fill="#e4e6ea"
           fontSize={10}
           textAnchor="start"
         >
@@ -504,10 +504,10 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
             );
           }}
           theme={{
-            text: { fill: "#9ca3af", fontSize: 11 },
+            text: { fill: "#e4e6ea", fontSize: 11 },
             axis: {
               legend: {
-                text: { fill: "#9ca3af", fontSize: 12 },
+                text: { fill: "#e4e6ea", fontSize: 12 },
               },
             },
             grid: { line: { stroke: "rgba(255,255,255,0.06)" } },

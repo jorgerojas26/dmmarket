@@ -1,10 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import SalesDashboard from "./SalesDashboard";
 import * as dashboardApi from "api/dashboard";
-import * as invoiceApi from "api/invoice";
 
 jest.mock("api/dashboard");
-jest.mock("api/invoice");
 
 const mockData = {
   kpis: {
@@ -28,7 +26,6 @@ describe("SalesDashboard", () => {
   beforeEach(() => {
     dashboardApi.fetchDashboardSales.mockResolvedValue(mockData);
     dashboardApi.fetchDashboardPareto.mockResolvedValue({ products: [], summary: null });
-    invoiceApi.fetchInvoiceReport.mockResolvedValue({ sales_report: [] });
   });
 
   it("muestra spinner mientras carga", () => {
