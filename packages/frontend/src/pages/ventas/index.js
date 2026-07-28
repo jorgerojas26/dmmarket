@@ -1,71 +1,13 @@
 import SalesDashboard from 'components/Dashboard/SalesDashboard';
 import DateRangePicker from 'components/DateRangePicker';
+import Sidebar from 'components/Sidebar';
 import { ShowNoeContext } from 'context/show_noe';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
-import Nav from 'react-bootstrap/Nav';
 import { useHistory, useLocation } from 'react-router-dom';
 import DesgloseView from './DesgloseView';
 import InvoicesView from './InvoicesView';
-
-const NavIcon = ({ children }) => <span className="nav-icon">{children}</span>;
-
-const ICONS = {
-    dashboard: (
-        <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <rect x="3" y="3" width="7" height="7" />
-            <rect x="14" y="3" width="7" height="7" />
-            <rect x="14" y="14" width="7" height="7" />
-            <rect x="3" y="14" width="7" height="7" />
-        </svg>
-    ),
-    despacho: (
-        <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <rect x="1" y="3" width="15" height="13" />
-            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-            <circle cx="5.5" cy="18.5" r="2.5" />
-            <circle cx="18.5" cy="18.5" r="2.5" />
-        </svg>
-    ),
-    desglose: (
-        <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <line x1="8" y1="6" x2="21" y2="6" />
-            <line x1="8" y1="12" x2="21" y2="12" />
-            <line x1="8" y1="18" x2="21" y2="18" />
-            <line x1="3" y1="6" x2="3.01" y2="6" />
-            <line x1="3" y1="12" x2="3.01" y2="12" />
-            <line x1="3" y1="18" x2="3.01" y2="18" />
-        </svg>
-    ),
-};
 
 const VALID_VIEWS = ['dashboard', 'desglose', 'despacho'];
 const DEFAULT_FROM = DateTime.now().startOf('year').toISODate();
@@ -108,6 +50,74 @@ const VentasPage = () => {
         setDateRange({ from, to });
     }, []);
 
+    const ICONS = useMemo(
+        () => ({
+            dashboard: (
+                <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                </svg>
+            ),
+            despacho: (
+                <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <rect x="1" y="3" width="15" height="13" />
+                    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                    <circle cx="5.5" cy="18.5" r="2.5" />
+                    <circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
+            ),
+            desglose: (
+                <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                >
+                    <line x1="8" y1="6" x2="21" y2="6" />
+                    <line x1="8" y1="12" x2="21" y2="12" />
+                    <line x1="8" y1="18" x2="21" y2="18" />
+                    <line x1="3" y1="6" x2="3.01" y2="6" />
+                    <line x1="3" y1="12" x2="3.01" y2="12" />
+                    <line x1="3" y1="18" x2="3.01" y2="18" />
+                </svg>
+            ),
+        }),
+        [],
+    );
+
+    const sidebarItems = useMemo(
+        () => [
+            { eventKey: 'dashboard', label: 'Dashboard', icon: ICONS.dashboard },
+            { eventKey: 'desglose', label: 'Desglose', icon: ICONS.desglose },
+            { eventKey: 'despacho', label: 'Despacho', icon: ICONS.despacho },
+        ],
+        [ICONS],
+    );
+
     const VIEWS = useMemo(
         () => ({
             dashboard: {
@@ -134,30 +144,7 @@ const VentasPage = () => {
         <Container fluid className="clientes-layout p-0">
             <div className="clientes-row">
                 {/* Sidebar */}
-                <div className="clients-sidebar mb-3 mb-md-0">
-                    <Nav
-                        variant="pills"
-                        className="flex-row flex-md-column"
-                        activeKey={activeView}
-                        onSelect={handleViewChange}
-                    >
-                        <Nav.Item>
-                            <Nav.Link eventKey="dashboard">
-                                <NavIcon>{ICONS.dashboard}</NavIcon> Dashboard
-                            </Nav.Link>
-                        </Nav.Item>
-                        <Nav.Item>
-                            <Nav.Link eventKey="desglose">
-                                <NavIcon>{ICONS.desglose}</NavIcon> Desglose
-                            </Nav.Link>
-                        </Nav.Item>
-                        <Nav.Item>
-                            <Nav.Link eventKey="despacho">
-                                <NavIcon>{ICONS.despacho}</NavIcon> Despacho
-                            </Nav.Link>
-                        </Nav.Item>
-                    </Nav>
-                </div>
+                <Sidebar activeKey={activeView} onSelect={handleViewChange} items={sidebarItems} />
 
                 {/* Content area */}
                 <div className="clientes-content p-4 w-0">

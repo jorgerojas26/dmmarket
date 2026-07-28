@@ -6,7 +6,7 @@ const Sidebar = ({ activeKey, onSelect, items }) => (
             {items.map(({ eventKey, label, icon }) => (
                 <Nav.Item key={eventKey}>
                     <Nav.Link eventKey={eventKey}>
-                        {icon}
+                        <span className="nav-icon">{icon}</span>
                         {label}
                     </Nav.Link>
                 </Nav.Item>
