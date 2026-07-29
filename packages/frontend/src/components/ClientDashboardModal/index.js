@@ -5,18 +5,17 @@ import { ShowNoeContext } from 'context/show_noe';
 import { useClientSales, useClientSummary } from 'hooks/useClients';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import Badge from 'react-bootstrap/Badge';
-import Modal from 'react-bootstrap/Modal';
-import Spinner from 'react-bootstrap/Spinner';
+import { Badge, Modal, Spinner } from 'react-bootstrap';
 import { formatCurrency } from 'utils/format';
+import './styles.css';
 
 const LIMIT = 20;
-const CHART_LIMIT = 500;
+const CHART_LIMIT = 1000;
 
 const IconSales = () => (
     <svg
-        width="20"
-        height="20"
+        width="38"
+        height="38"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -24,14 +23,15 @@ const IconSales = () => (
         strokeLinecap="round"
         strokeLinejoin="round"
     >
-        <line x1="12" y1="1" x2="12" y2="23" />
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+        <line x1="3" y1="6" x2="21" y2="6" />
+        <path d="M16 10a4 4 0 0 1-8 0" />
     </svg>
 );
 const IconHash = () => (
     <svg
-        width="20"
-        height="20"
+        width="38"
+        height="38"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -47,8 +47,8 @@ const IconHash = () => (
 );
 const IconTicket = () => (
     <svg
-        width="20"
-        height="20"
+        width="38"
+        height="38"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -56,16 +56,15 @@ const IconTicket = () => (
         strokeLinecap="round"
         strokeLinejoin="round"
     >
-        <path d="M15 5v2" />
-        <path d="M15 11v2" />
-        <path d="M15 17v2" />
-        <path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2z" />
+        <path d="M3 9v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9" />
+        <path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2" />
+        <line x1="12" y1="2" x2="12" y2="22" />
     </svg>
 );
 const IconCalendar = () => (
     <svg
-        width="20"
-        height="20"
+        width="38"
+        height="38"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -81,16 +80,12 @@ const IconCalendar = () => (
 );
 
 const StatCard = ({ label, value, variant, icon: Icon, loading }) => (
-    <div className="stat-card">
-        <div className="stat-card-icon-wrapper">
-            <div className={`stat-card-icon stat-card-icon--${variant}`}>
-                {loading ? <Spinner animation="border" size="sm" /> : <Icon />}
-            </div>
+    <div className={`stat-card ${variant}`}>
+        <div className="stat-icon">
+            <Icon />
         </div>
-        <div className="stat-card-body">
-            <div className="stat-card-label">{label}</div>
-            <div className="stat-card-value">{value}</div>
-        </div>
+        <div className="stat-label">{label}</div>
+        <div className="stat-value">{loading ? <Spinner animation="border" size="sm" /> : value}</div>
     </div>
 );
 
