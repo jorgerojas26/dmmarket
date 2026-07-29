@@ -5,9 +5,9 @@ const Sidebar = ({ activeKey, onSelect, items }) => (
         <Nav variant="pills" className="flex-row flex-md-column" activeKey={activeKey} onSelect={onSelect}>
             {items.map(({ eventKey, label, icon }) => (
                 <Nav.Item key={eventKey}>
-                    <Nav.Link eventKey={eventKey}>
+                    <Nav.Link eventKey={eventKey} >
                         <span className="nav-icon">{icon}</span>
-                        {label}
+                        <span>{label}</span>
                     </Nav.Link>
                 </Nav.Item>
             ))}

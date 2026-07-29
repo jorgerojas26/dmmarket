@@ -501,6 +501,9 @@ div.card-body {
     font-weight: 600;
 }
 .clients-sidebar .nav-link .nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 18px;
     height: 18px;
     flex-shrink: 0;
