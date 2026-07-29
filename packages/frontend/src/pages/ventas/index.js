@@ -48,6 +48,12 @@ const VentasPage = () => {
 
     const handleViewChange = useCallback((view) => {
         setActiveView(view);
+        if (VALID_VIEWS.includes(view)) {
+            setDateRange({
+                from: DEFAULT_FROM_BY_VIEW[view] || DEFAULT_TO,
+                to: DEFAULT_TO,
+            });
+        }
     }, []);
 
     const handleDateRangeChange = useCallback(({ from, to }) => {
