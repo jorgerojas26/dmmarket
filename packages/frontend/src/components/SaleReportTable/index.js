@@ -11,6 +11,7 @@ const SaleReportTable = ({
     onRowClick,
     maxHeight,
     columns: customColumns,
+    print,
 }) => {
     const defaultColumns = useMemo(() => columns, []);
     const memoizedColumns = customColumns || defaultColumns;
@@ -26,6 +27,7 @@ const SaleReportTable = ({
             pagination={pagination}
             search={search}
             onRowClick={onRowClick}
+            print={print}
         />
     );
 };

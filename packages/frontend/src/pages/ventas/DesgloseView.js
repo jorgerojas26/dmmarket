@@ -1,4 +1,5 @@
 import { fetchInvoiceDetail } from 'api/invoice';
+import { fetchFacturas, fetchProductos } from 'api/sales';
 import ClientSearch from 'components/ClientSearch';
 import DateRangePicker from 'components/DateRangePicker';
 import FacturaDetailModal from 'components/FacturaDetailModal';
@@ -9,8 +10,18 @@ import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
 import { useFacturas, useProductos } from 'hooks/useSales';
 import { DateTime } from 'luxon';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
+
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
+const formatCurrency = (value) => {
+    const num = Number(value);
+    if (Number.isNaN(num)) return '$0.00';
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const DesgloseView = ({ isActive }) => {
     const { showNoe } = useContext(ShowNoeContext);
@@ -214,6 +225,263 @@ const DesgloseView = ({ isActive }) => {
         setProductosPage(1);
     }, []);
 
+    // ---- Print handlers ----
+    const facturasTotal = facturasRes?.pagination?.total || 0;
+    const productosTotal = productosRes?.pagination?.total || 0;
+
+    const handlePrintAllFacturas = useCallback(async () => {
+        try {
+            const result = await fetchFacturas({
+                from: dateRange.from,
+                to: dateRange.to,
+                clientId: selectedClient?.IdCliente,
+                categoryId: selectedGroup?.groupId,
+                employeeId: selectedEmployee?.id,
+                page: 1,
+                limit: facturasTotal || 9999,
+                sortBy: facturasSort.sortBy,
+                sortDir: facturasSort.sortDir,
+                search: facturasSearch || undefined,
+                showNoe,
+            });
+            const data = result?.data || [];
+            const total = data.reduce((s, r) => s + (r.monto || 0), 0);
+            const body = [
+                [
+                    { text: 'Factura', style: 'th' },
+                    { text: 'Fecha', style: 'th' },
+                    { text: 'Cliente', style: 'th' },
+                    { text: 'Vendedor', style: 'th' },
+                    { text: 'Monto', style: 'th' },
+                    { text: 'Utilidad', style: 'th' },
+                    { text: '%', style: 'th' },
+                ],
+                ...data.map((r) => [
+                    String(r.invoiceId),
+                    r.fecha ? DateTime.fromISO(r.fecha).toFormat('dd/MM/yyyy') : '',
+                    r.cliente || '',
+                    r.vendedor || '',
+                    formatCurrency(r.monto),
+                    formatCurrency(r.utilidad),
+                    r.promedio != null ? `${r.promedio}%` : '',
+                ]),
+            ];
+
+            const filterLabel = [
+                dateRange.from && dateRange.to ? `${dateRange.from} — ${dateRange.to}` : '',
+                selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
+                selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
+                selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
+            ]
+                .filter(Boolean)
+                .join(' | ');
+
+            pdfMake
+                .createPdf({
+                    content: [
+                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                        { text: 'Desglose de Ventas — Facturas', style: 'subheader' },
+                        { text: filterLabel || 'Sin filtros', style: 'filterLabel', margin: [0, 0, 0, 12] },
+                        {
+                            style: 'table',
+                            table: {
+                                widths: ['auto', 'auto', '*', '*', 'auto', 'auto', 'auto'],
+                                body: [
+                                    ...body,
+                                    [
+                                        { text: '', colSpan: 4, border: [false, true, false, false] },
+                                        {},
+                                        {},
+                                        {},
+                                        { text: `Total: ${formatCurrency(total)}`, style: 'total', colSpan: 3 },
+                                        {},
+                                        {},
+                                    ],
+                                ],
+                            },
+                        },
+                    ],
+                    styles: {
+                        header: { alignment: 'center', fontSize: 10, bold: true },
+                        subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                        filterLabel: { alignment: 'center', fontSize: 8, italics: true, color: '#666' },
+                        th: { bold: true, fontSize: 8, fillColor: '#f3f4f6' },
+                        total: { bold: true, fontSize: 8 },
+                        table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                    },
+                    pageMargins: 30,
+                    pageSize: 'LETTER',
+                    pageOrientation: 'landscape',
+                })
+                .open();
+        } catch (err) {
+            console.error('Error printing all facturas:', err);
+        }
+    }, [
+        dateRange,
+        selectedClient,
+        selectedGroup,
+        selectedEmployee,
+        facturasSort,
+        facturasSearch,
+        facturasTotal,
+        showNoe,
+    ]);
+
+    const handlePrintAllProductos = useCallback(async () => {
+        try {
+            const result = await fetchProductos({
+                from: dateRange.from,
+                to: dateRange.to,
+                clientId: selectedClient?.IdCliente,
+                categoryId: selectedGroup?.groupId,
+                employeeId: selectedEmployee?.id,
+                page: 1,
+                limit: productosTotal || 9999,
+                sortBy: productosSort.sortBy,
+                sortDir: productosSort.sortDir,
+                search: productosSearch || undefined,
+                showNoe,
+            });
+            const data = result?.data || [];
+            const totalBruto = data.reduce((s, r) => s + (r.rawProfit || 0), 0);
+            const totalUtilidad = data.reduce((s, r) => s + (r.netProfit || 0), 0);
+            const body = [
+                [
+                    { text: 'Producto', style: 'th' },
+                    { text: 'Cantidad', style: 'th' },
+                    { text: 'Bruto', style: 'th' },
+                    { text: 'Utilidad', style: 'th' },
+                    { text: '%', style: 'th' },
+                ],
+                ...data.map((r) => [
+                    r.product || '',
+                    String(r.quantity != null ? Number(r.quantity).toFixed(2) : ''),
+                    formatCurrency(r.rawProfit),
+                    formatCurrency(r.netProfit),
+                    r.averageProfitPercent != null ? `${r.averageProfitPercent}%` : '',
+                ]),
+            ];
+
+            const filterLabel = [
+                dateRange.from && dateRange.to ? `${dateRange.from} — ${dateRange.to}` : '',
+                selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
+                selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
+                selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
+            ]
+                .filter(Boolean)
+                .join(' | ');
+
+            pdfMake
+                .createPdf({
+                    content: [
+                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                        { text: 'Desglose de Ventas — Productos', style: 'subheader' },
+                        { text: filterLabel || 'Sin filtros', style: 'filterLabel', margin: [0, 0, 0, 12] },
+                        {
+                            style: 'table',
+                            table: {
+                                widths: ['*', 'auto', 'auto', 'auto', 'auto'],
+                                body: [
+                                    ...body,
+                                    [
+                                        { text: `Total`, style: 'total' },
+                                        '',
+                                        { text: formatCurrency(totalBruto), style: 'total' },
+                                        { text: formatCurrency(totalUtilidad), style: 'total' },
+                                        '',
+                                    ],
+                                ],
+                            },
+                        },
+                    ],
+                    styles: {
+                        header: { alignment: 'center', fontSize: 10, bold: true },
+                        subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                        filterLabel: { alignment: 'center', fontSize: 8, italics: true, color: '#666' },
+                        th: { bold: true, fontSize: 8, fillColor: '#f3f4f6' },
+                        total: { bold: true, fontSize: 8 },
+                        table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                    },
+                    pageMargins: 30,
+                    pageSize: 'LETTER',
+                    pageOrientation: 'landscape',
+                })
+                .open();
+        } catch (err) {
+            console.error('Error printing all productos:', err);
+        }
+    }, [
+        dateRange,
+        selectedClient,
+        selectedGroup,
+        selectedEmployee,
+        productosSort,
+        productosSearch,
+        productosTotal,
+        showNoe,
+    ]);
+
+    const handlePrintFacturaRow = useCallback(
+        async (factura) => {
+            try {
+                const detail = await fetchInvoiceDetail(factura.invoiceId, showNoe);
+                const productos = detail?.productos || [];
+                const rows = productos.map((p) => [
+                    p.descripcion || p.product || '',
+                    String(Number(p.cantidad || p.quantity || 0)),
+                    formatCurrency(p.precio || p.price || 0),
+                    formatCurrency(p.subtotal || (p.precio || p.price || 0) * (p.cantidad || p.quantity || 0)),
+                ]);
+
+                pdfMake
+                    .createPdf({
+                        content: [
+                            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                            {
+                                text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
+                                style: 'header',
+                            },
+                            { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                            {
+                                text: factura.fecha ? DateTime.fromISO(factura.fecha).toFormat('dd/MM/yyyy') : '',
+                                style: 'header',
+                            },
+                            { text: `Factura: ${factura.invoiceId}`, style: 'subheader' },
+                            { text: `Cliente: ${factura.cliente || ''}`, style: 'subheader', margin: [0, 0, 0, 12] },
+                            {
+                                style: 'table',
+                                table: {
+                                    widths: ['*', 'auto', 'auto', 'auto'],
+                                    body: [
+                                        ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
+                                        ...rows,
+                                        [
+                                            '',
+                                            '',
+                                            { text: 'Total', bold: true },
+                                            { text: formatCurrency(detail.total || factura.monto || 0), bold: true },
+                                        ],
+                                    ],
+                                },
+                            },
+                        ],
+                        styles: {
+                            header: { alignment: 'center', fontSize: 10 },
+                            subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                            table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                        },
+                        pageMargins: 40,
+                        pageSize: 'LETTER',
+                    })
+                    .open();
+            } catch (err) {
+                console.error('Error printing factura:', err);
+            }
+        },
+        [showNoe],
+    );
+
     // Factura row click → open detail modal
     const handleFacturaRowClick = useCallback(
         async (factura) => {
@@ -233,9 +501,7 @@ const DesgloseView = ({ isActive }) => {
     const productosSortBy = [{ id: productosSort.sortBy, desc: productosSort.sortDir === 'desc' }];
 
     const facturasData = facturasRes?.data || [];
-    const facturasTotal = facturasRes?.pagination?.total || 0;
     const productosData = productosRes?.data || [];
-    const productosTotal = productosRes?.pagination?.total || 0;
 
     return (
         <div>
@@ -295,6 +561,12 @@ const DesgloseView = ({ isActive }) => {
                                     placeholder: 'Buscar por cliente o factura...',
                                     onSearch: handleFacturasSearch,
                                 }}
+                                print={{
+                                    enabled: true,
+                                    onGlobalPrint: handlePrintAllFacturas,
+                                    perRowPrint: true,
+                                    onRowPrint: handlePrintFacturaRow,
+                                }}
                             />
                         </div>
                     </div>
@@ -328,6 +600,10 @@ const DesgloseView = ({ isActive }) => {
                                     enabled: true,
                                     placeholder: 'Buscar producto...',
                                     onSearch: handleProductosSearch,
+                                }}
+                                print={{
+                                    enabled: true,
+                                    onGlobalPrint: handlePrintAllProductos,
                                 }}
                             />
                         </div>
