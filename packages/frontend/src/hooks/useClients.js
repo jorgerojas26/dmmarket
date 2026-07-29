@@ -14,9 +14,14 @@ import useSWR from 'hooks/swr-wrapper';
  * Clients list (paginated, searchable).
  * Null key = no fetch.
  */
-export function useClientsList({ search, page = 1, limit = 20, showNoe }, enabled = true) {
-    const key = enabled ? ['clients-list', search, page, limit, showNoe] : null;
-    return useSWR(key, () => fetchClientsList({ search, page, limit, showNoe }), { keepPreviousData: true });
+export function useClientsList(
+    { search, page = 1, limit = 20, sortBy = 'total_ventas', sortDir = 'desc', showNoe },
+    enabled = true,
+) {
+    const key = enabled ? ['clients-list', search, page, limit, sortBy, sortDir, showNoe] : null;
+    return useSWR(key, () => fetchClientsList({ search, page, limit, sortBy, sortDir, showNoe }), {
+        keepPreviousData: true,
+    });
 }
 
 /**

@@ -243,9 +243,26 @@ const GET_CLIENT_SUMMARY = async (req, res) => {
 };
 
 const GET_CLIENTS_LIST = async (req, res) => {
-  const { search, page = 1, limit = 20 } = req.query;
+  const { search, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
   const offset = (Number(page) - 1) * Number(limit);
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "IdCliente":
+        return "clientes.IdCliente";
+      case "Empresa":
+        return "clientes.Empresa";
+      case "num_ventas":
+        return "num_ventas";
+      case "utilidad":
+        return "utilidad";
+      default:
+        return "total_ventas";
+    }
+  })();
+
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
 
   try {
     // Build data query with LEFT JOINs so clients with 0 sales still appear
@@ -277,7 +294,7 @@ const GET_CLIENTS_LIST = async (req, res) => {
 
     const data = await dataQuery
       .groupBy("clientes.IdCliente")
-      .orderBy("total_ventas", "desc")
+      .orderBy(sortCol, sortDirection)
       .limit(Number(limit))
       .offset(Number(offset));
 

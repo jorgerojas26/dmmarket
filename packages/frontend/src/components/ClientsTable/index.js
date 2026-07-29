@@ -15,8 +15,16 @@ const ClientsTable = ({ onRowSelect }) => {
     const { showNoe } = useContext(ShowNoeContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
+    const [sort, setSort] = useState({ sortBy: 'total_ventas', sortDir: 'desc' });
 
-    const { data: result, isLoading } = useClientsList({ search, page, limit: LIMIT, showNoe });
+    const { data: result, isLoading } = useClientsList({
+        search,
+        page,
+        limit: LIMIT,
+        sortBy: sort.sortBy,
+        sortDir: sort.sortDir,
+        showNoe,
+    });
 
     const dataArr = result?.data || [];
     const total = result?.total || 0;
@@ -26,12 +34,21 @@ const ClientsTable = ({ onRowSelect }) => {
         setPage(1);
     }, []);
 
+    const handleSort = useCallback((sortBy) => {
+        if (sortBy && sortBy.length > 0) {
+            setSort({ sortBy: sortBy[0].id, sortDir: sortBy[0].desc ? 'desc' : 'asc' });
+            setPage(1);
+        }
+    }, []);
+
     const handlePrintAll = useCallback(async () => {
         try {
             const allResult = await fetchClientsList({
                 search,
                 page: 1,
                 limit: total || 9999,
+                sortBy: sort.sortBy,
+                sortDir: sort.sortDir,
                 showNoe,
             });
             const rows = (allResult.data || []).map((c) => [
@@ -81,7 +98,7 @@ const ClientsTable = ({ onRowSelect }) => {
         } catch (err) {
             console.error('Failed to print clients list:', err);
         }
-    }, [search, total, showNoe]);
+    }, [search, total, sort, showNoe]);
 
     const totalPages = Math.ceil(total / LIMIT);
 
@@ -116,6 +133,11 @@ const ClientsTable = ({ onRowSelect }) => {
                     loading={isLoading}
                     onRowClick={onRowSelect}
                     emptyMessage="Sin datos"
+                    sorting={{
+                        enabled: true,
+                        sortBy: [{ id: sort.sortBy, desc: sort.sortDir === 'desc' }],
+                        onSort: handleSort,
+                    }}
                     search={{
                         enabled: true,
                         placeholder: 'Buscar por empresa...',
