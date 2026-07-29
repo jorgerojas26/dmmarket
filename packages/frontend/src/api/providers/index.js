@@ -1,10 +1,19 @@
 const BASE_URL = '/api/providers';
 
-export const fetchProvidersList = async ({ search, page = 1, limit = 20, showNoe }) => {
+export const fetchProvidersList = async ({
+    search,
+    page = 1,
+    limit = 20,
+    sortBy = 'total_ventas',
+    sortDir = 'desc',
+    showNoe,
+}) => {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
     params.append('page', page);
     params.append('limit', limit);
+    params.append('sortBy', sortBy);
+    params.append('sortDir', sortDir);
     params.append('showNoe', showNoe);
     const response = await fetch(`${BASE_URL}/list?${params.toString()}`);
     return response.json();

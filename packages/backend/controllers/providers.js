@@ -1,13 +1,32 @@
 const knex = require("../database");
 
 const GET_PROVIDERS_LIST = async (req, res) => {
-  const { search, page = 1, limit = 20 } = req.query;
+  const { search, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
   const showNoe = req.query.showNoe === "true";
   const offset = (Number(page) - 1) * Number(limit);
 
   const masterTable = showNoe ? "masternoe" : "masterfact";
   const slaveTable = showNoe ? "slavenoe" : "slavefact";
   const idInvoice = showNoe ? "IdNoe" : "IdFactura";
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "IdProveedor":
+        return "p.IdProveedor";
+      case "Empresa":
+        return "p.Empresa";
+      case "total_compras":
+        return "total_compras";
+      case "num_compras":
+        return "num_compras";
+      case "num_ventas":
+        return "num_ventas";
+      default:
+        return "total_ventas";
+    }
+  })();
+
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
 
   try {
     // Build data query with subquery LEFT JOINs so metrics don't cross-multiply
@@ -64,10 +83,7 @@ const GET_PROVIDERS_LIST = async (req, res) => {
 
     const [{ total }] = await countQuery;
 
-    const data = await dataQuery
-      .orderByRaw("COALESCE(sales_data.total_ventas, 0) DESC")
-      .limit(Number(limit))
-      .offset(Number(offset));
+    const data = await dataQuery.orderBy(sortCol, sortDirection).limit(Number(limit)).offset(Number(offset));
 
     res.status(200).json({
       data,
