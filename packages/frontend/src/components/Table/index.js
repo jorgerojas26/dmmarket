@@ -362,14 +362,14 @@ const Table = ({
             <span className={`sort-chevron ${active ? 'active' : ''}`}>
                 <span
                     style={{
-                        color: active && !column.isSortedDesc ? '#e4e6ea' : undefined,
+                        color: active && !column.isSortedDesc ? '#3b82f6' : undefined,
                     }}
                 >
                     <ChevronUp />
                 </span>
                 <span
                     style={{
-                        color: active && column.isSortedDesc ? '#e4e6ea' : undefined,
+                        color: active && column.isSortedDesc ? '#3b82f6' : undefined,
                     }}
                 >
                     <ChevronDown />
