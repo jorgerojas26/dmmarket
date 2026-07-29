@@ -40,6 +40,6 @@ describe('KpiCard', () => {
 
     it('muestra spinner cuando loading es true', () => {
         render(<KpiCard label="Venta Bruta" value="$100" loading={true} />);
-        expect(screen.getByRole('status')).toBeInTheDocument();
+        expect(screen.getByRole('status', { hidden: true })).toBeInTheDocument();
     });
 });

@@ -1,9 +1,9 @@
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsiveLine } from '@nivo/line';
 import { ResponsivePie } from '@nivo/pie';
-import { fetchClientsDashboard } from 'api/clients';
+import { useClientsDashboard } from 'hooks/useClients';
 import { DateTime } from 'luxon';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { formatCurrency, formatNumber, formatPercent } from 'utils/format';
 import KpiCard from './KpiCard';
 import RankedList from './RankedList';
@@ -27,31 +27,7 @@ const nivoTheme = {
 };
 
 const ClientsDashboard = ({ dateRange, showNoe }) => {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const load = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const result = await fetchClientsDashboard({ from: dateRange.from, to: dateRange.to }, showNoe);
-                if (!cancelled) setData(result);
-            } catch (err) {
-                if (!cancelled) setError(err.message);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-
-        load();
-        return () => {
-            cancelled = true;
-        };
-    }, [dateRange.from, dateRange.to, showNoe]);
+    const { data, error, isLoading } = useClientsDashboard(dateRange, showNoe);
 
     // ── Derived chart data ──
 
@@ -89,7 +65,7 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
     const kpis = data?.kpis;
 
     if (error) {
-        return <div className="alert alert-danger">Error al cargar el dashboard: {error}</div>;
+        return <div className="alert alert-danger">Error al cargar el dashboard: {error.message}</div>;
     }
 
     const renderWaterfall = () => {
@@ -137,7 +113,7 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
 
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {bars.map((bar, _i) => (
+                {bars.map((bar) => (
                     <div key={bar.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span
                             style={{
@@ -191,7 +167,7 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
 
     return (
         <div style={{ position: 'relative' }}>
-            {loading && (
+            {isLoading && (
                 <div
                     style={{
                         position: 'absolute',
@@ -214,7 +190,7 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
                 </div>
             )}
 
-            {/* ═══ KPIs ═══ */}
+            {/* KPIs */}
             <div className="row g-3 mb-4">
                 <div className="col-12">
                     <div className="dashboard-kpi-grid h-100">
@@ -270,7 +246,7 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
                 </div>
             </div>
 
-            {/* ═══ Charts Row 1: Monthly Active + Segments ═══ */}
+            {/* Charts Row 1: Monthly Active + Segments */}
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-8">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
@@ -343,7 +319,7 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
                 </div>
             </div>
 
-            {/* ═══ Charts Row 2: Waterfall + Inactive Buckets ═══ */}
+            {/* Charts Row 2: Waterfall + Inactive Buckets */}
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
@@ -387,7 +363,7 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
                 </div>
             </div>
 
-            {/* ═══ ABC Pareto ═══ */}
+            {/* ABC Pareto */}
             {data?.abc?.summary && (
                 <div className="row g-3 mb-4">
                     <div className="col-12">
@@ -456,7 +432,7 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
                 </div>
             )}
 
-            {/* ═══ Top 50 Treemap + Segment Table ═══ */}
+            {/* Top 50 Treemap + Segment Table */}
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>

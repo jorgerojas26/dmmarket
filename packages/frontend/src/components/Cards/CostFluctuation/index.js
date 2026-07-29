@@ -1,29 +1,14 @@
 import { ResponsiveLine } from '@nivo/line';
-import { fetchCostFluctuation } from 'api/products';
 import ProductSearch from 'components/ProductSearch';
-import { useEffect, useState } from 'react';
+import { useCostFluctuation } from 'hooks/useProducts';
+import { useState } from 'react';
 
 const CostFluctuation = () => {
     const [selectedProduct, setSelectedProduct] = useState(null);
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        if (selectedProduct) {
-            const fetch_product_report = async () => {
-                setLoading(true);
-                const report_data = await fetchCostFluctuation(selectedProduct.IdProducto);
-                if (Object.keys(report_data).length > 0) {
-                    setData([report_data]);
-                }
-                setLoading(false);
-            };
+    const { data: reportData, isLoading } = useCostFluctuation(selectedProduct?.IdProducto, !!selectedProduct);
 
-            fetch_product_report();
-        } else if (!selectedProduct) {
-            setData([]);
-        }
-    }, [selectedProduct]);
+    const data = reportData && Object.keys(reportData).length > 0 ? [reportData] : [];
 
     return (
         <div className="card">
@@ -63,7 +48,7 @@ const CostFluctuation = () => {
                     useMesh={true}
                 />
             </div>
-            {loading && (
+            {isLoading && (
                 <div className="position-absolute top-50 start-50 translate-middle">
                     <span className="spinner-border spinner-border-md" role="status" aria-hidden="true" />
                 </div>

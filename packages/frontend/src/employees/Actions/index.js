@@ -1,8 +1,8 @@
-import { getEmployeeSales } from 'api/employees';
 import DateRangePicker from 'components/DateRangePicker';
 import { ShowNoeContext } from 'context/show_noe';
 import CommissionModal from 'employees/Modal/Commission';
 import EmployeeSearch from 'employees/Search';
+import { getEmployeeSales } from 'api/employees';
 import { DateTime } from 'luxon';
 import { useContext, useEffect, useState } from 'react';
 import { Button } from 'react-bootstrap';

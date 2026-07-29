@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import * as dashboardApi from 'api/dashboard';
+import { SWRConfig } from 'hooks/swr-wrapper';
 import SalesDashboard from './SalesDashboard';
 
 jest.mock('api/dashboard');
@@ -25,6 +26,10 @@ const mockData = {
     groupSalesChart: [{ categoria: 'Electrónicos', rawProfit: 30000, netProfit: 9000 }],
 };
 
+const swrWrapper = ({ children }) => (
+    <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>{children}</SWRConfig>
+);
+
 describe('SalesDashboard', () => {
     beforeEach(() => {
         dashboardApi.fetchDashboardSales.mockResolvedValue(mockData);
@@ -32,12 +37,16 @@ describe('SalesDashboard', () => {
     });
 
     it('muestra spinner mientras carga', () => {
-        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />);
+        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />, {
+            wrapper: swrWrapper,
+        });
         expect(screen.getByRole('status')).toBeInTheDocument();
     });
 
     it('renderiza KPIs, tablas y gráfico al recibir datos', async () => {
-        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />);
+        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />, {
+            wrapper: swrWrapper,
+        });
         await waitFor(() => expect(screen.getByText('Juan Pérez')).toBeInTheDocument());
         expect(screen.getByText('Venta Bruta')).toBeInTheDocument();
         expect(screen.getByText('Producto A')).toBeInTheDocument();
@@ -46,7 +55,9 @@ describe('SalesDashboard', () => {
 
     it('muestra error si el endpoint falla', async () => {
         dashboardApi.fetchDashboardSales.mockRejectedValue(new Error('Network error'));
-        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />);
+        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />, {
+            wrapper: swrWrapper,
+        });
         await waitFor(() => expect(screen.getByText(/Error al cargar/)).toBeInTheDocument());
     });
 
@@ -69,13 +80,17 @@ describe('SalesDashboard', () => {
             topClients: [],
             groupSalesChart: [],
         });
-        render(<SalesDashboard dateRange={{ from: '2000-01-01', to: '2000-01-02' }} showNoe={false} />);
+        render(<SalesDashboard dateRange={{ from: '2000-01-01', to: '2000-01-02' }} showNoe={false} />, {
+            wrapper: swrWrapper,
+        });
         await waitFor(() => expect(screen.getByText('Venta Bruta')).toBeInTheDocument());
         expect(screen.getAllByText('$0,00').length).toBeGreaterThan(0);
     });
 
     it('calcula compareFrom/compareTo y los envía al endpoint', async () => {
-        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-15' }} showNoe={false} />);
+        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-15' }} showNoe={false} />, {
+            wrapper: swrWrapper,
+        });
         await waitFor(() => {
             expect(dashboardApi.fetchDashboardSales).toHaveBeenCalledWith(
                 expect.objectContaining({

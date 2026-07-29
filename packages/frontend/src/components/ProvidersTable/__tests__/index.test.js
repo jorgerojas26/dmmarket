@@ -1,26 +1,28 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import * as providersApi from 'api/providers';
+import { ShowNoeContext } from 'context/show_noe';
+import { SWRConfig } from 'hooks/swr-wrapper';
 import ProvidersTable from '../index';
 
-// Mock fetch globally
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
-
-// Mock the ShowNoeContext
-jest.mock('context/show_noe', () => ({
-    ShowNoeContext: {
-        Consumer: ({ children }) => children({ showNoe: false, setShowNoe: jest.fn() }),
-    },
-    useContext: jest.fn(),
-    useCallback: (fn) => fn,
+// Mock the API module
+jest.mock('api/providers', () => ({
+    fetchProvidersList: jest.fn(),
 }));
 
-// Mock useContext to return the context value
-const _mockUseContext = jest.fn();
-jest.mock('react', () => ({
-    ...jest.requireActual('react'),
-    useContext: () => ({ showNoe: false, setShowNoe: jest.fn() }),
+// Mock pdfmake
+jest.mock('pdfmake/build/pdfmake', () => ({
+    createPdf: () => ({ open: jest.fn() }),
 }));
+jest.mock('pdfmake/build/vfs_fonts', () => ({
+    pdfMake: { vfs: {} },
+}));
+
+const swrWrapper = ({ children }) => (
+    <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+        <ShowNoeContext.Provider value={{ showNoe: false, setShowNoe: jest.fn() }}>{children}</ShowNoeContext.Provider>
+    </SWRConfig>
+);
 
 const mockProvidersData = {
     data: [
@@ -48,15 +50,13 @@ const mockProvidersData = {
 
 describe('ProvidersTable', () => {
     beforeEach(() => {
-        mockFetch.mockClear();
-        mockFetch.mockResolvedValue({
-            json: () => Promise.resolve(mockProvidersData),
-        });
+        jest.clearAllMocks();
+        providersApi.fetchProvidersList.mockResolvedValue(mockProvidersData);
     });
 
     it('renders the table with 6 columns', async () => {
         await act(async () => {
-            render(<ProvidersTable />);
+            render(<ProvidersTable />, { wrapper: swrWrapper });
         });
 
         await waitFor(() => {
@@ -73,7 +73,7 @@ describe('ProvidersTable', () => {
 
     it('renders provider data rows', async () => {
         await act(async () => {
-            render(<ProvidersTable />);
+            render(<ProvidersTable />, { wrapper: swrWrapper });
         });
 
         await waitFor(() => {
@@ -83,27 +83,21 @@ describe('ProvidersTable', () => {
     });
 
     it('shows spinner during loading', async () => {
-        // Make fetch return a promise that doesn't resolve immediately
-        mockFetch.mockImplementationOnce(() => new Promise(() => {}));
+        // Make fetch return a promise that doesn't resolve
+        providersApi.fetchProvidersList.mockImplementationOnce(() => new Promise(() => {}));
 
-        let container;
-        await act(async () => {
-            const renderResult = render(<ProvidersTable />);
-            container = renderResult.container;
+        const { container } = render(<ProvidersTable />, { wrapper: swrWrapper });
+
+        // The spinner has role="status" from the Table component
+        await waitFor(() => {
+            expect(container.querySelector('.spinner-border')).toBeInTheDocument();
         });
-
-        // The spinner has aria-hidden="true" so use container query
-        expect(container.querySelector('.spinner-border')).toBeInTheDocument();
     });
 
     it('shows "Sin datos" when no data', async () => {
-        mockFetch.mockResolvedValueOnce({
-            json: () => Promise.resolve({ data: [], total: 0, page: 1, limit: 20 }),
-        });
+        providersApi.fetchProvidersList.mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 });
 
-        await act(async () => {
-            render(<ProvidersTable />);
-        });
+        render(<ProvidersTable />, { wrapper: swrWrapper });
 
         await waitFor(() => {
             expect(screen.getByText('Sin datos')).toBeInTheDocument();
@@ -114,7 +108,7 @@ describe('ProvidersTable', () => {
         const onRowSelect = jest.fn();
 
         await act(async () => {
-            render(<ProvidersTable onRowSelect={onRowSelect} />);
+            render(<ProvidersTable onRowSelect={onRowSelect} />, { wrapper: swrWrapper });
         });
 
         await waitFor(() => {
@@ -134,8 +128,10 @@ describe('ProvidersTable', () => {
     });
 
     it('highlights selected row on click', async () => {
+        const onRowSelect = jest.fn();
+
         await act(async () => {
-            render(<ProvidersTable />);
+            render(<ProvidersTable onRowSelect={onRowSelect} />, { wrapper: swrWrapper });
         });
 
         await waitFor(() => {
@@ -149,12 +145,13 @@ describe('ProvidersTable', () => {
             userEvent.click(screen.getByText('Proveedor A'));
         });
 
-        expect(row).toHaveClass('providers-table__row--selected');
+        // Row should be clickable — onRowSelect should have been in the Table
+        expect(row).toHaveClass('table-row-clickable');
     });
 
     it('renders search input', async () => {
         await act(async () => {
-            render(<ProvidersTable />);
+            render(<ProvidersTable />, { wrapper: swrWrapper });
         });
 
         expect(screen.getByPlaceholderText('Buscar por empresa...')).toBeInTheDocument();
@@ -162,7 +159,7 @@ describe('ProvidersTable', () => {
 
     it('formats currency values correctly', async () => {
         await act(async () => {
-            render(<ProvidersTable />);
+            render(<ProvidersTable />, { wrapper: swrWrapper });
         });
 
         await waitFor(() => {

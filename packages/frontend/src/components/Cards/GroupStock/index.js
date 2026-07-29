@@ -1,12 +1,13 @@
-import { fetchProductPriceList, fetchProductsByGroup } from 'api/products';
 import GroupSearch from 'components/GroupSearch';
 import CurrencyModal from 'components/Modals/CurrencyModal';
 import PriceListPDF from 'components/PDF/PriceList';
 import PriceListTable from 'components/PriceListTable';
+import { useProductPriceList } from 'hooks/useProducts';
+import { fetchProductsByGroup } from 'api/products';
 import { useReportFilter } from 'hooks/useReportFilter';
 import jsPDF from 'jspdf';
 import { DateTime } from 'luxon';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useRef, useState } from 'react';
 import { Button } from 'react-bootstrap';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CurrencyRateContext } from '../../../context/currency_rate';
@@ -14,31 +15,15 @@ import 'jspdf-autotable';
 
 const GroupStock = () => {
     const [selectedGroup, setSelectedGroup] = useState(null);
-    const [data, setData] = useState([]);
-    const { filteredData, setFilteredData, onFilterDebounced } = useReportFilter(data);
     const inputRef = useRef(null);
-    const [loading, setLoading] = useState(false);
     const [showCurrencyModal, setShowCurrencyModal] = useState(false);
 
     const { currencyRate } = useContext(CurrencyRateContext);
 
-    useEffect(() => {
-        if (selectedGroup) {
-            const fetch_stock_by_group = async () => {
-                setLoading(true);
-                const data = await fetchProductPriceList(selectedGroup.groupId);
-                setFilteredData([]);
-                inputRef.current.value = '';
-                setData([...data]);
-                setLoading(false);
-            };
+    const { data: rawData = [], isLoading } = useProductPriceList(selectedGroup?.groupId, !!selectedGroup);
 
-            fetch_stock_by_group();
-        } else if (!selectedGroup) {
-            setData([]);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedGroup]);
+    const data = Array.isArray(rawData) ? rawData : [];
+    const { filteredData, setFilteredData, onFilterDebounced } = useReportFilter(data);
 
     return (
         <div className="card">
@@ -67,14 +52,13 @@ const GroupStock = () => {
                         }}
                     />
                 </div>
-                <PriceListTable data={filteredData.length > 0 ? filteredData : data} loading={loading} />
+                <PriceListTable data={filteredData.length > 0 ? filteredData : data} loading={isLoading} />
             </div>
             {showCurrencyModal && (
                 <CurrencyModal
                     show={showCurrencyModal}
                     onClose={() => setShowCurrencyModal(false)}
                     onSubmit={async (currency) => {
-                        console.log('currency', currency);
                         const groups = await fetchProductsByGroup();
                         var div = document.createElement('div');
 
@@ -113,13 +97,11 @@ const GroupStock = () => {
 
                             products = products.map((product) => {
                                 if (currency === 'Bs') {
-                                    console.log('yes currency is Bs');
                                     return {
                                         ...product,
                                         price: Number(product.price * currencyRate?.Cambio).toFixed(2),
                                     };
                                 }
-
                                 return product;
                             });
 

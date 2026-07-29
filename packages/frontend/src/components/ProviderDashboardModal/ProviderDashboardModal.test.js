@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import * as api from 'api/providers';
 import { ShowNoeContext } from 'context/show_noe';
+import { SWRConfig } from 'hooks/swr-wrapper';
 import ProviderDashboardModal from './index';
 
 // Mock the API module
@@ -8,19 +9,35 @@ jest.mock('api/providers', () => ({
     fetchProviderSummary: jest.fn(),
     fetchProviderSales: jest.fn(),
     fetchProviderPurchases: jest.fn(),
+    fetchProviderClients: jest.fn(),
+    fetchProviderProducts: jest.fn(),
     fetchPurchaseDetail: jest.fn(),
+    fetchSaleDetail: jest.fn(),
 }));
 
 // Mock DateRangePicker to avoid react-date-range complexity
 jest.mock('components/DateRangePicker', () => {
-    return function MockDateRangePicker({ onChange }) {
+    return function MockDateRangePicker({ onChange, initialFrom, initialTo }) {
         return (
-            <button data-testid="mock-date-picker" onClick={() => onChange({ from: '2024-01-01', to: '2024-12-31' })}>
+            <button
+                data-testid="mock-date-picker"
+                onClick={() => onChange({ from: initialFrom || '2024-01-01', to: initialTo || '2024-12-31' })}
+            >
                 Date Picker
             </button>
         );
     };
 });
+
+// Mock pdfmake (avoids loading heavy fonts in test)
+jest.mock('pdfmake/build/pdfmake', () => ({
+    createPdf: () => ({ open: jest.fn() }),
+}));
+jest.mock('pdfmake/build/vfs_fonts', () => ({}));
+
+const swrWrapper = ({ children }) => (
+    <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>{children}</SWRConfig>
+);
 
 const mockProvider = {
     IdProveedor: 1,
@@ -51,11 +68,16 @@ const mockSales = {
     total: 2,
 };
 
+const mockClients = { data: [], total: 0 };
+const mockProducts = { data: [], total: 0 };
+
 const renderModal = (show = true, provider = mockProvider, showNoe = false) => {
     return render(
-        <ShowNoeContext.Provider value={{ showNoe, setShowNoe: jest.fn() }}>
-            <ProviderDashboardModal show={show} onClose={jest.fn()} provider={provider} />
-        </ShowNoeContext.Provider>,
+        <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+            <ShowNoeContext.Provider value={{ showNoe, setShowNoe: jest.fn() }}>
+                <ProviderDashboardModal show={show} onClose={jest.fn()} provider={provider} />
+            </ShowNoeContext.Provider>
+        </SWRConfig>,
     );
 };
 
@@ -65,6 +87,8 @@ describe('ProviderDashboardModal', () => {
         api.fetchProviderSummary.mockResolvedValue(mockSummary);
         api.fetchProviderPurchases.mockResolvedValue(mockPurchases);
         api.fetchProviderSales.mockResolvedValue(mockSales);
+        api.fetchProviderClients.mockResolvedValue(mockClients);
+        api.fetchProviderProducts.mockResolvedValue(mockProducts);
     });
 
     it('renders nothing when show is false', () => {
@@ -92,16 +116,16 @@ describe('ProviderDashboardModal', () => {
             expect(screen.getByText('Mejor Vendedor')).toBeInTheDocument();
         });
 
-        // Check formatted values
+        // Check formatted values (es-VE locale: 5000 → $5.000,00)
         await waitFor(() => {
-            expect(screen.getByText('$5,000.00')).toBeInTheDocument();
+            expect(screen.getByText('$5.000,00')).toBeInTheDocument();
             expect(screen.getByText('10')).toBeInTheDocument();
-            expect(screen.getByText('$8,000.00')).toBeInTheDocument();
+            expect(screen.getByText('$8.000,00')).toBeInTheDocument();
             expect(screen.getByText('Vendedor Top')).toBeInTheDocument();
         });
     });
 
-    it('shows N/A for bestSeller when null', async () => {
+    it('shows \u2014 for bestSeller when null', async () => {
         api.fetchProviderSummary.mockResolvedValue({
             ...mockSummary,
             bestSeller: null,
@@ -110,15 +134,24 @@ describe('ProviderDashboardModal', () => {
         renderModal(true);
 
         await waitFor(() => {
-            expect(screen.getByText('N/A')).toBeInTheDocument();
+            expect(screen.getByText('\u2014')).toBeInTheDocument();
         });
     });
 
     it('renders purchases table with data', async () => {
         renderModal(true);
 
+        // Wait for summary stats
         await waitFor(() => {
-            expect(screen.getByText('Compras')).toBeInTheDocument();
+            expect(screen.getByText('Total Compras')).toBeInTheDocument();
+        });
+
+        // Switch to Compras tab
+        act(() => {
+            screen.getByText('Compras').click();
+        });
+
+        await waitFor(() => {
             expect(screen.getByText('FAC-001')).toBeInTheDocument();
             expect(screen.getByText('FAC-002')).toBeInTheDocument();
         });
@@ -129,6 +162,9 @@ describe('ProviderDashboardModal', () => {
 
         await waitFor(() => {
             expect(screen.getByText('Ventas')).toBeInTheDocument();
+        });
+
+        await waitFor(() => {
             expect(screen.getByText('Vendor A')).toBeInTheDocument();
             expect(screen.getByText('Vendor B')).toBeInTheDocument();
         });
@@ -138,6 +174,14 @@ describe('ProviderDashboardModal', () => {
         api.fetchProviderPurchases.mockResolvedValue({ data: [], total: 0 });
 
         renderModal(true);
+
+        // Switch to Compras tab
+        await waitFor(() => {
+            expect(screen.getByText('Compras')).toBeInTheDocument();
+        });
+        act(() => {
+            screen.getByText('Compras').click();
+        });
 
         await waitFor(() => {
             expect(screen.getByText('Sin compras en este período')).toBeInTheDocument();
@@ -176,6 +220,9 @@ describe('ProviderDashboardModal', () => {
                 page: 1,
                 limit: 20,
                 showNoe: true,
+                search: undefined,
+                sortBy: 'fecha',
+                sortDir: 'desc',
             });
         });
     });
@@ -192,17 +239,27 @@ describe('ProviderDashboardModal', () => {
 
         renderModal(true);
 
+        // Switch to Compras tab
         await waitFor(() => {
-            expect(screen.getByText('Página 1 de 3')).toBeInTheDocument();
+            expect(screen.getByText('Compras')).toBeInTheDocument();
+        });
+        act(() => {
+            screen.getByText('Compras').click();
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText('Mostrando 1–20 de 50 resultados')).toBeInTheDocument();
         });
     });
 
     it('closes modal when onClose is called', async () => {
         const onClose = jest.fn();
         render(
-            <ShowNoeContext.Provider value={{ showNoe: false, setShowNoe: jest.fn() }}>
-                <ProviderDashboardModal show={true} onClose={onClose} provider={mockProvider} />
-            </ShowNoeContext.Provider>,
+            <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+                <ShowNoeContext.Provider value={{ showNoe: false, setShowNoe: jest.fn() }}>
+                    <ProviderDashboardModal show={true} onClose={onClose} provider={mockProvider} />
+                </ShowNoeContext.Provider>
+            </SWRConfig>,
         );
 
         // Find and click the close button

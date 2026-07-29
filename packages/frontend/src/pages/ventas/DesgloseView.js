@@ -1,5 +1,4 @@
 import { fetchInvoiceDetail } from 'api/invoice';
-import { fetchFacturas, fetchProductos } from 'api/sales';
 import ClientSearch from 'components/ClientSearch';
 import DateRangePicker from 'components/DateRangePicker';
 import FacturaDetailModal from 'components/FacturaDetailModal';
@@ -8,6 +7,7 @@ import GroupSearch from 'components/GroupSearch';
 import SaleReportTable from 'components/SaleReportTable';
 import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
+import { useFacturas, useProductos } from 'hooks/useSales';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
@@ -36,9 +36,7 @@ const DesgloseView = ({ isActive }) => {
     };
 
     const initialClient = urlClientId ? { IdCliente: urlClientId, name: urlClientName || '' } : null;
-
     const initialGroup = urlGroupId ? { groupId: urlGroupId, name: urlGroupName || '' } : null;
-
     const initialEmployee = urlEmployeeId ? { id: urlEmployeeId, name: urlEmployeeName || '' } : null;
 
     // Date range — defaults to today
@@ -48,6 +46,20 @@ const DesgloseView = ({ isActive }) => {
     const [selectedClient, setSelectedClient] = useState(initialClient);
     const [selectedGroup, setSelectedGroup] = useState(initialGroup);
     const [selectedEmployee, setSelectedEmployee] = useState(initialEmployee);
+
+    // ---- Facturas table state ----
+    const [facturasPage, setFacturasPage] = useState(1);
+    const [facturasSort, setFacturasSort] = useState({ sortBy: 'fecha', sortDir: 'desc' });
+    const [facturasSearch, setFacturasSearch] = useState('');
+
+    // ---- Productos table state ----
+    const [productosPage, setProductosPage] = useState(1);
+    const [productosSort, setProductosSort] = useState({ sortBy: 'rawProfit', sortDir: 'desc' });
+    const [productosSearch, setProductosSearch] = useState('');
+
+    // ---- Factura detail modal ----
+    const [detailModalShow, setDetailModalShow] = useState(false);
+    const [selectedInvoice, setSelectedInvoice] = useState(null);
 
     // --- Sync filters back to URL ---
     useEffect(() => {
@@ -82,37 +94,40 @@ const DesgloseView = ({ isActive }) => {
         history.replace({ search: params.toString() });
     }, [dateRange, selectedClient, selectedGroup, selectedEmployee, history]);
 
-    // ---- Facturas table state ----
-    const [facturasData, setFacturasData] = useState([]);
-    const [facturasLoading, setFacturasLoading] = useState(false);
-    const [facturasPagination, setFacturasPagination] = useState({
-        page: 1,
-        limit: 20,
-        total: 0,
-    });
-    const [facturasSort, setFacturasSort] = useState({
-        sortBy: 'fecha',
-        sortDir: 'desc',
-    });
-    const [facturasSearch, setFacturasSearch] = useState('');
+    // --- SWR hooks ---
+    const { data: facturasRes, isLoading: facturasLoading } = useFacturas(
+        {
+            from: dateRange.from,
+            to: dateRange.to,
+            clientId: selectedClient?.IdCliente,
+            categoryId: selectedGroup?.groupId,
+            employeeId: selectedEmployee?.id,
+            page: facturasPage,
+            limit: 20,
+            sortBy: facturasSort.sortBy,
+            sortDir: facturasSort.sortDir,
+            search: facturasSearch || undefined,
+            showNoe,
+        },
+        isActive,
+    );
 
-    // ---- Productos table state ----
-    const [productosData, setProductosData] = useState([]);
-    const [productosLoading, setProductosLoading] = useState(false);
-    const [productosPagination, setProductosPagination] = useState({
-        page: 1,
-        limit: 20,
-        total: 0,
-    });
-    const [productosSort, setProductosSort] = useState({
-        sortBy: 'rawProfit',
-        sortDir: 'desc',
-    });
-    const [productosSearch, setProductosSearch] = useState('');
-
-    // ---- Factura detail modal ----
-    const [detailModalShow, setDetailModalShow] = useState(false);
-    const [selectedInvoice, setSelectedInvoice] = useState(null);
+    const { data: productosRes, isLoading: productosLoading } = useProductos(
+        {
+            from: dateRange.from,
+            to: dateRange.to,
+            clientId: selectedClient?.IdCliente,
+            categoryId: selectedGroup?.groupId,
+            employeeId: selectedEmployee?.id,
+            page: productosPage,
+            limit: 20,
+            sortBy: productosSort.sortBy,
+            sortDir: productosSort.sortDir,
+            search: productosSearch || undefined,
+            showNoe,
+        },
+        isActive,
+    );
 
     // --- Default values for search components (reconstructed from URL) ---
     const clientDefaultValue = useMemo(
@@ -143,66 +158,60 @@ const DesgloseView = ({ isActive }) => {
 
     const handleDateRangeChange = useCallback(({ from, to }) => {
         setDateRange({ from, to });
-        setFacturasPagination((prev) => ({ ...prev, page: 1 }));
-        setProductosPagination((prev) => ({ ...prev, page: 1 }));
+        setFacturasPage(1);
+        setProductosPage(1);
     }, []);
 
     const handleClientSelect = useCallback((client) => {
         setSelectedClient(client);
-        setFacturasPagination((prev) => ({ ...prev, page: 1 }));
-        setProductosPagination((prev) => ({ ...prev, page: 1 }));
+        setFacturasPage(1);
+        setProductosPage(1);
     }, []);
 
     const handleGroupSelect = useCallback((group) => {
         setSelectedGroup(group);
-        setFacturasPagination((prev) => ({ ...prev, page: 1 }));
-        setProductosPagination((prev) => ({ ...prev, page: 1 }));
+        setFacturasPage(1);
+        setProductosPage(1);
     }, []);
 
     const handleEmployeeSelect = useCallback((employee) => {
         setSelectedEmployee(employee);
-        setFacturasPagination((prev) => ({ ...prev, page: 1 }));
-        setProductosPagination((prev) => ({ ...prev, page: 1 }));
+        setFacturasPage(1);
+        setProductosPage(1);
     }, []);
 
     // Facturas handlers
     const handleFacturasPageChange = useCallback((page) => {
-        setFacturasPagination((prev) => ({ ...prev, page }));
+        setFacturasPage(page);
     }, []);
 
     const handleFacturasSort = useCallback((sortBy) => {
         if (sortBy && sortBy.length > 0) {
-            setFacturasSort({
-                sortBy: sortBy[0].id,
-                sortDir: sortBy[0].desc ? 'desc' : 'asc',
-            });
-            setFacturasPagination((prev) => ({ ...prev, page: 1 }));
+            setFacturasSort({ sortBy: sortBy[0].id, sortDir: sortBy[0].desc ? 'desc' : 'asc' });
+            setFacturasPage(1);
         }
     }, []);
 
     const handleFacturasSearch = useCallback((value) => {
         setFacturasSearch(value || '');
-        setFacturasPagination((prev) => ({ ...prev, page: 1 }));
+        setFacturasPage(1);
     }, []);
 
     // Productos handlers
     const handleProductosPageChange = useCallback((page) => {
-        setProductosPagination((prev) => ({ ...prev, page }));
+        setProductosPage(page);
     }, []);
 
     const handleProductosSort = useCallback((sortBy) => {
         if (sortBy && sortBy.length > 0) {
-            setProductosSort({
-                sortBy: sortBy[0].id,
-                sortDir: sortBy[0].desc ? 'desc' : 'asc',
-            });
-            setProductosPagination((prev) => ({ ...prev, page: 1 }));
+            setProductosSort({ sortBy: sortBy[0].id, sortDir: sortBy[0].desc ? 'desc' : 'asc' });
+            setProductosPage(1);
         }
     }, []);
 
     const handleProductosSearch = useCallback((value) => {
         setProductosSearch(value || '');
-        setProductosPagination((prev) => ({ ...prev, page: 1 }));
+        setProductosPage(1);
     }, []);
 
     // Factura row click → open detail modal
@@ -219,105 +228,14 @@ const DesgloseView = ({ isActive }) => {
         [showNoe],
     );
 
-    // ---- Effects ----
-
-    // Fetch facturas
-    useEffect(() => {
-        if (!isActive) return;
-        const fetchData = async () => {
-            setFacturasLoading(true);
-            try {
-                const response = await fetchFacturas({
-                    from: dateRange.from,
-                    to: dateRange.to,
-                    clientId: selectedClient?.IdCliente,
-                    categoryId: selectedGroup?.groupId,
-                    employeeId: selectedEmployee?.id,
-                    page: facturasPagination.page,
-                    limit: facturasPagination.limit,
-                    sortBy: facturasSort.sortBy,
-                    sortDir: facturasSort.sortDir,
-                    search: facturasSearch || undefined,
-                    showNoe,
-                });
-                setFacturasData(response.data || []);
-                if (response.pagination) {
-                    setFacturasPagination((prev) => ({
-                        ...prev,
-                        total: response.pagination.total,
-                        page: response.pagination.page,
-                    }));
-                }
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setFacturasLoading(false);
-            }
-        };
-        fetchData();
-    }, [
-        isActive,
-        dateRange.from,
-        dateRange.to,
-        selectedClient,
-        selectedGroup,
-        selectedEmployee,
-        facturasPagination.page,
-        facturasSort,
-        facturasSearch,
-        showNoe,
-    ]);
-
-    // Fetch productos
-    useEffect(() => {
-        if (!isActive) return;
-        const fetchData = async () => {
-            setProductosLoading(true);
-            try {
-                const response = await fetchProductos({
-                    from: dateRange.from,
-                    to: dateRange.to,
-                    clientId: selectedClient?.IdCliente,
-                    categoryId: selectedGroup?.groupId,
-                    employeeId: selectedEmployee?.id,
-                    page: productosPagination.page,
-                    limit: productosPagination.limit,
-                    sortBy: productosSort.sortBy,
-                    sortDir: productosSort.sortDir,
-                    search: productosSearch || undefined,
-                    showNoe,
-                });
-                setProductosData(response.data || []);
-                if (response.pagination) {
-                    setProductosPagination((prev) => ({
-                        ...prev,
-                        total: response.pagination.total,
-                        page: response.pagination.page,
-                    }));
-                }
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setProductosLoading(false);
-            }
-        };
-        fetchData();
-    }, [
-        isActive,
-        dateRange.from,
-        dateRange.to,
-        selectedClient,
-        selectedGroup,
-        selectedEmployee,
-        productosPagination.page,
-        productosSort,
-        productosSearch,
-        showNoe,
-    ]);
-
     // Build sortBy array for Table component
     const facturasSortBy = [{ id: facturasSort.sortBy, desc: facturasSort.sortDir === 'desc' }];
     const productosSortBy = [{ id: productosSort.sortBy, desc: productosSort.sortDir === 'desc' }];
+
+    const facturasData = facturasRes?.data || [];
+    const facturasTotal = facturasRes?.pagination?.total || 0;
+    const productosData = productosRes?.data || [];
+    const productosTotal = productosRes?.pagination?.total || 0;
 
     return (
         <div>
@@ -366,10 +284,10 @@ const DesgloseView = ({ isActive }) => {
                                 }}
                                 pagination={{
                                     enabled: true,
-                                    page: facturasPagination.page,
-                                    totalPages: Math.ceil(facturasPagination.total / facturasPagination.limit),
-                                    totalRows: facturasPagination.total,
-                                    pageSize: facturasPagination.limit,
+                                    page: facturasPage,
+                                    totalPages: Math.ceil(facturasTotal / 20),
+                                    totalRows: facturasTotal,
+                                    pageSize: 20,
                                     onPageChange: handleFacturasPageChange,
                                 }}
                                 search={{
@@ -400,10 +318,10 @@ const DesgloseView = ({ isActive }) => {
                                 }}
                                 pagination={{
                                     enabled: true,
-                                    page: productosPagination.page,
-                                    totalPages: Math.ceil(productosPagination.total / productosPagination.limit),
-                                    totalRows: productosPagination.total,
-                                    pageSize: productosPagination.limit,
+                                    page: productosPage,
+                                    totalPages: Math.ceil(productosTotal / 20),
+                                    totalRows: productosTotal,
+                                    pageSize: 20,
                                     onPageChange: handleProductosPageChange,
                                 }}
                                 search={{

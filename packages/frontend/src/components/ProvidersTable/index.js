@@ -1,9 +1,10 @@
 import { fetchProvidersList } from 'api/providers';
 import Table from 'components/Table';
 import { ShowNoeContext } from 'context/show_noe';
+import { useProvidersList } from 'hooks/useProviders';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { formatCurrency, formatNumber } from 'utils/format';
 import './styles.css';
 
@@ -13,30 +14,13 @@ const LIMIT = 20;
 
 const ProvidersTable = ({ onRowSelect }) => {
     const { showNoe } = useContext(ShowNoeContext);
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [total, setTotal] = useState(0);
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const result = await fetchProvidersList({ search, page, limit: LIMIT, showNoe });
-            setData(result.data || []);
-            setTotal(result.total || 0);
-        } catch (err) {
-            console.error(err);
-            setData([]);
-            setTotal(0);
-        } finally {
-            setLoading(false);
-        }
-    }, [search, page, showNoe]);
+    const { data: result, isLoading } = useProvidersList({ search, page, limit: LIMIT, showNoe });
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    const dataArr = result?.data || [];
+    const total = result?.total || 0;
 
     const handleSearch = useCallback((term) => {
         setSearch(term);
@@ -45,13 +29,13 @@ const ProvidersTable = ({ onRowSelect }) => {
 
     const handlePrintAll = useCallback(async () => {
         try {
-            const result = await fetchProvidersList({
+            const allResult = await fetchProvidersList({
                 search,
                 page: 1,
                 limit: total || 9999,
                 showNoe,
             });
-            const rows = (result.data || []).map((p) => [
+            const rows = (allResult.data || []).map((p) => [
                 String(p.IdProveedor ?? ''),
                 p.Empresa ?? '',
                 formatCurrency(p.total_compras ?? 0),
@@ -125,9 +109,9 @@ const ProvidersTable = ({ onRowSelect }) => {
             </header>
             <div className="providers-table__body">
                 <Table
-                    data={data}
+                    data={dataArr}
                     columns={columns}
-                    loading={loading}
+                    loading={isLoading}
                     onRowClick={onRowSelect}
                     className="providers-table"
                     emptyMessage="Sin datos"

@@ -1,80 +1,30 @@
-import { fetchDashboardPareto, fetchDashboardSales } from 'api/dashboard';
 import GroupSales from 'components/Cards/GroupSales';
+import { useDashboardParetoRaw, useDashboardSalesRaw } from 'hooks/useDashboard';
 import { DateTime } from 'luxon';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { computeComparison, formatCurrency, formatNumber, formatPercent } from 'utils/format';
 import KpiCard from './KpiCard';
 import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
 
+function buildCompareRange(dateRange) {
+    const fromDt = DateTime.fromISO(dateRange.from);
+    const toDt = DateTime.fromISO(dateRange.to);
+    const days = toDt.diff(fromDt, 'days').days;
+    const compareTo = fromDt.minus({ days: 1 }).toISODate();
+    const compareFrom = DateTime.fromISO(compareTo).minus({ days }).toISODate();
+    return { compareFrom, compareTo };
+}
+
 const SalesDashboard = ({ dateRange, showNoe }) => {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const { data, error, isLoading } = useDashboardSalesRaw(dateRange, showNoe);
+    const { data: paretoData, isLoading: paretoLoading } = useDashboardParetoRaw(dateRange, showNoe);
 
-    // ── Pareto ──
-    const [paretoData, setParetoData] = useState(null);
-    const [paretoLoading, setParetoLoading] = useState(false);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const load = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const fromDt = DateTime.fromISO(dateRange.from);
-                const toDt = DateTime.fromISO(dateRange.to);
-                const days = toDt.diff(fromDt, 'days').days;
-                const compareTo = fromDt.minus({ days: 1 }).toISODate();
-                const compareFrom = DateTime.fromISO(compareTo).minus({ days }).toISODate();
-
-                const result = await fetchDashboardSales({
-                    from: dateRange.from,
-                    to: dateRange.to,
-                    showNoe,
-                    compareFrom,
-                    compareTo,
-                });
-                if (!cancelled) setData(result);
-            } catch (err) {
-                if (!cancelled) setError(err.message);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-
-        load();
-        return () => {
-            cancelled = true;
-        };
-    }, [dateRange.from, dateRange.to, showNoe]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const loadPareto = async () => {
-            setParetoLoading(true);
-            try {
-                const result = await fetchDashboardPareto({
-                    from: dateRange.from,
-                    to: dateRange.to,
-                    showNoe,
-                });
-                if (!cancelled) setParetoData(result);
-            } catch (err) {
-                console.error(err);
-                if (!cancelled) setParetoData(null);
-            } finally {
-                if (!cancelled) setParetoLoading(false);
-            }
-        };
-
-        loadPareto();
-        return () => {
-            cancelled = true;
-        };
-    }, [dateRange.from, dateRange.to, showNoe]);
+    // Compare range for KPI delta badges — computed locally, not fetched
+    const compareRange = useMemo(() => {
+        if (!dateRange?.from || !dateRange?.to) return null;
+        return buildCompareRange(dateRange);
+    }, [dateRange?.from, dateRange?.to]);
 
     const chartData = useMemo(
         () =>
@@ -87,17 +37,16 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
         [data?.groupSalesChart],
     );
 
-    const isBusy = loading;
     const kpis = data?.kpis;
     const bestEmployee = data?.bestEmployee;
 
     if (error) {
-        return <div className="alert alert-danger">Error al cargar el dashboard: {error}</div>;
+        return <div className="alert alert-danger">Error al cargar el dashboard: {error.message}</div>;
     }
 
     return (
         <div style={{ position: 'relative' }}>
-            {isBusy && (
+            {isLoading && (
                 <div
                     style={{
                         position: 'absolute',
@@ -219,7 +168,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                 </div>
             </div>
 
-            {/* ═══ Pareto Analysis ═══ */}
+            {/* Pareto Analysis */}
             <div className="row g-3 mb-4">
                 <div className="col-12">
                     <ParetoChart

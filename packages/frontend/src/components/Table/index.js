@@ -148,7 +148,6 @@ const Table = ({
 
         return opts;
         // sorting.sortBy intentionally omitted — initial value only.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sorting?.enabled, columns, data]);
 
     const { getTableProps, getTableBodyProps, headerGroups, footerGroups, rows, prepareRow, state } = useTable(
@@ -164,7 +163,6 @@ const Table = ({
                 onRowSelect(selected);
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state.selectedRowIds]);
 
     /* ── Server‑side sort notifier ── */
@@ -178,7 +176,6 @@ const Table = ({
             prevSortByRef.current = state.sortBy;
             sorting.onSort(state.sortBy);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [state.sortBy, sorting?.enabled, sorting?.onSort]);
 
     /* ── Debounced filter ── */

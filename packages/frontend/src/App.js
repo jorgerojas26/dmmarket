@@ -7,22 +7,22 @@ import Container from 'react-bootstrap/Container';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Link, Redirect, Route, Switch, useLocation } from 'react-router-dom';
-import { fetchCurrencyRates } from './api/currency_rates';
 import { CurrencyRateContext } from './context/currency_rate';
 import ProveedoresPage from './pages/proveedores';
+import { useCurrencyRates } from 'hooks/useCurrencyRates';
 
 function App() {
     const location = useLocation();
     const { currencyRate, setCurrencyRate } = useContext(CurrencyRateContext);
     const { showNoe, setShowNoe } = useContext(ShowNoeContext);
 
+    const { data: currenciesRes } = useCurrencyRates();
+
     useEffect(() => {
-        fetchCurrencyRates().then((response) => {
-            if (response.status === 200) {
-                setCurrencyRate(response.data.find((currency) => currency.Simbolo === 'BsS'));
-            }
-        });
-    }, []);
+        if (currenciesRes?.data) {
+            setCurrencyRate(currenciesRes.data.find((currency) => currency.Simbolo === 'BsS'));
+        }
+    }, [currenciesRes, setCurrencyRate]);
 
     return (
         <div className="App bg-dark">

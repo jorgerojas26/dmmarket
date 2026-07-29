@@ -1,27 +1,34 @@
 import DateRangePicker from 'components/DateRangePicker';
+import { useSalesByGroup } from 'hooks/useGroups';
 import debounce from 'lodash.debounce';
 import { DateTime } from 'luxon';
-import { useEffect, useMemo, useState } from 'react';
-import { fetchSalesByGroup } from '../../api/groups';
+import { useMemo, useState } from 'react';
 import ProductChart from '../../components/Cards/ProductGraph';
 import SaleReportCard from '../../components/Cards/SaleReport';
 import GroupSearch from '../../components/GroupSearch';
 
 const Categories = () => {
-    const [loading, setLoading] = useState(false);
-    const [data, setData] = useState([]);
-    const [filteredData, setFilteredData] = useState([]);
     const [selectedGroup, setSelectedGroup] = useState();
     const [dateRange, setDateRange] = useState({
         from: DateTime.now().startOf('month').toISODate(),
         to: DateTime.now().toISODate(),
     });
+    const [filteredData, setFilteredData] = useState([]);
+
+    const { data: rawData = [], isLoading } = useSalesByGroup(
+        {
+            from: dateRange.from,
+            to: dateRange.to,
+            categoryId: selectedGroup?.groupId,
+        },
+        !!selectedGroup,
+    );
+
+    const data = Array.isArray(rawData) ? rawData : [];
 
     const chartData = useMemo(() => {
         const data_to_use = filteredData?.length ? filteredData : data;
-
         if (!Array.isArray(data_to_use)) return [];
-
         return data_to_use.reduce(
             (acc, current) => [
                 ...acc,
@@ -37,34 +44,13 @@ const Categories = () => {
     }, [data, filteredData]);
 
     const onFilter = debounce((searchTerm) => {
-        const filteredData = data.filter((f) => f.product.toLowerCase().includes(searchTerm.toLowerCase()));
-        setFilteredData(filteredData);
+        const filtered = data.filter((f) => f.product.toLowerCase().includes(searchTerm.toLowerCase()));
+        setFilteredData(filtered);
     }, 500);
 
-    const handleDateRangeChange = async ({ from, to }) => {
-        if (selectedGroup) {
-            try {
-                setLoading(true);
-                setDateRange({ from, to });
-                const response = await fetchSalesByGroup({
-                    from,
-                    to,
-                    categoryId: selectedGroup?.groupId,
-                });
-                setData(Array.isArray(response) ? response : []);
-            } catch (error) {
-                console.log('error', error);
-            } finally {
-                setLoading(false);
-            }
-        }
+    const handleDateRangeChange = ({ from, to }) => {
+        setDateRange({ from, to });
     };
-
-    useEffect(() => {
-        if (selectedGroup) {
-            handleDateRangeChange(dateRange);
-        }
-    }, [selectedGroup]);
 
     return (
         <div className="p-4">
@@ -86,12 +72,12 @@ const Categories = () => {
                 <div className="w-100">
                     <SaleReportCard
                         data={filteredData?.length ? filteredData : data}
-                        loading={loading}
+                        loading={isLoading}
                         onFilter={onFilter}
                     />
                 </div>
                 <div className="w-100">
-                    <ProductChart chartData={chartData} loading={loading} />
+                    <ProductChart chartData={chartData} loading={isLoading} />
                 </div>
             </div>
         </div>

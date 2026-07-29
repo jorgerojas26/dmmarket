@@ -1,34 +1,18 @@
 import { ResponsivePie } from '@nivo/pie';
-import { fetchCostPerGroup } from 'api/products';
-import { useEffect, useState } from 'react';
+import { useCostPerGroup } from 'hooks/useProducts';
+import { useEffect, useMemo, useState } from 'react';
 
 const ProductCostPerGroupCard = () => {
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const { data: response, isLoading } = useCostPerGroup();
 
-    useEffect(() => {
-        const fetch = async () => {
-            setLoading(true);
-            const response = await fetchCostPerGroup();
-            if (response?.length) {
-                const chartData = response.reduce(
-                    (acc, current) => [
-                        ...acc,
-                        {
-                            id: current.group_name,
-                            label: current.product,
-                            value: current.total_cost,
-                        },
-                    ],
-                    [],
-                );
-                console.log(response, chartData);
-                setData(chartData);
-            }
-            setLoading(false);
-        };
-        fetch();
-    }, []);
+    const data = useMemo(() => {
+        if (!response?.length) return [];
+        return response.map((current) => ({
+            id: current.group_name,
+            label: current.product,
+            value: current.total_cost,
+        }));
+    }, [response]);
 
     return (
         <div className="card">
@@ -57,7 +41,7 @@ const ProductCostPerGroupCard = () => {
                         }}
                     />
                 )}
-                {loading && (
+                {isLoading && (
                     <div className="position-absolute top-50 start-50 translate-middle">
                         <span className="spinner-border spinner-border-md" role="status" aria-hidden="true" />
                     </div>

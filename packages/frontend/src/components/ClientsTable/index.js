@@ -1,9 +1,10 @@
 import { fetchClientsList } from 'api/clients';
 import Table from 'components/Table';
 import { ShowNoeContext } from 'context/show_noe';
+import { useClientsList } from 'hooks/useClients';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { formatCurrency, formatNumber } from 'utils/format';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -12,35 +13,13 @@ const LIMIT = 20;
 
 const ClientsTable = ({ onRowSelect }) => {
     const { showNoe } = useContext(ShowNoeContext);
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [total, setTotal] = useState(0);
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const result = await fetchClientsList({
-                search,
-                page,
-                limit: LIMIT,
-                showNoe,
-            });
-            setData(result.data || []);
-            setTotal(result.total || 0);
-        } catch (err) {
-            console.error(err);
-            setData([]);
-            setTotal(0);
-        } finally {
-            setLoading(false);
-        }
-    }, [search, page, showNoe]);
+    const { data: result, isLoading } = useClientsList({ search, page, limit: LIMIT, showNoe });
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    const dataArr = result?.data || [];
+    const total = result?.total || 0;
 
     const handleSearch = useCallback((term) => {
         setSearch(term);
@@ -49,13 +28,13 @@ const ClientsTable = ({ onRowSelect }) => {
 
     const handlePrintAll = useCallback(async () => {
         try {
-            const result = await fetchClientsList({
+            const allResult = await fetchClientsList({
                 search,
                 page: 1,
                 limit: total || 9999,
                 showNoe,
             });
-            const rows = (result.data || []).map((c) => [
+            const rows = (allResult.data || []).map((c) => [
                 String(c.IdCliente ?? ''),
                 c.Empresa ?? '',
                 formatCurrency(c.total_ventas ?? 0),
@@ -132,9 +111,9 @@ const ClientsTable = ({ onRowSelect }) => {
             </div>
             <div className="dashboard-panel-body">
                 <Table
-                    data={data}
+                    data={dataArr}
                     columns={columns}
-                    loading={loading}
+                    loading={isLoading}
                     onRowClick={onRowSelect}
                     emptyMessage="Sin datos"
                     search={{

@@ -1,19 +1,16 @@
-import { fetchInvoiceList } from 'api/invoice';
 import InvoicesTable from 'components/InvoicesTable';
 import ProductsTable from 'components/ProductsTable';
 import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
+import { useInvoiceList } from 'hooks/useInvoice';
 import { useCallback, useEffect, useState } from 'react';
 
 const LIMIT = 20;
 
 const InvoicesView = ({ dateRange, showNoe, isActive }) => {
-    const [invoices, setInvoices] = useState([]);
-    const [loading, setLoading] = useState(false);
     const [selectedRows, setSelectedRows] = useState([]);
 
     // Pagination / sorting / search state
     const [page, setPage] = useState(1);
-    const [total, setTotal] = useState(0);
     const [sortBy, setSortBy] = useState('createdAt');
     const [sortDir, setSortDir] = useState('desc');
     const [search, setSearch] = useState('');
@@ -25,11 +22,9 @@ const InvoicesView = ({ dateRange, showNoe, isActive }) => {
         setPage(1);
     }, [dateRange.from, dateRange.to]);
 
-    // Fetch invoices
-    useEffect(() => {
-        if (!isActive) return;
-        setLoading(true);
-        fetchInvoiceList({
+    // ── SWR hook ──
+    const { data: invoiceRes, isLoading } = useInvoiceList(
+        {
             from: dateRange.from,
             to: dateRange.to,
             showNoe,
@@ -38,14 +33,12 @@ const InvoicesView = ({ dateRange, showNoe, isActive }) => {
             sortBy,
             sortDir,
             search: search || undefined,
-        })
-            .then((response) => {
-                setInvoices(response.data || []);
-                setTotal(response.pagination?.total || 0);
-            })
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, [dateRange.from, dateRange.to, showNoe, isActive, page, sortBy, sortDir, search]);
+        },
+        isActive,
+    );
+
+    const invoices = invoiceRes?.data || [];
+    const total = invoiceRes?.pagination?.total || 0;
 
     // Handlers
     const handlePageChange = useCallback((newPage) => {
@@ -73,7 +66,7 @@ const InvoicesView = ({ dateRange, showNoe, isActive }) => {
             <div className="col-12 col-xl-6">
                 <InvoicesTable
                     data={invoices}
-                    loading={loading}
+                    loading={isLoading}
                     onRowSelect={setSelectedRows}
                     maxHeight="calc(100vh - 360px)"
                     sorting={{

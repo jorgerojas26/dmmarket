@@ -1,30 +1,23 @@
-import { fetchBestClientsPerProduct } from 'api/clients';
 import ClientPerProductTable from 'components/ClientPerProduct/Table';
 import ProductSearch from 'components/ProductSearch';
 import { ShowNoeContext } from 'context/show_noe';
+import { useBestClientsPerProduct } from 'hooks/useClients';
 import { DateTime } from 'luxon';
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useState } from 'react';
 
 const ClientPerProductCard = ({ dateRange }) => {
     const [selectedProduct, setSelectedProduct] = useState(null);
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(false);
-
     const { showNoe } = useContext(ShowNoeContext);
 
-    useEffect(() => {
-        if (selectedProduct && dateRange.from && dateRange.to) {
-            setLoading(true);
-            fetchBestClientsPerProduct(selectedProduct.IdProducto, dateRange, showNoe).then((response) => {
-                if (response && !response.error) {
-                    setData([...response]);
-                }
-                setLoading(false);
-            });
-        } else if (!selectedProduct) {
-            setData([]);
-        }
-    }, [selectedProduct, dateRange, showNoe]);
+    const { data: response = [], isLoading } = useBestClientsPerProduct(
+        selectedProduct?.IdProducto,
+        dateRange,
+        showNoe,
+        !!selectedProduct && !!dateRange?.from && !!dateRange?.to,
+    );
+
+    const data = Array.isArray(response) ? response : [];
+
     return (
         <div className="card h-100">
             <div className="card-header">
@@ -48,7 +41,7 @@ const ClientPerProductCard = ({ dateRange }) => {
                         <ProductSearch onSelect={setSelectedProduct} />
                     </div>
                 </div>
-                <ClientPerProductTable data={data} loading={loading} />
+                <ClientPerProductTable data={data} loading={isLoading} />
             </div>
         </div>
     );

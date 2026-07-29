@@ -1,30 +1,16 @@
 import { ResponsiveLine } from '@nivo/line';
-import { fetchMonthlyAverage } from 'api/clients';
 import ClientSearch from 'components/ClientSearch';
 import { ShowNoeContext } from 'context/show_noe';
-import { useContext, useEffect, useState } from 'react';
+import { useMonthlyAverage } from 'hooks/useClients';
+import { useContext, useState } from 'react';
 
 const MonthlyAverageClient = () => {
     const [selectedClient, setSelectedClient] = useState(null);
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(false);
-
     const { showNoe } = useContext(ShowNoeContext);
 
-    useEffect(() => {
-        if (selectedClient) {
-            setLoading(true);
-            fetchMonthlyAverage(selectedClient.IdCliente, showNoe).then((response) => {
-                console.log(response);
-                if (Object.keys(response).length > 0) {
-                    setData([response]);
-                }
-                setLoading(false);
-            });
-        } else {
-            setData([]);
-        }
-    }, [selectedClient, showNoe]);
+    const { data: response, isLoading } = useMonthlyAverage(selectedClient?.IdCliente, showNoe, !!selectedClient);
+
+    const data = response && Object.keys(response).length > 0 ? [response] : [];
 
     return (
         <div className="card h-100">
@@ -55,7 +41,7 @@ const MonthlyAverageClient = () => {
                         useMesh={true}
                     />
                 )}
-                {loading && (
+                {isLoading && (
                     <div className="position-absolute top-50 start-50 translate-middle">
                         <span className="spinner-border spinner-border-md" role="status" aria-hidden="true" />
                     </div>

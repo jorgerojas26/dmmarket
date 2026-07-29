@@ -125,7 +125,7 @@ const ACCENT_COLORS = {
     orange: { border: '#f97316', bg: 'rgba(249,115,22,0.08)', icon: '#fb923c' },
 };
 
-const KpiCard = ({ label, value, comparison, icon, accent }) => {
+const KpiCard = ({ label, value, comparison, icon, accent, loading }) => {
     const palette = ACCENT_COLORS[accent] || ACCENT_COLORS.blue;
 
     const trendEl = comparison ? (
@@ -135,6 +135,29 @@ const KpiCard = ({ label, value, comparison, icon, accent }) => {
             <span className="trend-label">vs anterior</span>
         </span>
     ) : null;
+
+    if (loading) {
+        return (
+            <div
+                className="dashboard-kpi-card"
+                style={{
+                    '--kpi-accent': palette.border,
+                    '--kpi-accent-bg': palette.bg,
+                    '--kpi-icon-color': palette.icon,
+                }}
+            >
+                <div className="dashboard-kpi-card-inner">
+                    <div className="dashboard-kpi-icon" style={{ color: palette.icon }}>
+                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                    </div>
+                    <div className="dashboard-kpi-body">
+                        <span className="dashboard-kpi-label">{label}</span>
+                        <span className="dashboard-kpi-value">{'\u2014'}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div

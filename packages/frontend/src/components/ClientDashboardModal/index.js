@@ -1,26 +1,22 @@
 import { ResponsiveLine } from '@nivo/line';
-import { fetchClientSales, fetchClientSummary } from 'api/clients';
 import DateRangePicker from 'components/DateRangePicker';
 import Table from 'components/Table';
 import { ShowNoeContext } from 'context/show_noe';
+import { useClientSales, useClientSummary } from 'hooks/useClients';
 import { DateTime } from 'luxon';
-import { useContext, useEffect, useMemo, useState } from 'react';
-import { Badge, Modal, Spinner } from 'react-bootstrap';
-import './styles.css';
+import { useCallback, useContext, useMemo, useState } from 'react';
+import Badge from 'react-bootstrap/Badge';
+import Modal from 'react-bootstrap/Modal';
+import Spinner from 'react-bootstrap/Spinner';
+import { formatCurrency } from 'utils/format';
 
 const LIMIT = 20;
-const CHART_LIMIT = 1000;
-
-const formatCurrency = (value) => {
-    const num = Number(value);
-    if (Number.isNaN(num)) return '$0.00';
-    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
+const CHART_LIMIT = 500;
 
 const IconSales = () => (
     <svg
-        width="38"
-        height="38"
+        width="20"
+        height="20"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -28,16 +24,14 @@ const IconSales = () => (
         strokeLinecap="round"
         strokeLinejoin="round"
     >
-        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-        <line x1="3" y1="6" x2="21" y2="6" />
-        <path d="M16 10a4 4 0 0 1-8 0" />
+        <line x1="12" y1="1" x2="12" y2="23" />
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
     </svg>
 );
-
 const IconHash = () => (
     <svg
-        width="38"
-        height="38"
+        width="20"
+        height="20"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -51,11 +45,10 @@ const IconHash = () => (
         <line x1="16" y1="3" x2="14" y2="21" />
     </svg>
 );
-
 const IconTicket = () => (
     <svg
-        width="38"
-        height="38"
+        width="20"
+        height="20"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -63,16 +56,16 @@ const IconTicket = () => (
         strokeLinecap="round"
         strokeLinejoin="round"
     >
-        <path d="M3 9v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9" />
-        <path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2" />
-        <line x1="12" y1="2" x2="12" y2="22" />
+        <path d="M15 5v2" />
+        <path d="M15 11v2" />
+        <path d="M15 17v2" />
+        <path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2z" />
     </svg>
 );
-
 const IconCalendar = () => (
     <svg
-        width="38"
-        height="38"
+        width="20"
+        height="20"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -88,12 +81,16 @@ const IconCalendar = () => (
 );
 
 const StatCard = ({ label, value, variant, icon: Icon, loading }) => (
-    <div className={`stat-card ${variant}`}>
-        <div className="stat-icon">
-            <Icon />
+    <div className="stat-card">
+        <div className="stat-card-icon-wrapper">
+            <div className={`stat-card-icon stat-card-icon--${variant}`}>
+                {loading ? <Spinner animation="border" size="sm" /> : <Icon />}
+            </div>
         </div>
-        <div className="stat-label">{label}</div>
-        <div className="stat-value">{loading ? <Spinner animation="border" size="sm" /> : value}</div>
+        <div className="stat-card-body">
+            <div className="stat-card-label">{label}</div>
+            <div className="stat-card-value">{value}</div>
+        </div>
     </div>
 );
 
@@ -118,139 +115,87 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
     const oneYearAgo = DateTime.now().minus({ years: 1 }).toISODate();
 
     const [dateRange, setDateRange] = useState({ from: oneYearAgo, to: today });
-    const [summary, setSummary] = useState({
-        totalAmount: 0,
-        totalCount: 0,
-        avgTicket: null,
-        avgDaysBetweenSales: null,
-    });
-    const [salesData, setSalesData] = useState({ data: [], total: 0 });
     const [salesPage, setSalesPage] = useState(1);
-    const [loading, setLoading] = useState(false);
-    const [salesLoading, setSalesLoading] = useState(false);
-    const [chartData, setChartData] = useState([]);
-    const [chartLoading, setChartLoading] = useState(false);
     const [chartTooltip, setChartTooltip] = useState({ visible: false, x: 0, y: 0, point: null });
 
-    // Fetch summary
-    useEffect(() => {
-        if (!show || !client?.IdCliente) return;
+    // ── SWR hooks ──
+    const clientEnabled = show && !!client?.IdCliente;
 
-        const doFetch = async () => {
-            setLoading(true);
-            try {
-                const result = await fetchClientSummary(client.IdCliente, {
-                    from: dateRange.from,
-                    to: dateRange.to,
-                    showNoe,
-                });
-                setSummary({
-                    totalAmount: result.totalAmount ?? 0,
-                    totalCount: result.totalCount ?? 0,
-                    avgTicket: result.avgTicket ?? null,
-                    avgDaysBetweenSales: result.avgDaysBetweenSales ?? null,
-                });
-            } catch (err) {
-                console.error('Failed to fetch client summary:', err);
-                setSummary({ totalAmount: 0, totalCount: 0, avgTicket: null, avgDaysBetweenSales: null });
-            } finally {
-                setLoading(false);
-            }
-        };
+    const {
+        data: summary,
+        error: summaryError,
+        isLoading: summaryLoading,
+    } = useClientSummary(client?.IdCliente, { from: dateRange.from, to: dateRange.to, showNoe }, clientEnabled);
 
-        doFetch();
-    }, [show, client?.IdCliente, dateRange, showNoe]);
+    const { data: salesData, isLoading: salesLoading } = useClientSales(
+        client?.IdCliente,
+        {
+            from: dateRange.from,
+            to: dateRange.to,
+            page: salesPage,
+            limit: LIMIT,
+            showNoe,
+        },
+        clientEnabled,
+    );
 
-    // Fetch sales (paginated)
-    useEffect(() => {
-        if (!show || !client?.IdCliente) return;
+    // Chart: fetch all sales (up to CHART_LIMIT)
+    const chartEnabled = clientEnabled && (summary?.totalCount || 0) > 0;
+    const chartLimit = Math.min(summary?.totalCount || 0, CHART_LIMIT);
+    const { data: chartSalesData, isLoading: chartLoading } = useClientSales(
+        client?.IdCliente,
+        {
+            from: dateRange.from,
+            to: dateRange.to,
+            page: 1,
+            limit: chartLimit || 1,
+            showNoe,
+        },
+        chartEnabled,
+    );
 
-        const doFetch = async () => {
-            setSalesLoading(true);
-            try {
-                const result = await fetchClientSales(client.IdCliente, {
-                    from: dateRange.from,
-                    to: dateRange.to,
-                    page: salesPage,
-                    limit: LIMIT,
-                    showNoe,
-                });
-                setSalesData({
-                    data: result.data || [],
-                    total: result.total || 0,
-                });
-            } catch (err) {
-                console.error('Failed to fetch client sales:', err);
-                setSalesData({ data: [], total: 0 });
-            } finally {
-                setSalesLoading(false);
-            }
-        };
-
-        doFetch();
-    }, [show, client?.IdCliente, dateRange, salesPage, showNoe]);
-
-    // Fetch sales for trend chart
-    useEffect(() => {
-        if (!show || !client?.IdCliente || !summary.totalCount) {
-            setChartData([]);
-            return;
-        }
-
-        const doFetch = async () => {
-            setChartLoading(true);
-            try {
-                const limit = Math.min(summary.totalCount, CHART_LIMIT);
-                const result = await fetchClientSales(client.IdCliente, {
-                    from: dateRange.from,
-                    to: dateRange.to,
-                    page: 1,
-                    limit,
-                    showNoe,
-                });
-                const aggregated = aggregateSalesByMonth(result.data || []);
-                setChartData([{ id: 'Ventas', data: aggregated }]);
-            } catch (err) {
-                console.error('Failed to fetch chart sales:', err);
-                setChartData([]);
-            } finally {
-                setChartLoading(false);
-            }
-        };
-
-        doFetch();
-    }, [show, client?.IdCliente, dateRange, showNoe, summary.totalCount]);
+    const chartData = useMemo(() => {
+        if (!chartSalesData?.data?.length) return [];
+        const aggregated = aggregateSalesByMonth(chartSalesData.data);
+        return [{ id: 'Ventas', data: aggregated }];
+    }, [chartSalesData]);
 
     const handleDateRangeChange = ({ from, to }) => {
         setDateRange({ from, to });
         setSalesPage(1);
     };
 
-    const totalPages = Math.ceil(salesData.total / LIMIT);
+    const totalPages = Math.ceil((salesData?.total || 0) / LIMIT);
 
     const stats = useMemo(
         () => [
             {
                 label: 'Total Ventas',
-                value: formatCurrency(summary.totalAmount),
+                value: formatCurrency(summary?.totalAmount ?? 0),
                 variant: 'primary',
                 icon: IconSales,
             },
             {
                 label: '# Ventas',
-                value: String(summary.totalCount || '0'),
+                value: String(summary?.totalCount || '0'),
                 variant: 'success',
                 icon: IconHash,
             },
             {
                 label: 'Promedio Ticket',
-                value: summary.avgTicket !== null ? formatCurrency(summary.avgTicket) : 'N/A',
+                value:
+                    summary?.avgTicket !== null && summary?.avgTicket !== undefined
+                        ? formatCurrency(summary.avgTicket)
+                        : 'N/A',
                 variant: 'info',
                 icon: IconTicket,
             },
             {
                 label: 'Promedio Días',
-                value: summary.avgDaysBetweenSales !== null ? `${summary.avgDaysBetweenSales} días` : 'N/A',
+                value:
+                    summary?.avgDaysBetweenSales !== null && summary?.avgDaysBetweenSales !== undefined
+                        ? `${summary.avgDaysBetweenSales} días`
+                        : 'N/A',
                 variant: 'warning',
                 icon: IconCalendar,
             },
@@ -395,13 +340,13 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
             <div className="card-header">
                 <h5>Ventas</h5>
                 <Badge bg="secondary" pill>
-                    {salesData.total} registros
+                    {salesData?.total ?? 0} registros
                 </Badge>
             </div>
             <div className="card-body">
                 <div className="table-container">
                     <Table
-                        data={salesData.data}
+                        data={salesData?.data || []}
                         columns={[
                             { Header: 'Vendedor', accessor: 'vendedor' },
                             {
@@ -419,7 +364,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                             enabled: true,
                             page: salesPage,
                             totalPages,
-                            totalRows: salesData.total,
+                            totalRows: salesData?.total ?? 0,
                             pageSize: LIMIT,
                             onPageChange: setSalesPage,
                         }}
@@ -428,6 +373,10 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
             </div>
         </div>
     );
+
+    if (summaryError) {
+        console.error('Client dashboard error:', summaryError);
+    }
 
     return (
         <Modal show={show} size="xl" onHide={onClose} backdrop="static" scrollable className="client-dashboard-modal">
@@ -453,7 +402,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
 
                 <div className="stats-row">
                     {stats.map((stat) => (
-                        <StatCard key={stat.label} {...stat} loading={loading} />
+                        <StatCard key={stat.label} {...stat} loading={summaryLoading} />
                     ))}
                 </div>
 

@@ -1,56 +1,43 @@
-import { fetchBestProviders } from 'api/providers';
 import DateRangePicker from 'components/DateRangePicker';
 import ProviderDashboardModal from 'components/ProviderDashboardModal';
 import ProviderReportCard from 'components/ProviderReportCard';
 import ProvidersTable from 'components/ProvidersTable';
 import Sidebar from 'components/Sidebar';
 import { ShowNoeContext } from 'context/show_noe';
+import { useBestProviders } from 'hooks/useProviders';
 import debounce from 'lodash.debounce';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 
 const ProveedoresPage = () => {
-    const [data, setData] = useState([]);
-    const [filteredData, setFilteredData] = useState([]);
     const [dateRange, setDateRange] = useState({
         from: DateTime.now().startOf('month').toISODate(),
         to: DateTime.now().toISODate(),
     });
-    const [loading, setLoading] = useState(false);
     const [activeView, setActiveView] = useState('providers');
     const [mode, setMode] = useState('ventas');
     const [selectedProvider, setSelectedProvider] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [modalKey, setModalKey] = useState(0);
+    const [filteredData, setFilteredData] = useState([]);
 
     const { showNoe } = useContext(ShowNoeContext);
 
+    const { data: bestProviders = [], isLoading } = useBestProviders(dateRange, showNoe, mode);
+
     const onFilter = debounce((searchTerm) => {
         if (!searchTerm) {
-            setFilteredData(data);
+            setFilteredData(bestProviders);
             return;
         }
-        const filtered = data.filter((f) => f.proveedor.toLowerCase().includes(searchTerm.toLowerCase()));
+        const filtered = bestProviders.filter((f) => f.proveedor.toLowerCase().includes(searchTerm.toLowerCase()));
         setFilteredData(filtered);
     }, 500);
 
-    const handleDateRangeChange = useCallback(
-        async ({ from, to }) => {
-            setLoading(true);
-            const response = await fetchBestProviders({ from, to }, showNoe, mode);
-            setDateRange({ from, to });
-            setData(response);
-            setFilteredData(response);
-            setLoading(false);
-        },
-        [showNoe, mode],
-    );
-
-    useEffect(() => {
-        handleDateRangeChange(dateRange);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mode]);
+    const handleDateRangeChange = useCallback(({ from, to }) => {
+        setDateRange({ from, to });
+    }, []);
 
     const handleModeChange = useCallback((newMode) => {
         setMode(newMode);
@@ -118,9 +105,9 @@ const ProveedoresPage = () => {
                             <div className="row justify-content-center g-3">
                                 <div className="col-12">
                                     <ProviderReportCard
-                                        data={filteredData}
+                                        data={filteredData.length ? filteredData : bestProviders}
                                         onFilter={onFilterCallback}
-                                        loading={loading}
+                                        loading={isLoading}
                                         mode={mode}
                                         onModeChange={handleModeChange}
                                     />

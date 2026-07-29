@@ -1,9 +1,9 @@
-import { getComisionInfo, updateComisionInfo } from 'api/employees';
-import { useEffect, useState } from 'react';
+import { updateComisionInfo } from 'api/employees';
+import { useComisionInfo } from 'hooks/useEmployees';
+import { useState } from 'react';
 import { Alert, Button, Modal, Spinner } from 'react-bootstrap';
 
 const CommissionModal = ({ employee, show, onClose }) => {
-    const [commissionInfo, setCommissionInfo] = useState({ data: [], loading: false });
     const [formData, setFormData] = useState({});
     const [submissionState, setSubmissionState] = useState({
         loading: false,
@@ -11,16 +11,11 @@ const CommissionModal = ({ employee, show, onClose }) => {
         message: '',
     });
 
-    useEffect(() => {
-        setCommissionInfo({ ...commissionInfo, loading: true });
-        getComisionInfo(employee.id).then((data) => {
-            setCommissionInfo({ data, loading: false });
-        });
-    }, []);
+    const { data: commissionData, isLoading } = useComisionInfo(employee?.id, show && !!employee?.id);
 
     const sanitizedFormData = () => {
         const data = {};
-        Object.keys(formData).map((key) => {
+        Object.keys(formData).forEach((key) => {
             if (formData[key]) {
                 data[key] = Number(formData[key]);
             }
@@ -42,12 +37,12 @@ const CommissionModal = ({ employee, show, onClose }) => {
     };
 
     const modalBody = () => {
-        if (commissionInfo.data.error) {
-            return <Alert variant="danger">{commissionInfo.data.error.message}</Alert>;
-        } else if (commissionInfo.loading) {
+        if (commissionData?.error) {
+            return <Alert variant="danger">{commissionData.error.message}</Alert>;
+        } else if (isLoading) {
             return <Spinner animation="border" />;
-        } else {
-            return commissionInfo.data.map((info) => {
+        } else if (commissionData) {
+            return commissionData.map((info) => {
                 return (
                     <div key={info.groupId} className="d-flex flex-column col-sm-4">
                         <label className="form-label">{info.group}</label>
@@ -70,6 +65,7 @@ const CommissionModal = ({ employee, show, onClose }) => {
                 );
             });
         }
+        return null;
     };
 
     return (
