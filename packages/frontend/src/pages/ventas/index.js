@@ -10,7 +10,11 @@ import DesgloseView from './DesgloseView';
 import InvoicesView from './InvoicesView';
 
 const VALID_VIEWS = ['dashboard', 'desglose', 'despacho'];
-const DEFAULT_FROM = DateTime.now().startOf('year').toISODate();
+const DEFAULT_FROM_BY_VIEW = {
+    dashboard: DateTime.now().startOf('year').toISODate(),
+    desglose: DateTime.now().startOf('day').toISODate(),
+    despacho: DateTime.now().startOf('day').toISODate(),
+};
 const DEFAULT_TO = DateTime.now().toISODate();
 
 const VentasPage = () => {
@@ -26,7 +30,7 @@ const VentasPage = () => {
 
     const initialView = VALID_VIEWS.includes(urlView) ? urlView : 'dashboard';
     const initialDateRange = {
-        from: urlFrom || DEFAULT_FROM,
+        from: urlFrom || DEFAULT_FROM_BY_VIEW[initialView] || DEFAULT_TO,
         to: urlTo || DEFAULT_TO,
     };
 
