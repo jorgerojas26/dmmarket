@@ -34,11 +34,13 @@ export function useClientRoutes(showNoe, enabled = true) {
 }
 
 /**
- * Client aggregate dashboard (KPIs + charts).
+ * Client aggregate dashboard (KPIs + charts). `ruta` optionally scopes every
+ * KPI to a single route (undefined = all clients).
  */
-export function useClientsDashboard(dateRange, showNoe) {
-    const key = dateRange?.from && dateRange?.to ? ['clients-dashboard', dateRange.from, dateRange.to, showNoe] : null;
-    return useSWR(key, () => fetchClientsDashboard(dateRange, showNoe), { keepPreviousData: true });
+export function useClientsDashboard(dateRange, showNoe, ruta) {
+    const key =
+        dateRange?.from && dateRange?.to ? ['clients-dashboard', dateRange.from, dateRange.to, showNoe, ruta] : null;
+    return useSWR(key, () => fetchClientsDashboard(dateRange, showNoe, ruta), { keepPreviousData: true });
 }
 
 /**

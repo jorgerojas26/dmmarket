@@ -26,8 +26,8 @@ const nivoTheme = {
     },
 };
 
-const ClientsDashboard = ({ dateRange, showNoe }) => {
-    const { data, error, isLoading } = useClientsDashboard(dateRange, showNoe);
+const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
+    const { data, error, isLoading } = useClientsDashboard(dateRange, showNoe, ruta);
 
     // ── Derived chart data ──
 
@@ -61,6 +61,16 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
             'Revenue ($)': b.revenue,
         }));
     }, [data?.inactiveBuckets]);
+
+    const coverageRoutes = useMemo(
+        () =>
+            (data?.coverage?.routes || []).map((r) => ({
+                ...r,
+                Asignados: r.asignados,
+                Activos: r.activos,
+            })),
+        [data?.coverage?.routes],
+    );
 
     const kpis = data?.kpis;
 
@@ -212,6 +222,14 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
                         </div>
                         <div>
                             <KpiCard
+                                label={ruta ? 'Cobertura Ruta' : 'Cobertura Periodo'}
+                                value={formatPercent(kpis?.activePercent)}
+                                icon="percent"
+                                accent="cyan"
+                            />
+                        </div>
+                        <div>
+                            <KpiCard
                                 label="Concentración Top 5"
                                 value={formatPercent(kpis?.concentration?.top5)}
                                 icon="chart"
@@ -242,6 +260,16 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
                                 accent="pink"
                             />
                         </div>
+                        {!ruta && (
+                            <div>
+                                <KpiCard
+                                    label="Clientes Sin Ruta"
+                                    value={formatNumber(kpis?.withoutRoute)}
+                                    icon="user"
+                                    accent="orange"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -318,6 +346,73 @@ const ClientsDashboard = ({ dateRange, showNoe }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Route coverage: cartera by route */}
+            {coverageRoutes.length > 0 && (
+                <div className="row g-3 mb-4">
+                    <div className="col-12">
+                        <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
+                            <div className="dashboard-inline-title">Cartera por Ruta</div>
+                            <div style={{ height: 300 }}>
+                                <ResponsiveBar
+                                    data={coverageRoutes}
+                                    theme={nivoTheme}
+                                    keys={['Asignados', 'Activos']}
+                                    indexBy="Id_Ruta"
+                                    margin={{ top: 10, right: 110, bottom: 40, left: 50 }}
+                                    colors={['#3b82f6', '#22c55e']}
+                                    borderRadius={3}
+                                    axisBottom={{
+                                        tickSize: 5,
+                                        tickPadding: 5,
+                                        tickRotation: -25,
+                                    }}
+                                    axisLeft={{
+                                        tickSize: 5,
+                                        tickPadding: 5,
+                                    }}
+                                    labelSkipWidth={16}
+                                    labelSkipHeight={14}
+                                    enableGridY={true}
+                                    legends={[
+                                        {
+                                            dataFrom: 'keys',
+                                            anchor: 'right',
+                                            direction: 'column',
+                                            translateX: 100,
+                                            itemWidth: 80,
+                                            itemHeight: 18,
+                                            itemsSpacing: 4,
+                                            symbolSize: 12,
+                                            symbolShape: 'square',
+                                            itemTextColor: '#adb5bd',
+                                        },
+                                    ]}
+                                    tooltip={({ id, value, data }) => (
+                                        <div
+                                            style={{
+                                                background: '#1a1d21',
+                                                padding: '6px 12px',
+                                                border: '1px solid #2f3338',
+                                                borderRadius: 6,
+                                                fontSize: 12,
+                                                color: '#e9ecef',
+                                            }}
+                                        >
+                                            <strong>{data.Nombre}</strong>
+                                            <br />
+                                            {id}: {formatNumber(value)}
+                                            <br />
+                                            Cobertura: {formatPercent(data.coberturaPct)} ·{' '}
+                                            {formatPercent(data.sharePct)} de los clientes
+                                        </div>
+                                    )}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Charts Row 2: Waterfall + Inactive Buckets */}
             <div className="row g-3 mb-4">

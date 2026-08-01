@@ -38,8 +38,11 @@ export const fetchClientSummary = async (clientId, { from, to, showNoe }) => {
     return response.json();
 };
 
-export const fetchClientsDashboard = async (dateRange, showNoe) => {
-    const response = await fetch(`${BASE_URL}/dashboard?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}`);
+export const fetchClientsDashboard = async (dateRange, showNoe, ruta) => {
+    const rutaParam = ruta ? `&ruta=${encodeURIComponent(ruta)}` : '';
+    const response = await fetch(
+        `${BASE_URL}/dashboard?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}${rutaParam}`,
+    );
     return response.json();
 };
 

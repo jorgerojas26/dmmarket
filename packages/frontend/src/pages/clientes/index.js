@@ -160,13 +160,36 @@ const ClientesPage = () => {
                     <section className={activeView === 'dashboard' ? 'd-flex flex-column gap-3' : 'd-none'}>
                         <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
                             <h4 className="m-0 text-light">Dashboard de Clientes</h4>
-                            <DateRangePicker
-                                initialFrom={DateTime.now().startOf('month').toISODate()}
-                                initialTo={DateTime.now().toISODate()}
-                                onChange={handleDateRangeChange}
-                            />
+                            <div className="d-flex flex-wrap gap-3">
+                                <div style={{ minWidth: '220px' }}>
+                                    <Select
+                                        options={routeOptions}
+                                        value={selectedRuta}
+                                        onChange={handleRutaChange}
+                                        placeholder="Todas las rutas"
+                                        isClearable
+                                        isLoading={routesLoading}
+                                        styles={darkSelectStyles}
+                                        classNamePrefix="search-select"
+                                        menuPortalTarget={document.body}
+                                        menuPlacement="auto"
+                                        loadingMessage={() => 'Cargando...'}
+                                        noOptionsMessage={() => 'Sin resultados'}
+                                    />
+                                </div>
+                                <DateRangePicker
+                                    initialFrom={DateTime.now().startOf('month').toISODate()}
+                                    initialTo={DateTime.now().toISODate()}
+                                    onChange={handleDateRangeChange}
+                                />
+                            </div>
                         </div>
-                        <ClientsDashboard key={dashboardRefreshKey} dateRange={dateRange} showNoe={showNoe} />
+                        <ClientsDashboard
+                            key={dashboardRefreshKey}
+                            dateRange={dateRange}
+                            showNoe={showNoe}
+                            ruta={selectedRuta?.value}
+                        />
                     </section>
                 </div>
             </div>
