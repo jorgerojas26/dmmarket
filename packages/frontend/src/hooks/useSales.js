@@ -11,6 +11,7 @@ export function useFacturas(
         clientId,
         categoryId,
         employeeId,
+        ruta,
         page = 1,
         limit = 20,
         sortBy = 'fecha',
@@ -22,7 +23,21 @@ export function useFacturas(
 ) {
     const key =
         enabled && from && to
-            ? ['facturas', from, to, clientId, categoryId, employeeId, page, limit, sortBy, sortDir, search, showNoe]
+            ? [
+                  'facturas',
+                  from,
+                  to,
+                  clientId,
+                  categoryId,
+                  employeeId,
+                  ruta,
+                  page,
+                  limit,
+                  sortBy,
+                  sortDir,
+                  search,
+                  showNoe,
+              ]
             : null;
     return useSWR(
         key,
@@ -33,6 +48,7 @@ export function useFacturas(
                 clientId,
                 categoryId,
                 employeeId,
+                ruta,
                 page,
                 limit,
                 sortBy,
@@ -54,6 +70,7 @@ export function useProductos(
         clientId,
         categoryId,
         employeeId,
+        ruta,
         page = 1,
         limit = 20,
         sortBy = 'rawProfit',
@@ -65,7 +82,21 @@ export function useProductos(
 ) {
     const key =
         enabled && from && to
-            ? ['productos', from, to, clientId, categoryId, employeeId, page, limit, sortBy, sortDir, search, showNoe]
+            ? [
+                  'productos',
+                  from,
+                  to,
+                  clientId,
+                  categoryId,
+                  employeeId,
+                  ruta,
+                  page,
+                  limit,
+                  sortBy,
+                  sortDir,
+                  search,
+                  showNoe,
+              ]
             : null;
     return useSWR(
         key,
@@ -76,6 +107,7 @@ export function useProductos(
                 clientId,
                 categoryId,
                 employeeId,
+                ruta,
                 page,
                 limit,
                 sortBy,

@@ -8,6 +8,7 @@ const GET_FACTURAS = async (req, res) => {
     clientId,
     categoryId,
     employeeId,
+    ruta,
     page = 1,
     limit = 20,
     sortBy = "fecha",
@@ -59,6 +60,7 @@ const GET_FACTURAS = async (req, res) => {
         if (clientId) q.andWhere("mf.IdCliente", clientId);
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
+        if (ruta) q.andWhere("clientes.Ruta", ruta);
         if (search) {
           q.andWhere(function () {
             this.where("clientes.Empresa", "like", `%${search}%`).orWhere(`mf.${idInvoice}`, "like", `%${search}%`);
@@ -92,6 +94,7 @@ const GET_FACTURAS = async (req, res) => {
         if (clientId) q.andWhere("mf.IdCliente", clientId);
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
+        if (ruta) q.andWhere("clientes.Ruta", ruta);
         if (search) {
           q.andWhere(function () {
             this.where("clientes.Empresa", "like", `%${search}%`).orWhere(`mf.${idInvoice}`, "like", `%${search}%`);
@@ -127,6 +130,7 @@ const GET_PRODUCTOS = async (req, res) => {
     clientId,
     categoryId,
     employeeId,
+    ruta,
     page = 1,
     limit = 20,
     sortBy = "rawProfit",
@@ -169,6 +173,7 @@ const GET_PRODUCTOS = async (req, res) => {
       .innerJoin(`${masterTable} as mf`, function () {
         this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
       })
+      .innerJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
       .innerJoin("productos", "productos.IdProducto", "sf.IdProducto")
       .innerJoin("grupos", "grupos.idGrupo", "productos.Grupo")
       .whereBetween("mf.Fecha", [from, to])
@@ -176,6 +181,7 @@ const GET_PRODUCTOS = async (req, res) => {
         if (clientId) q.andWhere("mf.IdCliente", clientId);
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
+        if (ruta) q.andWhere("clientes.Ruta", ruta);
         if (search) {
           q.andWhere("productos.Descripcion", "like", `%${search}%`);
         }
@@ -196,6 +202,7 @@ const GET_PRODUCTOS = async (req, res) => {
       .innerJoin(`${masterTable} as mf`, function () {
         this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
       })
+      .innerJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
       .innerJoin("productos", "productos.IdProducto", "sf.IdProducto")
       .innerJoin("grupos", "grupos.idGrupo", "productos.Grupo")
       .whereBetween("mf.Fecha", [from, to])
@@ -203,6 +210,7 @@ const GET_PRODUCTOS = async (req, res) => {
         if (clientId) q.andWhere("mf.IdCliente", clientId);
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
+        if (ruta) q.andWhere("clientes.Ruta", ruta);
         if (search) {
           q.andWhere("productos.Descripcion", "like", `%${search}%`);
         }

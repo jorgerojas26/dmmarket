@@ -6,14 +6,17 @@ import FacturaDetailModal from 'components/FacturaDetailModal';
 import facturasColumns from 'components/FacturasTable/columns';
 import GroupSearch from 'components/GroupSearch';
 import SaleReportTable from 'components/SaleReportTable';
+import { darkSelectStyles } from 'components/selectStyles';
 import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
+import { useClientRoutes } from 'hooks/useClients';
 import { useFacturas, useProductos } from 'hooks/useSales';
 import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
+import Select from 'react-select';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -38,6 +41,8 @@ const DesgloseView = ({ isActive }) => {
     const urlGroupName = searchParams.get('groupName');
     const urlEmployeeId = searchParams.get('employeeId');
     const urlEmployeeName = searchParams.get('employeeName');
+    const urlRutaId = searchParams.get('rutaId');
+    const urlRutaName = searchParams.get('rutaName');
 
     const today = DateTime.now().toISODate();
 
@@ -49,6 +54,7 @@ const DesgloseView = ({ isActive }) => {
     const initialClient = urlClientId ? { IdCliente: urlClientId, name: urlClientName || '' } : null;
     const initialGroup = urlGroupId ? { groupId: urlGroupId, name: urlGroupName || '' } : null;
     const initialEmployee = urlEmployeeId ? { id: urlEmployeeId, name: urlEmployeeName || '' } : null;
+    const initialRuta = urlRutaId ? { value: urlRutaId, label: urlRutaName || urlRutaId } : null;
 
     // Date range — defaults to today
     const [dateRange, setDateRange] = useState(initialDateRange);
@@ -57,6 +63,7 @@ const DesgloseView = ({ isActive }) => {
     const [selectedClient, setSelectedClient] = useState(initialClient);
     const [selectedGroup, setSelectedGroup] = useState(initialGroup);
     const [selectedEmployee, setSelectedEmployee] = useState(initialEmployee);
+    const [selectedRuta, setSelectedRuta] = useState(initialRuta);
 
     // ---- Facturas table state ----
     const [facturasPage, setFacturasPage] = useState(1);
@@ -102,8 +109,16 @@ const DesgloseView = ({ isActive }) => {
             params.delete('employeeName');
         }
 
+        if (selectedRuta?.value) {
+            params.set('rutaId', selectedRuta.value);
+            params.set('rutaName', selectedRuta.label || '');
+        } else {
+            params.delete('rutaId');
+            params.delete('rutaName');
+        }
+
         history.replace({ search: params.toString() });
-    }, [dateRange, selectedClient, selectedGroup, selectedEmployee, history]);
+    }, [dateRange, selectedClient, selectedGroup, selectedEmployee, selectedRuta, history]);
 
     // --- SWR hooks ---
     const { data: facturasRes, isLoading: facturasLoading } = useFacturas(
@@ -113,6 +128,7 @@ const DesgloseView = ({ isActive }) => {
             clientId: selectedClient?.IdCliente,
             categoryId: selectedGroup?.groupId,
             employeeId: selectedEmployee?.id,
+            ruta: selectedRuta?.value,
             page: facturasPage,
             limit: 20,
             sortBy: facturasSort.sortBy,
@@ -130,6 +146,7 @@ const DesgloseView = ({ isActive }) => {
             clientId: selectedClient?.IdCliente,
             categoryId: selectedGroup?.groupId,
             employeeId: selectedEmployee?.id,
+            ruta: selectedRuta?.value,
             page: productosPage,
             limit: 20,
             sortBy: productosSort.sortBy,
@@ -165,6 +182,21 @@ const DesgloseView = ({ isActive }) => {
         [selectedEmployee],
     );
 
+    // --- Routes (for the route filter) ---
+    const { data: routes = [], isLoading: routesLoading } = useClientRoutes(showNoe);
+
+    const routeOptions = useMemo(
+        () =>
+            routes.map((route) => ({
+                value: route.Id_Ruta,
+                label:
+                    route.Nombre && route.Nombre !== route.Id_Ruta
+                        ? `${route.Nombre} (${route.Id_Ruta})`
+                        : route.Id_Ruta,
+            })),
+        [routes],
+    );
+
     // ---- Handlers ----
 
     const handleDateRangeChange = useCallback(({ from, to }) => {
@@ -187,6 +219,12 @@ const DesgloseView = ({ isActive }) => {
 
     const handleEmployeeSelect = useCallback((employee) => {
         setSelectedEmployee(employee);
+        setFacturasPage(1);
+        setProductosPage(1);
+    }, []);
+
+    const handleRutaSelect = useCallback((option) => {
+        setSelectedRuta(option);
         setFacturasPage(1);
         setProductosPage(1);
     }, []);
@@ -237,6 +275,7 @@ const DesgloseView = ({ isActive }) => {
                 clientId: selectedClient?.IdCliente,
                 categoryId: selectedGroup?.groupId,
                 employeeId: selectedEmployee?.id,
+                ruta: selectedRuta?.value,
                 page: 1,
                 limit: facturasTotal || 9999,
                 sortBy: facturasSort.sortBy,
@@ -269,6 +308,7 @@ const DesgloseView = ({ isActive }) => {
 
             const filterLabel = [
                 dateRange.from && dateRange.to ? `${dateRange.from} — ${dateRange.to}` : '',
+                selectedRuta?.label ? `Ruta: ${selectedRuta.label}` : '',
                 selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
                 selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
                 selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
@@ -322,6 +362,7 @@ const DesgloseView = ({ isActive }) => {
         selectedClient,
         selectedGroup,
         selectedEmployee,
+        selectedRuta,
         facturasSort,
         facturasSearch,
         facturasTotal,
@@ -336,6 +377,7 @@ const DesgloseView = ({ isActive }) => {
                 clientId: selectedClient?.IdCliente,
                 categoryId: selectedGroup?.groupId,
                 employeeId: selectedEmployee?.id,
+                ruta: selectedRuta?.value,
                 page: 1,
                 limit: productosTotal || 9999,
                 sortBy: productosSort.sortBy,
@@ -365,6 +407,7 @@ const DesgloseView = ({ isActive }) => {
 
             const filterLabel = [
                 dateRange.from && dateRange.to ? `${dateRange.from} — ${dateRange.to}` : '',
+                selectedRuta?.label ? `Ruta: ${selectedRuta.label}` : '',
                 selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
                 selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
                 selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
@@ -416,6 +459,7 @@ const DesgloseView = ({ isActive }) => {
         selectedClient,
         selectedGroup,
         selectedEmployee,
+        selectedRuta,
         productosSort,
         productosSearch,
         productosTotal,
@@ -517,6 +561,22 @@ const DesgloseView = ({ isActive }) => {
 
             {/* Filter selectors */}
             <div className="d-flex flex-wrap gap-3 mb-3">
+                <div style={{ minWidth: '220px' }}>
+                    <Select
+                        options={routeOptions}
+                        value={selectedRuta}
+                        onChange={handleRutaSelect}
+                        placeholder="Todas las rutas"
+                        isClearable
+                        isLoading={routesLoading}
+                        styles={darkSelectStyles}
+                        classNamePrefix="search-select"
+                        menuPortalTarget={document.body}
+                        menuPlacement="auto"
+                        loadingMessage={() => 'Cargando...'}
+                        noOptionsMessage={() => 'Sin resultados'}
+                    />
+                </div>
                 <div style={{ minWidth: '220px' }}>
                     <ClientSearch onSelect={handleClientSelect} defaultValue={clientDefaultValue} />
                 </div>

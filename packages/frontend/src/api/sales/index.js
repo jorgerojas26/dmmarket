@@ -6,6 +6,7 @@ export const fetchFacturas = async ({
     clientId,
     categoryId,
     employeeId,
+    ruta,
     page = 1,
     limit = 20,
     sortBy = 'fecha',
@@ -24,6 +25,7 @@ export const fetchFacturas = async ({
     if (clientId) params.append('clientId', clientId);
     if (categoryId) params.append('categoryId', categoryId);
     if (employeeId) params.append('employeeId', employeeId);
+    if (ruta) params.append('ruta', ruta);
     if (search) params.append('search', search);
 
     const response = await fetch(`${BASE_URL}/facturas?${params.toString()}`);
@@ -36,6 +38,7 @@ export const fetchProductos = async ({
     clientId,
     categoryId,
     employeeId,
+    ruta,
     page = 1,
     limit = 20,
     sortBy = 'rawProfit',
@@ -54,6 +57,7 @@ export const fetchProductos = async ({
     if (clientId) params.append('clientId', clientId);
     if (categoryId) params.append('categoryId', categoryId);
     if (employeeId) params.append('employeeId', employeeId);
+    if (ruta) params.append('ruta', ruta);
     if (search) params.append('search', search);
 
     const response = await fetch(`${BASE_URL}/productos?${params.toString()}`);
