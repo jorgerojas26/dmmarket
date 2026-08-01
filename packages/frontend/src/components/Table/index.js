@@ -138,6 +138,10 @@ const Table = ({
     // ── layout ──
     /** Fill the parent's height (flex column): the table body stretches and scrolls internally. */
     fillHeight = false,
+
+    // ── sorted rows ──
+    /** Called with the displayed rows' originals (`Array`) whenever the sorted/filtered data changes. */
+    onSortedRowsChange,
 }) => {
     /* ── Plugins ── */
     const plugins = useMemo(() => {
@@ -202,6 +206,13 @@ const Table = ({
             dispatch({ type: actions.resetSelectedRows });
         }
     }, [clearSelectionSignal, dispatch]);
+
+    /* ── Notify sorted/filtered rows (for external consumers like PDF export) ── */
+    useEffect(() => {
+        if (onSortedRowsChange) {
+            onSortedRowsChange(rows.map((r) => r.original));
+        }
+    }, [rows, onSortedRowsChange]);
 
     /* ── Server‑side sort notifier ── */
     const prevSortByRef = useRef(null);

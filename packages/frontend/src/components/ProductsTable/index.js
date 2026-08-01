@@ -2,7 +2,7 @@ import CurrencyModal from 'components/Modals/CurrencyModal';
 import Table from 'components/Table';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { Card } from 'react-bootstrap';
 import { CurrencyRateContext } from '../../context/currency_rate';
 import pdf from './pdf';
@@ -15,10 +15,24 @@ const formatPeso = (value) => {
     return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
 };
 
+// Spanish-aware alphabetical sort: handles accents, ñ and case
+// (react-table's default alphanumeric compares raw UTF-16 code units).
+const textSortType = (rowA, rowB, columnId) => {
+    const a = String(rowA.values[columnId] ?? '');
+    const b = String(rowB.values[columnId] ?? '');
+    return a.localeCompare(b, 'es', { sensitivity: 'base', ignorePunctuation: true });
+};
+
 const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
 
     const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+
+    // Rows in the table's current sort order (for PDF export).
+    const sortedRowsRef = useRef([]);
+    const handleSortedRowsChange = useCallback((rows) => {
+        sortedRowsRef.current = rows;
+    }, []);
 
     const quantityTotal = useMemo(() => {
         if (!data) return 0;
@@ -30,21 +44,11 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
         return data.reduce((acc, item) => acc + (item.peso || 0), 0);
     }, [data]);
 
-    const sortedData = useMemo(() => {
-        if (!data) return [];
-        return [...data].sort((a, b) => {
-            return (
-                a.group.toLowerCase().localeCompare(b.group.toLowerCase()) ||
-                a.product.toLowerCase().localeCompare(b.product.toLowerCase())
-            );
-        });
-    }, [data]);
-
     const memoizedColumns = useMemo(
         () => [
-            { Header: 'Categoría', accessor: 'group' },
+            { Header: 'Categoría', accessor: 'group', sortType: textSortType },
             { Header: 'ID', accessor: 'productId' },
-            { Header: 'Producto', accessor: 'product' },
+            { Header: 'Producto', accessor: 'product', sortType: textSortType },
             { Header: 'Cantidad', accessor: 'quantity' },
             {
                 Header: 'Peso',
@@ -72,21 +76,19 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
             </Card.Header>
             <Card.Body>
                 <Table
-                    data={sortedData}
+                    data={data}
                     columns={memoizedColumns}
                     showFooter
                     summaries={summaries}
                     fillHeight
+                    onSortedRowsChange={handleSortedRowsChange}
                     print={{
                         enabled: true,
                         onGlobalPrint: () => setShowCurrencyModal(true),
                     }}
                     sorting={{
                         enabled: true,
-                        sortBy: [
-                            { id: 'group', desc: false },
-                            { id: 'product', desc: false },
-                        ],
+                        sortBy: [{ id: 'product', desc: false }],
                         resetOnDataChange: false,
                     }}
                     // Info bar only (no page controls): matches the invoices table chrome
@@ -102,7 +104,7 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                     show={showCurrencyModal}
                     onClose={() => setShowCurrencyModal(false)}
                     onSubmit={async (currency) => {
-                        let productsData = sortedData;
+                        let productsData = sortedRowsRef.current;
 
                         if (currency === 'Bs') {
                             productsData = productsData.map((item) => {
