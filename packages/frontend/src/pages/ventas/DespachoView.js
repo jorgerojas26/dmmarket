@@ -119,7 +119,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                     </Button>
                 )}
             </div>
-            <div className="row g-3">
+            <div className="row g-3" style={{ height: 'calc(100vh - 240px)' }}>
                 <div className="col-12 col-xl-6">
                     <InvoicesTable
                         data={invoices}
@@ -151,7 +151,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                     <ProductsTable
                         data={productsSummary}
                         totalSummary={invoicesTotalSummary}
-                        maxHeight="calc(100vh - 280px)"
+                        maxHeight="calc(100vh - 360px)"
                     />
                 </div>
             </div>

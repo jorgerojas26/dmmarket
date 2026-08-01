@@ -25,10 +25,11 @@ import './styles.css';
  * @param {boolean}        [props.multiSelect=false]                  - Enable checkbox column + multi‑select mode (requires `onRowSelect`). Supports Ctrl / Shift.
  * @param {Function}       [props.onRowClick]                         - Row‑click callback `(rowData)`.
  *
- * @param {object}         [props.sorting]                            - Server‑side sorting config.
+ * @param {object}         [props.sorting]                            - Sorting config. Server‑side when `onSort` is provided; client‑side (react‑table) otherwise.
  * @param {boolean}         props.sorting.enabled
  * @param {Array<{id: string, desc: boolean}>} [props.sorting.sortBy] - Initial sort state.
- * @param {Function}        props.sorting.onSort                      - Callback `(sortBy)` on header click.
+ * @param {Function}        props.sorting.onSort                      - Callback `(sortBy)` on header click (server‑side).
+ * @param {boolean}        [props.sorting.resetOnDataChange=true]     - Reset sort when `data` changes (react‑table default). Set `false` to keep the user's sort across data updates.
  *
  * @param {object}         [props.pagination]                         - Server‑side pagination config.
  * @param {boolean}         props.pagination.enabled
@@ -133,6 +134,10 @@ const Table = ({
     getRowId,
     /** Keep selection when `data` changes (react-table resets it by default). Enables cross-page multi-select. */
     preserveSelection = false,
+
+    // ── layout ──
+    /** Fill the parent's height (flex column): the table body stretches and scrolls internally. */
+    fillHeight = false,
 }) => {
     /* ── Plugins ── */
     const plugins = useMemo(() => {
@@ -152,6 +157,7 @@ const Table = ({
         if (sorting?.enabled) {
             opts.manualSortBy = !!sorting.onSort;
             opts.disableMultiSort = true;
+            if (sorting.resetOnDataChange === false) opts.autoResetSortBy = false;
             if (sorting.sortBy?.length) {
                 opts.initialState = { sortBy: sorting.sortBy };
             }
@@ -159,7 +165,7 @@ const Table = ({
 
         return opts;
         // sorting.sortBy intentionally omitted — initial value only.
-    }, [sorting?.enabled, columns, data, getRowId, preserveSelection]);
+    }, [sorting?.enabled, sorting?.resetOnDataChange, columns, data, getRowId, preserveSelection]);
 
     const { getTableProps, getTableBodyProps, headerGroups, footerGroups, rows, prepareRow, state, dispatch } =
         useTable(tableOptions, ...plugins);
@@ -684,8 +690,16 @@ const Table = ({
     );
 
     /* ── Render ── */
+    const tableContainerStyle = fillHeight
+        ? { flex: '1 1 auto', minHeight: 0, position: 'relative' }
+        : maxHeight != null
+          ? { maxHeight, position: 'relative' }
+          : { position: 'relative' };
+
     return (
-        <div>
+        <div
+            style={fillHeight ? { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 } : undefined}
+        >
             {onFilter && (
                 <div className="table-filter-container">
                     <input
@@ -696,17 +710,10 @@ const Table = ({
                 </div>
             )}
             {tableToolbar}
-            {maxHeight != null ? (
-                <div className="table-container" style={{ maxHeight, position: 'relative' }}>
-                    {tableElement}
-                    {spinner}
-                </div>
-            ) : (
-                <div style={{ position: 'relative' }}>
-                    {tableElement}
-                    {spinner}
-                </div>
-            )}
+            <div className="table-container" style={tableContainerStyle}>
+                {tableElement}
+                {spinner}
+            </div>
             {paginationBar}
         </div>
     );

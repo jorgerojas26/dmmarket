@@ -17,7 +17,7 @@ const InvoicesTable = ({
     const memoizedColumns = useMemo(() => columns, []);
 
     return (
-        <Card className="noselect">
+        <Card className="h-100 noselect">
             <Card.Header>
                 <h3>Facturas</h3>
             </Card.Header>
@@ -30,6 +30,7 @@ const InvoicesTable = ({
                     multiSelect
                     getRowId={(row) => row.invoiceId}
                     preserveSelection
+                    fillHeight
                     sorting={sorting}
                     pagination={pagination}
                     search={search}

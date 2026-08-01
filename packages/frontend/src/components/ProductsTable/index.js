@@ -3,7 +3,7 @@ import Table from 'components/Table';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useContext, useMemo, useState } from 'react';
-import { Button, Card } from 'react-bootstrap';
+import { Card } from 'react-bootstrap';
 import { CurrencyRateContext } from '../../context/currency_rate';
 import pdf from './pdf';
 
@@ -66,12 +66,9 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     );
 
     return (
-        <Card>
+        <Card className="h-100">
             <Card.Header>
-                <div className="d-flex w-100 justify-content-between">
-                    <h3>Productos</h3>
-                    <Button onClick={() => setShowCurrencyModal(true)}>Imprimir</Button>
-                </div>
+                <h3>Productos</h3>
             </Card.Header>
             <Card.Body>
                 <Table
@@ -79,7 +76,25 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                     columns={memoizedColumns}
                     showFooter
                     summaries={summaries}
-                    maxHeight={maxHeight}
+                    fillHeight
+                    print={{
+                        enabled: true,
+                        onGlobalPrint: () => setShowCurrencyModal(true),
+                    }}
+                    sorting={{
+                        enabled: true,
+                        sortBy: [
+                            { id: 'group', desc: false },
+                            { id: 'product', desc: false },
+                        ],
+                        resetOnDataChange: false,
+                    }}
+                    // Info bar only (no page controls): matches the invoices table chrome
+                    // so both tables end up exactly the same height.
+                    pagination={{
+                        enabled: true,
+                        totalRows: data?.length || 0,
+                    }}
                 />
             </Card.Body>
             {showCurrencyModal && (
