@@ -150,6 +150,8 @@ const GET_PRODUCTOS = async (req, res) => {
     switch (sortBy) {
       case "quantity":
         return knex.raw("SUM(sf.Cantidad)");
+      case "peso":
+        return knex.raw("SUM(sf.Cantidad * productos.Peso)");
       case "rawProfit":
         return knex.raw("SUM(sf.Precio * sf.Cantidad)");
       case "netProfit":
@@ -194,6 +196,7 @@ const GET_PRODUCTOS = async (req, res) => {
       .select(
         "productos.Descripcion as product",
         knex.raw("ROUND(SUM(sf.Cantidad), 3) as quantity"),
+        knex.raw("ROUND(SUM(sf.Cantidad * productos.Peso), 3) as peso"),
         knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as rawProfit"),
         knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as netProfit"),
         knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent"),

@@ -6,6 +6,7 @@ import FacturaDetailModal from 'components/FacturaDetailModal';
 import facturasColumns from 'components/FacturasTable/columns';
 import GroupSearch from 'components/GroupSearch';
 import SaleReportTable from 'components/SaleReportTable';
+import productosColumns from 'components/SaleReportTable/productosColumns';
 import { darkSelectStyles } from 'components/selectStyles';
 import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
@@ -388,10 +389,18 @@ const DesgloseView = ({ isActive }) => {
             const data = result?.data || [];
             const totalBruto = data.reduce((s, r) => s + (r.rawProfit || 0), 0);
             const totalUtilidad = data.reduce((s, r) => s + (r.netProfit || 0), 0);
+            const totalPeso = data.reduce((s, r) => s + (r.peso || 0), 0);
+            const formatPeso = (value) => {
+                const num = Number(value);
+                return Number.isNaN(num) || num === 0
+                    ? ''
+                    : num.toLocaleString(undefined, { maximumFractionDigits: 3 });
+            };
             const body = [
                 [
                     { text: 'Producto', style: 'th' },
                     { text: 'Cantidad', style: 'th' },
+                    { text: 'Peso', style: 'th' },
                     { text: 'Bruto', style: 'th' },
                     { text: 'Utilidad', style: 'th' },
                     { text: '%', style: 'th' },
@@ -399,6 +408,7 @@ const DesgloseView = ({ isActive }) => {
                 ...data.map((r) => [
                     r.product || '',
                     String(r.quantity != null ? Number(r.quantity).toFixed(2) : ''),
+                    formatPeso(r.peso),
                     formatCurrency(r.rawProfit),
                     formatCurrency(r.netProfit),
                     r.averageProfitPercent != null ? `${r.averageProfitPercent}%` : '',
@@ -424,12 +434,13 @@ const DesgloseView = ({ isActive }) => {
                         {
                             style: 'table',
                             table: {
-                                widths: ['*', 'auto', 'auto', 'auto', 'auto'],
+                                widths: ['*', 'auto', 'auto', 'auto', 'auto', 'auto'],
                                 body: [
                                     ...body,
                                     [
                                         { text: `Total`, style: 'total' },
                                         '',
+                                        { text: formatPeso(totalPeso), style: 'total' },
                                         { text: formatCurrency(totalBruto), style: 'total' },
                                         { text: formatCurrency(totalUtilidad), style: 'total' },
                                         '',
@@ -642,6 +653,7 @@ const DesgloseView = ({ isActive }) => {
                             <SaleReportTable
                                 data={productosData}
                                 loading={productosLoading}
+                                columns={productosColumns}
                                 maxHeight={620}
                                 sorting={{
                                     enabled: true,
