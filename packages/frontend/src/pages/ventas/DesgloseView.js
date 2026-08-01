@@ -128,7 +128,7 @@ const DesgloseView = ({ isActive }) => {
 
         if (selectedProveedor?.IdProveedor) {
             params.set('proveedorId', selectedProveedor.IdProveedor);
-            params.set('proveedorName', selectedProveedor.name || '');
+            params.set('proveedorName', selectedProveedor.Empresa || selectedProveedor.name || '');
         } else {
             params.delete('proveedorId');
             params.delete('proveedorName');
@@ -204,7 +204,11 @@ const DesgloseView = ({ isActive }) => {
     const proveedorDefaultValue = useMemo(
         () =>
             selectedProveedor
-                ? { key: selectedProveedor.IdProveedor, label: selectedProveedor.name || '', value: selectedProveedor }
+                ? {
+                      key: selectedProveedor.IdProveedor,
+                      label: selectedProveedor.Empresa || selectedProveedor.name || '',
+                      value: selectedProveedor,
+                  }
                 : null,
         [selectedProveedor],
     );
@@ -369,7 +373,9 @@ const DesgloseView = ({ isActive }) => {
                     selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
                     selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
                     selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
-                    selectedProveedor?.name ? `Proveedor: ${selectedProveedor.name}` : '',
+                    selectedProveedor?.Empresa || selectedProveedor?.name
+                        ? `Proveedor: ${selectedProveedor.Empresa || selectedProveedor.name}`
+                        : '',
                 ]
                     .filter(Boolean)
                     .join(' | ');
@@ -513,7 +519,9 @@ const DesgloseView = ({ isActive }) => {
                     selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
                     selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
                     selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
-                    selectedProveedor?.name ? `Proveedor: ${selectedProveedor.name}` : '',
+                    selectedProveedor?.Empresa || selectedProveedor?.name
+                        ? `Proveedor: ${selectedProveedor.Empresa || selectedProveedor.name}`
+                        : '',
                 ]
                     .filter(Boolean)
                     .join(' | ');
