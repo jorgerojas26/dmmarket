@@ -5,9 +5,11 @@ import { useClientRoutes } from 'hooks/useClients';
 import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
 import { useInvoiceList } from 'hooks/useInvoice';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button } from 'react-bootstrap';
 import Select from 'react-select';
 
 const LIMIT = 20;
+const EMPTY_INVOICES = [];
 
 const DespachoView = ({ dateRange, showNoe, isActive }) => {
     const [selectedRows, setSelectedRows] = useState([]);
@@ -18,12 +20,15 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     const [sortDir, setSortDir] = useState('desc');
     const [search, setSearch] = useState('');
     const [selectedRuta, setSelectedRuta] = useState(null);
+    const [clearSelectionSignal, setClearSelectionSignal] = useState(0);
 
     const { productsSummary, invoicesTotalSummary } = useInvoiceDispatch(selectedRows);
 
-    // Reset page when date range or route changes
+    // Reset page and selection when date range or route changes
     useEffect(() => {
         setPage(1);
+        setSelectedRows([]);
+        setClearSelectionSignal((key) => key + 1);
     }, [dateRange.from, dateRange.to, selectedRuta]);
 
     const { data: routes = [], isLoading: routesLoading } = useClientRoutes(showNoe, isActive);
@@ -56,7 +61,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
         isActive,
     );
 
-    const invoices = invoiceRes?.data || [];
+    const invoices = invoiceRes?.data || EMPTY_INVOICES;
     const total = invoiceRes?.pagination?.total || 0;
 
     // Handlers
@@ -75,6 +80,10 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     const handleSearch = useCallback((value) => {
         setSearch(value || '');
         setPage(1);
+    }, []);
+
+    const handleClearSelection = useCallback(() => {
+        setClearSelectionSignal((key) => key + 1);
     }, []);
 
     const sortByArr = [{ id: sortBy, desc: sortDir === 'desc' }];
@@ -99,6 +108,16 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                         noOptionsMessage={() => 'Sin resultados'}
                     />
                 </div>
+                {selectedRows.length > 0 && (
+                    <Button
+                        variant="outline-danger"
+                        size="sm"
+                        className="ms-auto align-self-center"
+                        onClick={handleClearSelection}
+                    >
+                        Limpiar selección ({selectedRows.length})
+                    </Button>
+                )}
             </div>
             <div className="row g-3">
                 <div className="col-12 col-xl-6">
@@ -125,6 +144,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                             placeholder: 'Buscar por cliente o factura...',
                             onSearch: handleSearch,
                         }}
+                        clearSelectionSignal={clearSelectionSignal}
                     />
                 </div>
                 <div className="col-12 col-xl-6">

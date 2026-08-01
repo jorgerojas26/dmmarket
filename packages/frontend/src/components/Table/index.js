@@ -1,6 +1,6 @@
 import debounce from 'lodash.debounce';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRowSelect, useSortBy, useTable } from 'react-table';
+import { actions, useRowSelect, useSortBy, useTable } from 'react-table';
 import './styles.css';
 
 /**
@@ -21,7 +21,7 @@ import './styles.css';
  * @param {boolean}        [props.showFooter=false]                   - Show footer row.
  * @param {Object<string, (string|number)>} [props.summaries]         - Pre‑computed summary values keyed by column `accessor`.
  *
- * @param {Function}       [props.onRowSelect]                        - Row‑select callback `(rowData)`. Enables clickable rows; with `multiSelect` enables checkbox multi‑select (callback receives array).
+ * @param {Function}       [props.onRowSelect]                        - Row‑select callback `(rowData)`. Enables clickable rows; with `multiSelect` enables checkbox multi‑select (callback receives the array of selected rows — all pages when `preserveSelection` is on).
  * @param {boolean}        [props.multiSelect=false]                  - Enable checkbox column + multi‑select mode (requires `onRowSelect`). Supports Ctrl / Shift.
  * @param {Function}       [props.onRowClick]                         - Row‑click callback `(rowData)`.
  *
@@ -125,6 +125,14 @@ const Table = ({
 
     // ── print ──
     print,
+
+    // ── selection reset ──
+    /** Changing this value clears all selected rows */
+    clearSelectionSignal,
+    /** Stable row id accessor `(row) => id`. Required for selection to survive `data` changes (pagination, search, sort). */
+    getRowId,
+    /** Keep selection when `data` changes (react-table resets it by default). Enables cross-page multi-select. */
+    preserveSelection = false,
 }) => {
     /* ── Plugins ── */
     const plugins = useMemo(() => {
@@ -138,6 +146,9 @@ const Table = ({
     const tableOptions = useMemo(() => {
         const opts = { columns, data };
 
+        if (getRowId) opts.getRowId = getRowId;
+        if (preserveSelection) opts.autoResetSelectedRows = false;
+
         if (sorting?.enabled) {
             opts.manualSortBy = !!sorting.onSort;
             opts.disableMultiSort = true;
@@ -148,22 +159,43 @@ const Table = ({
 
         return opts;
         // sorting.sortBy intentionally omitted — initial value only.
-    }, [sorting?.enabled, columns, data]);
+    }, [sorting?.enabled, columns, data, getRowId, preserveSelection]);
 
-    const { getTableProps, getTableBodyProps, headerGroups, footerGroups, rows, prepareRow, state } = useTable(
-        tableOptions,
-        ...plugins,
-    );
+    const { getTableProps, getTableBodyProps, headerGroups, footerGroups, rows, prepareRow, state, dispatch } =
+        useTable(tableOptions, ...plugins);
 
     /* ── Sync selection state → parent callback ── */
+    // Cache selected row objects by stable row id so the callback can report
+    // selections accumulated across pages (see `preserveSelection`).
+    const selectedRowsCacheRef = useRef({});
+    const lastSelectionRef = useRef(null);
+
     useEffect(() => {
         if (onRowSelect && multiSelect) {
-            const selected = rows.filter((r) => r.isSelected).map((r) => r.original);
-            if (selected.length > 0) {
-                onRowSelect(selected);
+            const cache = selectedRowsCacheRef.current;
+            rows.forEach((r) => {
+                if (r.isSelected) cache[r.id] = r.original;
+                else delete cache[r.id];
+            });
+            const allSelected = Object.keys(state.selectedRowIds)
+                .map((id) => cache[id])
+                .filter(Boolean);
+            const prev = lastSelectionRef.current;
+            const changed =
+                prev === null || prev.length !== allSelected.length || prev.some((row, i) => row !== allSelected[i]);
+            if (changed) {
+                lastSelectionRef.current = allSelected;
+                onRowSelect(allSelected);
             }
         }
     }, [state.selectedRowIds]);
+
+    /* ── Global selection clear (signal from parent) ── */
+    useEffect(() => {
+        if (clearSelectionSignal && dispatch) {
+            dispatch({ type: actions.resetSelectedRows });
+        }
+    }, [clearSelectionSignal, dispatch]);
 
     /* ── Server‑side sort notifier ── */
     const prevSortByRef = useRef(null);
