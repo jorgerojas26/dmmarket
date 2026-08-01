@@ -111,6 +111,7 @@ table tfoot td {
     }
 }
 .dashboard-kpi-card {
+    position: relative;
     background: #1e2126;
     border-radius: 12px;
     border: 1px solid #2d3138;
@@ -751,4 +752,88 @@ input:checked + .slider:before {
 .search-select__multi-value__remove:hover {
     background: #c0392b;
     color: #e4e6ea;
+}
+
+/* ── KPI help button + popover (dark theme) ── */
+.kpi-help-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #2d3138;
+    background: transparent;
+    color: #8b92a0;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition:
+        color 0.15s,
+        border-color 0.15s;
+}
+.kpi-help-btn:hover {
+    color: #e4e6ea;
+    border-color: #4b5563;
+}
+.kpi-help-popover.popover {
+    --bs-popover-bg: #1e2126;
+    --bs-popover-border-color: #2d3138;
+    background: #1e2126;
+    border-color: #2d3138;
+    max-width: 340px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+.kpi-help-popover .popover-body {
+    color: #cbd5e1;
+    font-size: 12.5px;
+    line-height: 1.55;
+    padding: 12px 14px;
+}
+.kpi-help-line {
+    margin-bottom: 6px;
+}
+.kpi-help-line:last-child {
+    margin-bottom: 0;
+}
+.kpi-help-k {
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+/* ── Panel help button (charts) ── */
+.panel-help-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.panel-help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid #2d3138;
+    background: transparent;
+    color: #8b92a0;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    margin-left: 2px;
+    padding: 0;
+    flex-shrink: 0;
+    transition:
+        color 0.15s,
+        border-color 0.15s;
+}
+.panel-help-btn:hover {
+    color: #e4e6ea;
+    border-color: #4b5563;
 }

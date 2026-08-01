@@ -6,6 +6,7 @@ import { DateTime } from 'luxon';
 import { useMemo } from 'react';
 import { formatCurrency, formatNumber, formatPercent } from 'utils/format';
 import KpiCard from './KpiCard';
+import PanelHelpTitle from './PanelHelpTitle';
 import RankedList from './RankedList';
 
 const nivoTheme = {
@@ -210,6 +211,11 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                 value={formatNumber(kpis?.totalClients)}
                                 icon="user"
                                 accent="blue"
+                                help={{
+                                    que: 'Cuántos clientes tiene registrados la empresa (o cuántos tiene la ruta seleccionada).',
+                                    leer: 'Es el tamaño de la cartera y la base de los demás indicadores.',
+                                    servir: 'Ver si la base de clientes crece o se mantiene.',
+                                }}
                             />
                         </div>
                         <div>
@@ -218,6 +224,11 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                 value={formatNumber(kpis?.activeClients)}
                                 icon="user"
                                 accent="green"
+                                help={{
+                                    que: 'Clientes que compraron al menos una vez dentro del periodo elegido.',
+                                    leer: 'Si es muy inferior al Total Clientes, hay parte de la cartera que no está comprando.',
+                                    servir: 'Conocer la base real de clientes que generan movimiento.',
+                                }}
                             />
                         </div>
                         <div>
@@ -226,6 +237,12 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                 value={formatPercent(kpis?.activePercent)}
                                 icon="percent"
                                 accent="cyan"
+                                help={{
+                                    que: 'Porcentaje de clientes que compraron en el periodo sobre el total (Activos / Total).',
+                                    leer: '70% = 7 de cada 10 clientes compraron. Con una ruta seleccionada, mide la cobertura de esa ruta.',
+                                    servir: 'Es el indicador más accionable: cobertura baja = clientes que nadie está atendiendo.',
+                                    accion: 'Entra al Desglose con esa ruta y retoma a los clientes que no compraron.',
+                                }}
                             />
                         </div>
                         <div>
@@ -234,6 +251,11 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                 value={formatPercent(kpis?.concentration?.top5)}
                                 icon="chart"
                                 accent="orange"
+                                help={{
+                                    que: 'Qué porcentaje de las ventas del periodo viene de los 5 clientes que más compran.',
+                                    leer: '40% = 5 clientes generan 40 de cada 100 pesos vendidos.',
+                                    servir: 'Mide la dependencia: número alto = la empresa depende de pocos clientes (frágil); número bajo = cartera más repartida y sana.',
+                                }}
                             />
                         </div>
                         <div>
@@ -242,6 +264,11 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                 value={formatPercent(kpis?.retention?.rate)}
                                 icon="percent"
                                 accent="purple"
+                                help={{
+                                    que: 'Qué porcentaje del dinero vendido en el periodo anterior se mantiene en el actual (clientes que ya compraban y siguen comprando).',
+                                    leer: '90% = se conservan 90 de cada 100 pesos del periodo anterior; lo que falta es dinero perdido por clientes que dejaron de comprar.',
+                                    servir: 'Destapa pérdida de clientes aunque las ventas se mantengan.',
+                                }}
                             />
                         </div>
                         <div>
@@ -250,6 +277,11 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                 value={formatNumber(kpis?.avgFrequency)}
                                 icon="receipt"
                                 accent="cyan"
+                                help={{
+                                    que: 'Cuántas facturas emite en promedio cada cliente en el periodo.',
+                                    leer: '2,5 = un cliente típico compra entre 2 y 3 veces en el periodo.',
+                                    servir: 'Frecuencia baja con clientes activos = venta esporádica; hay espacio para más visitas y pedidos.',
+                                }}
                             />
                         </div>
                         <div>
@@ -258,6 +290,12 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                 value={formatCurrency(kpis?.revenueAtRisk?.amount)}
                                 icon="money"
                                 accent="pink"
+                                help={{
+                                    que: 'Ventas acumuladas de los clientes que llevan más de 60 días sin comprar.',
+                                    leer: 'Es el dinero "dormido": clientes que compraron fuerte alguna vez y dejaron de hacerlo.',
+                                    servir: 'Priorizar la recuperación de clientes antes de que se pierdan.',
+                                    accion: 'Combínalo con el gráfico "Inactividad por Días" para ubicar y contactar a esos clientes.',
+                                }}
                             />
                         </div>
                         {!ruta && (
@@ -267,6 +305,12 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                     value={formatNumber(kpis?.withoutRoute)}
                                     icon="user"
                                     accent="orange"
+                                    help={{
+                                        que: 'Cuántos clientes no tienen ninguna ruta asignada.',
+                                        leer: 'Se oculta cuando hay una ruta seleccionada en el filtro, porque no aplica a una ruta en particular.',
+                                        servir: 'Un cliente sin ruta es un cliente que ningún vendedor visita de forma planificada.',
+                                        accion: 'Asignarles ruta: es higiene de datos que se traduce directamente en ventas.',
+                                    }}
                                 />
                             </div>
                         )}
@@ -278,7 +322,15 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-8">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Clientes Activos por Mes</div>
+                        <PanelHelpTitle
+                            title="Clientes Activos por Mes"
+                            help={{
+                                que: 'Evolución mes a mes de cuántos clientes compraron, dentro del periodo elegido.',
+                                leer: 'Cada punto es un mes: si la línea baja, menos clientes están comprando.',
+                                servir: 'Ver la tendencia: ¿la base activa crece, se estanca o se encoge?',
+                                accion: 'Con una ruta seleccionada, compara la tendencia de esa ruta contra la global.',
+                            }}
+                        />
                         <div style={{ height: 300 }}>
                             {monthlyActiveChart.length > 0 && monthlyActiveChart[0].data.length > 0 ? (
                                 <ResponsiveLine
@@ -317,7 +369,14 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                 </div>
                 <div className="col-12 col-lg-4">
                     <div className="dashboard-panel" style={{ padding: '16px 20px', height: '100%' }}>
-                        <div className="dashboard-inline-title">Revenue por Segmento</div>
+                        <PanelHelpTitle
+                            title="Revenue por Segmento"
+                            help={{
+                                que: 'Reparte las ventas del periodo según el tamaño de cada cliente: A (>$100K), B ($20K-$100K), C ($5K-$20K), D ($1K-$5K), E (<$1K).',
+                                leer: 'Cada porción es un segmento; cuanto más grande, más vende ese grupo.',
+                                servir: 'Ver de dónde viene el dinero: si la torta depende de un solo segmento, la cartera es frágil.',
+                            }}
+                        />
                         <div style={{ height: 300 }}>
                             {segmentPieData.length > 0 ? (
                                 <ResponsivePie
@@ -352,7 +411,15 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                 <div className="row g-3 mb-4">
                     <div className="col-12">
                         <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                            <div className="dashboard-inline-title">Cartera por Ruta</div>
+                            <PanelHelpTitle
+                                title="Cartera por Ruta"
+                                help={{
+                                    que: 'Para cada ruta: clientes asignados (azul) y clientes que compraron en el periodo (verde).',
+                                    leer: 'Pasa el mouse sobre una barra para ver el nombre de la ruta, su cobertura (%) y qué % de la cartera total representa.',
+                                    servir: 'Es el gráfico de la oportunidad: mucha barra azul y poca verde = clientes sin atender.',
+                                    accion: 'Selecciona esa ruta en el filtro para ver sus números completos.',
+                                }}
+                            />
                             <div style={{ height: 300 }}>
                                 <ResponsiveBar
                                     data={coverageRoutes}
@@ -418,13 +485,28 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Waterfall de Retención</div>
+                        <PanelHelpTitle
+                            title="Waterfall de Retención"
+                            help={{
+                                que: 'Compara el periodo actual contra el anterior en número de clientes: retenidos (siguen comprando), perdidos y nuevos.',
+                                leer: 'Se lee de arriba hacia abajo: Anterior → Retenidos → Perdidos → Ganados → Actual. El "Neto" final dice si la cartera crece o se encoge.',
+                                servir: 'Responde: ¿estoy ganando o perdiendo clientes, y de dónde viene cada número?',
+                            }}
+                        />
                         <div style={{ minHeight: 200, paddingTop: 10 }}>{renderWaterfall()}</div>
                     </div>
                 </div>
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Inactividad por Días</div>
+                        <PanelHelpTitle
+                            title="Inactividad por Días"
+                            help={{
+                                que: 'Clasifica a los clientes según cuántos días llevan sin comprar: 0-7, 8-15, 16-30, 31-60, 61-90 y más de 90 días.',
+                                leer: 'Cada barra es un rango de días; mientras más clientes en 61-90 y +90 días, más cartera se está perdiendo.',
+                                servir: 'Es el semáforo de abandono: actuar antes de que los clientes se pierdan definitivamente.',
+                                accion: 'Combínalo con "Revenue en Riesgo" para saber cuánto dinero está dormido.',
+                            }}
+                        />
                         <div style={{ height: 280 }}>
                             {inactiveBucketData.length > 0 ? (
                                 <ResponsiveBar
@@ -463,17 +545,25 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                 <div className="row g-3 mb-4">
                     <div className="col-12">
                         <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                            <div className="dashboard-inline-title">
-                                ABC Clientes{' '}
-                                <span style={{ fontWeight: 400, fontSize: 12, color: '#64748b' }}>
-                                    (A: {data.abc.summary.classA.count} clientes &middot;{' '}
-                                    {formatPercent(data.abc.summary.classA.revenuePercent)} &middot; B:{' '}
-                                    {data.abc.summary.classB.count} clientes &middot;{' '}
-                                    {formatPercent(data.abc.summary.classB.revenuePercent)} &middot; C:{' '}
-                                    {data.abc.summary.classC.count} clientes &middot;{' '}
-                                    {formatPercent(data.abc.summary.classC.revenuePercent)})
-                                </span>
-                            </div>
+                            <PanelHelpTitle
+                                title="ABC Clientes"
+                                subtitle={
+                                    <span style={{ fontWeight: 400, fontSize: 12, color: '#64748b' }}>
+                                        {' '}
+                                        (A: {data.abc.summary.classA.count} clientes &middot;{' '}
+                                        {formatPercent(data.abc.summary.classA.revenuePercent)} &middot; B:{' '}
+                                        {data.abc.summary.classB.count} clientes &middot;{' '}
+                                        {formatPercent(data.abc.summary.classB.revenuePercent)} &middot; C:{' '}
+                                        {data.abc.summary.classC.count} clientes &middot;{' '}
+                                        {formatPercent(data.abc.summary.classC.revenuePercent)})
+                                    </span>
+                                }
+                                help={{
+                                    que: 'Ordena a los 50 clientes que más venden y los clasifica: A acumulan el 80% de las ventas, B el siguiente 15% y C el 5% restante.',
+                                    leer: 'Barras verdes = clientes clase A (los más importantes), amarillas = B, grises = C.',
+                                    servir: 'Saber qué clientes cuidar con prioridad (los A) y cuáles son complemento.',
+                                }}
+                            />
                             <div style={{ height: 300 }}>
                                 {data.abc.clients.length > 0 ? (
                                     <ResponsiveBar
@@ -531,7 +621,13 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Top 50 Clientes</div>
+                        <PanelHelpTitle
+                            title="Top 50 Clientes"
+                            help={{
+                                que: 'Lista de los 50 clientes que más venden en el periodo, ordenados de mayor a menor.',
+                                servir: 'La foto rápida de quién sostiene la empresa.',
+                            }}
+                        />
                         <div style={{ height: 340, overflowY: 'auto' }}>
                             <RankedList
                                 data={(data?.treemapTop50 || []).map((d) => ({
@@ -548,7 +644,13 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                 </div>
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Segmentos</div>
+                        <PanelHelpTitle
+                            title="Segmentos"
+                            help={{
+                                que: 'La clasificación A-E en tabla: cuántos clientes hay en cada segmento, cuánto venden, qué % representan y con qué frecuencia compran.',
+                                servir: 'Analizar cada segmento con detalle.',
+                            }}
+                        />
                         <div style={{ overflowX: 'auto' }}>
                             <table className="table table-dark table-sm" style={{ margin: 0 }}>
                                 <thead>

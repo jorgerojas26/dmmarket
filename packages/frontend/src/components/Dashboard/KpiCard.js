@@ -1,3 +1,6 @@
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import Popover from 'react-bootstrap/Popover';
+
 const ICONS = {
     money: (
         <svg
@@ -125,8 +128,30 @@ const ACCENT_COLORS = {
     orange: { border: '#f97316', bg: 'rgba(249,115,22,0.08)', icon: '#fb923c' },
 };
 
-const KpiCard = ({ label, value, comparison, icon, accent, loading }) => {
+const KpiCard = ({ label, value, comparison, icon, accent, loading, help }) => {
     const palette = ACCENT_COLORS[accent] || ACCENT_COLORS.blue;
+
+    const helpLines = help
+        ? [
+              { label: 'Qué es', text: help.que },
+              { label: 'Cómo leerlo', text: help.leer },
+              { label: 'Para qué sirve', text: help.servir },
+              { label: 'Acción sugerida', text: help.accion },
+          ].filter((line) => line.text)
+        : [];
+
+    const helpPopover = help ? (
+        <Popover id={`kpi-help-${label.replace(/\W+/g, '-')}`} className="kpi-help-popover">
+            <Popover.Body>
+                {helpLines.map((line) => (
+                    <div key={line.label} className="kpi-help-line">
+                        <span className="kpi-help-k">{line.label}: </span>
+                        {line.text}
+                    </div>
+                ))}
+            </Popover.Body>
+        </Popover>
+    ) : null;
 
     const trendEl = comparison ? (
         <span className={`dashboard-kpi-trend ${comparison.isPositive ? 'trend-up' : 'trend-down'}`}>
@@ -168,6 +193,18 @@ const KpiCard = ({ label, value, comparison, icon, accent, loading }) => {
                 '--kpi-icon-color': palette.icon,
             }}
         >
+            {help && (
+                <OverlayTrigger trigger="click" rootClose placement="bottom" overlay={helpPopover}>
+                    <button
+                        type="button"
+                        className="kpi-help-btn"
+                        aria-label={`Ayuda sobre ${label}`}
+                        title={`Ayuda sobre ${label}`}
+                    >
+                        ?
+                    </button>
+                </OverlayTrigger>
+            )}
             <div className="dashboard-kpi-card-inner">
                 <div className="dashboard-kpi-icon" style={{ color: palette.icon }}>
                     {icon ? ICONS[icon] : ICONS.money}
