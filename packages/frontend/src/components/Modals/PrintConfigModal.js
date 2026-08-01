@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button, Form, Modal } from 'react-bootstrap';
+import './PrintConfigModal.css';
 
 /**
  * Config dialog shown before every global print in `Table`.
@@ -42,7 +43,7 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
     };
 
     return (
-        <Modal show={show} onHide={onClose} size="lg">
+        <Modal show={show} onHide={onClose} size="lg" className="print-config-modal">
             <Modal.Header closeButton>
                 <Modal.Title>Configuración de impresión</Modal.Title>
             </Modal.Header>
@@ -70,7 +71,7 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
                                 </Button>
                             </div>
                         </div>
-                        <div className="border rounded p-3" style={{ maxHeight: 260, overflowY: 'auto' }}>
+                        <div className="column-list rounded p-3" style={{ maxHeight: 260, overflowY: 'auto' }}>
                             {columns.length === 0 && <Form.Text>No hay columnas disponibles.</Form.Text>}
                             {columns.map((col) => {
                                 const key = getColumnKey(col);

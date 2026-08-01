@@ -1,0 +1,50 @@
+/* Print config modal — dark theme, consistent with Client/ProviderDashboardModal */
+.print-config-modal .modal-content {
+    background: #1a1d21;
+    color: #e9ecef;
+    border: 1px solid #2f3338;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.print-config-modal .modal-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    color: #fff;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    border-bottom: none;
+    padding: 1rem 1.25rem;
+}
+
+.print-config-modal .modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.print-config-modal .modal-title {
+    font-weight: 700;
+    letter-spacing: -0.25px;
+}
+
+.print-config-modal .modal-body {
+    background: #1a1d21;
+}
+
+.print-config-modal .modal-footer {
+    background: #1a1d21;
+    border-top: 1px solid #2f3338;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+
+.print-config-modal .form-label {
+    color: #e9ecef;
+}
+
+.print-config-modal .form-check-label {
+    color: #c4cad4;
+}
+
+.print-config-modal .column-list {
+    background: #14171b;
+    border: 1px solid #2f3338;
+}
