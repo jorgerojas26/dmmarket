@@ -11,7 +11,7 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 const LIMIT = 20;
 
-const ClientsTable = ({ onRowSelect }) => {
+const ClientsTable = ({ onRowSelect, ruta }) => {
     const { showNoe } = useContext(ShowNoeContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
@@ -19,6 +19,7 @@ const ClientsTable = ({ onRowSelect }) => {
 
     const { data: result, isLoading } = useClientsList({
         search,
+        ruta,
         page,
         limit: LIMIT,
         sortBy: sort.sortBy,
@@ -45,6 +46,7 @@ const ClientsTable = ({ onRowSelect }) => {
         try {
             const allResult = await fetchClientsList({
                 search,
+                ruta,
                 page: 1,
                 limit: total || 9999,
                 sortBy: sort.sortBy,
@@ -59,6 +61,12 @@ const ClientsTable = ({ onRowSelect }) => {
                 formatNumber(c.num_ventas ?? 0),
             ]);
 
+            const subtitleParts = [];
+            if (search) subtitleParts.push(`Búsqueda: "${search}"`);
+            if (ruta) subtitleParts.push(`Ruta: "${ruta}"`);
+            const subtitle =
+                subtitleParts.length > 0 ? `Listado de Clientes — ${subtitleParts.join(' · ')}` : 'Listado de Clientes';
+
             const docDef = {
                 content: [
                     { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
@@ -67,10 +75,7 @@ const ClientsTable = ({ onRowSelect }) => {
                         style: 'header',
                     },
                     { text: 'R.I.F.: J-41270446-0', style: 'header' },
-                    {
-                        text: search ? `Listado de Clientes — Búsqueda: "${search}"` : 'Listado de Clientes',
-                        style: 'subheader',
-                    },
+                    { text: subtitle, style: 'subheader' },
                     {
                         style: 'table',
                         table: {
@@ -98,7 +103,7 @@ const ClientsTable = ({ onRowSelect }) => {
         } catch (err) {
             console.error('Failed to print clients list:', err);
         }
-    }, [search, total, sort, showNoe]);
+    }, [search, ruta, total, sort, showNoe]);
 
     const totalPages = Math.ceil(total / LIMIT);
 
@@ -123,9 +128,6 @@ const ClientsTable = ({ onRowSelect }) => {
 
     return (
         <div className="dashboard-panel">
-            <div className="dashboard-panel-header">
-                <h3>Clientes</h3>
-            </div>
             <div className="dashboard-panel-body">
                 <Table
                     data={dataArr}

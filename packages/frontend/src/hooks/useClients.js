@@ -1,27 +1,36 @@
 import {
-    fetchClients,
     fetchBestClients,
     fetchBestClientsPerProduct,
-    fetchMonthlyAverage,
+    fetchClientRoutes,
     fetchClientSales,
     fetchClientSummary,
+    fetchClients,
     fetchClientsDashboard,
     fetchClientsList,
+    fetchMonthlyAverage,
 } from 'api/clients';
 import useSWR from 'hooks/swr-wrapper';
 
 /**
- * Clients list (paginated, searchable).
+ * Clients list (paginated, searchable, filterable by route).
  * Null key = no fetch.
  */
 export function useClientsList(
-    { search, page = 1, limit = 20, sortBy = 'total_ventas', sortDir = 'desc', showNoe },
+    { search, ruta, page = 1, limit = 20, sortBy = 'total_ventas', sortDir = 'desc', showNoe },
     enabled = true,
 ) {
-    const key = enabled ? ['clients-list', search, page, limit, sortBy, sortDir, showNoe] : null;
-    return useSWR(key, () => fetchClientsList({ search, page, limit, sortBy, sortDir, showNoe }), {
+    const key = enabled ? ['clients-list', search, ruta, page, limit, sortBy, sortDir, showNoe] : null;
+    return useSWR(key, () => fetchClientsList({ search, ruta, page, limit, sortBy, sortDir, showNoe }), {
         keepPreviousData: true,
     });
+}
+
+/**
+ * Client routes (for the route filter).
+ */
+export function useClientRoutes(showNoe, enabled = true) {
+    const key = enabled ? ['client-routes', showNoe] : null;
+    return useSWR(key, () => fetchClientRoutes(showNoe));
 }
 
 /**

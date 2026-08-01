@@ -3,12 +3,26 @@ import ClientsTable from 'components/ClientsTable';
 import ClientsDashboard from 'components/Dashboard/ClientsDashboard';
 import DateRangePicker from 'components/DateRangePicker';
 import Sidebar from 'components/Sidebar';
+import { darkSelectStyles } from 'components/selectStyles';
 import { ShowNoeContext } from 'context/show_noe';
+import { useClientRoutes } from 'hooks/useClients';
 import { DateTime } from 'luxon';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
+import { useHistory, useLocation } from 'react-router-dom';
+import Select from 'react-select';
+
+const VALID_VIEWS = ['dashboard', 'clients'];
 
 const ClientesPage = () => {
+    const history = useHistory();
+    const location = useLocation();
+
+    // --- Parse active view from URL query params ---
+    const searchParams = new URLSearchParams(location.search);
+    const urlView = searchParams.get('view');
+    const initialView = VALID_VIEWS.includes(urlView) ? urlView : 'dashboard';
+
     const [dateRange, setDateRange] = useState({
         from: DateTime.now().startOf('month').toISODate(),
         to: DateTime.now().toISODate(),
@@ -17,9 +31,35 @@ const ClientesPage = () => {
     const [selectedClient, setSelectedClient] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [modalKey, setModalKey] = useState(0);
-    const [activeView, setActiveView] = useState('dashboard');
+    const [activeView, setActiveView] = useState(initialView);
+    const [selectedRuta, setSelectedRuta] = useState(null);
 
     const { showNoe } = useContext(ShowNoeContext);
+
+    // --- Sync active view back to URL ---
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        params.set('view', activeView);
+        history.replace({ search: params.toString() });
+    }, [activeView, history]);
+
+    const { data: routes = [], isLoading: routesLoading } = useClientRoutes(showNoe);
+
+    const routeOptions = useMemo(
+        () =>
+            routes.map((route) => ({
+                value: route.Id_Ruta,
+                label:
+                    route.Nombre && route.Nombre !== route.Id_Ruta
+                        ? `${route.Nombre} (${route.Id_Ruta})`
+                        : route.Id_Ruta,
+            })),
+        [routes],
+    );
+
+    const handleRutaChange = useCallback((option) => {
+        setSelectedRuta(option);
+    }, []);
 
     const handleDateRangeChange = useCallback(({ from, to }) => {
         setDateRange({ from, to });
@@ -48,6 +88,7 @@ const ClientesPage = () => {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                     >
+                        <title>Dashboard</title>
                         <rect x="3" y="3" width="7" height="7" />
                         <rect x="14" y="3" width="7" height="7" />
                         <rect x="14" y="14" width="7" height="7" />
@@ -69,6 +110,7 @@ const ClientesPage = () => {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                     >
+                        <title>Desglose</title>
                         <line x1="8" y1="6" x2="21" y2="6" />
                         <line x1="8" y1="12" x2="21" y2="12" />
                         <line x1="8" y1="18" x2="21" y2="18" />
@@ -88,8 +130,31 @@ const ClientesPage = () => {
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4">
                     <div className={activeView === 'clients' ? '' : 'd-none'}>
+                        <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
+                            <h4 className="m-0 text-light">Desglose de Clientes</h4>
+                        </div>
                         <div className="clients-content-wrapper">
-                            <ClientsTable onRowSelect={handleRowSelect} />
+                            <div className="d-flex flex-wrap gap-3 mb-3">
+                                <div style={{ minWidth: '220px' }}>
+                                    <Select
+                                        options={routeOptions}
+                                        value={selectedRuta}
+                                        onChange={handleRutaChange}
+                                        placeholder="Todas las rutas"
+                                        isClearable
+                                        isLoading={routesLoading}
+                                        styles={darkSelectStyles}
+                                        classNamePrefix="search-select"
+                                        menuPortalTarget={document.body}
+                                        menuPlacement="auto"
+                                        loadingMessage={() => 'Cargando...'}
+                                        noOptionsMessage={() => 'Sin resultados'}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="clients-content-wrapper">
+                            <ClientsTable onRowSelect={handleRowSelect} ruta={selectedRuta?.value} />
                         </div>
                     </div>
                     <section className={activeView === 'dashboard' ? 'd-flex flex-column gap-3' : 'd-none'}>

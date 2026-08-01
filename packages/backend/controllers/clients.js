@@ -242,8 +242,29 @@ const GET_CLIENT_SUMMARY = async (req, res) => {
   }
 };
 
+const GET_CLIENT_ROUTES = async (_req, res) => {
+  try {
+    const response = await knex
+      .select(
+        "clientes.Ruta as Id_Ruta",
+        knex.raw("COALESCE(rutas.Nombre, clientes.Ruta) as Nombre"),
+        knex.raw("COUNT(*) as clientes"),
+      )
+      .from("clientes")
+      .leftJoin("rutas", "rutas.Id_Ruta", "clientes.Ruta")
+      .whereNotNull("clientes.Ruta")
+      .groupBy("clientes.Ruta")
+      .orderBy("clientes.Ruta");
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 const GET_CLIENTS_LIST = async (req, res) => {
-  const { search, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
+  const { search, ruta, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
   const offset = (Number(page) - 1) * Number(limit);
 
@@ -290,6 +311,11 @@ const GET_CLIENTS_LIST = async (req, res) => {
       countQuery.where("clientes.Empresa", "like", `%${search}%`);
     }
 
+    if (ruta) {
+      dataQuery.where("clientes.Ruta", ruta);
+      countQuery.where("clientes.Ruta", ruta);
+    }
+
     const [{ total }] = await countQuery;
 
     const data = await dataQuery
@@ -321,4 +347,5 @@ module.exports = {
   GET_CLIENT_SUMMARY,
   GET_CLIENTS_LIST,
   GET_CLIENTS_DASHBOARD,
+  GET_CLIENT_ROUTES,
 };

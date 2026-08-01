@@ -45,6 +45,7 @@ export const fetchClientsDashboard = async (dateRange, showNoe) => {
 
 export const fetchClientsList = async ({
     search,
+    ruta,
     page = 1,
     limit = 20,
     sortBy = 'total_ventas',
@@ -53,11 +54,17 @@ export const fetchClientsList = async ({
 }) => {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
+    if (ruta) params.append('ruta', ruta);
     params.append('page', page);
     params.append('limit', limit);
     params.append('sortBy', sortBy);
     params.append('sortDir', sortDir);
     params.append('showNoe', showNoe);
     const response = await fetch(`${BASE_URL}/list?${params.toString()}`);
+    return response.json();
+};
+
+export const fetchClientRoutes = async (showNoe) => {
+    const response = await fetch(`${BASE_URL}/routes?showNoe=${showNoe}`);
     return response.json();
 };
