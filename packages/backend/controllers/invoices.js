@@ -2,7 +2,7 @@ const knex = require("../database");
 const model = require("../models/invoice");
 
 const GET_INVOICES = async (req, res) => {
-  const { from, to, page = 1, limit = 20, sortBy = "createdAt", sortDir = "desc", search } = req.query;
+  const { from, to, page = 1, limit = 20, sortBy = "createdAt", sortDir = "desc", search, ruta } = req.query;
 
   try {
     const response = await model.GET_INVOICES({
@@ -14,6 +14,7 @@ const GET_INVOICES = async (req, res) => {
       sortBy,
       sortDir,
       search,
+      ruta,
     });
 
     res.status(200).json(response);

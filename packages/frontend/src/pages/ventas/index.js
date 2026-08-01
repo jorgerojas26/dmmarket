@@ -7,7 +7,7 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import { useHistory, useLocation } from 'react-router-dom';
 import DesgloseView from './DesgloseView';
-import InvoicesView from './InvoicesView';
+import DespachoView from './DespachoView';
 
 const VALID_VIEWS = ['dashboard', 'desglose', 'despacho'];
 const DEFAULT_FROM_BY_VIEW = {
@@ -141,7 +141,7 @@ const VentasPage = () => {
             despacho: {
                 heading: 'Despacho',
                 render: () => (
-                    <InvoicesView dateRange={dateRange} showNoe={showNoe} isActive={activeView === 'despacho'} />
+                    <DespachoView dateRange={dateRange} showNoe={showNoe} isActive={activeView === 'despacho'} />
                 ),
             },
         }),

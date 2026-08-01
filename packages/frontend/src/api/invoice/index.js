@@ -32,6 +32,7 @@ export const fetchInvoiceList = async ({
     sortBy = 'createdAt',
     sortDir = 'desc',
     search,
+    ruta,
 }) => {
     const params = new URLSearchParams();
     params.append('from', from);
@@ -42,6 +43,7 @@ export const fetchInvoiceList = async ({
     params.append('sortBy', sortBy);
     params.append('sortDir', sortDir);
     if (search) params.append('search', search);
+    if (ruta) params.append('ruta', ruta);
 
     const response = await fetch(`${BASE_URL}?${params.toString()}`);
     const invoices = await response.json();

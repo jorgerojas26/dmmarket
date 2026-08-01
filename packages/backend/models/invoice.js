@@ -19,6 +19,7 @@ exports.GET_INVOICES = async ({
   sortBy = "createdAt",
   sortDir = "desc",
   search,
+  ruta,
 }) => {
   const { masterTable, slaveTable, idInvoice } = showNoe;
   const offset = (Number(page) - 1) * Number(limit);
@@ -38,6 +39,10 @@ exports.GET_INVOICES = async ({
         `%${search}%`,
       );
     });
+  }
+
+  if (ruta) {
+    idQuery.innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`).where("clientes.Ruta", ruta);
   }
 
   // Count total distinct invoices

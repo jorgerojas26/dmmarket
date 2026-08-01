@@ -12,12 +12,12 @@ export function useInvoiceReport(
 }
 
 export function useInvoiceList(
-    { from, to, showNoe, page = 1, limit = 20, sortBy = 'createdAt', sortDir = 'desc', search },
+    { from, to, showNoe, page = 1, limit = 20, sortBy = 'createdAt', sortDir = 'desc', search, ruta },
     enabled = true,
 ) {
     const key =
-        enabled && from && to ? ['invoice-list', from, to, showNoe, page, limit, sortBy, sortDir, search] : null;
-    return useSWR(key, () => fetchInvoiceList({ from, to, showNoe, page, limit, sortBy, sortDir, search }), {
+        enabled && from && to ? ['invoice-list', from, to, showNoe, page, limit, sortBy, sortDir, search, ruta] : null;
+    return useSWR(key, () => fetchInvoiceList({ from, to, showNoe, page, limit, sortBy, sortDir, search, ruta }), {
         keepPreviousData: true,
     });
 }
