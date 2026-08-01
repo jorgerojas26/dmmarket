@@ -42,68 +42,95 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
         }
     }, []);
 
-    const handlePrintAll = useCallback(async () => {
-        try {
-            const allResult = await fetchClientsList({
-                search,
-                ruta,
-                page: 1,
-                limit: total || 9999,
-                sortBy: sort.sortBy,
-                sortDir: sort.sortDir,
-                showNoe,
-            });
-            const rows = (allResult.data || []).map((c) => [
-                String(c.IdCliente ?? ''),
-                c.Empresa ?? '',
-                formatCurrency(c.total_ventas ?? 0),
-                formatCurrency(c.utilidad ?? 0),
-                formatNumber(c.num_ventas ?? 0),
-            ]);
-
-            const subtitleParts = [];
-            if (search) subtitleParts.push(`Búsqueda: "${search}"`);
-            if (ruta) subtitleParts.push(`Ruta: "${ruta}"`);
-            const subtitle =
-                subtitleParts.length > 0 ? `Listado de Clientes — ${subtitleParts.join(' · ')}` : 'Listado de Clientes';
-
-            const docDef = {
-                content: [
-                    { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+    const handlePrintAll = useCallback(
+        async (config) => {
+            try {
+                const allResult = await fetchClientsList({
+                    search,
+                    ruta,
+                    page: 1,
+                    limit: total || 9999,
+                    sortBy: sort.sortBy,
+                    sortDir: sort.sortDir,
+                    showNoe,
+                });
+                // Column metadata for the PDF, keyed by accessor (order defines layout).
+                const pdfColumns = [
+                    { accessor: 'IdCliente', Header: 'ID', width: 'auto', render: (c) => String(c.IdCliente ?? '') },
+                    { accessor: 'Empresa', Header: 'Empresa', width: '*', render: (c) => c.Empresa ?? '' },
                     {
-                        text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
-                        style: 'header',
+                        accessor: 'total_ventas',
+                        Header: 'Total Ventas',
+                        width: 'auto',
+                        render: (c) => formatCurrency(c.total_ventas ?? 0),
                     },
-                    { text: 'R.I.F.: J-41270446-0', style: 'header' },
-                    { text: subtitle, style: 'subheader' },
                     {
-                        style: 'table',
-                        table: {
-                            widths: ['auto', '*', 'auto', 'auto', 'auto'],
-                            body: [['ID', 'Empresa', 'Total Ventas', 'Utilidad', '# Ventas'], ...rows],
+                        accessor: 'utilidad',
+                        Header: 'Utilidad',
+                        width: 'auto',
+                        render: (c) => formatCurrency(c.utilidad ?? 0),
+                    },
+                    {
+                        accessor: 'num_ventas',
+                        Header: '# Ventas',
+                        width: 'auto',
+                        render: (c) => formatNumber(c.num_ventas ?? 0),
+                    },
+                ];
+                const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
+                const selected =
+                    selectedAccessors.size > 0
+                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
+                        : pdfColumns;
+                const rows = (allResult.data || []).map((c) => selected.map((col) => col.render(c)));
+
+                const subtitleParts = [];
+                if (search) subtitleParts.push(`Búsqueda: "${search}"`);
+                if (ruta) subtitleParts.push(`Ruta: "${ruta}"`);
+                const subtitle =
+                    subtitleParts.length > 0
+                        ? `Listado de Clientes — ${subtitleParts.join(' · ')}`
+                        : 'Listado de Clientes';
+
+                const docDef = {
+                    content: [
+                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                        {
+                            text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
+                            style: 'header',
                         },
+                        { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                        { text: subtitle, style: 'subheader' },
+                        {
+                            style: 'table',
+                            table: {
+                                widths: selected.map((col) => col.width),
+                                body: [selected.map((col) => col.Header), ...rows],
+                            },
+                        },
+                    ],
+                    styles: {
+                        header: { alignment: 'center', fontSize: 9 },
+                        subheader: {
+                            alignment: 'center',
+                            fontSize: 8,
+                            margin: [0, 4, 0, 2],
+                            bold: true,
+                        },
+                        table: { margin: [0, 10, 0, 0], fontSize: 7 },
                     },
-                ],
-                styles: {
-                    header: { alignment: 'center', fontSize: 9 },
-                    subheader: {
-                        alignment: 'center',
-                        fontSize: 8,
-                        margin: [0, 4, 0, 2],
-                        bold: true,
-                    },
-                    table: { margin: [0, 10, 0, 0], fontSize: 7 },
-                },
-                pageMargins: 30,
-                pageSize: 'LETTER',
-                pageOrientation: 'landscape',
-            };
+                    pageMargins: 30,
+                    pageSize: 'LETTER',
+                    pageOrientation: config?.orientation || 'portrait',
+                };
 
-            pdfMake.createPdf(docDef).open();
-        } catch (err) {
-            console.error('Failed to print clients list:', err);
-        }
-    }, [search, ruta, total, sort, showNoe]);
+                pdfMake.createPdf(docDef).open();
+            } catch (err) {
+                console.error('Failed to print clients list:', err);
+            }
+        },
+        [search, ruta, total, sort, showNoe],
+    );
 
     const totalPages = Math.ceil(total / LIMIT);
 

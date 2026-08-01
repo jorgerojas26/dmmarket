@@ -27,6 +27,8 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
 
     const [showCurrencyModal, setShowCurrencyModal] = useState(false);
+    // Config chosen in the print dialog (columns + orientation), passed to the PDF builder.
+    const [printConfig, setPrintConfig] = useState(null);
 
     // Rows in the table's current sort order (for PDF export).
     const sortedRowsRef = useRef([]);
@@ -84,7 +86,10 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                     onSortedRowsChange={handleSortedRowsChange}
                     print={{
                         enabled: true,
-                        onGlobalPrint: () => setShowCurrencyModal(true),
+                        onGlobalPrint: (config) => {
+                            setPrintConfig(config);
+                            setShowCurrencyModal(true);
+                        },
                     }}
                     sorting={{
                         enabled: true,
@@ -115,7 +120,11 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                             });
                         }
 
-                        const pdfData = pdf(productsData, quantityTotal, totalSummary, pesoTotal, currency);
+                        const pdfData = pdf(
+                            productsData,
+                            { quantityTotal, totalSummary, pesoTotal, currency },
+                            printConfig,
+                        );
 
                         pdfMake.createPdf(pdfData).open();
                     }}

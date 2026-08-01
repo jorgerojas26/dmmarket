@@ -324,158 +324,166 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         [provider?.IdProveedor, provider?.Empresa],
     );
 
-    const handlePrintAllPurchases = useCallback(async () => {
-        try {
-            const { fetchProviderPurchases } = await import('api/providers');
-            const result = await fetchProviderPurchases(provider.IdProveedor, {
-                from: dateRange.from,
-                to: dateRange.to,
-                page: 1,
-                limit: purchasesData?.total || 9999,
-                search: purchasesSearch || undefined,
-            });
-            const invoices = result.data || [];
-            const tables = [];
-            for (const inv of invoices) {
-                const detail = await fetchPurchaseDetail(provider.IdProveedor, inv.idFactura);
-                const rows = detail.productos.map((p) => [
-                    p.descripcion,
-                    String(Number(p.cantidad)),
-                    formatCurrency(p.precio),
-                    formatCurrency(p.subtotal),
-                ]);
-                tables.push(
-                    {
-                        text: `Factura: ${detail.idFactura} — ${DateTime.fromISO(detail.fecha).toFormat('dd/MM/yyyy')}`,
-                        style: 'invoiceTitle',
-                        margin: [0, 14, 0, 4],
-                    },
-                    {
-                        style: 'table',
-                        table: {
-                            widths: ['*', 'auto', 'auto', 'auto'],
-                            body: [
-                                ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
-                                ...rows,
-                                [
-                                    '',
-                                    '',
-                                    { text: 'Total', bold: true },
-                                    { text: formatCurrency(detail.total), bold: true },
+    const handlePrintAllPurchases = useCallback(
+        async (config) => {
+            try {
+                const { fetchProviderPurchases } = await import('api/providers');
+                const result = await fetchProviderPurchases(provider.IdProveedor, {
+                    from: dateRange.from,
+                    to: dateRange.to,
+                    page: 1,
+                    limit: purchasesData?.total || 9999,
+                    search: purchasesSearch || undefined,
+                });
+                const invoices = result.data || [];
+                const tables = [];
+                for (const inv of invoices) {
+                    const detail = await fetchPurchaseDetail(provider.IdProveedor, inv.idFactura);
+                    const rows = detail.productos.map((p) => [
+                        p.descripcion,
+                        String(Number(p.cantidad)),
+                        formatCurrency(p.precio),
+                        formatCurrency(p.subtotal),
+                    ]);
+                    tables.push(
+                        {
+                            text: `Factura: ${detail.idFactura} — ${DateTime.fromISO(detail.fecha).toFormat('dd/MM/yyyy')}`,
+                            style: 'invoiceTitle',
+                            margin: [0, 14, 0, 4],
+                        },
+                        {
+                            style: 'table',
+                            table: {
+                                widths: ['*', 'auto', 'auto', 'auto'],
+                                body: [
+                                    ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
+                                    ...rows,
+                                    [
+                                        '',
+                                        '',
+                                        { text: 'Total', bold: true },
+                                        { text: formatCurrency(detail.total), bold: true },
+                                    ],
                                 ],
-                            ],
+                            },
                         },
-                    },
-                );
+                    );
+                }
+                pdfMake
+                    .createPdf({
+                        content: [
+                            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                            {
+                                text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
+                                style: 'header',
+                            },
+                            { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                            { text: `Compras a: ${provider.Empresa}`, style: 'subheader' },
+                            {
+                                text: `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} — ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
+                                style: 'subheader',
+                                margin: [0, 0, 0, 12],
+                            },
+                            ...tables,
+                        ],
+                        styles: {
+                            header: { alignment: 'center', fontSize: 10 },
+                            subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                            invoiceTitle: { fontSize: 9, bold: true },
+                            table: { margin: [0, 4, 0, 10], fontSize: 8 },
+                        },
+                        pageMargins: 40,
+                        pageSize: 'LETTER',
+                        pageOrientation: config?.orientation || 'portrait',
+                    })
+                    .open();
+            } catch (err) {
+                console.error('Failed to print all purchases:', err);
             }
-            pdfMake
-                .createPdf({
-                    content: [
-                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
-                        {
-                            text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
-                            style: 'header',
-                        },
-                        { text: 'R.I.F.: J-41270446-0', style: 'header' },
-                        { text: `Compras a: ${provider.Empresa}`, style: 'subheader' },
-                        {
-                            text: `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} — ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
-                            style: 'subheader',
-                            margin: [0, 0, 0, 12],
-                        },
-                        ...tables,
-                    ],
-                    styles: {
-                        header: { alignment: 'center', fontSize: 10 },
-                        subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
-                        invoiceTitle: { fontSize: 9, bold: true },
-                        table: { margin: [0, 4, 0, 10], fontSize: 8 },
-                    },
-                    pageMargins: 40,
-                    pageSize: 'LETTER',
-                })
-                .open();
-        } catch (err) {
-            console.error('Failed to print all purchases:', err);
-        }
-    }, [provider?.IdProveedor, provider?.Empresa, dateRange, purchasesSearch, purchasesData?.total]);
+        },
+        [provider?.IdProveedor, provider?.Empresa, dateRange, purchasesSearch, purchasesData?.total],
+    );
 
-    const handlePrintAllSales = useCallback(async () => {
-        try {
-            const { fetchProviderSales } = await import('api/providers');
-            const result = await fetchProviderSales(provider.IdProveedor, {
-                from: dateRange.from,
-                to: dateRange.to,
-                page: 1,
-                limit: salesData?.total || 9999,
-                search: salesSearch || undefined,
-                showNoe,
-            });
-            const invoices = result.data || [];
-            const tables = [];
-            for (const inv of invoices) {
-                const detail = await fetchSaleDetail(provider.IdProveedor, inv.idFactura, showNoe);
-                const rows = detail.productos.map((p) => [
-                    p.descripcion,
-                    String(Number(p.cantidad)),
-                    formatCurrency(p.precio),
-                    formatCurrency(p.subtotal),
-                ]);
-                tables.push(
-                    {
-                        text: `Factura: ${detail.idFactura} — ${DateTime.fromISO(detail.fecha).toFormat('dd/MM/yyyy')}`,
-                        style: 'invoiceTitle',
-                        margin: [0, 14, 0, 4],
-                    },
-                    {
-                        style: 'table',
-                        table: {
-                            widths: ['*', 'auto', 'auto', 'auto'],
-                            body: [
-                                ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
-                                ...rows,
-                                [
-                                    '',
-                                    '',
-                                    { text: 'Total', bold: true },
-                                    { text: formatCurrency(detail.total), bold: true },
+    const handlePrintAllSales = useCallback(
+        async (config) => {
+            try {
+                const { fetchProviderSales } = await import('api/providers');
+                const result = await fetchProviderSales(provider.IdProveedor, {
+                    from: dateRange.from,
+                    to: dateRange.to,
+                    page: 1,
+                    limit: salesData?.total || 9999,
+                    search: salesSearch || undefined,
+                    showNoe,
+                });
+                const invoices = result.data || [];
+                const tables = [];
+                for (const inv of invoices) {
+                    const detail = await fetchSaleDetail(provider.IdProveedor, inv.idFactura, showNoe);
+                    const rows = detail.productos.map((p) => [
+                        p.descripcion,
+                        String(Number(p.cantidad)),
+                        formatCurrency(p.precio),
+                        formatCurrency(p.subtotal),
+                    ]);
+                    tables.push(
+                        {
+                            text: `Factura: ${detail.idFactura} — ${DateTime.fromISO(detail.fecha).toFormat('dd/MM/yyyy')}`,
+                            style: 'invoiceTitle',
+                            margin: [0, 14, 0, 4],
+                        },
+                        {
+                            style: 'table',
+                            table: {
+                                widths: ['*', 'auto', 'auto', 'auto'],
+                                body: [
+                                    ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
+                                    ...rows,
+                                    [
+                                        '',
+                                        '',
+                                        { text: 'Total', bold: true },
+                                        { text: formatCurrency(detail.total), bold: true },
+                                    ],
                                 ],
-                            ],
+                            },
                         },
-                    },
-                );
+                    );
+                }
+                pdfMake
+                    .createPdf({
+                        content: [
+                            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                            {
+                                text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
+                                style: 'header',
+                            },
+                            { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                            { text: `Ventas de: ${provider.Empresa}`, style: 'subheader' },
+                            {
+                                text: `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} — ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
+                                style: 'subheader',
+                                margin: [0, 0, 0, 12],
+                            },
+                            ...tables,
+                        ],
+                        styles: {
+                            header: { alignment: 'center', fontSize: 10 },
+                            subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                            invoiceTitle: { fontSize: 9, bold: true },
+                            table: { margin: [0, 4, 0, 10], fontSize: 8 },
+                        },
+                        pageMargins: 40,
+                        pageSize: 'LETTER',
+                        pageOrientation: config?.orientation || 'portrait',
+                    })
+                    .open();
+            } catch (err) {
+                console.error('Failed to print all sales:', err);
             }
-            pdfMake
-                .createPdf({
-                    content: [
-                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
-                        {
-                            text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
-                            style: 'header',
-                        },
-                        { text: 'R.I.F.: J-41270446-0', style: 'header' },
-                        { text: `Ventas de: ${provider.Empresa}`, style: 'subheader' },
-                        {
-                            text: `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} — ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
-                            style: 'subheader',
-                            margin: [0, 0, 0, 12],
-                        },
-                        ...tables,
-                    ],
-                    styles: {
-                        header: { alignment: 'center', fontSize: 10 },
-                        subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
-                        invoiceTitle: { fontSize: 9, bold: true },
-                        table: { margin: [0, 4, 0, 10], fontSize: 8 },
-                    },
-                    pageMargins: 40,
-                    pageSize: 'LETTER',
-                })
-                .open();
-        } catch (err) {
-            console.error('Failed to print all sales:', err);
-        }
-    }, [provider?.IdProveedor, provider?.Empresa, dateRange, salesSearch, salesData?.total, showNoe]);
+        },
+        [provider?.IdProveedor, provider?.Empresa, dateRange, salesSearch, salesData?.total, showNoe],
+    );
 
     const handlePrintSale = useCallback(
         async (sale, e) => {
@@ -658,8 +666,13 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 loading={c.loading}
                 emptyMessage={c.emptyMessage}
                 onRowClick={c.onRowClick}
-                onGlobalPrint={c.onGlobalPrint}
-                onRowPrint={c.onRowPrint}
+                print={{
+                    enabled: true,
+                    onGlobalPrint: c.onGlobalPrint,
+                    perRowPrint: Boolean(c.onRowPrint),
+                    onRowPrint: c.onRowPrint,
+                    defaultOrientation: 'portrait',
+                }}
                 pagination={{
                     enabled: true,
                     page: c.page,

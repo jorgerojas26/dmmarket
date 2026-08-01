@@ -9,6 +9,7 @@ const GET_FACTURAS = async (req, res) => {
     categoryId,
     employeeId,
     ruta,
+    proveedorId,
     page = 1,
     limit = 20,
     sortBy = "fecha",
@@ -61,6 +62,7 @@ const GET_FACTURAS = async (req, res) => {
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
         if (ruta) q.andWhere("clientes.Ruta", ruta);
+        if (proveedorId) q.andWhere("productos.Proveedor", proveedorId);
         if (search) {
           q.andWhere(function () {
             this.where("clientes.Empresa", "like", `%${search}%`).orWhere(`mf.${idInvoice}`, "like", `%${search}%`);
@@ -95,6 +97,7 @@ const GET_FACTURAS = async (req, res) => {
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
         if (ruta) q.andWhere("clientes.Ruta", ruta);
+        if (proveedorId) q.andWhere("productos.Proveedor", proveedorId);
         if (search) {
           q.andWhere(function () {
             this.where("clientes.Empresa", "like", `%${search}%`).orWhere(`mf.${idInvoice}`, "like", `%${search}%`);
@@ -131,6 +134,7 @@ const GET_PRODUCTOS = async (req, res) => {
     categoryId,
     employeeId,
     ruta,
+    proveedorId,
     page = 1,
     limit = 20,
     sortBy = "rawProfit",
@@ -184,6 +188,7 @@ const GET_PRODUCTOS = async (req, res) => {
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
         if (ruta) q.andWhere("clientes.Ruta", ruta);
+        if (proveedorId) q.andWhere("productos.Proveedor", proveedorId);
         if (search) {
           q.andWhere("productos.Descripcion", "like", `%${search}%`);
         }
@@ -214,6 +219,7 @@ const GET_PRODUCTOS = async (req, res) => {
         if (categoryId) q.andWhere("productos.Grupo", categoryId);
         if (employeeId) q.andWhere("mf.IdVend", employeeId);
         if (ruta) q.andWhere("clientes.Ruta", ruta);
+        if (proveedorId) q.andWhere("productos.Proveedor", proveedorId);
         if (search) {
           q.andWhere("productos.Descripcion", "like", `%${search}%`);
         }

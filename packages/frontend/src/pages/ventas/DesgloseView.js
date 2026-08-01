@@ -7,6 +7,7 @@ import facturasColumns from 'components/FacturasTable/columns';
 import GroupSearch from 'components/GroupSearch';
 import SaleReportTable from 'components/SaleReportTable';
 import productosColumns from 'components/SaleReportTable/productosColumns';
+import ProveedorSearch from 'components/ProveedorSearch';
 import { darkSelectStyles } from 'components/selectStyles';
 import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
@@ -44,6 +45,8 @@ const DesgloseView = ({ isActive }) => {
     const urlEmployeeName = searchParams.get('employeeName');
     const urlRutaId = searchParams.get('rutaId');
     const urlRutaName = searchParams.get('rutaName');
+    const urlProveedorId = searchParams.get('proveedorId');
+    const urlProveedorName = searchParams.get('proveedorName');
 
     const today = DateTime.now().toISODate();
 
@@ -56,6 +59,7 @@ const DesgloseView = ({ isActive }) => {
     const initialGroup = urlGroupId ? { groupId: urlGroupId, name: urlGroupName || '' } : null;
     const initialEmployee = urlEmployeeId ? { id: urlEmployeeId, name: urlEmployeeName || '' } : null;
     const initialRuta = urlRutaId ? { value: urlRutaId, label: urlRutaName || urlRutaId } : null;
+    const initialProveedor = urlProveedorId ? { IdProveedor: urlProveedorId, name: urlProveedorName || '' } : null;
 
     // Date range — defaults to today
     const [dateRange, setDateRange] = useState(initialDateRange);
@@ -65,6 +69,7 @@ const DesgloseView = ({ isActive }) => {
     const [selectedGroup, setSelectedGroup] = useState(initialGroup);
     const [selectedEmployee, setSelectedEmployee] = useState(initialEmployee);
     const [selectedRuta, setSelectedRuta] = useState(initialRuta);
+    const [selectedProveedor, setSelectedProveedor] = useState(initialProveedor);
 
     // ---- Facturas table state ----
     const [facturasPage, setFacturasPage] = useState(1);
@@ -118,8 +123,16 @@ const DesgloseView = ({ isActive }) => {
             params.delete('rutaName');
         }
 
+        if (selectedProveedor?.IdProveedor) {
+            params.set('proveedorId', selectedProveedor.IdProveedor);
+            params.set('proveedorName', selectedProveedor.name || '');
+        } else {
+            params.delete('proveedorId');
+            params.delete('proveedorName');
+        }
+
         history.replace({ search: params.toString() });
-    }, [dateRange, selectedClient, selectedGroup, selectedEmployee, selectedRuta, history]);
+    }, [dateRange, selectedClient, selectedGroup, selectedEmployee, selectedRuta, selectedProveedor, history]);
 
     // --- SWR hooks ---
     const { data: facturasRes, isLoading: facturasLoading } = useFacturas(
@@ -130,6 +143,7 @@ const DesgloseView = ({ isActive }) => {
             categoryId: selectedGroup?.groupId,
             employeeId: selectedEmployee?.id,
             ruta: selectedRuta?.value,
+            proveedorId: selectedProveedor?.IdProveedor,
             page: facturasPage,
             limit: 20,
             sortBy: facturasSort.sortBy,
@@ -148,6 +162,7 @@ const DesgloseView = ({ isActive }) => {
             categoryId: selectedGroup?.groupId,
             employeeId: selectedEmployee?.id,
             ruta: selectedRuta?.value,
+            proveedorId: selectedProveedor?.IdProveedor,
             page: productosPage,
             limit: 20,
             sortBy: productosSort.sortBy,
@@ -181,6 +196,14 @@ const DesgloseView = ({ isActive }) => {
                 ? { key: selectedEmployee.id, label: selectedEmployee.name || '', value: selectedEmployee }
                 : null,
         [selectedEmployee],
+    );
+
+    const proveedorDefaultValue = useMemo(
+        () =>
+            selectedProveedor
+                ? { key: selectedProveedor.IdProveedor, label: selectedProveedor.name || '', value: selectedProveedor }
+                : null,
+        [selectedProveedor],
     );
 
     // --- Routes (for the route filter) ---
@@ -230,6 +253,12 @@ const DesgloseView = ({ isActive }) => {
         setProductosPage(1);
     }, []);
 
+    const handleProveedorSelect = useCallback((proveedor) => {
+        setSelectedProveedor(proveedor);
+        setFacturasPage(1);
+        setProductosPage(1);
+    }, []);
+
     // Facturas handlers
     const handleFacturasPageChange = useCallback((page) => {
         setFacturasPage(page);
@@ -268,214 +297,270 @@ const DesgloseView = ({ isActive }) => {
     const facturasTotal = facturasRes?.pagination?.total || 0;
     const productosTotal = productosRes?.pagination?.total || 0;
 
-    const handlePrintAllFacturas = useCallback(async () => {
-        try {
-            const result = await fetchFacturas({
-                from: dateRange.from,
-                to: dateRange.to,
-                clientId: selectedClient?.IdCliente,
-                categoryId: selectedGroup?.groupId,
-                employeeId: selectedEmployee?.id,
-                ruta: selectedRuta?.value,
-                page: 1,
-                limit: facturasTotal || 9999,
-                sortBy: facturasSort.sortBy,
-                sortDir: facturasSort.sortDir,
-                search: facturasSearch || undefined,
-                showNoe,
-            });
-            const data = result?.data || [];
-            const total = data.reduce((s, r) => s + (r.monto || 0), 0);
-            const body = [
-                [
-                    { text: 'Factura', style: 'th' },
-                    { text: 'Fecha', style: 'th' },
-                    { text: 'Cliente', style: 'th' },
-                    { text: 'Vendedor', style: 'th' },
-                    { text: 'Monto', style: 'th' },
-                    { text: 'Utilidad', style: 'th' },
-                    { text: '%', style: 'th' },
-                ],
-                ...data.map((r) => [
-                    String(r.invoiceId),
-                    r.fecha ? DateTime.fromISO(r.fecha).toFormat('dd/MM/yyyy') : '',
-                    r.cliente || '',
-                    r.vendedor || '',
-                    formatCurrency(r.monto),
-                    formatCurrency(r.utilidad),
-                    r.promedio != null ? `${r.promedio}%` : '',
-                ]),
-            ];
-
-            const filterLabel = [
-                dateRange.from && dateRange.to ? `${dateRange.from} — ${dateRange.to}` : '',
-                selectedRuta?.label ? `Ruta: ${selectedRuta.label}` : '',
-                selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
-                selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
-                selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
-            ]
-                .filter(Boolean)
-                .join(' | ');
-
-            pdfMake
-                .createPdf({
-                    content: [
-                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
-                        { text: 'Desglose de Ventas — Facturas', style: 'subheader' },
-                        { text: filterLabel || 'Sin filtros', style: 'filterLabel', margin: [0, 0, 0, 12] },
-                        {
-                            style: 'table',
-                            table: {
-                                widths: ['auto', 'auto', '*', '*', 'auto', 'auto', 'auto'],
-                                body: [
-                                    ...body,
-                                    [
-                                        { text: '', colSpan: 4, border: [false, true, false, false] },
-                                        {},
-                                        {},
-                                        {},
-                                        { text: `Total: ${formatCurrency(total)}`, style: 'total', colSpan: 3 },
-                                        {},
-                                        {},
-                                    ],
-                                ],
-                            },
-                        },
-                    ],
-                    styles: {
-                        header: { alignment: 'center', fontSize: 10, bold: true },
-                        subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
-                        filterLabel: { alignment: 'center', fontSize: 8, italics: true, color: '#666' },
-                        th: { bold: true, fontSize: 8, fillColor: '#f3f4f6' },
-                        total: { bold: true, fontSize: 8 },
-                        table: { margin: [0, 10, 0, 0], fontSize: 8 },
+    const handlePrintAllFacturas = useCallback(
+        async (config) => {
+            try {
+                const result = await fetchFacturas({
+                    from: dateRange.from,
+                    to: dateRange.to,
+                    clientId: selectedClient?.IdCliente,
+                    categoryId: selectedGroup?.groupId,
+                    employeeId: selectedEmployee?.id,
+                    ruta: selectedRuta?.value,
+                    proveedorId: selectedProveedor?.IdProveedor,
+                    page: 1,
+                    limit: facturasTotal || 9999,
+                    sortBy: facturasSort.sortBy,
+                    sortDir: facturasSort.sortDir,
+                    search: facturasSearch || undefined,
+                    showNoe,
+                });
+                const data = result?.data || [];
+                const total = data.reduce((s, r) => s + (r.monto || 0), 0);
+                // Column metadata for the PDF, keyed by accessor (order defines layout).
+                const pdfColumns = [
+                    { accessor: 'invoiceId', Header: 'Factura', width: 'auto', render: (r) => String(r.invoiceId) },
+                    {
+                        accessor: 'fecha',
+                        Header: 'Fecha',
+                        width: 'auto',
+                        render: (r) => (r.fecha ? DateTime.fromISO(r.fecha).toFormat('dd/MM/yyyy') : ''),
                     },
-                    pageMargins: 30,
-                    pageSize: 'LETTER',
-                    pageOrientation: 'landscape',
-                })
-                .open();
-        } catch (err) {
-            console.error('Error printing all facturas:', err);
-        }
-    }, [
-        dateRange,
-        selectedClient,
-        selectedGroup,
-        selectedEmployee,
-        selectedRuta,
-        facturasSort,
-        facturasSearch,
-        facturasTotal,
-        showNoe,
-    ]);
-
-    const handlePrintAllProductos = useCallback(async () => {
-        try {
-            const result = await fetchProductos({
-                from: dateRange.from,
-                to: dateRange.to,
-                clientId: selectedClient?.IdCliente,
-                categoryId: selectedGroup?.groupId,
-                employeeId: selectedEmployee?.id,
-                ruta: selectedRuta?.value,
-                page: 1,
-                limit: productosTotal || 9999,
-                sortBy: productosSort.sortBy,
-                sortDir: productosSort.sortDir,
-                search: productosSearch || undefined,
-                showNoe,
-            });
-            const data = result?.data || [];
-            const totalBruto = data.reduce((s, r) => s + (r.rawProfit || 0), 0);
-            const totalUtilidad = data.reduce((s, r) => s + (r.netProfit || 0), 0);
-            const totalPeso = data.reduce((s, r) => s + (r.peso || 0), 0);
-            const formatPeso = (value) => {
-                const num = Number(value);
-                return Number.isNaN(num) || num === 0
-                    ? ''
-                    : num.toLocaleString(undefined, { maximumFractionDigits: 3 });
-            };
-            const body = [
-                [
-                    { text: 'Producto', style: 'th' },
-                    { text: 'Cantidad', style: 'th' },
-                    { text: 'Peso', style: 'th' },
-                    { text: 'Bruto', style: 'th' },
-                    { text: 'Utilidad', style: 'th' },
-                    { text: '%', style: 'th' },
-                ],
-                ...data.map((r) => [
-                    r.product || '',
-                    String(r.quantity != null ? Number(r.quantity).toFixed(2) : ''),
-                    formatPeso(r.peso),
-                    formatCurrency(r.rawProfit),
-                    formatCurrency(r.netProfit),
-                    r.averageProfitPercent != null ? `${r.averageProfitPercent}%` : '',
-                ]),
-            ];
-
-            const filterLabel = [
-                dateRange.from && dateRange.to ? `${dateRange.from} — ${dateRange.to}` : '',
-                selectedRuta?.label ? `Ruta: ${selectedRuta.label}` : '',
-                selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
-                selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
-                selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
-            ]
-                .filter(Boolean)
-                .join(' | ');
-
-            pdfMake
-                .createPdf({
-                    content: [
-                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
-                        { text: 'Desglose de Ventas — Productos', style: 'subheader' },
-                        { text: filterLabel || 'Sin filtros', style: 'filterLabel', margin: [0, 0, 0, 12] },
-                        {
-                            style: 'table',
-                            table: {
-                                widths: ['*', 'auto', 'auto', 'auto', 'auto', 'auto'],
-                                body: [
-                                    ...body,
-                                    [
-                                        { text: `Total`, style: 'total' },
-                                        '',
-                                        { text: formatPeso(totalPeso), style: 'total' },
-                                        { text: formatCurrency(totalBruto), style: 'total' },
-                                        { text: formatCurrency(totalUtilidad), style: 'total' },
-                                        '',
-                                    ],
-                                ],
-                            },
-                        },
-                    ],
-                    styles: {
-                        header: { alignment: 'center', fontSize: 10, bold: true },
-                        subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
-                        filterLabel: { alignment: 'center', fontSize: 8, italics: true, color: '#666' },
-                        th: { bold: true, fontSize: 8, fillColor: '#f3f4f6' },
-                        total: { bold: true, fontSize: 8 },
-                        table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                    { accessor: 'cliente', Header: 'Cliente', width: '*', render: (r) => r.cliente || '' },
+                    { accessor: 'vendedor', Header: 'Vendedor', width: '*', render: (r) => r.vendedor || '' },
+                    { accessor: 'monto', Header: 'Monto', width: 'auto', render: (r) => formatCurrency(r.monto) },
+                    {
+                        accessor: 'utilidad',
+                        Header: 'Utilidad',
+                        width: 'auto',
+                        render: (r) => formatCurrency(r.utilidad),
                     },
-                    pageMargins: 30,
-                    pageSize: 'LETTER',
-                    pageOrientation: 'landscape',
-                })
-                .open();
-        } catch (err) {
-            console.error('Error printing all productos:', err);
-        }
-    }, [
-        dateRange,
-        selectedClient,
-        selectedGroup,
-        selectedEmployee,
-        selectedRuta,
-        productosSort,
-        productosSearch,
-        productosTotal,
-        showNoe,
-    ]);
+                    {
+                        accessor: 'promedio',
+                        Header: '%',
+                        width: 'auto',
+                        render: (r) => (r.promedio != null ? `${r.promedio}%` : ''),
+                    },
+                ];
+                const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
+                const selected =
+                    selectedAccessors.size > 0
+                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
+                        : pdfColumns;
+                const allColumnsSelected = selected.length === pdfColumns.length;
+                const body = [
+                    selected.map((col) => ({ text: col.Header, style: 'th' })),
+                    ...data.map((r) => selected.map((col) => col.render(r))),
+                ];
+
+                const filterLabel = [
+                    dateRange.from && dateRange.to ? `${dateRange.from} — ${dateRange.to}` : '',
+                    selectedRuta?.label ? `Ruta: ${selectedRuta.label}` : '',
+                    selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
+                    selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
+                    selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
+                    selectedProveedor?.name ? `Proveedor: ${selectedProveedor.name}` : '',
+                ]
+                    .filter(Boolean)
+                    .join(' | ');
+
+                pdfMake
+                    .createPdf({
+                        content: [
+                            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                            { text: 'Desglose de Ventas — Facturas', style: 'subheader' },
+                            { text: filterLabel || 'Sin filtros', style: 'filterLabel', margin: [0, 0, 0, 12] },
+                            {
+                                style: 'table',
+                                table: {
+                                    widths: selected.map((col) => col.width),
+                                    body: allColumnsSelected
+                                        ? [
+                                              ...body,
+                                              [
+                                                  { text: '', colSpan: 4, border: [false, true, false, false] },
+                                                  {},
+                                                  {},
+                                                  {},
+                                                  {
+                                                      text: `Total: ${formatCurrency(total)}`,
+                                                      style: 'total',
+                                                      colSpan: 3,
+                                                  },
+                                                  {},
+                                                  {},
+                                              ],
+                                          ]
+                                        : body,
+                                },
+                            },
+                        ],
+                        styles: {
+                            header: { alignment: 'center', fontSize: 10, bold: true },
+                            subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                            filterLabel: { alignment: 'center', fontSize: 8, italics: true, color: '#666' },
+                            th: { bold: true, fontSize: 8, fillColor: '#f3f4f6' },
+                            total: { bold: true, fontSize: 8 },
+                            table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                        },
+                        pageMargins: 30,
+                        pageSize: 'LETTER',
+                        pageOrientation: config?.orientation || 'portrait',
+                    })
+                    .open();
+            } catch (err) {
+                console.error('Error printing all facturas:', err);
+            }
+        },
+        [
+            dateRange,
+            selectedClient,
+            selectedGroup,
+            selectedEmployee,
+            selectedRuta,
+            selectedProveedor,
+            facturasSort,
+            facturasSearch,
+            facturasTotal,
+            showNoe,
+        ],
+    );
+
+    const handlePrintAllProductos = useCallback(
+        async (config) => {
+            try {
+                const result = await fetchProductos({
+                    from: dateRange.from,
+                    to: dateRange.to,
+                    clientId: selectedClient?.IdCliente,
+                    categoryId: selectedGroup?.groupId,
+                    employeeId: selectedEmployee?.id,
+                    ruta: selectedRuta?.value,
+                    proveedorId: selectedProveedor?.IdProveedor,
+                    page: 1,
+                    limit: productosTotal || 9999,
+                    sortBy: productosSort.sortBy,
+                    sortDir: productosSort.sortDir,
+                    search: productosSearch || undefined,
+                    showNoe,
+                });
+                const data = result?.data || [];
+                const totalBruto = data.reduce((s, r) => s + (r.rawProfit || 0), 0);
+                const totalUtilidad = data.reduce((s, r) => s + (r.netProfit || 0), 0);
+                const totalPeso = data.reduce((s, r) => s + (r.peso || 0), 0);
+                const formatPeso = (value) => {
+                    const num = Number(value);
+                    return Number.isNaN(num) || num === 0
+                        ? ''
+                        : num.toLocaleString(undefined, { maximumFractionDigits: 3 });
+                };
+                // Column metadata for the PDF, keyed by accessor (order defines layout).
+                const pdfColumns = [
+                    { accessor: 'product', Header: 'Producto', width: '*', render: (r) => r.product || '' },
+                    {
+                        accessor: 'quantity',
+                        Header: 'Cantidad',
+                        width: 'auto',
+                        render: (r) => String(r.quantity != null ? Number(r.quantity).toFixed(2) : ''),
+                    },
+                    { accessor: 'peso', Header: 'Peso', width: 'auto', render: (r) => formatPeso(r.peso) },
+                    {
+                        accessor: 'rawProfit',
+                        Header: 'Bruto',
+                        width: 'auto',
+                        render: (r) => formatCurrency(r.rawProfit),
+                    },
+                    {
+                        accessor: 'netProfit',
+                        Header: 'Utilidad',
+                        width: 'auto',
+                        render: (r) => formatCurrency(r.netProfit),
+                    },
+                    {
+                        accessor: 'averageProfitPercent',
+                        Header: '%',
+                        width: 'auto',
+                        render: (r) => (r.averageProfitPercent != null ? `${r.averageProfitPercent}%` : ''),
+                    },
+                ];
+                const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
+                const selected =
+                    selectedAccessors.size > 0
+                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
+                        : pdfColumns;
+                const allColumnsSelected = selected.length === pdfColumns.length;
+                const body = [
+                    selected.map((col) => ({ text: col.Header, style: 'th' })),
+                    ...data.map((r) => selected.map((col) => col.render(r))),
+                ];
+
+                const filterLabel = [
+                    dateRange.from && dateRange.to ? `${dateRange.from} — ${dateRange.to}` : '',
+                    selectedRuta?.label ? `Ruta: ${selectedRuta.label}` : '',
+                    selectedClient?.name ? `Cliente: ${selectedClient.name}` : '',
+                    selectedGroup?.name ? `Categoría: ${selectedGroup.name}` : '',
+                    selectedEmployee?.name ? `Vendedor: ${selectedEmployee.name}` : '',
+                    selectedProveedor?.name ? `Proveedor: ${selectedProveedor.name}` : '',
+                ]
+                    .filter(Boolean)
+                    .join(' | ');
+
+                pdfMake
+                    .createPdf({
+                        content: [
+                            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                            { text: 'Desglose de Ventas — Productos', style: 'subheader' },
+                            { text: filterLabel || 'Sin filtros', style: 'filterLabel', margin: [0, 0, 0, 12] },
+                            {
+                                style: 'table',
+                                table: {
+                                    widths: selected.map((col) => col.width),
+                                    body: allColumnsSelected
+                                        ? [
+                                              ...body,
+                                              [
+                                                  { text: 'Total', style: 'total' },
+                                                  '',
+                                                  { text: formatPeso(totalPeso), style: 'total' },
+                                                  { text: formatCurrency(totalBruto), style: 'total' },
+                                                  { text: formatCurrency(totalUtilidad), style: 'total' },
+                                                  '',
+                                              ],
+                                          ]
+                                        : body,
+                                },
+                            },
+                        ],
+                        styles: {
+                            header: { alignment: 'center', fontSize: 10, bold: true },
+                            subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                            filterLabel: { alignment: 'center', fontSize: 8, italics: true, color: '#666' },
+                            th: { bold: true, fontSize: 8, fillColor: '#f3f4f6' },
+                            total: { bold: true, fontSize: 8 },
+                            table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                        },
+                        pageMargins: 30,
+                        pageSize: 'LETTER',
+                        pageOrientation: config?.orientation || 'portrait',
+                    })
+                    .open();
+            } catch (err) {
+                console.error('Error printing all productos:', err);
+            }
+        },
+        [
+            dateRange,
+            selectedClient,
+            selectedGroup,
+            selectedEmployee,
+            selectedRuta,
+            selectedProveedor,
+            productosSort,
+            productosSearch,
+            productosTotal,
+            showNoe,
+        ],
+    );
 
     const handlePrintFacturaRow = useCallback(
         async (factura) => {
@@ -596,6 +681,9 @@ const DesgloseView = ({ isActive }) => {
                 </div>
                 <div style={{ minWidth: '220px' }}>
                     <EmployeeSearch onSelect={handleEmployeeSelect} defaultValue={employeeDefaultValue} />
+                </div>
+                <div style={{ minWidth: '220px' }}>
+                    <ProveedorSearch onSelect={handleProveedorSelect} defaultValue={proveedorDefaultValue} />
                 </div>
             </div>
 

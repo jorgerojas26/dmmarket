@@ -102,27 +102,47 @@ const buildColumns = (cfg) => {
 
 // ── pdfmake document ──
 
-const buildParetoPdf = (products, filterLabel, cfg) => {
+const buildParetoPdf = (products, filterLabel, cfg, config = {}) => {
     const hasQuantity = Boolean(cfg.quantityKey);
     const total = products.reduce((s, p) => s + Number(p[cfg.valueKey] || 0), 0);
+    // Column metadata for the PDF, keyed by accessor (order defines layout).
+    const pdfColumns = [
+        { accessor: 'rank', Header: '#', width: 30, render: (p) => String(p.rank) },
+        { accessor: cfg.nameKey, Header: cfg.entityLabel, width: '*', render: (p) => p[cfg.nameKey] },
+        {
+            accessor: cfg.valueKey,
+            Header: cfg.valueLabel,
+            width: 'auto',
+            render: (p) => formatCurrency(p[cfg.valueKey]),
+        },
+        ...(hasQuantity
+            ? [
+                  {
+                      accessor: cfg.quantityKey,
+                      Header: 'Unidades',
+                      width: 'auto',
+                      render: (p) => formatNumber(p[cfg.quantityKey]),
+                  },
+              ]
+            : []),
+        {
+            accessor: 'cumulativePercent',
+            Header: '% Acum.',
+            width: 'auto',
+            render: (p) => `${p.cumulativePercent}%`,
+        },
+        { accessor: 'abcClass', Header: 'Clase', width: 'auto', render: (p) => p.abcClass },
+    ];
+    const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
+    const selected =
+        selectedAccessors.size > 0 ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor)) : pdfColumns;
+    const allColumnsSelected = selected.length === pdfColumns.length;
     const body = [
-        [
-            { text: '#', style: 'th' },
-            { text: cfg.entityLabel, style: 'th' },
-            { text: cfg.valueLabel, style: 'th' },
-            ...(hasQuantity ? [{ text: 'Unidades', style: 'th' }] : []),
-            { text: '% Acum.', style: 'th' },
-            { text: 'Clase', style: 'th' },
-        ],
-        ...products.map((p) => [
-            String(p.rank),
-            p[cfg.nameKey],
-            formatCurrency(p[cfg.valueKey]),
-            ...(hasQuantity ? [formatNumber(p[cfg.quantityKey])] : []),
-            `${p.cumulativePercent}%`,
-            p.abcClass,
-        ]),
-        [
+        selected.map((col) => ({ text: col.Header, style: 'th' })),
+        ...products.map((p) => selected.map((col) => col.render(p))),
+    ];
+    if (allColumnsSelected) {
+        body.push([
             { text: '', colSpan: hasQuantity ? 4 : 3, border: [false, true, false, false] },
             ...(hasQuantity ? [{}, {}, {}] : [{}, {}]),
             {
@@ -130,8 +150,8 @@ const buildParetoPdf = (products, filterLabel, cfg) => {
                 style: 'total',
             },
             {},
-        ],
-    ];
+        ]);
+    }
 
     return {
         content: [
@@ -151,7 +171,7 @@ const buildParetoPdf = (products, filterLabel, cfg) => {
             {
                 style: 'table',
                 table: {
-                    widths: [30, '*', 'auto', ...(hasQuantity ? ['auto'] : []), 'auto', 'auto'],
+                    widths: selected.map((col) => col.width),
                     body,
                 },
             },
@@ -175,7 +195,7 @@ const buildParetoPdf = (products, filterLabel, cfg) => {
         },
         pageMargins: 30,
         pageSize: 'LETTER',
-        pageOrientation: 'landscape',
+        pageOrientation: config?.orientation || 'portrait',
     };
 };
 
@@ -291,16 +311,19 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
     }, []);
 
     /* ---- print handler ---- */
-    const handlePrint = useCallback(() => {
-        const labels = {
-            all: cfg.allFilterLabel,
-            A: 'Clase A (0–80% acumulado)',
-            B: 'Clase B (80–95% acumulado)',
-            C: 'Clase C (95–100% acumulado)',
-        };
-        const docDef = buildParetoPdf(filteredProducts, labels[abcFilter] || cfg.allFilterLabel, cfg);
-        pdfMake.createPdf(docDef).open();
-    }, [filteredProducts, abcFilter, cfg]);
+    const handlePrint = useCallback(
+        (config) => {
+            const labels = {
+                all: cfg.allFilterLabel,
+                A: 'Clase A (0–80% acumulado)',
+                B: 'Clase B (80–95% acumulado)',
+                C: 'Clase C (95–100% acumulado)',
+            };
+            const docDef = buildParetoPdf(filteredProducts, labels[abcFilter] || cfg.allFilterLabel, cfg, config);
+            pdfMake.createPdf(docDef).open();
+        },
+        [filteredProducts, abcFilter, cfg],
+    );
 
     // ── loading / empty ──
     if (loading) {

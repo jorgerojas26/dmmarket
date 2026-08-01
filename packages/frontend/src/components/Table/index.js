@@ -1,3 +1,4 @@
+import PrintConfigModal from 'components/Modals/PrintConfigModal';
 import debounce from 'lodash.debounce';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { actions, useRowSelect, useSortBy, useTable } from 'react-table';
@@ -46,7 +47,8 @@ import './styles.css';
  *
  * @param {object}         [props.print]                              - Print config.
  * @param {boolean}         props.print.enabled
- * @param {Function}       [props.print.onGlobalPrint]                - Global‑print callback.
+ * @param {Function}       [props.print.onGlobalPrint]                - Global‑print callback. Runs after the config dialog; receives `{ columns, orientation }` (columns = the selected column definitions).
+ * @param {string}         [props.print.defaultOrientation='portrait'] - Page orientation preselected in the config dialog.
  * @param {string}         [props.print.globalPrintLabel='Imprimir']  - Global‑print button label.
  * @param {boolean}        [props.print.perRowPrint=false]            - Show per‑row print button.
  * @param {Function}       [props.print.onRowPrint]                   - Per‑row print callback `(rowData)`.
@@ -262,6 +264,21 @@ const Table = ({
     const hasPerRowPrint = print?.enabled && print?.perRowPrint && print?.onRowPrint;
     const hasSelectCol = onRowSelect && multiSelect;
     const totalColSpan = columns.length + (hasPerRowPrint ? 1 : 0) + (hasSelectCol ? 1 : 0);
+
+    /* ── Global print (config dialog runs first) ── */
+    const [showPrintConfig, setShowPrintConfig] = useState(false);
+
+    const handlePrintButtonClick = useCallback(() => {
+        setShowPrintConfig(true);
+    }, []);
+
+    const handlePrintConfirm = useCallback(
+        (config) => {
+            setShowPrintConfig(false);
+            print?.onGlobalPrint?.(config);
+        },
+        [print?.onGlobalPrint],
+    );
 
     /* ── Select-all handler ── */
     const handleToggleAll = useCallback(() => {
@@ -607,7 +624,7 @@ const Table = ({
             )}
             {hasPrintBtn && (
                 <div className="table-toolbar-right">
-                    <button className="table-toolbar-btn" onClick={print.onGlobalPrint}>
+                    <button className="table-toolbar-btn" onClick={handlePrintButtonClick}>
                         {print.globalPrintLabel || 'Imprimir'}
                     </button>
                 </div>
@@ -726,6 +743,15 @@ const Table = ({
                 {spinner}
             </div>
             {paginationBar}
+            {hasPrintBtn && (
+                <PrintConfigModal
+                    show={showPrintConfig}
+                    columns={columns}
+                    initialOrientation={print?.defaultOrientation}
+                    onClose={() => setShowPrintConfig(false)}
+                    onPrint={handlePrintConfirm}
+                />
+            )}
         </div>
     );
 };

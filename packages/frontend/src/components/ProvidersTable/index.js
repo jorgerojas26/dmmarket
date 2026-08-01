@@ -42,68 +42,100 @@ const ProvidersTable = ({ onRowSelect }) => {
         }
     }, []);
 
-    const handlePrintAll = useCallback(async () => {
-        try {
-            const allResult = await fetchProvidersList({
-                search,
-                page: 1,
-                limit: total || 9999,
-                sortBy: sort.sortBy,
-                sortDir: sort.sortDir,
-                showNoe,
-            });
-            const rows = (allResult.data || []).map((p) => [
-                String(p.IdProveedor ?? ''),
-                p.Empresa ?? '',
-                formatCurrency(p.total_compras ?? 0),
-                formatNumber(p.num_compras ?? 0),
-                formatCurrency(p.total_ventas ?? 0),
-                formatNumber(p.num_ventas ?? 0),
-            ]);
+    const handlePrintAll = useCallback(
+        async (config) => {
+            try {
+                const allResult = await fetchProvidersList({
+                    search,
+                    page: 1,
+                    limit: total || 9999,
+                    sortBy: sort.sortBy,
+                    sortDir: sort.sortDir,
+                    showNoe,
+                });
+                // Column metadata for the PDF, keyed by accessor (order defines layout).
+                const pdfColumns = [
+                    {
+                        accessor: 'IdProveedor',
+                        Header: 'ID',
+                        width: 'auto',
+                        render: (p) => String(p.IdProveedor ?? ''),
+                    },
+                    { accessor: 'Empresa', Header: 'Empresa', width: '*', render: (p) => p.Empresa ?? '' },
+                    {
+                        accessor: 'total_compras',
+                        Header: 'Total Compras',
+                        width: 'auto',
+                        render: (p) => formatCurrency(p.total_compras ?? 0),
+                    },
+                    {
+                        accessor: 'num_compras',
+                        Header: '# Compras',
+                        width: 'auto',
+                        render: (p) => formatNumber(p.num_compras ?? 0),
+                    },
+                    {
+                        accessor: 'total_ventas',
+                        Header: 'Total Ventas',
+                        width: 'auto',
+                        render: (p) => formatCurrency(p.total_ventas ?? 0),
+                    },
+                    {
+                        accessor: 'num_ventas',
+                        Header: '# Ventas',
+                        width: 'auto',
+                        render: (p) => formatNumber(p.num_ventas ?? 0),
+                    },
+                ];
+                const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
+                const selected =
+                    selectedAccessors.size > 0
+                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
+                        : pdfColumns;
+                const rows = (allResult.data || []).map((p) => selected.map((col) => col.render(p)));
 
-            const docDef = {
-                content: [
-                    { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
-                    {
-                        text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
-                        style: 'header',
-                    },
-                    { text: 'R.I.F.: J-41270446-0', style: 'header' },
-                    {
-                        text: search ? `Listado de Proveedores — Búsqueda: "${search}"` : 'Listado de Proveedores',
-                        style: 'subheader',
-                    },
-                    {
-                        style: 'table',
-                        table: {
-                            widths: ['auto', '*', 'auto', 'auto', 'auto', 'auto'],
-                            body: [
-                                ['ID', 'Empresa', 'Total Compras', '# Compras', 'Total Ventas', '# Ventas'],
-                                ...rows,
-                            ],
+                const docDef = {
+                    content: [
+                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                        {
+                            text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
+                            style: 'header',
                         },
+                        { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                        {
+                            text: search ? `Listado de Proveedores — Búsqueda: "${search}"` : 'Listado de Proveedores',
+                            style: 'subheader',
+                        },
+                        {
+                            style: 'table',
+                            table: {
+                                widths: selected.map((col) => col.width),
+                                body: [selected.map((col) => col.Header), ...rows],
+                            },
+                        },
+                    ],
+                    styles: {
+                        header: { alignment: 'center', fontSize: 9 },
+                        subheader: {
+                            alignment: 'center',
+                            fontSize: 8,
+                            margin: [0, 4, 0, 2],
+                            bold: true,
+                        },
+                        table: { margin: [0, 10, 0, 0], fontSize: 7 },
                     },
-                ],
-                styles: {
-                    header: { alignment: 'center', fontSize: 9 },
-                    subheader: {
-                        alignment: 'center',
-                        fontSize: 8,
-                        margin: [0, 4, 0, 2],
-                        bold: true,
-                    },
-                    table: { margin: [0, 10, 0, 0], fontSize: 7 },
-                },
-                pageMargins: 30,
-                pageSize: 'LETTER',
-                pageOrientation: 'landscape',
-            };
+                    pageMargins: 30,
+                    pageSize: 'LETTER',
+                    pageOrientation: config?.orientation || 'portrait',
+                };
 
-            pdfMake.createPdf(docDef).open();
-        } catch (err) {
-            console.error('Failed to print providers list:', err);
-        }
-    }, [search, total, sort, showNoe]);
+                pdfMake.createPdf(docDef).open();
+            } catch (err) {
+                console.error('Failed to print providers list:', err);
+            }
+        },
+        [search, total, sort, showNoe],
+    );
 
     const totalPages = Math.ceil(total / LIMIT);
 
