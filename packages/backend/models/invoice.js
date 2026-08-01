@@ -68,6 +68,7 @@ exports.GET_INVOICES = async ({
       `${slaveTable}.Cantidad`,
       `${slaveTable}.Precio`,
       "grupos.Descripcion as group",
+      "productos.Peso as peso",
     )
     .from(masterTable)
     .innerJoin(slaveTable, `${slaveTable}.${idInvoice}`, `${masterTable}.${idInvoice}`)
@@ -80,6 +81,7 @@ exports.GET_INVOICES = async ({
       `${slaveTable}.Descripcion`,
       `${slaveTable}.Cantidad`,
       `${slaveTable}.Precio`,
+      "productos.Peso",
     )
     .orderBy("productos.Descripcion", "DESC");
 
@@ -102,6 +104,7 @@ exports.GET_INVOICES = async ({
       quantity: Number(invoice.Cantidad.toFixed(2)),
       price: Number(invoice.Precio.toFixed(2)),
       group: invoice.group,
+      peso: Number(invoice.peso != null ? invoice.peso : 0),
     });
   });
 

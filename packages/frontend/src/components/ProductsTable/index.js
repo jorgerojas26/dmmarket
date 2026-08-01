@@ -9,6 +9,12 @@ import pdf from './pdf';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
+const formatPeso = (value) => {
+    const num = Number(value);
+    if (Number.isNaN(num) || num === 0) return '';
+    return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
+};
+
 const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
 
@@ -17,6 +23,11 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     const quantityTotal = useMemo(() => {
         if (!data) return 0;
         return data.reduce((acc, item) => acc + item.quantity, 0);
+    }, [data]);
+
+    const pesoTotal = useMemo(() => {
+        if (!data) return 0;
+        return data.reduce((acc, item) => acc + (item.peso || 0), 0);
     }, [data]);
 
     const sortedData = useMemo(() => {
@@ -35,6 +46,11 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
             { Header: 'ID', accessor: 'productId' },
             { Header: 'Producto', accessor: 'product' },
             { Header: 'Cantidad', accessor: 'quantity' },
+            {
+                Header: 'Peso',
+                accessor: 'peso',
+                Cell: ({ value }) => formatPeso(value),
+            },
             { Header: 'Total', accessor: 'total' },
         ],
         [],
@@ -43,9 +59,10 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     const summaries = useMemo(
         () => ({
             quantity: quantityTotal ? quantityTotal.toFixed(2) : '',
+            peso: formatPeso(pesoTotal),
             total: totalSummary ? `$${totalSummary.toFixed(2)}` : '',
         }),
-        [quantityTotal, totalSummary],
+        [quantityTotal, pesoTotal, totalSummary],
     );
 
     return (
@@ -81,7 +98,7 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                             });
                         }
 
-                        const pdfData = pdf(productsData, quantityTotal, totalSummary, currency);
+                        const pdfData = pdf(productsData, quantityTotal, totalSummary, pesoTotal, currency);
 
                         pdfMake.createPdf(pdfData).open();
                     }}

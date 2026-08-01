@@ -18,9 +18,13 @@ export const useInvoiceDispatch = (selectedRows) => {
                     products[product.productId] = {
                         ...product,
                         quantity: 0,
+                        peso: 0,
                     };
                 }
                 products[product.productId].quantity += product.quantity;
+                products[product.productId].peso = Number(
+                    (products[product.productId].peso + product.quantity * (product.peso || 0)).toFixed(3),
+                );
                 products[product.productId].total = Number(
                     (products[product.productId].quantity * products[product.productId].price).toFixed(2),
                 );

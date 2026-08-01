@@ -1,6 +1,12 @@
 import { DateTime } from 'luxon';
 
-const pdfschema = (productList, quantityTotal, totalSummary, currency) => ({
+const formatPeso = (value) => {
+    const num = Number(value);
+    if (Number.isNaN(num) || num === 0) return '';
+    return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
+};
+
+const pdfschema = (productList, quantityTotal, totalSummary, pesoTotal, currency) => ({
     content: [
         { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
         {
@@ -12,11 +18,23 @@ const pdfschema = (productList, quantityTotal, totalSummary, currency) => ({
         {
             style: 'table',
             table: {
-                widths: [85, '*', 'auto', 'auto'],
+                widths: [85, '*', 'auto', 'auto', 'auto'],
                 body: [
-                    ['CATEGORÍA', 'PRODUCTO', 'CANTIDAD', `TOTAL (${currency})`],
-                    ...productList.map(({ group, product, quantity, total }) => [group, product, quantity, total]),
-                    ['', '', { text: quantityTotal, bold: true }, { text: `${currency} ${totalSummary}`, bold: true }],
+                    ['CATEGORÍA', 'PRODUCTO', 'CANTIDAD', 'PESO', `TOTAL (${currency})`],
+                    ...productList.map(({ group, product, quantity, peso, total }) => [
+                        group,
+                        product,
+                        quantity,
+                        formatPeso(peso),
+                        total,
+                    ]),
+                    [
+                        '',
+                        '',
+                        { text: quantityTotal, bold: true },
+                        { text: formatPeso(pesoTotal), bold: true },
+                        { text: `${currency} ${totalSummary}`, bold: true },
+                    ],
                 ],
             },
         },
