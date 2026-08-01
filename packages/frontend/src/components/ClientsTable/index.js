@@ -1,11 +1,12 @@
 import { fetchClientsList } from 'api/clients';
 import Table from 'components/Table';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { useClientsList } from 'hooks/useClients';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatCurrency, formatNumber } from 'utils/format';
+import { formatMoney, formatNumber } from 'utils/format';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -13,6 +14,7 @@ const LIMIT = 20;
 
 const ClientsTable = ({ onRowSelect, ruta }) => {
     const { showNoe } = useContext(ShowNoeContext);
+    const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState({ sortBy: 'total_ventas', sortDir: 'desc' });
@@ -55,6 +57,8 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
                     showNoe,
                 });
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
                 const pdfColumns = [
                     { accessor: 'IdCliente', Header: 'ID', width: 'auto', render: (c) => String(c.IdCliente ?? '') },
                     { accessor: 'Empresa', Header: 'Empresa', width: '*', render: (c) => c.Empresa ?? '' },
@@ -62,13 +66,13 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
                         accessor: 'total_ventas',
                         Header: 'Total Ventas',
                         width: 'auto',
-                        render: (c) => formatCurrency(c.total_ventas ?? 0),
+                        render: (c) => formatMoney(c.total_ventas ?? 0, currency, rate),
                     },
                     {
                         accessor: 'utilidad',
                         Header: 'Utilidad',
                         width: 'auto',
-                        render: (c) => formatCurrency(c.utilidad ?? 0),
+                        render: (c) => formatMoney(c.utilidad ?? 0, currency, rate),
                     },
                     {
                         accessor: 'num_ventas',
@@ -129,7 +133,7 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
                 console.error('Failed to print clients list:', err);
             }
         },
-        [search, ruta, total, sort, showNoe],
+        [search, ruta, total, sort, showNoe, currencyRate],
     );
 
     const totalPages = Math.ceil(total / LIMIT);

@@ -1,5 +1,6 @@
 import DateRangePicker from 'components/DateRangePicker';
 import Table from 'components/Table';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useMemo, useState } from 'react';
@@ -15,7 +16,7 @@ import {
     useProviderSales,
     useProviderSummary,
 } from 'hooks/useProviders';
-import { formatCurrency } from 'utils/format';
+import { formatCurrency, formatMoney } from 'utils/format';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import SaleDetailModal from './SaleDetailModal';
 import './styles.css';
@@ -105,6 +106,7 @@ const StatCard = ({ label, value, variant, icon: Icon, loading }) => (
 
 const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const { showNoe } = useContext(ShowNoeContext);
+    const { currencyRate } = useContext(CurrencyRateContext);
 
     const today = DateTime.now().toISODate();
     const oneMonthAgo = DateTime.now().minus({ months: 1 }).toISODate();
@@ -337,13 +339,15 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 });
                 const invoices = result.data || [];
                 const tables = [];
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
                 for (const inv of invoices) {
                     const detail = await fetchPurchaseDetail(provider.IdProveedor, inv.idFactura);
                     const rows = detail.productos.map((p) => [
                         p.descripcion,
                         String(Number(p.cantidad)),
-                        formatCurrency(p.precio),
-                        formatCurrency(p.subtotal),
+                        formatMoney(p.precio, currency, rate),
+                        formatMoney(p.subtotal, currency, rate),
                     ]);
                     tables.push(
                         {
@@ -362,7 +366,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                                         '',
                                         '',
                                         { text: 'Total', bold: true },
-                                        { text: formatCurrency(detail.total), bold: true },
+                                        { text: formatMoney(detail.total, currency, rate), bold: true },
                                     ],
                                 ],
                             },
@@ -401,7 +405,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 console.error('Failed to print all purchases:', err);
             }
         },
-        [provider?.IdProveedor, provider?.Empresa, dateRange, purchasesSearch, purchasesData?.total],
+        [provider?.IdProveedor, provider?.Empresa, dateRange, purchasesSearch, purchasesData?.total, currencyRate],
     );
 
     const handlePrintAllSales = useCallback(
@@ -418,13 +422,15 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 });
                 const invoices = result.data || [];
                 const tables = [];
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
                 for (const inv of invoices) {
                     const detail = await fetchSaleDetail(provider.IdProveedor, inv.idFactura, showNoe);
                     const rows = detail.productos.map((p) => [
                         p.descripcion,
                         String(Number(p.cantidad)),
-                        formatCurrency(p.precio),
-                        formatCurrency(p.subtotal),
+                        formatMoney(p.precio, currency, rate),
+                        formatMoney(p.subtotal, currency, rate),
                     ]);
                     tables.push(
                         {
@@ -443,7 +449,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                                         '',
                                         '',
                                         { text: 'Total', bold: true },
-                                        { text: formatCurrency(detail.total), bold: true },
+                                        { text: formatMoney(detail.total, currency, rate), bold: true },
                                     ],
                                 ],
                             },
@@ -482,7 +488,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 console.error('Failed to print all sales:', err);
             }
         },
-        [provider?.IdProveedor, provider?.Empresa, dateRange, salesSearch, salesData?.total, showNoe],
+        [provider?.IdProveedor, provider?.Empresa, dateRange, salesSearch, salesData?.total, showNoe, currencyRate],
     );
 
     const handlePrintSale = useCallback(

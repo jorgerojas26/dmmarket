@@ -1,11 +1,12 @@
 import { fetchProvidersList } from 'api/providers';
 import Table from 'components/Table';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { useProvidersList } from 'hooks/useProviders';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatCurrency, formatNumber } from 'utils/format';
+import { formatMoney, formatNumber } from 'utils/format';
 import './styles.css';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -14,6 +15,7 @@ const LIMIT = 20;
 
 const ProvidersTable = ({ onRowSelect }) => {
     const { showNoe } = useContext(ShowNoeContext);
+    const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState({ sortBy: 'total_ventas', sortDir: 'desc' });
@@ -54,6 +56,8 @@ const ProvidersTable = ({ onRowSelect }) => {
                     showNoe,
                 });
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
                 const pdfColumns = [
                     {
                         accessor: 'IdProveedor',
@@ -66,7 +70,7 @@ const ProvidersTable = ({ onRowSelect }) => {
                         accessor: 'total_compras',
                         Header: 'Total Compras',
                         width: 'auto',
-                        render: (p) => formatCurrency(p.total_compras ?? 0),
+                        render: (p) => formatMoney(p.total_compras ?? 0, currency, rate),
                     },
                     {
                         accessor: 'num_compras',
@@ -78,7 +82,7 @@ const ProvidersTable = ({ onRowSelect }) => {
                         accessor: 'total_ventas',
                         Header: 'Total Ventas',
                         width: 'auto',
-                        render: (p) => formatCurrency(p.total_ventas ?? 0),
+                        render: (p) => formatMoney(p.total_ventas ?? 0, currency, rate),
                     },
                     {
                         accessor: 'num_ventas',
@@ -134,7 +138,7 @@ const ProvidersTable = ({ onRowSelect }) => {
                 console.error('Failed to print providers list:', err);
             }
         },
-        [search, total, sort, showNoe],
+        [search, total, sort, showNoe, currencyRate],
     );
 
     const totalPages = Math.ceil(total / LIMIT);

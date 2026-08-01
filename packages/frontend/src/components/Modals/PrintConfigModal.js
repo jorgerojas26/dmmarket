@@ -5,9 +5,10 @@ import './PrintConfigModal.css';
 /**
  * Config dialog shown before every global print in `Table`.
  *
- * Lets the user pick which columns to print (all checked by default) and the page
- * orientation. On confirm it calls `onPrint({ columns, orientation })` where `columns`
- * is the filtered array of column definitions.
+ * Lets the user pick which columns to print (all checked by default), the page
+ * orientation and the currency for monetary values. On confirm it calls
+ * `onPrint({ columns, orientation, currency })` where `columns` is the filtered
+ * array of column definitions and `currency` is 'USD' or 'Bs'.
  */
 const getColumnKey = (col) => col.accessor ?? col.id ?? col.Header;
 
@@ -16,12 +17,14 @@ const getColumnLabel = (col) => (typeof col.Header === 'string' ? col.Header : S
 const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait', onClose, onPrint }) => {
     const [selectedKeys, setSelectedKeys] = useState(() => new Set(columns.map(getColumnKey)));
     const [orientation, setOrientation] = useState(initialOrientation);
+    const [currency, setCurrency] = useState('USD');
 
     // Every time the modal opens, start with all columns checked and the default orientation.
     useEffect(() => {
         if (show) {
             setSelectedKeys(new Set(columns.map(getColumnKey)));
             setOrientation(initialOrientation);
+            setCurrency('USD');
         }
     }, [show, columns, initialOrientation]);
 
@@ -39,7 +42,7 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
 
     const handlePrint = () => {
         if (selectedColumns.length === 0) return;
-        onPrint({ columns: selectedColumns, orientation });
+        onPrint({ columns: selectedColumns, orientation, currency });
     };
 
     return (
@@ -112,6 +115,30 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
                                 label="Vertical"
                                 checked={orientation === 'portrait'}
                                 onChange={() => setOrientation('portrait')}
+                            />
+                        </div>
+                    </Form.Group>
+
+                    <Form.Group className="mt-4">
+                        <Form.Label className="fw-bold">Moneda de los valores</Form.Label>
+                        <div>
+                            <Form.Check
+                                inline
+                                type="radio"
+                                name="print-currency"
+                                id="print-currency-usd"
+                                label="Dólares (USD)"
+                                checked={currency === 'USD'}
+                                onChange={() => setCurrency('USD')}
+                            />
+                            <Form.Check
+                                inline
+                                type="radio"
+                                name="print-currency"
+                                id="print-currency-bs"
+                                label="Bolívares (Bs)"
+                                checked={currency === 'Bs'}
+                                onChange={() => setCurrency('Bs')}
                             />
                         </div>
                     </Form.Group>

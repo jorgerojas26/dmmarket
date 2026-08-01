@@ -47,7 +47,7 @@ import './styles.css';
  *
  * @param {object}         [props.print]                              - Print config.
  * @param {boolean}         props.print.enabled
- * @param {Function}       [props.print.onGlobalPrint]                - Global‑print callback. Runs after the config dialog; receives `{ columns, orientation }` (columns = the selected column definitions).
+ * @param {Function}       [props.print.onGlobalPrint]                - Global‑print callback. Runs after the config dialog; receives `{ columns, orientation, currency }` (columns = selected column definitions, currency = 'USD' | 'Bs').
  * @param {string}         [props.print.defaultOrientation='portrait'] - Page orientation preselected in the config dialog.
  * @param {string}         [props.print.globalPrintLabel='Imprimir']  - Global‑print button label.
  * @param {boolean}        [props.print.perRowPrint=false]            - Show per‑row print button.

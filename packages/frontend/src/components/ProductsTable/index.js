@@ -1,8 +1,7 @@
-import CurrencyModal from 'components/Modals/CurrencyModal';
 import Table from 'components/Table';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useMemo, useRef } from 'react';
 import { Card } from 'react-bootstrap';
 import { CurrencyRateContext } from '../../context/currency_rate';
 import pdf from './pdf';
@@ -25,10 +24,6 @@ const textSortType = (rowA, rowB, columnId) => {
 
 const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
-
-    const [showCurrencyModal, setShowCurrencyModal] = useState(false);
-    // Config chosen in the print dialog (columns + orientation), passed to the PDF builder.
-    const [printConfig, setPrintConfig] = useState(null);
 
     // Rows in the table's current sort order (for PDF export).
     const sortedRowsRef = useRef([]);
@@ -71,6 +66,34 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
         [quantityTotal, pesoTotal, totalSummary],
     );
 
+    // Print: convert totals to the currency chosen in the print config dialog.
+    const handlePrint = useCallback(
+        (config) => {
+            let productsData = sortedRowsRef.current;
+            const rate = currencyRate?.Cambio;
+            const currency = config?.currency;
+
+            if (currency === 'Bs' && rate) {
+                productsData = productsData.map((item) => ({
+                    ...item,
+                    total: Number(item.price * item.quantity * rate).toFixed(2),
+                }));
+            }
+
+            const convertedSummary =
+                currency === 'Bs' && rate && totalSummary != null ? Number(totalSummary) * rate : totalSummary;
+
+            const pdfData = pdf(
+                productsData,
+                { quantityTotal, totalSummary: convertedSummary, pesoTotal, currency },
+                config,
+            );
+
+            pdfMake.createPdf(pdfData).open();
+        },
+        [currencyRate?.Cambio, quantityTotal, pesoTotal, totalSummary],
+    );
+
     return (
         <Card className="h-100">
             <Card.Header>
@@ -86,10 +109,7 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                     onSortedRowsChange={handleSortedRowsChange}
                     print={{
                         enabled: true,
-                        onGlobalPrint: (config) => {
-                            setPrintConfig(config);
-                            setShowCurrencyModal(true);
-                        },
+                        onGlobalPrint: handlePrint,
                     }}
                     sorting={{
                         enabled: true,
@@ -104,32 +124,6 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                     }}
                 />
             </Card.Body>
-            {showCurrencyModal && (
-                <CurrencyModal
-                    show={showCurrencyModal}
-                    onClose={() => setShowCurrencyModal(false)}
-                    onSubmit={async (currency) => {
-                        let productsData = sortedRowsRef.current;
-
-                        if (currency === 'Bs') {
-                            productsData = productsData.map((item) => {
-                                return {
-                                    ...item,
-                                    total: Number(item.price * item.quantity * currencyRate?.Cambio).toFixed(2),
-                                };
-                            });
-                        }
-
-                        const pdfData = pdf(
-                            productsData,
-                            { quantityTotal, totalSummary, pesoTotal, currency },
-                            printConfig,
-                        );
-
-                        pdfMake.createPdf(pdfData).open();
-                    }}
-                />
-            )}
         </Card>
     );
 };

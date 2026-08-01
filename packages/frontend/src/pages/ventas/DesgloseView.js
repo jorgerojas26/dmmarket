@@ -9,6 +9,7 @@ import SaleReportTable from 'components/SaleReportTable';
 import productosColumns from 'components/SaleReportTable/productosColumns';
 import ProveedorSearch from 'components/ProveedorSearch';
 import { darkSelectStyles } from 'components/selectStyles';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
 import { useClientRoutes } from 'hooks/useClients';
@@ -19,6 +20,7 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import Select from 'react-select';
+import { formatMoney } from 'utils/format';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -30,6 +32,7 @@ const formatCurrency = (value) => {
 
 const DesgloseView = ({ isActive }) => {
     const { showNoe } = useContext(ShowNoeContext);
+    const { currencyRate } = useContext(CurrencyRateContext);
     const history = useHistory();
     const location = useLocation();
 
@@ -317,6 +320,8 @@ const DesgloseView = ({ isActive }) => {
                 });
                 const data = result?.data || [];
                 const total = data.reduce((s, r) => s + (r.monto || 0), 0);
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
                 const pdfColumns = [
                     { accessor: 'invoiceId', Header: 'Factura', width: 'auto', render: (r) => String(r.invoiceId) },
@@ -328,12 +333,17 @@ const DesgloseView = ({ isActive }) => {
                     },
                     { accessor: 'cliente', Header: 'Cliente', width: '*', render: (r) => r.cliente || '' },
                     { accessor: 'vendedor', Header: 'Vendedor', width: '*', render: (r) => r.vendedor || '' },
-                    { accessor: 'monto', Header: 'Monto', width: 'auto', render: (r) => formatCurrency(r.monto) },
+                    {
+                        accessor: 'monto',
+                        Header: 'Monto',
+                        width: 'auto',
+                        render: (r) => formatMoney(r.monto, currency, rate),
+                    },
                     {
                         accessor: 'utilidad',
                         Header: 'Utilidad',
                         width: 'auto',
-                        render: (r) => formatCurrency(r.utilidad),
+                        render: (r) => formatMoney(r.utilidad, currency, rate),
                     },
                     {
                         accessor: 'promedio',
@@ -383,7 +393,7 @@ const DesgloseView = ({ isActive }) => {
                                                   {},
                                                   {},
                                                   {
-                                                      text: `Total: ${formatCurrency(total)}`,
+                                                      text: `Total: ${formatMoney(total, currency, rate)}`,
                                                       style: 'total',
                                                       colSpan: 3,
                                                   },
@@ -423,6 +433,7 @@ const DesgloseView = ({ isActive }) => {
             facturasSearch,
             facturasTotal,
             showNoe,
+            currencyRate,
         ],
     );
 
@@ -454,6 +465,8 @@ const DesgloseView = ({ isActive }) => {
                         ? ''
                         : num.toLocaleString(undefined, { maximumFractionDigits: 3 });
                 };
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
                 const pdfColumns = [
                     { accessor: 'product', Header: 'Producto', width: '*', render: (r) => r.product || '' },
@@ -468,13 +481,13 @@ const DesgloseView = ({ isActive }) => {
                         accessor: 'rawProfit',
                         Header: 'Bruto',
                         width: 'auto',
-                        render: (r) => formatCurrency(r.rawProfit),
+                        render: (r) => formatMoney(r.rawProfit, currency, rate),
                     },
                     {
                         accessor: 'netProfit',
                         Header: 'Utilidad',
                         width: 'auto',
-                        render: (r) => formatCurrency(r.netProfit),
+                        render: (r) => formatMoney(r.netProfit, currency, rate),
                     },
                     {
                         accessor: 'averageProfitPercent',
@@ -522,8 +535,8 @@ const DesgloseView = ({ isActive }) => {
                                                   { text: 'Total', style: 'total' },
                                                   '',
                                                   { text: formatPeso(totalPeso), style: 'total' },
-                                                  { text: formatCurrency(totalBruto), style: 'total' },
-                                                  { text: formatCurrency(totalUtilidad), style: 'total' },
+                                                  { text: formatMoney(totalBruto, currency, rate), style: 'total' },
+                                                  { text: formatMoney(totalUtilidad, currency, rate), style: 'total' },
                                                   '',
                                               ],
                                           ]
@@ -559,6 +572,7 @@ const DesgloseView = ({ isActive }) => {
             productosSearch,
             productosTotal,
             showNoe,
+            currencyRate,
         ],
     );
 

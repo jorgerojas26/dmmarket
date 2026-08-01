@@ -1,9 +1,10 @@
 import { ResponsiveBar } from '@nivo/bar';
 import Table from 'components/Table';
+import { CurrencyRateContext } from 'context/currency_rate';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useMemo, useState } from 'react';
-import { formatCurrency, formatNumber } from 'utils/format';
+import { useCallback, useContext, useMemo, useState } from 'react';
+import { formatMoney, formatNumber } from 'utils/format';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -102,9 +103,10 @@ const buildColumns = (cfg) => {
 
 // ── pdfmake document ──
 
-const buildParetoPdf = (products, filterLabel, cfg, config = {}) => {
+const buildParetoPdf = (products, filterLabel, cfg, config = {}, rate) => {
     const hasQuantity = Boolean(cfg.quantityKey);
     const total = products.reduce((s, p) => s + Number(p[cfg.valueKey] || 0), 0);
+    const currency = config?.currency;
     // Column metadata for the PDF, keyed by accessor (order defines layout).
     const pdfColumns = [
         { accessor: 'rank', Header: '#', width: 30, render: (p) => String(p.rank) },
@@ -113,7 +115,7 @@ const buildParetoPdf = (products, filterLabel, cfg, config = {}) => {
             accessor: cfg.valueKey,
             Header: cfg.valueLabel,
             width: 'auto',
-            render: (p) => formatCurrency(p[cfg.valueKey]),
+            render: (p) => formatMoney(p[cfg.valueKey], currency, rate),
         },
         ...(hasQuantity
             ? [
@@ -146,7 +148,7 @@ const buildParetoPdf = (products, filterLabel, cfg, config = {}) => {
             { text: '', colSpan: hasQuantity ? 4 : 3, border: [false, true, false, false] },
             ...(hasQuantity ? [{}, {}, {}] : [{}, {}]),
             {
-                text: `Total: ${formatCurrency(total)}`,
+                text: `Total: ${formatMoney(total, currency, rate)}`,
                 style: 'total',
             },
             {},
@@ -262,6 +264,7 @@ const CumulativeLine = ({ bars, xScale, innerHeight, innerWidth, data }) => {
 
 const ParetoChart = ({ products = [], summary = null, loading = false, config = {} }) => {
     const cfg = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
+    const { currencyRate } = useContext(CurrencyRateContext);
     const [abcFilter, setAbcFilter] = useState('all');
     const [tablePage, setTablePage] = useState(1);
 
@@ -319,10 +322,16 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
                 B: 'Clase B (80–95% acumulado)',
                 C: 'Clase C (95–100% acumulado)',
             };
-            const docDef = buildParetoPdf(filteredProducts, labels[abcFilter] || cfg.allFilterLabel, cfg, config);
+            const docDef = buildParetoPdf(
+                filteredProducts,
+                labels[abcFilter] || cfg.allFilterLabel,
+                cfg,
+                config,
+                currencyRate?.Cambio,
+            );
             pdfMake.createPdf(docDef).open();
         },
-        [filteredProducts, abcFilter, cfg],
+        [filteredProducts, abcFilter, cfg, currencyRate?.Cambio],
     );
 
     // ── loading / empty ──
