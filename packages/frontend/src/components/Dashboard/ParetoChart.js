@@ -10,89 +10,121 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 const CHART_TOP_N = 40;
 const PAGE_SIZE = 20;
 
+// ── entity config ──
+// Defaults describe the sales/products pareto. The clients dashboard passes a
+// `config` override so both share the exact same chart, table and PDF.
+
+const DEFAULT_CONFIG = {
+    nameKey: 'product', // field with the entity name
+    valueKey: 'netProfit', // field with the monetary value
+    quantityKey: 'quantity', // field with units (null hides the column)
+    entityLabel: 'Producto', // singular entity label (column header)
+    valueLabel: 'Ganancia',
+    valueAxisLabel: 'Ganancia Neta',
+    axisLegend: 'Productos (ordenados por ganancia neta)',
+    summaryValueKey: 'profitPercent',
+    summaryPctLabel: 'de ganancia',
+    summaryTotalKey: 'totalProducts',
+    summaryTotalLabel: 'Total SKUs',
+    summaryTotalUnit: 'productos',
+    title: 'Análisis Pareto (ABC)',
+    subtitle: '80% de la ganancia viene del 20% de productos',
+    pdfTitle: 'Análisis Pareto (ABC) de Productos',
+    allFilterLabel: 'Todos los productos',
+    emptyTableMessage: 'Sin productos en esta clase',
+};
+
 // ── table columns ──
 
-const paretoColumns = [
-    {
-        Header: '#',
-        accessor: 'rank',
-    },
-    {
-        Header: 'Producto',
-        accessor: 'product',
-    },
-    {
-        Header: 'Ganancia',
-        accessor: 'netProfit',
-        Cell: ({ value }) => formatCurrency(value),
-    },
-    {
-        Header: 'Unidades',
-        accessor: 'quantity',
-        Cell: ({ value }) => formatNumber(value),
-    },
-    {
-        Header: '% Acum.',
-        accessor: 'cumulativePercent',
-        Cell: ({ value }) => `${value}%`,
-    },
-    {
-        Header: 'Clase',
-        accessor: 'abcClass',
-        Cell: ({ value }) => {
-            if (!value) return '\u2014';
-            const colors = {
-                A: { bg: 'rgba(34,197,94,0.12)', fg: '#22c55e' },
-                B: { bg: 'rgba(245,158,11,0.12)', fg: '#f59e0b' },
-                C: { bg: 'rgba(239,68,68,0.12)', fg: '#ef4444' },
-            };
-            const c = colors[value] || { bg: 'transparent', fg: '#9ca3af' };
-            return (
-                <span
-                    style={{
-                        display: 'inline-block',
-                        padding: '1px 10px',
-                        borderRadius: 10,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: c.bg,
-                        color: c.fg,
-                        lineHeight: '20px',
-                    }}
-                >
-                    {value}
-                </span>
-            );
+const buildColumns = (cfg) => {
+    const columns = [
+        {
+            Header: '#',
+            accessor: 'rank',
         },
-    },
-];
+        {
+            Header: cfg.entityLabel,
+            accessor: cfg.nameKey,
+        },
+        {
+            Header: cfg.valueLabel,
+            accessor: cfg.valueKey,
+            Cell: ({ value }) => formatCurrency(value),
+        },
+    ];
+
+    if (cfg.quantityKey) {
+        columns.push({
+            Header: 'Unidades',
+            accessor: cfg.quantityKey,
+            Cell: ({ value }) => formatNumber(value),
+        });
+    }
+
+    columns.push(
+        {
+            Header: '% Acum.',
+            accessor: 'cumulativePercent',
+            Cell: ({ value }) => `${value}%`,
+        },
+        {
+            Header: 'Clase',
+            accessor: 'abcClass',
+            Cell: ({ value }) => {
+                if (!value) return '\u2014';
+                const colors = {
+                    A: { bg: 'rgba(34,197,94,0.12)', fg: '#22c55e' },
+                    B: { bg: 'rgba(245,158,11,0.12)', fg: '#f59e0b' },
+                    C: { bg: 'rgba(239,68,68,0.12)', fg: '#ef4444' },
+                };
+                const c = colors[value] || { bg: 'transparent', fg: '#9ca3af' };
+                return (
+                    <span
+                        style={{
+                            display: 'inline-block',
+                            padding: '1px 10px',
+                            borderRadius: 10,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            background: c.bg,
+                            color: c.fg,
+                            lineHeight: '20px',
+                        }}
+                    >
+                        {value}
+                    </span>
+                );
+            },
+        },
+    );
+    return columns;
+};
 
 // ── pdfmake document ──
 
-const buildParetoPdf = (products, filterLabel) => {
-    const total = products.reduce((s, p) => s + Number(p.netProfit || 0), 0);
+const buildParetoPdf = (products, filterLabel, cfg) => {
+    const hasQuantity = Boolean(cfg.quantityKey);
+    const total = products.reduce((s, p) => s + Number(p[cfg.valueKey] || 0), 0);
     const body = [
         [
             { text: '#', style: 'th' },
-            { text: 'Producto', style: 'th' },
-            { text: 'Ganancia', style: 'th' },
-            { text: 'Unidades', style: 'th' },
+            { text: cfg.entityLabel, style: 'th' },
+            { text: cfg.valueLabel, style: 'th' },
+            ...(hasQuantity ? [{ text: 'Unidades', style: 'th' }] : []),
             { text: '% Acum.', style: 'th' },
             { text: 'Clase', style: 'th' },
         ],
         ...products.map((p) => [
             String(p.rank),
-            p.product,
-            formatCurrency(p.netProfit),
-            formatNumber(p.quantity),
+            p[cfg.nameKey],
+            formatCurrency(p[cfg.valueKey]),
+            ...(hasQuantity ? [formatNumber(p[cfg.quantityKey])] : []),
             `${p.cumulativePercent}%`,
             p.abcClass,
         ]),
         [
-            { text: '', colSpan: 4, border: [false, true, false, false] },
-            {},
-            {},
-            {},
+            { text: '', colSpan: hasQuantity ? 4 : 3, border: [false, true, false, false] },
+            ...(hasQuantity ? [{}, {}, {}] : [{}, {}]),
             {
                 text: `Total: ${formatCurrency(total)}`,
                 style: 'total',
@@ -108,7 +140,7 @@ const buildParetoPdf = (products, filterLabel) => {
                 style: 'header',
             },
             {
-                text: 'Análisis Pareto (ABC) de Productos',
+                text: cfg.pdfTitle,
                 style: 'subheader',
             },
             {
@@ -119,7 +151,7 @@ const buildParetoPdf = (products, filterLabel) => {
             {
                 style: 'table',
                 table: {
-                    widths: [30, '*', 'auto', 'auto', 'auto', 'auto'],
+                    widths: [30, '*', 'auto', ...(hasQuantity ? ['auto'] : []), 'auto', 'auto'],
                     body,
                 },
             },
@@ -208,7 +240,8 @@ const CumulativeLine = ({ bars, xScale, innerHeight, innerWidth, data }) => {
 
 // ── component ──
 
-const ParetoChart = ({ products = [], summary = null, loading = false }) => {
+const ParetoChart = ({ products = [], summary = null, loading = false, config = {} }) => {
+    const cfg = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
     const [abcFilter, setAbcFilter] = useState('all');
     const [tablePage, setTablePage] = useState(1);
 
@@ -217,11 +250,11 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
         if (!products.length) return [];
         const topN = products.slice(0, CHART_TOP_N);
         const rest = products.slice(CHART_TOP_N);
-        const restProfit = rest.reduce((s, p) => s + Number(p.netProfit || 0), 0);
+        const restProfit = rest.reduce((s, p) => s + Number(p[cfg.valueKey] || 0), 0);
 
         const rows = topN.map((p) => ({
-            product: p.product,
-            netProfit: Number(p.netProfit || 0),
+            product: p[cfg.nameKey],
+            netProfit: Number(p[cfg.valueKey] || 0),
             cumulativePercent: p.cumulativePercent,
         }));
 
@@ -260,14 +293,14 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
     /* ---- print handler ---- */
     const handlePrint = useCallback(() => {
         const labels = {
-            all: 'Todos los productos',
+            all: cfg.allFilterLabel,
             A: 'Clase A (0–80% acumulado)',
             B: 'Clase B (80–95% acumulado)',
             C: 'Clase C (95–100% acumulado)',
         };
-        const docDef = buildParetoPdf(filteredProducts, labels[abcFilter] || 'Todos los productos');
+        const docDef = buildParetoPdf(filteredProducts, labels[abcFilter] || cfg.allFilterLabel, cfg);
         pdfMake.createPdf(docDef).open();
-    }, [filteredProducts, abcFilter]);
+    }, [filteredProducts, abcFilter, cfg]);
 
     // ── loading / empty ──
     if (loading) {
@@ -293,19 +326,19 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
               {
                   label: 'Clase A',
                   count: summary.classA.count,
-                  pct: summary.classA.profitPercent,
+                  pct: summary.classA[cfg.summaryValueKey],
                   accent: '#22c55e',
               },
               {
                   label: 'Clase B',
                   count: summary.classB.count,
-                  pct: summary.classB.profitPercent,
+                  pct: summary.classB[cfg.summaryValueKey],
                   accent: '#f59e0b',
               },
               {
                   label: 'Clase C',
                   count: summary.classC.count,
-                  pct: summary.classC.profitPercent,
+                  pct: summary.classC[cfg.summaryValueKey],
                   accent: '#ef4444',
               },
           ]
@@ -322,8 +355,7 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
         <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
             {/* ── Title ── */}
             <div className="dashboard-inline-title" style={{ marginBottom: 16 }}>
-                Análisis Pareto (ABC) &mdash;{' '}
-                <span style={{ fontWeight: 400, color: '#9ca3af' }}>80% de la ganancia viene del 20% de productos</span>
+                {cfg.title} &mdash; <span style={{ fontWeight: 400, color: '#9ca3af' }}>{cfg.subtitle}</span>
             </div>
 
             {/* ── ABC KPI cards ── */}
@@ -347,7 +379,9 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
                     >
                         <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>{card.label}</div>
                         <div style={{ fontSize: 20, fontWeight: 700, color: '#e4e6ea' }}>{card.count}</div>
-                        <div style={{ fontSize: 12, color: card.accent }}>{card.pct}% de ganancia</div>
+                        <div style={{ fontSize: 12, color: card.accent }}>
+                            {card.pct}% {cfg.summaryPctLabel}
+                        </div>
                     </div>
                 ))}
                 <div
@@ -358,9 +392,11 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
                         padding: '10px 14px',
                     }}
                 >
-                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Total SKUs</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: '#e4e6ea' }}>{products.length}</div>
-                    <div style={{ fontSize: 12, color: '#6366f1' }}>productos</div>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>{cfg.summaryTotalLabel}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#e4e6ea' }}>
+                        {summary?.[cfg.summaryTotalKey] ?? products.length}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6366f1' }}>{cfg.summaryTotalUnit}</div>
                 </div>
             </div>
 
@@ -383,7 +419,7 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
                         tickPadding: 6,
                         tickRotation: -50,
                         format: (v) => (v.length > 16 ? `${v.slice(0, 15)}…` : v),
-                        legend: 'Productos (ordenados por ganancia neta)',
+                        legend: cfg.axisLegend,
                         legendPosition: 'middle',
                         legendOffset: 78,
                     }}
@@ -391,7 +427,7 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
                         tickSize: 0,
                         tickPadding: 8,
                         format: (v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`),
-                        legend: 'Ganancia Neta',
+                        legend: cfg.valueAxisLabel,
                         legendPosition: 'middle',
                         legendOffset: -55,
                     }}
@@ -412,7 +448,9 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
                         return (
                             <div className="tooltip-container" style={{ minWidth: 200 }}>
                                 <strong style={{ display: 'block', marginBottom: 6 }}>{indexValue}</strong>
-                                <div>Ganancia: {formatCurrency(value)}</div>
+                                <div>
+                                    {cfg.valueLabel}: {formatCurrency(value)}
+                                </div>
                                 {item && <div>% Acumulado: {item.cumulativePercent}%</div>}
                             </div>
                         );
@@ -514,8 +552,8 @@ const ParetoChart = ({ products = [], summary = null, loading = false }) => {
 
             <Table
                 data={tableData}
-                columns={paretoColumns}
-                emptyMessage="Sin productos en esta clase"
+                columns={buildColumns(cfg)}
+                emptyMessage={cfg.emptyTableMessage}
                 maxHeight={null}
                 pagination={{
                     enabled: true,

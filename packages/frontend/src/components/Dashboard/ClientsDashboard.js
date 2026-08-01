@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import { formatCurrency, formatNumber, formatPercent } from 'utils/format';
 import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
+import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
 
 const nivoTheme = {
@@ -74,6 +75,30 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
     );
 
     const kpis = data?.kpis;
+
+    // ParetoChart config for clients — stable reference so internal memoization holds.
+    const paretoConfig = useMemo(
+        () => ({
+            nameKey: 'name',
+            valueKey: 'total_usd',
+            quantityKey: null,
+            entityLabel: 'Cliente',
+            valueLabel: 'Ventas',
+            valueAxisLabel: 'Ventas',
+            axisLegend: 'Clientes (ordenados por ventas)',
+            summaryValueKey: 'revenuePercent',
+            summaryPctLabel: 'de ventas',
+            summaryTotalKey: 'totalClients',
+            summaryTotalLabel: 'Total Clientes',
+            summaryTotalUnit: 'clientes',
+            title: 'Análisis Pareto (ABC) de Clientes',
+            subtitle: '80% de las ventas viene del 20% de los clientes',
+            pdfTitle: 'Análisis Pareto (ABC) de Clientes',
+            allFilterLabel: 'Todos los clientes',
+            emptyTableMessage: 'Sin clientes en esta clase',
+        }),
+        [],
+    );
 
     if (error) {
         return <div className="alert alert-danger">Error al cargar el dashboard: {error.message}</div>;
@@ -544,75 +569,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
             {data?.abc?.summary && (
                 <div className="row g-3 mb-4">
                     <div className="col-12">
-                        <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                            <PanelHelpTitle
-                                title="ABC Clientes"
-                                subtitle={
-                                    <span style={{ fontWeight: 400, fontSize: 12, color: '#64748b' }}>
-                                        {' '}
-                                        (A: {data.abc.summary.classA.count} clientes &middot;{' '}
-                                        {formatPercent(data.abc.summary.classA.revenuePercent)} &middot; B:{' '}
-                                        {data.abc.summary.classB.count} clientes &middot;{' '}
-                                        {formatPercent(data.abc.summary.classB.revenuePercent)} &middot; C:{' '}
-                                        {data.abc.summary.classC.count} clientes &middot;{' '}
-                                        {formatPercent(data.abc.summary.classC.revenuePercent)})
-                                    </span>
-                                }
-                                help={{
-                                    que: 'Ordena a los 50 clientes que más venden y los clasifica: A acumulan el 80% de las ventas, B el siguiente 15% y C el 5% restante.',
-                                    leer: 'Barras verdes = clientes clase A (los más importantes), amarillas = B, grises = C.',
-                                    servir: 'Saber qué clientes cuidar con prioridad (los A) y cuáles son complemento.',
-                                }}
-                            />
-                            <div style={{ height: 300 }}>
-                                {data.abc.clients.length > 0 ? (
-                                    <ResponsiveBar
-                                        data={data.abc.clients}
-                                        theme={nivoTheme}
-                                        keys={['total_usd']}
-                                        indexBy="name"
-                                        margin={{ top: 10, right: 50, bottom: 50, left: 50 }}
-                                        colors={(d) => {
-                                            const client = d.data;
-                                            if (client.abcClass === 'A') return '#22c55e';
-                                            if (client.abcClass === 'B') return '#f59e0b';
-                                            return '#64748b';
-                                        }}
-                                        borderRadius={2}
-                                        axisBottom={null}
-                                        axisLeft={{
-                                            tickSize: 5,
-                                            tickPadding: 5,
-                                        }}
-                                        label={(d) => `${d.data.abcClass}`}
-                                        labelTextColor="#fff"
-                                        tooltip={({ data: d }) => (
-                                            <div
-                                                style={{
-                                                    background: '#1a1d21',
-                                                    padding: '6px 12px',
-                                                    border: '1px solid #2f3338',
-                                                    borderRadius: 6,
-                                                    fontSize: 12,
-                                                    color: '#e9ecef',
-                                                }}
-                                            >
-                                                <strong>{d.name}</strong>
-                                                <br />
-                                                {formatCurrency(d.total_usd)} &middot; {d.cumulativePercent}% acum
-                                                <br />
-                                                Clase {d.abcClass}
-                                            </div>
-                                        )}
-                                        enableGridY={true}
-                                    />
-                                ) : (
-                                    <div className="d-flex align-items-center justify-content-center h-100 text-muted">
-                                        Sin datos
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        <ParetoChart products={data.abc.clients} summary={data.abc.summary} config={paretoConfig} />
                     </div>
                 </div>
             )}
