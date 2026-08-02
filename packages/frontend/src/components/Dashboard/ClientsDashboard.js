@@ -1,6 +1,7 @@
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsiveLine } from '@nivo/line';
 import { ResponsivePie } from '@nivo/pie';
+import ChartTooltip from 'components/ChartTooltip';
 import { useClientsDashboard } from 'hooks/useClients';
 import { DateTime } from 'luxon';
 import { useMemo } from 'react';
@@ -54,6 +55,11 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
             value: s.revenue,
         }));
     }, [data?.revenueBySegment]);
+
+    const segmentTotal = useMemo(
+        () => segmentPieData.reduce((sum, s) => sum + Number(s.value || 0), 0),
+        [segmentPieData],
+    );
 
     const inactiveBucketData = useMemo(() => {
         if (!data?.inactiveBuckets) return [];
@@ -383,6 +389,12 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                     areaOpacity={0.1}
                                     useMesh={true}
                                     enableGridX={false}
+                                    tooltip={({ point }) => (
+                                        <ChartTooltip title={String(point.data.x)}>
+                                            <span>Clientes activos</span>
+                                            <strong>{formatNumber(point.data.y)}</strong>
+                                        </ChartTooltip>
+                                    )}
                                 />
                             ) : (
                                 <div className="d-flex align-items-center justify-content-center h-100 text-muted">
@@ -420,6 +432,19 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                     arcLinkLabelsColor="#adb5bd"
                                     arcLinkLabelsThickness={1}
                                     valueFormat={(v) => formatCurrency(v)}
+                                    tooltip={({ datum }) => (
+                                        <ChartTooltip title={datum.label} color={datum.color}>
+                                            <span>Revenue</span>
+                                            <strong>{formatCurrency(datum.value)}</strong>
+                                            <span>% del total</span>
+                                            <strong>
+                                                {segmentTotal > 0
+                                                    ? ((datum.value / segmentTotal) * 100).toFixed(1)
+                                                    : '0.0'}
+                                                %
+                                            </strong>
+                                        </ChartTooltip>
+                                    )}
                                 />
                             ) : (
                                 <div className="d-flex align-items-center justify-content-center h-100 text-muted">
@@ -481,23 +506,14 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                         },
                                     ]}
                                     tooltip={({ id, value, data }) => (
-                                        <div
-                                            style={{
-                                                background: '#1a1d21',
-                                                padding: '6px 12px',
-                                                border: '1px solid #2f3338',
-                                                borderRadius: 6,
-                                                fontSize: 12,
-                                                color: '#e9ecef',
-                                            }}
-                                        >
-                                            <strong>{data.Nombre}</strong>
-                                            <br />
-                                            {id}: {formatNumber(value)}
-                                            <br />
-                                            Cobertura: {formatPercent(data.coberturaPct)} ·{' '}
-                                            {formatPercent(data.sharePct)} de los clientes
-                                        </div>
+                                        <ChartTooltip title={data.Nombre}>
+                                            <span>{id}</span>
+                                            <strong>{formatNumber(value)}</strong>
+                                            <span>Cobertura</span>
+                                            <strong>{formatPercent(data.coberturaPct ?? 0)}</strong>
+                                            <span>De los clientes</span>
+                                            <strong>{formatPercent(data.sharePct ?? 0)}</strong>
+                                        </ChartTooltip>
                                     )}
                                 />
                             </div>
@@ -554,6 +570,14 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                     labelSkipWidth={20}
                                     labelSkipHeight={16}
                                     enableGridY={true}
+                                    tooltip={({ id, value, data }) => (
+                                        <ChartTooltip title={String(data.bucket)}>
+                                            <span>{id}</span>
+                                            <strong>{formatNumber(value)}</strong>
+                                            <span>Revenue</span>
+                                            <strong>{formatCurrency(data['Revenue ($)'] ?? 0)}</strong>
+                                        </ChartTooltip>
+                                    )}
                                 />
                             ) : (
                                 <div className="d-flex align-items-center justify-content-center h-100 text-muted">

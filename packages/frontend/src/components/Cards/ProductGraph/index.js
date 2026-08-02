@@ -1,4 +1,6 @@
 import { ResponsivePie } from '@nivo/pie';
+import ChartTooltip from 'components/ChartTooltip';
+import { formatCurrency } from 'utils/format';
 
 const ProductChart = ({ chartData = [], loading }) => {
     return (
@@ -26,18 +28,14 @@ const ProductChart = ({ chartData = [], loading }) => {
                             from: 'color',
                             modifiers: [['darker', 2]],
                         }}
-                        tooltip={({ datum }) => {
-                            return (
-                                <div className="tooltip-container">
-                                    <span className="small-square" style={{ background: datum.color }}></span>
-                                    <strong>{datum.label}</strong>
-                                    <label>Bruto: </label>
-                                    <span>${Number(datum.value).toLocaleString()}</span>
-                                    <label>Utilidad: </label>
-                                    <span>${Number(datum.data.netProfit).toLocaleString()}</span>
-                                </div>
-                            );
-                        }}
+                        tooltip={({ datum }) => (
+                            <ChartTooltip title={datum.label} color={datum.color}>
+                                <span>Bruto</span>
+                                <strong>{formatCurrency(datum.value)}</strong>
+                                <span>Utilidad</span>
+                                <strong>{formatCurrency(datum.data.netProfit)}</strong>
+                            </ChartTooltip>
+                        )}
                     />
                 )}
                 {loading && (

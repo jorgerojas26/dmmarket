@@ -1,4 +1,5 @@
 import { ResponsiveBar } from '@nivo/bar';
+import ChartTooltip from 'components/ChartTooltip';
 import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import pdfMake from 'pdfmake/build/pdfmake';
@@ -478,13 +479,16 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
                     tooltip={({ indexValue, value }) => {
                         const item = chartData.find((c) => c.product === indexValue);
                         return (
-                            <div className="tooltip-container" style={{ minWidth: 200 }}>
-                                <strong style={{ display: 'block', marginBottom: 6 }}>{indexValue}</strong>
-                                <div>
-                                    {cfg.valueLabel}: {formatCurrency(value)}
-                                </div>
-                                {item && <div>% Acumulado: {item.cumulativePercent}%</div>}
-                            </div>
+                            <ChartTooltip title={indexValue}>
+                                <span>{cfg.valueLabel}</span>
+                                <strong>{formatCurrency(value)}</strong>
+                                {item && (
+                                    <>
+                                        <span>% Acumulado</span>
+                                        <strong>{item.cumulativePercent}%</strong>
+                                    </>
+                                )}
+                            </ChartTooltip>
                         );
                     }}
                     theme={{

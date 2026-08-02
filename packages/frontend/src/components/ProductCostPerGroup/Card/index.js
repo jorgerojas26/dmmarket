@@ -1,6 +1,8 @@
 import { ResponsivePie } from '@nivo/pie';
+import ChartTooltip from 'components/ChartTooltip';
 import { useCostPerGroup } from 'hooks/useProducts';
 import { useEffect, useMemo, useState } from 'react';
+import { formatCurrency } from 'utils/format';
 
 const ProductCostPerGroupCard = () => {
     const { data: response, isLoading } = useCostPerGroup();
@@ -39,6 +41,14 @@ const ProductCostPerGroupCard = () => {
                             from: 'color',
                             modifiers: [['darker', 2]],
                         }}
+                        tooltip={({ datum }) => (
+                            <ChartTooltip title={datum.label} color={datum.color}>
+                                <span>Categoría</span>
+                                <strong>{datum.id}</strong>
+                                <span>Costo total</span>
+                                <strong>{formatCurrency(datum.value)}</strong>
+                            </ChartTooltip>
+                        )}
                     />
                 )}
                 {isLoading && (

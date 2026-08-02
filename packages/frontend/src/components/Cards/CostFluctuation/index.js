@@ -1,7 +1,9 @@
 import { ResponsiveLine } from '@nivo/line';
+import ChartTooltip from 'components/ChartTooltip';
 import ProductSearch from 'components/ProductSearch';
 import { useCostFluctuation } from 'hooks/useProducts';
 import { useState } from 'react';
+import { formatCurrency } from 'utils/format';
 
 const CostFluctuation = () => {
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -46,6 +48,12 @@ const CostFluctuation = () => {
                     pointBorderColor={{ from: 'serieColor' }}
                     pointLabelYOffset={-12}
                     useMesh={true}
+                    tooltip={({ point }) => (
+                        <ChartTooltip title={String(point.data.x)}>
+                            <span>Precio</span>
+                            <strong>{formatCurrency(point.data.y)}</strong>
+                        </ChartTooltip>
+                    )}
                 />
             </div>
             {isLoading && (
