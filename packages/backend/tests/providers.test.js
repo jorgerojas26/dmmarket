@@ -17,7 +17,11 @@ const makeBuilder = (value) => {
     orderByRaw: jest.fn(() => b),
     limit: jest.fn(() => b),
     offset: jest.fn(() => b),
-    first: jest.fn(() => b),
+    // Real knex `.first()` returns the row OBJECT, not an array
+    first: jest.fn(() => {
+      const v = resolved();
+      return makeBuilder(Array.isArray(v) ? v[0] : v);
+    }),
     as: jest.fn(() => b),
     countDistinct: jest.fn(() => b),
     raw: jest.fn((x) => x),
@@ -144,7 +148,7 @@ describe("GET_PROVIDERS_LIST", () => {
   it("should order by total_ventas DESC by default", async () => {
     await controller.GET_PROVIDERS_LIST(req, res);
     const db = require("../database");
-    expect(db.orderByRaw).toHaveBeenCalled();
+    expect(db.orderBy).toHaveBeenCalledWith("total_ventas", "desc");
   });
 });
 
@@ -257,8 +261,8 @@ describe("GET_PROVIDER_SALES", () => {
 
   it("should return paginated sales data", async () => {
     const mockSales = [
-      { vendedor: "Vendor A", fecha: "2024-06-15", monto: 500 },
-      { vendedor: "Vendor B", fecha: "2024-05-10", monto: 300 },
+      { cliente: "Client A", vendedor: "Vendor A", fecha: "2024-06-15", monto: 500 },
+      { cliente: "Client B", vendedor: "Vendor B", fecha: "2024-05-10", monto: 300 },
     ];
 
     const db = makeBuilder([]);
@@ -293,7 +297,9 @@ describe("GET_PROVIDER_SALES", () => {
     req.query.showNoe = "true";
     const db = makeBuilder([]);
     db.countDistinct = jest.fn(() => makeBuilder([{ count: 1 }]));
-    db.select = jest.fn(() => makeBuilder([{ vendedor: "V NOE", fecha: "2024-06-15", monto: 100 }]));
+    db.select = jest.fn(() =>
+      makeBuilder([{ cliente: "Client NOE", vendedor: "V NOE", fecha: "2024-06-15", monto: 100 }]),
+    );
 
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");
@@ -311,6 +317,138 @@ describe("GET_PROVIDER_SALES", () => {
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");
     await controller.GET_PROVIDER_SALES(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe("GET_PROVIDER_CLIENTS", () => {
+  let req, res, controller;
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.restoreAllMocks();
+
+    req = {
+      params: { providerId: "1" },
+      query: { from: "2024-01-01", to: "2024-12-31", page: "1", limit: "20", showNoe: "false" },
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    };
+  });
+
+  it("should return clients with cliente, numVentas and totalVentas", async () => {
+    const mockClients = [
+      { cliente: "Client A", numVentas: 5, totalVentas: 500, utilidad: 100 },
+      { cliente: "Client B", numVentas: 3, totalVentas: 300, utilidad: 60 },
+    ];
+
+    const db = makeBuilder([]);
+    db.countDistinct = jest.fn(() => makeBuilder([{ count: 2 }]));
+    db.select = jest.fn(() => makeBuilder(mockClients));
+
+    jest.doMock("../database", () => db);
+    controller = require("../controllers/providers");
+    await controller.GET_PROVIDER_CLIENTS(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    const called = res.json.mock.calls[0][0];
+    expect(called.data).toEqual(mockClients);
+    expect(called.total).toBe(2);
+    expect(called.data[0]).toHaveProperty("cliente");
+    expect(called.data[0]).toHaveProperty("numVentas");
+    expect(called.data[0]).toHaveProperty("totalVentas");
+  });
+
+  it("should return empty array when no clients", async () => {
+    const db = makeBuilder([]);
+    db.countDistinct = jest.fn(() => makeBuilder([{ count: 0 }]));
+    db.select = jest.fn(() => makeBuilder([]));
+
+    jest.doMock("../database", () => db);
+    controller = require("../controllers/providers");
+    await controller.GET_PROVIDER_CLIENTS(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: [], total: 0 }));
+  });
+
+  it("should handle errors gracefully", async () => {
+    const db = makeBuilder([]);
+    db.countDistinct = jest.fn(() => {
+      throw new Error("DB error");
+    });
+
+    jest.doMock("../database", () => db);
+    controller = require("../controllers/providers");
+    await controller.GET_PROVIDER_CLIENTS(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe("GET_PROVIDER_PRODUCTS", () => {
+  let req, res, controller;
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.restoreAllMocks();
+
+    req = {
+      params: { providerId: "1" },
+      query: { from: "2024-01-01", to: "2024-12-31", page: "1", limit: "20", showNoe: "false" },
+    };
+    res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn().mockReturnThis(),
+    };
+  });
+
+  it("should return products with producto, cantidad and totalVentas", async () => {
+    const mockProducts = [
+      { producto: "Product A", cantidad: 10, totalVentas: 500, utilidad: 100 },
+      { producto: "Product B", cantidad: 4, totalVentas: 300, utilidad: 60 },
+    ];
+
+    const db = makeBuilder([]);
+    db.countDistinct = jest.fn(() => makeBuilder([{ count: 2 }]));
+    db.select = jest.fn(() => makeBuilder(mockProducts));
+
+    jest.doMock("../database", () => db);
+    controller = require("../controllers/providers");
+    await controller.GET_PROVIDER_PRODUCTS(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    const called = res.json.mock.calls[0][0];
+    expect(called.data).toEqual(mockProducts);
+    expect(called.total).toBe(2);
+    expect(called.data[0]).toHaveProperty("producto");
+    expect(called.data[0]).toHaveProperty("cantidad");
+    expect(called.data[0]).toHaveProperty("totalVentas");
+  });
+
+  it("should return empty array when no products", async () => {
+    const db = makeBuilder([]);
+    db.countDistinct = jest.fn(() => makeBuilder([{ count: 0 }]));
+    db.select = jest.fn(() => makeBuilder([]));
+
+    jest.doMock("../database", () => db);
+    controller = require("../controllers/providers");
+    await controller.GET_PROVIDER_PRODUCTS(req, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: [], total: 0 }));
+  });
+
+  it("should handle errors gracefully", async () => {
+    const db = makeBuilder([]);
+    db.countDistinct = jest.fn(() => {
+      throw new Error("DB error");
+    });
+
+    jest.doMock("../database", () => db);
+    controller = require("../controllers/providers");
+    await controller.GET_PROVIDER_PRODUCTS(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
   });

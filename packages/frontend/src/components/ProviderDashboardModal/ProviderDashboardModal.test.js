@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import * as api from 'api/providers';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { SWRConfig } from 'hooks/swr-wrapper';
 import ProviderDashboardModal from './index';
@@ -62,21 +63,35 @@ const mockPurchases = {
 
 const mockSales = {
     data: [
-        { vendedor: 'Vendor A', fecha: '2024-06-15', monto: 500 },
-        { vendedor: 'Vendor B', fecha: '2024-05-10', monto: 300 },
+        { idFactura: 'FAC-101', cliente: 'Client A', vendedor: 'Vendor A', fecha: '2024-06-15', monto: 500 },
+        { idFactura: 'FAC-102', cliente: 'Client B', vendedor: 'Vendor B', fecha: '2024-05-10', monto: 300 },
     ],
     total: 2,
 };
 
-const mockClients = { data: [], total: 0 };
-const mockProducts = { data: [], total: 0 };
+const mockClients = {
+    data: [
+        { cliente: 'Client A', numVentas: 5, totalVentas: 500, utilidad: 100 },
+        { cliente: 'Client B', numVentas: 3, totalVentas: 300, utilidad: 60 },
+    ],
+    total: 2,
+};
+const mockProducts = {
+    data: [
+        { producto: 'Product A', cantidad: 10, totalVentas: 500, utilidad: 100 },
+        { producto: 'Product B', cantidad: 4, totalVentas: 300, utilidad: 60 },
+    ],
+    total: 2,
+};
 
 const renderModal = (show = true, provider = mockProvider, showNoe = false) => {
     return render(
         <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
-            <ShowNoeContext.Provider value={{ showNoe, setShowNoe: jest.fn() }}>
-                <ProviderDashboardModal show={show} onClose={jest.fn()} provider={provider} />
-            </ShowNoeContext.Provider>
+            <CurrencyRateContext.Provider value={{ currencyRate: { Cambio: 1 }, setCurrencyRate: jest.fn() }}>
+                <ShowNoeContext.Provider value={{ showNoe, setShowNoe: jest.fn() }}>
+                    <ProviderDashboardModal show={show} onClose={jest.fn()} provider={provider} />
+                </ShowNoeContext.Provider>
+            </CurrencyRateContext.Provider>
         </SWRConfig>,
     );
 };
@@ -198,6 +213,99 @@ describe('ProviderDashboardModal', () => {
         });
     });
 
+    it('renders clients table with client name and # ventas', async () => {
+        renderModal(true);
+
+        await waitFor(() => {
+            expect(screen.getByText('Ventas')).toBeInTheDocument();
+        });
+        act(() => {
+            screen.getByText('Clientes').click();
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText('Client A')).toBeInTheDocument();
+            expect(screen.getByText('Client B')).toBeInTheDocument();
+        });
+        expect(screen.getByText('5')).toBeInTheDocument();
+        expect(screen.getByText('3')).toBeInTheDocument();
+        expect(screen.getByText('$500,00')).toBeInTheDocument();
+    });
+
+    it('renders products table with product name and quantity', async () => {
+        renderModal(true);
+
+        await waitFor(() => {
+            expect(screen.getByText('Ventas')).toBeInTheDocument();
+        });
+        act(() => {
+            screen.getByText('Productos').click();
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText('Product A')).toBeInTheDocument();
+            expect(screen.getByText('Product B')).toBeInTheDocument();
+        });
+        expect(screen.getByText('4')).toBeInTheDocument();
+        expect(screen.getByText('$500,00')).toBeInTheDocument();
+    });
+
+    it('shows empty state when clients data is empty', async () => {
+        api.fetchProviderClients.mockResolvedValue({ data: [], total: 0 });
+
+        renderModal(true);
+
+        await waitFor(() => {
+            expect(screen.getByText('Ventas')).toBeInTheDocument();
+        });
+        act(() => {
+            screen.getByText('Clientes').click();
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText('Sin clientes en este período')).toBeInTheDocument();
+        });
+    });
+
+    it('shows empty state when products data is empty', async () => {
+        api.fetchProviderProducts.mockResolvedValue({ data: [], total: 0 });
+
+        renderModal(true);
+
+        await waitFor(() => {
+            expect(screen.getByText('Ventas')).toBeInTheDocument();
+        });
+        act(() => {
+            screen.getByText('Productos').click();
+        });
+
+        await waitFor(() => {
+            expect(screen.getByText('Sin productos en este período')).toBeInTheDocument();
+        });
+    });
+
+    it('shows global print button on clients and products tabs', async () => {
+        renderModal(true);
+
+        await waitFor(() => {
+            expect(screen.getByText('Ventas')).toBeInTheDocument();
+        });
+
+        act(() => {
+            screen.getByText('Clientes').click();
+        });
+        await waitFor(() => {
+            expect(screen.getByText('Imprimir')).toBeInTheDocument();
+        });
+
+        act(() => {
+            screen.getByText('Productos').click();
+        });
+        await waitFor(() => {
+            expect(screen.getAllByText('Imprimir').length).toBeGreaterThan(0);
+        });
+    });
+
     it('calls fetchProviderSummary with correct params', async () => {
         renderModal(true);
 
@@ -256,9 +364,11 @@ describe('ProviderDashboardModal', () => {
         const onClose = jest.fn();
         render(
             <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
-                <ShowNoeContext.Provider value={{ showNoe: false, setShowNoe: jest.fn() }}>
-                    <ProviderDashboardModal show={true} onClose={onClose} provider={mockProvider} />
-                </ShowNoeContext.Provider>
+                <CurrencyRateContext.Provider value={{ currencyRate: { Cambio: 1 }, setCurrencyRate: jest.fn() }}>
+                    <ShowNoeContext.Provider value={{ showNoe: false, setShowNoe: jest.fn() }}>
+                        <ProviderDashboardModal show={true} onClose={onClose} provider={mockProvider} />
+                    </ShowNoeContext.Provider>
+                </CurrencyRateContext.Provider>
             </SWRConfig>,
         );
 

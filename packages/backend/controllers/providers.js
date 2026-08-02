@@ -223,6 +223,8 @@ const GET_PROVIDER_SALES = async (req, res) => {
     switch (sortBy) {
       case "idFactura":
         return `${masterTable}.${idInvoice}`;
+      case "cliente":
+        return "clientes.Empresa";
       case "vendedor":
         return "vendedores.Empresa";
       case "monto":
@@ -240,6 +242,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
+      .innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .where("productos.Proveedor", providerId)
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
@@ -247,6 +250,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
     const dataQuery = knex
       .select(
         `${masterTable}.${idInvoice} as idFactura`,
+        "clientes.Empresa as cliente",
         "vendedores.Empresa as vendedor",
         `${masterTable}.Fecha as fecha`,
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`),
@@ -255,6 +259,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
+      .innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
       .where("productos.Proveedor", providerId)
@@ -267,18 +272,14 @@ const GET_PROVIDER_SALES = async (req, res) => {
     if (search) {
       countQuery.innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`);
       countQuery.where(function () {
-        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`).orWhere(
-          "vendedores.Empresa",
-          "like",
-          `%${search}%`,
-        );
+        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`)
+          .orWhere("clientes.Empresa", "like", `%${search}%`)
+          .orWhere("vendedores.Empresa", "like", `%${search}%`);
       });
       dataQuery.where(function () {
-        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`).orWhere(
-          "vendedores.Empresa",
-          "like",
-          `%${search}%`,
-        );
+        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`)
+          .orWhere("clientes.Empresa", "like", `%${search}%`)
+          .orWhere("vendedores.Empresa", "like", `%${search}%`);
       });
     }
 
@@ -312,6 +313,8 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
         return "clientes.Empresa";
       case "totalVentas":
         return "totalVentas";
+      case "numVentas":
+        return "numVentas";
       case "utilidad":
         return "utilidad";
       default:
@@ -335,6 +338,7 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
     const dataQuery = knex
       .select(
         "clientes.Empresa as cliente",
+        knex.raw(`COUNT(DISTINCT ${masterTable}.${idInvoice}) as numVentas`),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
       )
@@ -384,6 +388,8 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
     switch (sortBy) {
       case "producto":
         return "productos.Descripcion";
+      case "cantidad":
+        return "cantidad";
       case "totalVentas":
         return "totalVentas";
       case "utilidad":
@@ -408,6 +414,7 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
     const dataQuery = knex
       .select(
         "productos.Descripcion as producto",
+        knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 2) as cantidad`),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
       )

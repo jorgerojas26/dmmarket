@@ -25,6 +25,32 @@ pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
 
 const LIMIT = 20;
 
+const CLIENTS_COLUMNS = [
+    { Header: 'Cliente', accessor: 'cliente' },
+    { Header: 'Total Ventas', accessor: 'totalVentas', Cell: ({ value }) => formatCurrency(value) },
+    { Header: '# Ventas', accessor: 'numVentas' },
+];
+
+const PRODUCTS_COLUMNS = [
+    { Header: 'Producto', accessor: 'producto' },
+    { Header: 'Cantidad', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString() },
+    { Header: 'Total Ventas', accessor: 'totalVentas', Cell: ({ value }) => formatCurrency(value) },
+];
+
+/** Formats a cell value for PDF output, honoring the print currency option for money columns. */
+const printCellValue = (col, row, currency, rate) => {
+    const value = row[col.accessor];
+    switch (col.accessor) {
+        case 'totalVentas':
+        case 'monto':
+            return formatMoney(value, currency, rate);
+        case 'cantidad':
+            return Number(value).toLocaleString();
+        default:
+            return value;
+    }
+};
+
 const IconSales = () => (
     <svg
         width="38"
@@ -491,6 +517,134 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         [provider?.IdProveedor, provider?.Empresa, dateRange, salesSearch, salesData?.total, showNoe, currencyRate],
     );
 
+    const handlePrintAllClients = useCallback(
+        async (config) => {
+            try {
+                const { fetchProviderClients } = await import('api/providers');
+                const result = await fetchProviderClients(provider.IdProveedor, {
+                    from: dateRange.from,
+                    to: dateRange.to,
+                    page: 1,
+                    limit: clientsData?.total || 9999,
+                    search: clientsSearch || undefined,
+                    showNoe,
+                });
+                const rows = result.data || [];
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
+                const cols = config?.columns?.length ? config.columns : CLIENTS_COLUMNS;
+                const body = [
+                    cols.map((c) => c.Header),
+                    ...rows.map((r) => cols.map((c) => printCellValue(c, r, currency, rate))),
+                ];
+                pdfMake
+                    .createPdf({
+                        content: [
+                            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                            {
+                                text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
+                                style: 'header',
+                            },
+                            { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                            { text: `Clientes de: ${provider.Empresa}`, style: 'subheader' },
+                            {
+                                text: `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} — ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
+                                style: 'subheader',
+                                margin: [0, 0, 0, 12],
+                            },
+                            {
+                                style: 'table',
+                                table: {
+                                    widths: cols.map((_, i) => (i === 0 ? '*' : 'auto')),
+                                    body,
+                                },
+                            },
+                        ],
+                        styles: {
+                            header: { alignment: 'center', fontSize: 10 },
+                            subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                            table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                        },
+                        pageMargins: 40,
+                        pageSize: 'LETTER',
+                        pageOrientation: config?.orientation || 'portrait',
+                    })
+                    .open();
+            } catch (err) {
+                console.error('Failed to print all clients:', err);
+            }
+        },
+        [provider?.IdProveedor, provider?.Empresa, dateRange, clientsSearch, clientsData?.total, showNoe, currencyRate],
+    );
+
+    const handlePrintAllProducts = useCallback(
+        async (config) => {
+            try {
+                const { fetchProviderProducts } = await import('api/providers');
+                const result = await fetchProviderProducts(provider.IdProveedor, {
+                    from: dateRange.from,
+                    to: dateRange.to,
+                    page: 1,
+                    limit: productsData?.total || 9999,
+                    search: productsSearch || undefined,
+                    showNoe,
+                });
+                const rows = result.data || [];
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
+                const cols = config?.columns?.length ? config.columns : PRODUCTS_COLUMNS;
+                const body = [
+                    cols.map((c) => c.Header),
+                    ...rows.map((r) => cols.map((c) => printCellValue(c, r, currency, rate))),
+                ];
+                pdfMake
+                    .createPdf({
+                        content: [
+                            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                            {
+                                text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
+                                style: 'header',
+                            },
+                            { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                            { text: `Productos de: ${provider.Empresa}`, style: 'subheader' },
+                            {
+                                text: `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} — ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
+                                style: 'subheader',
+                                margin: [0, 0, 0, 12],
+                            },
+                            {
+                                style: 'table',
+                                table: {
+                                    widths: cols.map((_, i) => (i === 0 ? '*' : 'auto')),
+                                    body,
+                                },
+                            },
+                        ],
+                        styles: {
+                            header: { alignment: 'center', fontSize: 10 },
+                            subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                            table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                        },
+                        pageMargins: 40,
+                        pageSize: 'LETTER',
+                        pageOrientation: config?.orientation || 'portrait',
+                    })
+                    .open();
+            } catch (err) {
+                console.error('Failed to print all products:', err);
+            }
+        },
+        [
+            provider?.IdProveedor,
+            provider?.Empresa,
+            dateRange,
+            productsSearch,
+            productsData?.total,
+            showNoe,
+            currencyRate,
+        ],
+    );
+
     const handlePrintSale = useCallback(
         async (sale, e) => {
             if (e?.stopPropagation) e.stopPropagation();
@@ -601,7 +755,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         accessor: 'fecha',
                         Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd/MM/yyyy'),
                     },
-                    { Header: 'Cliente', accessor: 'empresa' },
+                    { Header: 'Cliente', accessor: 'cliente' },
                     { Header: 'Vendedor', accessor: 'vendedor' },
                     { Header: 'Total', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
                 ],
@@ -638,12 +792,9 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 onSearch: handleClientsSearch,
                 sort: clientsSort,
                 onSort: handleClientsSort,
+                onGlobalPrint: handlePrintAllClients,
                 emptyMessage: 'Sin clientes en este período',
-                columns: [
-                    { Header: 'Cliente', accessor: 'empresa' },
-                    { Header: 'Total Ventas', accessor: 'totalVentas', Cell: ({ value }) => formatCurrency(value) },
-                    { Header: '# Ventas', accessor: 'numVentas' },
-                ],
+                columns: CLIENTS_COLUMNS,
             },
             productos: {
                 data: productsData,
@@ -654,12 +805,9 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 onSearch: handleProductsSearch,
                 sort: productsSort,
                 onSort: handleProductsSort,
+                onGlobalPrint: handlePrintAllProducts,
                 emptyMessage: 'Sin productos en este período',
-                columns: [
-                    { Header: 'Producto', accessor: 'descripcion' },
-                    { Header: 'Cantidad', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString() },
-                    { Header: 'Total Ventas', accessor: 'totalVentas', Cell: ({ value }) => formatCurrency(value) },
-                ],
+                columns: PRODUCTS_COLUMNS,
             },
         };
         const c = configs[tab];
