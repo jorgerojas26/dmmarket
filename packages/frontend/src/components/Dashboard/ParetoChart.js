@@ -4,7 +4,7 @@ import { CurrencyRateContext } from 'context/currency_rate';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatMoney, formatNumber } from 'utils/format';
+import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
