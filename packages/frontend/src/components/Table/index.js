@@ -163,6 +163,9 @@ const Table = ({
         if (sorting?.enabled) {
             opts.manualSortBy = !!sorting.onSort;
             opts.disableMultiSort = true;
+            // Server-side sorting: clicks toggle asc <-> desc and never remove the sort
+            // (react-table's default "third click removes" maps to no-op in server handlers).
+            opts.disableSortRemove = true;
             if (sorting.resetOnDataChange === false) opts.autoResetSortBy = false;
             if (sorting.sortBy?.length) {
                 opts.initialState = { sortBy: sorting.sortBy };

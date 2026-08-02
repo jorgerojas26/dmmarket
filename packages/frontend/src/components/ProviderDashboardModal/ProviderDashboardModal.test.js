@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import * as api from 'api/providers';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
@@ -306,6 +306,35 @@ describe('ProviderDashboardModal', () => {
         });
     });
 
+    it('shows the searchable columns in each tab search placeholder', async () => {
+        renderModal(true);
+
+        await waitFor(() => {
+            expect(screen.getByPlaceholderText('Buscar por factura, cliente o vendedor...')).toBeInTheDocument();
+        });
+
+        act(() => {
+            screen.getByText('Compras').click();
+        });
+        await waitFor(() => {
+            expect(screen.getByPlaceholderText('Buscar por factura...')).toBeInTheDocument();
+        });
+
+        act(() => {
+            screen.getByText('Clientes').click();
+        });
+        await waitFor(() => {
+            expect(screen.getByPlaceholderText('Buscar por cliente...')).toBeInTheDocument();
+        });
+
+        act(() => {
+            screen.getByText('Productos').click();
+        });
+        await waitFor(() => {
+            expect(screen.getByPlaceholderText('Buscar por producto...')).toBeInTheDocument();
+        });
+    });
+
     it('calls fetchProviderSummary with correct params', async () => {
         renderModal(true);
 
@@ -333,6 +362,49 @@ describe('ProviderDashboardModal', () => {
                 sortDir: 'desc',
             });
         });
+    });
+
+    it('triggers server-side sorting when a column header is clicked', async () => {
+        renderModal(true);
+
+        await waitFor(() => {
+            expect(screen.getByText('Fecha')).toBeInTheDocument();
+        });
+
+        act(() => {
+            fireEvent.click(screen.getByText('Fecha'));
+        });
+
+        await waitFor(() => {
+            expect(api.fetchProviderSales).toHaveBeenCalledWith(
+                1,
+                expect.objectContaining({ sortBy: 'fecha', sortDir: 'asc' }),
+            );
+        });
+    });
+
+    it('triggers server-side search when typing in the search box', async () => {
+        renderModal(true);
+
+        await waitFor(() => {
+            expect(screen.getByPlaceholderText('Buscar por factura, cliente o vendedor...')).toBeInTheDocument();
+        });
+
+        act(() => {
+            fireEvent.change(screen.getByPlaceholderText('Buscar por factura, cliente o vendedor...'), {
+                target: { value: 'Cliente A' },
+            });
+        });
+
+        await waitFor(
+            () => {
+                expect(api.fetchProviderSales).toHaveBeenCalledWith(
+                    1,
+                    expect.objectContaining({ search: 'Cliente A' }),
+                );
+            },
+            { timeout: 3000 },
+        );
     });
 
     it('renders pagination when there are more records than LIMIT', async () => {

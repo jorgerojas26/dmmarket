@@ -259,15 +259,19 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
 
     const handlePurchasesSort = useCallback((s) => {
         setPurchasesSort(s.length ? s : [{ id: 'fecha', desc: true }]);
+        setPurchasesPage(1);
     }, []);
     const handleSalesSort = useCallback((s) => {
         setSalesSort(s.length ? s : [{ id: 'fecha', desc: true }]);
+        setSalesPage(1);
     }, []);
     const handleClientsSort = useCallback((s) => {
         setClientsSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
+        setClientsPage(1);
     }, []);
     const handleProductsSort = useCallback((s) => {
         setProductsSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
+        setProductsPage(1);
     }, []);
 
     const handlePurchaseRowClick = useCallback(
@@ -749,6 +753,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 onGlobalPrint: handlePrintAllSales,
                 onRowPrint: handlePrintSale,
                 emptyMessage: 'Sin ventas en este período',
+                searchPlaceholder: 'Buscar por factura, cliente o vendedor...',
                 columns: [
                     {
                         Header: 'Fecha',
@@ -773,6 +778,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 onGlobalPrint: handlePrintAllPurchases,
                 onRowPrint: handlePrintPurchase,
                 emptyMessage: 'Sin compras en este período',
+                searchPlaceholder: 'Buscar por factura...',
                 columns: [
                     {
                         Header: 'Fecha',
@@ -794,6 +800,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 onSort: handleClientsSort,
                 onGlobalPrint: handlePrintAllClients,
                 emptyMessage: 'Sin clientes en este período',
+                searchPlaceholder: 'Buscar por cliente...',
                 columns: CLIENTS_COLUMNS,
             },
             productos: {
@@ -807,6 +814,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 onSort: handleProductsSort,
                 onGlobalPrint: handlePrintAllProducts,
                 emptyMessage: 'Sin productos en este período',
+                searchPlaceholder: 'Buscar por producto...',
                 columns: PRODUCTS_COLUMNS,
             },
         };
@@ -837,11 +845,10 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 }}
                 search={{
                     enabled: true,
-                    value: c.search,
-                    onChange: c.onSearch,
-                    placeholder: `Buscar ${tab}...`,
+                    onSearch: c.onSearch,
+                    placeholder: c.searchPlaceholder || `Buscar ${tab}...`,
                 }}
-                sort={{ enabled: true, value: c.sort, onChange: c.onSort }}
+                sorting={{ enabled: true, sortBy: c.sort, onSort: c.onSort }}
             />
         );
     };
