@@ -12,6 +12,7 @@ const currency_rates_routes = require("./routes/currency_rates");
 const providers_routes = require("./routes/providers");
 const dashboard_routes = require("./routes/dashboard");
 const sales_routes = require("./routes/sales");
+const purchases_routes = require("./routes/purchases");
 
 //app.use(express.static(path.join(__dirname, "public")));
 
@@ -27,6 +28,7 @@ app.use("/api/currency_rates", currency_rates_routes);
 app.use("/api/providers", providers_routes);
 app.use("/api/dashboard", dashboard_routes);
 app.use("/api/sales", sales_routes);
+app.use("/api/purchases", purchases_routes);
 
 app.use("/api/*", (req, res) => {
   res.status(404).json({

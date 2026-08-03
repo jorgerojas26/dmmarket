@@ -1,6 +1,10 @@
 const request = require("supertest");
 const app = require("../index");
 
+// Los tests corren contra la DB local real; bajo carga paralela de suites cada request
+// multi-statement puede superar los 5000ms por defecto (flaky) — se amplía el margen.
+jest.setTimeout(30000);
+
 describe("GET /api/dashboard/sales", () => {
   // 1. Estructura de respuesta con datos
   it("responde 200 con la estructura completa cuando hay datos", async () => {
