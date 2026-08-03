@@ -42,6 +42,11 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
         return data.reduce((acc, item) => acc + (item.peso || 0), 0);
     }, [data]);
 
+    const utilidadTotal = useMemo(() => {
+        if (!data) return 0;
+        return data.reduce((acc, item) => acc + (item.utilidad || 0), 0);
+    }, [data]);
+
     const memoizedColumns = useMemo(
         () => [
             { Header: 'Categoría', accessor: 'group', sortType: textSortType },
@@ -54,6 +59,11 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                 Cell: ({ value }) => formatPeso(value),
             },
             { Header: 'Total', accessor: 'total' },
+            {
+                Header: 'Utilidad',
+                accessor: 'utilidad',
+                Cell: ({ value }) => (value != null ? `$${Number(value).toFixed(2)}` : ''),
+            },
         ],
         [],
     );
@@ -63,8 +73,9 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
             quantity: quantityTotal ? quantityTotal.toFixed(2) : '',
             peso: formatPeso(pesoTotal),
             total: totalSummary ? `$${totalSummary.toFixed(2)}` : '',
+            utilidad: utilidadTotal ? `$${utilidadTotal.toFixed(2)}` : '',
         }),
-        [quantityTotal, pesoTotal, totalSummary],
+        [quantityTotal, pesoTotal, totalSummary, utilidadTotal],
     );
 
     // Print: convert totals to the currency chosen in the print config dialog.
@@ -73,12 +84,15 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
             let productsData = sortedRowsRef.current;
             const rate = currencyRate?.Cambio;
             const currency = config?.currency;
+            let utilidadTotalPdf = utilidadTotal;
 
             if (currency === 'Bs' && rate) {
                 productsData = productsData.map((item) => ({
                     ...item,
                     total: Number(item.price * item.quantity * rate).toFixed(2),
+                    utilidad: Number((item.utilidad || 0) * rate).toFixed(2),
                 }));
+                utilidadTotalPdf = Number(utilidadTotal * rate).toFixed(2);
             }
 
             productsData = sortRows(productsData, config?.sortBy);
@@ -88,13 +102,13 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
 
             const pdfData = pdf(
                 productsData,
-                { quantityTotal, totalSummary: convertedSummary, pesoTotal, currency },
+                { quantityTotal, totalSummary: convertedSummary, pesoTotal, currency, utilidadTotal: utilidadTotalPdf },
                 config,
             );
 
             pdfMake.createPdf(pdfData).open();
         },
-        [currencyRate?.Cambio, quantityTotal, pesoTotal, totalSummary],
+        [currencyRate?.Cambio, quantityTotal, pesoTotal, totalSummary, utilidadTotal],
     );
 
     return (

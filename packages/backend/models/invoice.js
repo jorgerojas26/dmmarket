@@ -6,6 +6,7 @@ const buildSortColumn = (sortBy, masterTable, idInvoice) => {
     client: `${masterTable}.Nombre`,
     createdAt: `${masterTable}.Fecha`,
     rif: `${masterTable}.Rif`,
+    utilidad: "inv_util.__utilidad",
   };
   return map[sortBy] || `${masterTable}.Fecha`;
 };
@@ -48,6 +49,14 @@ exports.GET_INVOICES = async ({
   // Count total distinct invoices
   const [{ total }] = await knex.count("* as total").from(idQuery.clone().as("sq"));
 
+  // Sorting by profit needs the per-invoice profit aggregation joined in.
+  // (Applied only to the ordered query so the count above stays cheap.)
+  if (sortBy === "utilidad") {
+    idQuery.joinRaw(
+      `INNER JOIN (SELECT ${slaveTable}.${idInvoice} AS __inv_id, SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad) AS __utilidad FROM ${slaveTable} GROUP BY ${slaveTable}.${idInvoice}) AS inv_util ON inv_util.__inv_id = ${masterTable}.${idInvoice}`,
+    );
+  }
+
   // Get paginated invoice IDs
   const invoiceIdRows = await idQuery
     .clone()
@@ -72,6 +81,7 @@ exports.GET_INVOICES = async ({
       `${slaveTable}.Descripcion`,
       `${slaveTable}.Cantidad`,
       `${slaveTable}.Precio`,
+      `${slaveTable}.Costo`,
       "grupos.Descripcion as group",
       "productos.Peso as peso",
     )
@@ -86,6 +96,7 @@ exports.GET_INVOICES = async ({
       `${slaveTable}.Descripcion`,
       `${slaveTable}.Cantidad`,
       `${slaveTable}.Precio`,
+      `${slaveTable}.Costo`,
       "productos.Peso",
     )
     .orderBy("productos.Descripcion", "DESC");
@@ -108,18 +119,22 @@ exports.GET_INVOICES = async ({
       product: invoice.Descripcion,
       quantity: Number(invoice.Cantidad.toFixed(2)),
       price: Number(invoice.Precio.toFixed(2)),
+      cost: Number(invoice.Costo != null ? invoice.Costo : 0),
       group: invoice.group,
       peso: Number(invoice.peso != null ? invoice.peso : 0),
     });
   });
 
-  // Calculate invoice totals
+  // Calculate invoice totals and profit
   Object.keys(invoices).forEach((invoiceId) => {
     const invoice = invoices[invoiceId];
     invoice.total = 0;
+    invoice.utilidad = 0;
     invoice.products.forEach((product) => {
       invoice.total += product.quantity * product.price;
       invoice.total = Number(invoice.total.toFixed(2));
+      invoice.utilidad += (product.price - product.cost) * product.quantity;
+      invoice.utilidad = Number(invoice.utilidad.toFixed(2));
     });
   });
 

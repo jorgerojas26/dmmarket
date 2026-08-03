@@ -10,7 +10,7 @@ const formatPeso = (value) => {
  * Builds the products PDF. `config` comes from the print config dialog:
  * `{ columns: selected column definitions, orientation: 'landscape' | 'portrait' }`.
  */
-const pdfschema = (productList, { quantityTotal, totalSummary, pesoTotal, currency }, config = {}) => {
+const pdfschema = (productList, { quantityTotal, totalSummary, pesoTotal, currency, utilidadTotal }, config = {}) => {
     // Column metadata for the PDF, keyed by accessor (order defines layout).
     const pdfColumns = [
         { accessor: 'group', label: 'CATEGORÍA', width: 85, render: (p) => p.group },
@@ -19,6 +19,12 @@ const pdfschema = (productList, { quantityTotal, totalSummary, pesoTotal, curren
         { accessor: 'quantity', label: 'CANTIDAD', width: 'auto', render: (p) => p.quantity },
         { accessor: 'peso', label: 'PESO', width: 'auto', render: (p) => formatPeso(p.peso) },
         { accessor: 'total', label: `TOTAL (${currency})`, width: 'auto', render: (p) => p.total },
+        {
+            accessor: 'utilidad',
+            label: 'UTILIDAD',
+            width: 'auto',
+            render: (p) => (p.utilidad != null ? Number(p.utilidad).toFixed(2) : ''),
+        },
     ];
 
     const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
@@ -45,6 +51,12 @@ const pdfschema = (productList, { quantityTotal, totalSummary, pesoTotal, curren
                             if (col.accessor === 'quantity') return { text: quantityTotal, bold: true };
                             if (col.accessor === 'peso') return { text: formatPeso(pesoTotal), bold: true };
                             if (col.accessor === 'total') return { text: `${currency} ${totalSummary}`, bold: true };
+                            if (col.accessor === 'utilidad') {
+                                return {
+                                    text: utilidadTotal != null ? Number(utilidadTotal).toFixed(2) : '',
+                                    bold: true,
+                                };
+                            }
                             return '';
                         }),
                     ],

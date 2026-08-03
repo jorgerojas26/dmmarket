@@ -20,6 +20,11 @@ const columns = [
         Cell: ({ value }) => `$${value ? value.toFixed(2) : ''}`,
     },
     {
+        Header: 'UTILIDAD',
+        accessor: 'utilidad',
+        Cell: ({ value }) => `$${value ? value.toFixed(2) : ''}`,
+    },
+    {
         Header: 'Fecha',
         accessor: 'createdAt',
         Cell: ({ value }) => {
