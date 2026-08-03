@@ -207,4 +207,175 @@ const GET_PARETO_PURCHASES = async (req, res) => {
   }
 };
 
-module.exports = { GET_DASHBOARD_PURCHASES, GET_PARETO_PURCHASES };
+// GET /api/purchases/invoices — purchase invoices grouped by invoice ID
+const GET_INVOICES = async (req, res) => {
+  const { from, to, proveedorId, groupId, sortBy = "fecha", sortDir = "desc", search } = req.query;
+
+  if (!from || !to) {
+    return res.status(400).json({ error: "from and to are required" });
+  }
+
+  // Sanitizar page/limit: "" o texto no numérico caen a los defaults (1 y 20), nunca OFFSET negativo
+  const limit = Number(req.query.limit) || 20;
+  const page = Number(req.query.page) || 1;
+  const offset = (page - 1) * limit;
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "numero":
+        return "mc.IdFactura";
+      case "proveedor":
+        return "proveedores.Empresa";
+      case "monto":
+        return knex.raw("SUM(sc.Precio * sc.Cantidad)");
+      case "unidades":
+        return knex.raw("SUM(sc.Cantidad)");
+      default:
+        return "mc.Fecha";
+    }
+  })();
+
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
+
+  try {
+    const buildFilters = (q) => {
+      if (proveedorId) q.andWhere("mc.IdProveedor", proveedorId);
+      if (groupId) q.andWhere("productos.Grupo", groupId);
+      if (search) {
+        q.andWhere(function () {
+          this.where("mc.IdFactura", "like", `%${search}%`).orWhere("proveedores.Empresa", "like", `%${search}%`);
+        });
+      }
+    };
+
+    // Count
+    const [{ total }] = await knex
+      .countDistinct("mc.IdFactura as total")
+      .from("slavecomp as sc")
+      .innerJoin("mastercomp as mc", function () {
+        this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
+      })
+      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .whereBetween("mc.Fecha", [from, to])
+      .modify(buildFilters);
+
+    // Data query
+    const data = await knex
+      .select(
+        "mc.IdFactura as invoiceId",
+        "proveedores.Empresa as proveedor",
+        "mc.Fecha as fecha",
+        knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as monto"),
+        knex.raw("ROUND(SUM(sc.Cantidad), 3) as unidades"),
+      )
+      .from("slavecomp as sc")
+      .innerJoin("mastercomp as mc", function () {
+        this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
+      })
+      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .whereBetween("mc.Fecha", [from, to])
+      .modify(buildFilters)
+      .groupBy("mc.IdFactura")
+      .orderBy(sortCol, sortDirection)
+      .limit(limit)
+      .offset(offset);
+
+    res.status(200).json({
+      data,
+      pagination: {
+        page,
+        limit,
+        total: Number(total),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// GET /api/purchases/products — purchased products aggregated by product ID
+const GET_PRODUCTS = async (req, res) => {
+  const { from, to, proveedorId, groupId, sortBy = "monto", sortDir = "desc", search } = req.query;
+
+  if (!from || !to) {
+    return res.status(400).json({ error: "from and to are required" });
+  }
+
+  // Sanitizar page/limit: "" o texto no numérico caen a los defaults (1 y 20), nunca OFFSET negativo
+  const limit = Number(req.query.limit) || 20;
+  const page = Number(req.query.page) || 1;
+  const offset = (page - 1) * limit;
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "product":
+        return "productos.Descripcion";
+      case "quantity":
+        return knex.raw("SUM(sc.Cantidad)");
+      case "avgUnitCost":
+        return knex.raw("SUM(sc.Precio * sc.Cantidad) / NULLIF(SUM(sc.Cantidad), 0)");
+      default:
+        return knex.raw("SUM(sc.Precio * sc.Cantidad)");
+    }
+  })();
+
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
+
+  try {
+    const buildFilters = (q) => {
+      if (proveedorId) q.andWhere("mc.IdProveedor", proveedorId);
+      if (groupId) q.andWhere("productos.Grupo", groupId);
+      if (search) q.andWhere("productos.Descripcion", "like", `%${search}%`);
+    };
+
+    // Count distinct products
+    const [{ total }] = await knex
+      .countDistinct("productos.IdProducto as total")
+      .from("slavecomp as sc")
+      .innerJoin("mastercomp as mc", function () {
+        this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
+      })
+      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .whereBetween("mc.Fecha", [from, to])
+      .modify(buildFilters);
+
+    // Data query
+    const data = await knex
+      .select(
+        "productos.Descripcion as product",
+        knex.raw("ROUND(SUM(sc.Cantidad), 3) as quantity"),
+        knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as monto"),
+        knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad) / NULLIF(SUM(sc.Cantidad), 0), 2) as avgUnitCost"),
+      )
+      .from("slavecomp as sc")
+      .innerJoin("mastercomp as mc", function () {
+        this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
+      })
+      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .whereBetween("mc.Fecha", [from, to])
+      .modify(buildFilters)
+      .groupBy("productos.IdProducto")
+      .orderBy(sortCol, sortDirection)
+      .limit(limit)
+      .offset(offset);
+
+    res.status(200).json({
+      data,
+      pagination: {
+        page,
+        limit,
+        total: Number(total),
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+module.exports = { GET_DASHBOARD_PURCHASES, GET_PARETO_PURCHASES, GET_INVOICES, GET_PRODUCTS };
