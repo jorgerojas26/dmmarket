@@ -7,6 +7,7 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { formatMoney, formatNumber } from 'utils/format';
+import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -86,7 +87,9 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
                     selectedAccessors.size > 0
                         ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
                         : pdfColumns;
-                const rows = (allResult.data || []).map((c) => selected.map((col) => col.render(c)));
+                const rows = sortRows(allResult.data || [], config?.sortBy).map((c) =>
+                    selected.map((col) => col.render(c)),
+                );
 
                 const subtitleParts = [];
                 if (search) subtitleParts.push(`Búsqueda: "${search}"`);

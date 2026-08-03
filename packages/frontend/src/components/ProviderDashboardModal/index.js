@@ -17,6 +17,7 @@ import {
     useProviderSummary,
 } from 'hooks/useProviders';
 import { formatCurrency, formatMoney } from 'utils/format';
+import { sortRows } from 'utils/sortRows';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import SaleDetailModal from './SaleDetailModal';
 import './styles.css';
@@ -367,7 +368,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     limit: purchasesData?.total || 9999,
                     search: purchasesSearch || undefined,
                 });
-                const invoices = result.data || [];
+                const invoices = sortRows(result.data || [], config?.sortBy);
                 const tables = [];
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
@@ -450,7 +451,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     search: salesSearch || undefined,
                     showNoe,
                 });
-                const invoices = result.data || [];
+                const invoices = sortRows(result.data || [], config?.sortBy);
                 const tables = [];
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
@@ -533,7 +534,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     search: clientsSearch || undefined,
                     showNoe,
                 });
-                const rows = result.data || [];
+                const rows = sortRows(result.data || [], config?.sortBy);
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
                 const cols = config?.columns?.length ? config.columns : CLIENTS_COLUMNS;
@@ -593,7 +594,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     search: productsSearch || undefined,
                     showNoe,
                 });
-                const rows = result.data || [];
+                const rows = sortRows(result.data || [], config?.sortBy);
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
                 const cols = config?.columns?.length ? config.columns : PRODUCTS_COLUMNS;

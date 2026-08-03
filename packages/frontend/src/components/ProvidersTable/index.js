@@ -7,6 +7,7 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { formatMoney, formatNumber } from 'utils/format';
+import { sortRows } from 'utils/sortRows';
 import './styles.css';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -96,7 +97,9 @@ const ProvidersTable = ({ onRowSelect }) => {
                     selectedAccessors.size > 0
                         ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
                         : pdfColumns;
-                const rows = (allResult.data || []).map((p) => selected.map((col) => col.render(p)));
+                const rows = sortRows(allResult.data || [], config?.sortBy).map((p) =>
+                    selected.map((col) => col.render(p)),
+                );
 
                 const docDef = {
                     content: [

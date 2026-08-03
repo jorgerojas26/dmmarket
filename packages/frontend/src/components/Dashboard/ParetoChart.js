@@ -6,6 +6,7 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
+import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -324,7 +325,7 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
                 C: 'Clase C (95–100% acumulado)',
             };
             const docDef = buildParetoPdf(
-                filteredProducts,
+                sortRows(filteredProducts, config?.sortBy),
                 labels[abcFilter] || cfg.allFilterLabel,
                 cfg,
                 config,

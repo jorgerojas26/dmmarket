@@ -4,6 +4,7 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useRef } from 'react';
 import { Card } from 'react-bootstrap';
 import { CurrencyRateContext } from '../../context/currency_rate';
+import { sortRows } from 'utils/sortRows';
 import pdf from './pdf';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -79,6 +80,8 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
                     total: Number(item.price * item.quantity * rate).toFixed(2),
                 }));
             }
+
+            productsData = sortRows(productsData, config?.sortBy);
 
             const convertedSummary =
                 currency === 'Bs' && rate && totalSummary != null ? Number(totalSummary) * rate : totalSummary;

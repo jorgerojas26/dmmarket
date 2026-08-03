@@ -3,6 +3,7 @@ import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useMemo } from 'react';
+import { sortRows } from 'utils/sortRows';
 import columns from './columns';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -14,7 +15,9 @@ const EmployeeSales = ({ data, loading, onRowSelect }) => {
         (config) => {
             const selectedColumns = config?.columns?.length ? config.columns : columns;
             const widths = selectedColumns.map((col) => (col.accessor === 'name' ? '*' : 'auto'));
-            const body = data.map((row) => selectedColumns.map((col) => String(row[col.accessor] ?? '')));
+            const body = sortRows(data, config?.sortBy).map((row) =>
+                selectedColumns.map((col) => String(row[col.accessor] ?? '')),
+            );
 
             pdfMake
                 .createPdf({

@@ -21,6 +21,7 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import { formatMoney } from 'utils/format';
+import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -322,7 +323,7 @@ const DesgloseView = ({ isActive }) => {
                     search: facturasSearch || undefined,
                     showNoe,
                 });
-                const data = result?.data || [];
+                const data = sortRows(result?.data || [], config?.sortBy);
                 const total = data.reduce((s, r) => s + (r.monto || 0), 0);
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
@@ -461,7 +462,7 @@ const DesgloseView = ({ isActive }) => {
                     search: productosSearch || undefined,
                     showNoe,
                 });
-                const data = result?.data || [];
+                const data = sortRows(result?.data || [], config?.sortBy);
                 const totalBruto = data.reduce((s, r) => s + (r.rawProfit || 0), 0);
                 const totalUtilidad = data.reduce((s, r) => s + (r.netProfit || 0), 0);
                 const totalPeso = data.reduce((s, r) => s + (r.peso || 0), 0);

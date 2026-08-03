@@ -48,3 +48,61 @@
     background: #14171b;
     border: 1px solid #2f3338;
 }
+
+/* ── Sort criteria ── */
+.print-config-modal .sort-rules-empty {
+    color: #6c757d;
+    font-size: 13px;
+    font-style: italic;
+    padding: 6px 0;
+}
+
+.print-config-modal .sort-rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.print-config-modal .sort-rule {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #14171b;
+    border: 1px solid #2f3338;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+.print-config-modal .sort-rule-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.print-config-modal .sort-rule-label {
+    flex: 1;
+    color: #e9ecef;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.print-config-modal .form-select {
+    background-color: #14171b;
+    color: #e9ecef;
+    border: 1px solid #2f3338;
+}
+
+.print-config-modal .form-select option {
+    background-color: #14171b;
+    color: #e9ecef;
+}
