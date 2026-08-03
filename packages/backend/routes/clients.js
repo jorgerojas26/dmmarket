@@ -11,6 +11,7 @@ router.route("/:clientId/sales").get(showNoe, controller.GET_CLIENT_SALES);
 router.route("/:clientId/summary").get(showNoe, controller.GET_CLIENT_SUMMARY);
 
 router.route("/dashboard").get(showNoe, controller.GET_CLIENTS_DASHBOARD);
+router.route("/sin-facturar").get(showNoe, controller.GET_CLIENTS_SIN_FACTURAR);
 router.route("/list").get(showNoe, controller.GET_CLIENTS_LIST);
 router.route("/routes").get(showNoe, controller.GET_CLIENT_ROUTES);
 

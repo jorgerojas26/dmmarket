@@ -291,6 +291,7 @@ const GET_CLIENTS_LIST = async (req, res) => {
       .select(
         "clientes.IdCliente",
         "clientes.Empresa",
+        knex.raw(`MAX(${masterTable}.Fecha) as last_factura`),
         knex.raw(`COALESCE(ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2), 0) as total_ventas`),
         knex.raw(`COUNT(DISTINCT ${masterTable}.${idInvoice}) as num_ventas`),
         knex.raw(
@@ -336,6 +337,91 @@ const GET_CLIENTS_LIST = async (req, res) => {
   }
 };
 
+const GET_CLIENTS_SIN_FACTURAR = async (req, res) => {
+  const { from, to, search, ruta, page = 1, limit = 20, sortBy = "revenue_historico", sortDir = "desc" } = req.query;
+  const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
+  const offset = (Number(page) - 1) * Number(limit);
+
+  if (!from || !to) {
+    return res.status(400).json({ error: "from and to are required" });
+  }
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "IdCliente":
+        return "c.IdCliente";
+      case "Empresa":
+        return "c.Empresa";
+      case "ruta":
+        return "ruta_nombre";
+      case "last_factura":
+        return "last_factura";
+      case "dias_inactivo":
+        return "dias_inactivo";
+      default:
+        return "revenue_historico";
+    }
+  })();
+
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
+
+  try {
+    // Clients with at least one invoice in the period (excluded from results)
+    const invoicedInPeriod = knex(`${masterTable}`)
+      .distinct(`${masterTable}.IdCliente`)
+      .whereBetween("Fecha", [from, to])
+      .andWhere("Anulada", 0);
+
+    const dataQuery = knex("clientes as c")
+      .select(
+        "c.IdCliente",
+        "c.Empresa",
+        knex.raw("COALESCE(rutas.Nombre, c.Ruta) as ruta_nombre"),
+        knex.raw("MAX(mh.Fecha) as last_factura"),
+        knex.raw("DATEDIFF(?, MAX(mh.Fecha)) as dias_inactivo", [to]),
+        knex.raw("COALESCE(ROUND(SUM(sh.Precio * sh.Cantidad), 2), 0) as revenue_historico"),
+      )
+      .from("clientes as c")
+      .leftJoin(`${masterTable} as mh`, function () {
+        this.on("c.IdCliente", "mh.IdCliente").andOn("mh.Anulada", 0);
+      })
+      .leftJoin(`${slaveTable} as sh`, `mh.${idInvoice}`, `sh.${idInvoice}`)
+      .leftJoin("rutas", "rutas.Id_Ruta", "c.Ruta")
+      .whereNotIn("c.IdCliente", invoicedInPeriod);
+
+    // Count query (from clientes directly with same filters)
+    const countQuery = knex("clientes").countDistinct({ total: "IdCliente" }).whereNotIn("IdCliente", invoicedInPeriod);
+
+    if (search) {
+      dataQuery.where("c.Empresa", "like", `%${search}%`);
+      countQuery.where("Empresa", "like", `%${search}%`);
+    }
+
+    if (ruta) {
+      dataQuery.where("c.Ruta", ruta);
+      countQuery.where("Ruta", ruta);
+    }
+
+    const [{ total }] = await countQuery;
+
+    const data = await dataQuery
+      .groupBy("c.IdCliente")
+      .orderBy(sortCol, sortDirection)
+      .limit(Number(limit))
+      .offset(Number(offset));
+
+    res.status(200).json({
+      data,
+      total: Number(total),
+      page: Number(page),
+      limit: Number(limit),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 const { GET_CLIENTS_DASHBOARD } = require("./clients/dashboard");
 
 module.exports = {
@@ -346,6 +432,7 @@ module.exports = {
   GET_CLIENT_SALES,
   GET_CLIENT_SUMMARY,
   GET_CLIENTS_LIST,
+  GET_CLIENTS_SIN_FACTURAR,
   GET_CLIENTS_DASHBOARD,
   GET_CLIENT_ROUTES,
 };

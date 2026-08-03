@@ -7,6 +7,7 @@ import {
     fetchClients,
     fetchClientsDashboard,
     fetchClientsList,
+    fetchClientsSinFacturar,
     fetchMonthlyAverage,
 } from 'api/clients';
 import useSWR from 'hooks/swr-wrapper';
@@ -61,6 +62,24 @@ export function useBestClientsPerProduct(productId, dateRange, showNoe, enabled 
             ? ['best-clients-per-product', productId, dateRange.from, dateRange.to, showNoe]
             : null;
     return useSWR(key, () => fetchBestClientsPerProduct(productId, dateRange, showNoe));
+}
+
+/**
+ * Clients without invoices in the period (paginated, searchable, filterable by route).
+ */
+export function useClientsSinFacturar(
+    { from, to, search, ruta, page = 1, limit = 20, sortBy = 'revenue_historico', sortDir = 'desc', showNoe },
+    enabled = true,
+) {
+    const key =
+        enabled && from && to
+            ? ['clients-sin-facturar', from, to, search, ruta, page, limit, sortBy, sortDir, showNoe]
+            : null;
+    return useSWR(
+        key,
+        () => fetchClientsSinFacturar({ from, to, search, ruta, page, limit, sortBy, sortDir, showNoe }),
+        { keepPreviousData: true },
+    );
 }
 
 /**

@@ -109,7 +109,18 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
     const today = DateTime.now().toISODate();
     const oneYearAgo = DateTime.now().minus({ years: 1 }).toISODate();
 
-    const [dateRange, setDateRange] = useState({ from: oneYearAgo, to: today });
+    // Smart default: anchor the range on the client's last invoice (when known,
+    // e.g. from the "Clientes Sin Facturar" table), so inactive clients open on
+    // their real activity window instead of an empty last year.
+    const initialRange =
+        client?.last_factura && DateTime.fromISO(client.last_factura).isValid
+            ? {
+                  from: DateTime.fromISO(client.last_factura).minus({ years: 1 }).toISODate(),
+                  to: DateTime.fromISO(client.last_factura).toISODate(),
+              }
+            : { from: oneYearAgo, to: today };
+
+    const [dateRange, setDateRange] = useState(initialRange);
     const [salesPage, setSalesPage] = useState(1);
     const [chartTooltip, setChartTooltip] = useState({ visible: false, x: 0, y: 0, point: null });
 
@@ -389,8 +400,8 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                     <div className="date-picker-label">Rango de fechas</div>
                     <DateRangePicker
                         key={client?.IdCliente || 'picker'}
-                        initialFrom={oneYearAgo}
-                        initialTo={today}
+                        initialFrom={initialRange.from}
+                        initialTo={initialRange.to}
                         onChange={handleDateRangeChange}
                     />
                 </div>

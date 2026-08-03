@@ -189,6 +189,7 @@ const ClientesPage = () => {
                             dateRange={dateRange}
                             showNoe={showNoe}
                             ruta={selectedRuta?.value}
+                            onClientSelect={handleRowSelect}
                         />
                     </section>
                 </div>

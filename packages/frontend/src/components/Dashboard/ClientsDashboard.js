@@ -10,6 +10,7 @@ import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
 import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
+import SinFacturarTable from './SinFacturarTable';
 
 const nivoTheme = {
     axis: {
@@ -29,7 +30,7 @@ const nivoTheme = {
     },
 };
 
-const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
+const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
     const { data, error, isLoading } = useClientsDashboard(dateRange, showNoe, ruta);
 
     // ── Derived chart data ──
@@ -273,6 +274,20 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                     leer: '70% = 7 de cada 10 clientes compraron. Con una ruta seleccionada, mide la cobertura de esa ruta.',
                                     servir: 'Es el indicador más accionable: cobertura baja = clientes que nadie está atendiendo.',
                                     accion: 'Entra al Desglose con esa ruta y retoma a los clientes que no compraron.',
+                                }}
+                            />
+                        </div>
+                        <div>
+                            <KpiCard
+                                label="Sin Facturar Periodo"
+                                value={formatNumber(kpis?.sinFacturar)}
+                                icon="ticket"
+                                accent="amber"
+                                help={{
+                                    que: 'Clientes de la cartera que no emitieron ninguna factura dentro del periodo elegido.',
+                                    leer: 'Es el complemento de Activos Periodo: Total − Activos. Número alto = gran parte de la cartera sin mover.',
+                                    servir: 'Ver el tamaño de la oportunidad de recuperación en un vistazo.',
+                                    accion: 'Baja al panel "Clientes Sin Facturar" para ver quiénes son y retomarlos.',
                                 }}
                             />
                         </div>
@@ -585,6 +600,29 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta }) => {
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Clientes sin facturar en el periodo */}
+            <div className="row g-3 mb-4">
+                <div className="col-12">
+                    <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
+                        <PanelHelpTitle
+                            title="Clientes Sin Facturar"
+                            help={{
+                                que: 'Clientes sin ninguna factura dentro del periodo elegido (o de la ruta seleccionada).',
+                                leer: 'Ordenados por su venta histórica: los que más dinero han movido aparecen primero. "Nunca" = jamás han facturado.',
+                                servir: 'Es la lista de acción: a quién llamar o visitar para recuperar venta.',
+                                accion: 'Haz clic en una fila para abrir el dashboard del cliente y retomarlo.',
+                            }}
+                        />
+                        <SinFacturarTable
+                            from={dateRange.from}
+                            to={dateRange.to}
+                            ruta={ruta}
+                            onRowSelect={onClientSelect}
+                        />
                     </div>
                 </div>
             </div>

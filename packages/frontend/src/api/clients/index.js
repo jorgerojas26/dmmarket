@@ -71,3 +71,28 @@ export const fetchClientRoutes = async (showNoe) => {
     const response = await fetch(`${BASE_URL}/routes?showNoe=${showNoe}`);
     return response.json();
 };
+
+export const fetchClientsSinFacturar = async ({
+    from,
+    to,
+    search,
+    ruta,
+    page = 1,
+    limit = 20,
+    sortBy = 'revenue_historico',
+    sortDir = 'desc',
+    showNoe,
+}) => {
+    const params = new URLSearchParams();
+    params.append('from', from);
+    params.append('to', to);
+    if (search) params.append('search', search);
+    if (ruta) params.append('ruta', ruta);
+    params.append('page', page);
+    params.append('limit', limit);
+    params.append('sortBy', sortBy);
+    params.append('sortDir', sortDir);
+    params.append('showNoe', showNoe);
+    const response = await fetch(`${BASE_URL}/sin-facturar?${params.toString()}`);
+    return response.json();
+};

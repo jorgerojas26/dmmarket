@@ -164,6 +164,7 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
       routeActivos,
       totalGlobalRow,
       withoutRouteRow,
+      sinFacturarRow,
     ] = await Promise.all([
       // 1. Total clients (optionally scoped to route)
       (async () => {
@@ -398,6 +399,19 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
 
       // 13. Clients without a route assigned
       knex("clientes").whereNull("Ruta").count("* as total").first(),
+
+      // 14. Clients without invoices in the period (count only; same criteria as /api/clients/sin-facturar)
+      (async () => {
+        const invoicedInPeriod = knex(`${masterTable}`)
+          .distinct(`${masterTable}.IdCliente`)
+          .whereBetween("Fecha", [from, to])
+          .andWhere("Anulada", 0);
+
+        let q = knex("clientes").countDistinct({ total: "IdCliente" }).whereNotIn("IdCliente", invoicedInPeriod);
+        if (routeClients) q = q.whereIn("IdCliente", routeClients);
+
+        return q.first();
+      })(),
     ]);
 
     // ── Route coverage (global cartera breakdown, merged) ──
@@ -428,6 +442,7 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         activePercent: totalClientsRow?.total
           ? Math.round((Number(activeClientsRow?.total) / Number(totalClientsRow?.total)) * 1000) / 10
           : 0,
+        sinFacturar: Number(sinFacturarRow?.total) || 0,
         withoutRoute: Number(withoutRouteRow?.total) || 0,
         concentration,
         retention: {
