@@ -28,6 +28,10 @@ _Avoid_: Purchase order, procurement
 `SUM(Precio * Cantidad)` — ingreso bruto de ventas para un alcance dado (proveedor, cliente, producto, período).
 _Avoid_: Revenue, gross revenue
 
+**Total Compras (Gross Purchases)**:
+`SUM(Precio * Cantidad)` sobre `slavecomp` — inversión en inventario para un alcance dado (proveedor, grupo, producto, período). En compras `Precio` es el costo de adquisición; no existe margen.
+_Avoid_: Purchases, gasto de adquisición, procurement
+
 **Utilidad (Net Profit / Margin)**:
 `SUM((Precio - Costo) * Cantidad)` — ganancia neta después de restar costo de adquisición.
 _Avoid_: Ganancia, profit margin (usar solo al referirse al porcentaje)
