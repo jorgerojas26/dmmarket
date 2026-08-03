@@ -13,7 +13,7 @@
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
     border-bottom: none;
-    padding: 1rem 1.25rem;
+    padding: 0.9rem 1.25rem;
 }
 
 .print-config-modal .modal-header .btn-close {
@@ -23,10 +23,12 @@
 .print-config-modal .modal-title {
     font-weight: 700;
     letter-spacing: -0.25px;
+    font-size: 1.1rem;
 }
 
 .print-config-modal .modal-body {
     background: #1a1d21;
+    padding: 1.25rem;
 }
 
 .print-config-modal .modal-footer {
@@ -36,73 +38,369 @@
     border-bottom-right-radius: 16px;
 }
 
-.print-config-modal .form-label {
-    color: #e9ecef;
+/* ── Two-column layout ── */
+.print-config-modal .pc-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
 }
 
-.print-config-modal .form-check-label {
-    color: #c4cad4;
-}
-
-.print-config-modal .column-list {
-    background: #14171b;
-    border: 1px solid #2f3338;
-}
-
-/* ── Sort criteria ── */
-.print-config-modal .sort-rules-empty {
-    color: #6c757d;
-    font-size: 13px;
-    font-style: italic;
-    padding: 6px 0;
-}
-
-.print-config-modal .sort-rules-list {
+.print-config-modal .pc-side {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 20px;
+    min-width: 0;
 }
 
-.print-config-modal .sort-rule {
+@media (max-width: 576px) {
+    .print-config-modal .pc-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Section headers ── */
+.print-config-modal .pc-section {
+    min-width: 0;
+}
+
+.print-config-modal .pc-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.print-config-modal .pc-section-title {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #9aa3af;
+    margin-bottom: 6px;
+}
+
+.print-config-modal .pc-section-head .pc-section-title {
+    margin-bottom: 0;
+}
+
+.print-config-modal .pc-count {
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #2d3138;
+    color: #adb5bd;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.print-config-modal .pc-section-actions button {
+    background: none;
+    border: none;
+    padding: 0 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6ea8fe;
+    cursor: pointer;
+}
+
+.print-config-modal .pc-section-actions button:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
+.print-config-modal .pc-section-actions button:disabled {
+    color: #4b5158;
+    cursor: default;
+}
+
+/* ── Column picker ── */
+.print-config-modal .pc-search {
     display: flex;
     align-items: center;
     gap: 8px;
     background: #14171b;
     border: 1px solid #2f3338;
     border-radius: 8px;
-    padding: 6px 10px;
+    padding: 0 10px;
+    margin-bottom: 8px;
+    color: #6c757d;
 }
 
-.print-config-modal .sort-rule-index {
+.print-config-modal .pc-search input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: none;
+    outline: none;
+    color: #e9ecef;
+    font-size: 13px;
+    height: 32px;
+}
+
+.print-config-modal .pc-search input::placeholder {
+    color: #6c757d;
+}
+
+.print-config-modal .pc-search:focus-within {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.2);
+}
+
+.print-config-modal .column-list {
+    background: #14171b;
+    border: 1px solid #2f3338;
+    border-radius: 10px;
+    padding: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Custom check rows — no native checkbox, avoids clipped input artifacts */
+.print-config-modal .column-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 6px 10px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: #c4cad4;
+    font-size: 13.5px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.print-config-modal .column-item:hover {
+    background: rgba(255, 255, 255, 0.045);
+}
+
+.print-config-modal .column-item:focus-visible {
+    outline: 2px solid #0d6efd;
+    outline-offset: -2px;
+}
+
+.print-config-modal .column-item.checked {
+    color: #e9ecef;
+    background: rgba(13, 110, 253, 0.08);
+}
+
+.print-config-modal .column-item-check {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: #0d6efd;
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    border: 1.5px solid #4b5158;
+    background: #2d3138;
     color: #fff;
-    font-size: 12px;
-    font-weight: 700;
     flex-shrink: 0;
+    transition:
+        background 0.12s ease,
+        border-color 0.12s ease;
 }
 
-.print-config-modal .sort-rule-label {
-    flex: 1;
-    color: #e9ecef;
-    font-size: 14px;
+.print-config-modal .column-item:hover .column-item-check {
+    border-color: #6ea8fe;
+}
+
+.print-config-modal .column-item.checked .column-item-check {
+    background: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.print-config-modal .column-item-label {
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.print-config-modal .form-select {
-    background-color: #14171b;
-    color: #e9ecef;
-    border: 1px solid #2f3338;
+.print-config-modal .pc-empty {
+    color: #6c757d;
+    font-size: 13px;
+    font-style: italic;
+    margin: 6px 4px;
 }
 
-.print-config-modal .form-select option {
-    background-color: #14171b;
+.print-config-modal .pc-error {
+    color: #ff6b6b;
+    font-size: 12.5px;
+    margin: 8px 2px 0;
+}
+
+/* ── Sort criteria (drag to reorder) ── */
+.print-config-modal .sort-rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.print-config-modal .sort-rule {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #14171b;
+    border: 1px solid #2f3338;
+    border-radius: 8px;
+    padding: 4px 8px 4px 4px;
+    position: relative;
+}
+
+.print-config-modal .sort-rule.dragging {
+    opacity: 0.9;
+    border-color: #0d6efd;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+.print-config-modal .sort-rule-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 26px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: #6c757d;
+    cursor: grab;
+    touch-action: none;
+    flex-shrink: 0;
+}
+
+.print-config-modal .sort-rule-handle:hover {
+    color: #c4cad4;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.print-config-modal .sort-rule.dragging .sort-rule-handle {
+    cursor: grabbing;
+}
+
+.print-config-modal .sort-rule-label {
+    flex: 1;
+    min-width: 0;
     color: #e9ecef;
+    font-size: 13.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.print-config-modal .sort-rule-direction {
+    display: inline-flex;
+    border: 1px solid #2f3338;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.print-config-modal .sort-rule-direction button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 24px;
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+}
+
+.print-config-modal .sort-rule-direction button + button {
+    border-left: 1px solid #2f3338;
+}
+
+.print-config-modal .sort-rule-direction button:hover:not(.active) {
+    color: #c4cad4;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.print-config-modal .sort-rule-direction button.active {
+    background: #0d6efd;
+    color: #fff;
+}
+
+.print-config-modal .sort-rule-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: #6c757d;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.print-config-modal .sort-rule-remove:hover {
+    color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.12);
+}
+
+.print-config-modal .pc-hint {
+    color: #6c757d;
+    font-size: 12px;
+    line-height: 1.45;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed #2f3338;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 8px 0 0;
+}
+
+/* ── Segmented toggles (orientation / currency) ── */
+.print-config-modal .pc-page-setup {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.print-config-modal .pc-segmented {
+    display: flex;
+    width: 100%;
+}
+
+.print-config-modal .pc-segmented .btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 8px;
+    color: #adb5bd;
+    border-color: #373b3e;
+}
+
+.print-config-modal .pc-segmented .btn:hover {
+    color: #e9ecef;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #4b5158;
+}
+
+/* react-bootstrap ToggleButton renders .btn-check + label.btn — checked state
+   is styled via the :checked sibling selector, not .active */
+.print-config-modal .pc-segmented .btn-check:checked + .btn-outline-secondary,
+.print-config-modal .pc-segmented .btn.active {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}
+
+.print-config-modal .pc-segmented .btn-check:focus + .btn-outline-secondary {
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.25);
+}
+
+/* ── react-select tweaks ── */
+.print-config-modal .print-sort-select__control {
+    font-size: 13px;
 }
