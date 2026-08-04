@@ -1,5 +1,6 @@
 import { ShowNoeContext } from 'context/show_noe';
 import ClientesPage from 'pages/clientes';
+import ComprasPage from 'pages/compras';
 import ProductosPage from 'pages/productos';
 import VentasPage from 'pages/ventas';
 import { useContext, useEffect } from 'react';
@@ -32,6 +33,7 @@ function App() {
                     className={
                         'app-navbar' +
                         (location.pathname.includes('/ventas') ||
+                        location.pathname.includes('/compras') ||
                         location.pathname.includes('/clientes') ||
                         location.pathname.includes('/proveedores')
                             ? ' has-clients-sidebar'
@@ -46,19 +48,21 @@ function App() {
                         <Navbar.Collapse id="basic-navbar-nav">
                             <Container fluid className="d-flex gap-5 justify-content-between align-items-center">
                                 <Nav className="me-auto">
-                                    {['ventas', 'clientes', 'productos', 'proveedores'].map((route, index) => {
-                                        return (
-                                            <Link
-                                                key={index}
-                                                to={`/${route}`}
-                                                className={`text-decoration-none nav-link${
-                                                    location.pathname.includes(route) ? ' active' : ''
-                                                }`}
-                                            >
-                                                {route}
-                                            </Link>
-                                        );
-                                    })}
+                                    {['ventas', 'compras', 'clientes', 'productos', 'proveedores'].map(
+                                        (route, index) => {
+                                            return (
+                                                <Link
+                                                    key={index}
+                                                    to={`/${route}`}
+                                                    className={`text-decoration-none nav-link${
+                                                        location.pathname.includes(route) ? ' active' : ''
+                                                    }`}
+                                                >
+                                                    {route}
+                                                </Link>
+                                            );
+                                        },
+                                    )}
                                 </Nav>
                                 <div
                                     style={{
@@ -95,6 +99,7 @@ function App() {
                     <Switch>
                         <Redirect exact from="/" to="/ventas" />
                         <Route path="/ventas" component={VentasPage} />
+                        <Route path="/compras" component={ComprasPage} />
                         <Route path="/clientes" component={ClientesPage} />
                         <Route path="/productos" component={ProductosPage} />
                         <Route path="/proveedores" component={ProveedoresPage} />
