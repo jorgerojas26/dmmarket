@@ -13,6 +13,7 @@ const InvoicesTable = ({
     print,
     maxHeight,
     clearSelectionSignal,
+    deselectSignal,
 }) => {
     const memoizedColumns = useMemo(() => columns, []);
 
@@ -37,6 +38,7 @@ const InvoicesTable = ({
                     print={print}
                     maxHeight={maxHeight}
                     clearSelectionSignal={clearSelectionSignal}
+                    deselectSignal={deselectSignal}
                 />
             </Card.Body>
         </Card>

@@ -132,6 +132,8 @@ const Table = ({
     // ── selection reset ──
     /** Changing this value clears all selected rows */
     clearSelectionSignal,
+    /** `{ key, ids }` — when `key` changes, deselects the given row ids (works even for rows not on the current page). */
+    deselectSignal,
     /** Stable row id accessor `(row) => id`. Required for selection to survive `data` changes (pagination, search, sort). */
     getRowId,
     /** Keep selection when `data` changes (react-table resets it by default). Enables cross-page multi-select. */
@@ -211,6 +213,15 @@ const Table = ({
             dispatch({ type: actions.resetSelectedRows });
         }
     }, [clearSelectionSignal, dispatch]);
+
+    /* ── Targeted row deselection (e.g. removing one invoice from a selection modal) ── */
+    useEffect(() => {
+        if (deselectSignal?.ids?.length && dispatch) {
+            deselectSignal.ids.forEach((id) => {
+                dispatch({ type: actions.toggleRowSelected, id });
+            });
+        }
+    }, [deselectSignal, dispatch]);
 
     /* ── Notify sorted/filtered rows (for external consumers like PDF export) ── */
     useEffect(() => {
@@ -304,18 +315,16 @@ const Table = ({
             const lastIdx = Object.keys(state.selectedRowIds).pop();
             const newIdx = row.index;
 
-            if (e.ctrlKey && !e.shiftKey) {
-                row.toggleRowSelected();
-            } else if (e.shiftKey && !e.ctrlKey) {
-                if (multi && lastIdx != null) {
-                    const last = Number(lastIdx);
-                    const [from, to] = last < newIdx ? [last, newIdx] : [newIdx, last];
-                    for (let i = from; i <= to; i++) {
-                        if (i !== last) rows[i].toggleRowSelected();
-                    }
+            if (e.shiftKey && !e.ctrlKey && multi && lastIdx != null) {
+                const last = Number(lastIdx);
+                const [from, to] = last < newIdx ? [last, newIdx] : [newIdx, last];
+                for (let i = from; i <= to; i++) {
+                    if (i !== last) rows[i].toggleRowSelected();
                 }
             } else {
-                state.selectedRowIds = {};
+                // Plain click (and ctrl/cmd-click) toggles this row without touching
+                // any other selection — accumulated selection survives pagination,
+                // search and filter changes.
                 row.toggleRowSelected();
             }
         };

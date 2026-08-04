@@ -1,0 +1,115 @@
+/* Selected invoices modal — dark theme, consistent with PrintConfigModal */
+.selected-invoices-modal .modal-content {
+    background: #1a1d21;
+    color: #e9ecef;
+    border: 1px solid #2f3338;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.selected-invoices-modal .modal-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    color: #fff;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    border-bottom: none;
+    padding: 0.9rem 1.25rem;
+}
+
+.selected-invoices-modal .modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.selected-invoices-modal .modal-title {
+    font-weight: 700;
+    letter-spacing: -0.25px;
+    font-size: 1.1rem;
+}
+
+.selected-invoices-modal .modal-body {
+    background: #1a1d21;
+    padding: 1.25rem;
+}
+
+.selected-invoices-modal .modal-footer {
+    background: #1a1d21;
+    border-top: 1px solid #2f3338;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+
+.selected-invoices-modal .si-empty {
+    padding: 2rem;
+    text-align: center;
+    color: #94a3b8;
+}
+
+.selected-invoices-modal .si-table-wrap {
+    max-height: 60vh;
+    overflow: auto;
+    border: 1px solid #2f3338;
+    border-radius: 10px;
+}
+
+.selected-invoices-modal .si-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.selected-invoices-modal .si-table th {
+    position: sticky;
+    top: 0;
+    background: #23272d;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.5px;
+    padding: 0.65rem 0.9rem;
+    text-align: left;
+    border-bottom: 1px solid #2f3338;
+    white-space: nowrap;
+}
+
+.selected-invoices-modal .si-table td {
+    padding: 0.55rem 0.9rem;
+    color: #c4cad4;
+    border-bottom: 1px solid #262a30;
+    white-space: nowrap;
+}
+
+.selected-invoices-modal .si-table tbody tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.selected-invoices-modal .si-remove-cell {
+    text-align: center;
+}
+
+.selected-invoices-modal .si-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        color 0.15s ease;
+}
+
+.selected-invoices-modal .si-remove:hover {
+    background: rgba(220, 53, 69, 0.18);
+    color: #dc3545;
+}
+
+.selected-invoices-modal .si-total {
+    font-weight: 600;
+    color: #e9ecef;
+    margin-right: auto;
+}

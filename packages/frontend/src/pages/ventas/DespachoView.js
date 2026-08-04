@@ -1,9 +1,10 @@
 import InvoicesTable from 'components/InvoicesTable';
+import SelectedInvoicesModal from 'components/Modals/SelectedInvoicesModal';
 import ProductsTable from 'components/ProductsTable';
 import { darkSelectStyles } from 'components/selectStyles';
 import { useClientRoutes } from 'hooks/useClients';
-import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
 import { useInvoiceList } from 'hooks/useInvoice';
+import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from 'react-bootstrap';
 import Select from 'react-select';
@@ -12,6 +13,9 @@ const LIMIT = 20;
 const EMPTY_INVOICES = [];
 
 const DespachoView = ({ dateRange, showNoe, isActive }) => {
+    // Independent selection state: accumulates invoices across pages, searches
+    // and filter changes. Only explicit user actions ("Limpiar selección" or
+    // removing one invoice from the modal) modify it.
     const [selectedRows, setSelectedRows] = useState([]);
 
     // Pagination / sorting / search state
@@ -21,14 +25,15 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     const [search, setSearch] = useState('');
     const [selectedRuta, setSelectedRuta] = useState(null);
     const [clearSelectionSignal, setClearSelectionSignal] = useState(0);
+    const [showSelectionModal, setShowSelectionModal] = useState(false);
+    const [deselectSignal, setDeselectSignal] = useState({ key: 0, ids: [] });
 
     const { productsSummary, invoicesTotalSummary } = useInvoiceDispatch(selectedRows);
 
-    // Reset page and selection when date range or route changes
+    // Reset page when date range or route changes. Selection is NOT cleared:
+    // it is independent state that survives pagination, search and filters.
     useEffect(() => {
         setPage(1);
-        setSelectedRows([]);
-        setClearSelectionSignal((key) => key + 1);
     }, [dateRange.from, dateRange.to, selectedRuta]);
 
     const { data: routes = [], isLoading: routesLoading } = useClientRoutes(showNoe, isActive);
@@ -86,6 +91,15 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
         setClearSelectionSignal((key) => key + 1);
     }, []);
 
+    const handleRemoveSelectedInvoice = useCallback((invoiceId) => {
+        setDeselectSignal((prev) => ({ key: prev.key + 1, ids: [invoiceId] }));
+    }, []);
+
+    const handleClearAll = useCallback(() => {
+        handleClearSelection();
+        setShowSelectionModal(false);
+    }, [handleClearSelection]);
+
     const sortByArr = [{ id: sortBy, desc: sortDir === 'desc' }];
     const totalPages = Math.ceil(total / LIMIT);
 
@@ -109,14 +123,24 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                     />
                 </div>
                 {selectedRows.length > 0 && (
-                    <Button
-                        variant="outline-danger"
-                        size="sm"
-                        className="ms-auto align-self-center"
-                        onClick={handleClearSelection}
-                    >
-                        Limpiar selección ({selectedRows.length})
-                    </Button>
+                    <>
+                        <Button
+                            variant="outline-primary"
+                            size="sm"
+                            className="ms-auto align-self-center"
+                            onClick={() => setShowSelectionModal(true)}
+                        >
+                            Ver selección ({selectedRows.length})
+                        </Button>
+                        <Button
+                            variant="outline-danger"
+                            size="sm"
+                            className="align-self-center"
+                            onClick={handleClearSelection}
+                        >
+                            Limpiar selección
+                        </Button>
+                    </>
                 )}
             </div>
             <div className="row g-3" style={{ height: 'calc(100vh - 240px)' }}>
@@ -145,6 +169,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                             onSearch: handleSearch,
                         }}
                         clearSelectionSignal={clearSelectionSignal}
+                        deselectSignal={deselectSignal}
                     />
                 </div>
                 <div className="col-12 col-xl-6">
@@ -155,6 +180,14 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                     />
                 </div>
             </div>
+            <SelectedInvoicesModal
+                show={showSelectionModal}
+                invoices={selectedRows}
+                totalSummary={invoicesTotalSummary}
+                onRemove={handleRemoveSelectedInvoice}
+                onClear={handleClearAll}
+                onClose={() => setShowSelectionModal(false)}
+            />
         </>
     );
 };
