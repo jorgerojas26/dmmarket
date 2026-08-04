@@ -114,7 +114,7 @@ const ComprasPage = () => {
             },
             desglose: {
                 heading: 'Desglose de Compras',
-                render: () => <DesgloseView />,
+                render: () => <DesgloseView isActive={activeView === 'desglose'} />,
             },
         }),
         [dateRange, activeView],
