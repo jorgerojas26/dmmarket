@@ -3,8 +3,8 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useRef } from 'react';
 import { Card } from 'react-bootstrap';
-import { CurrencyRateContext } from '../../context/currency_rate';
 import { sortRows } from 'utils/sortRows';
+import { CurrencyRateContext } from '../../context/currency_rate';
 import pdf from './pdf';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -23,7 +23,7 @@ const textSortType = (rowA, rowB, columnId) => {
     return a.localeCompare(b, 'es', { sensitivity: 'base', ignorePunctuation: true });
 };
 
-const ProductsTable = ({ data, totalSummary, maxHeight }) => {
+const ProductsTable = ({ data, totalSummary }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
 
     // Rows in the table's current sort order (for PDF export).
@@ -112,11 +112,11 @@ const ProductsTable = ({ data, totalSummary, maxHeight }) => {
     );
 
     return (
-        <Card className="h-100">
+        <Card className="h-100 mb-0">
             <Card.Header>
                 <h3>Productos</h3>
             </Card.Header>
-            <Card.Body>
+            <Card.Body style={{ minHeight: 0 }}>
                 <Table
                     data={data}
                     columns={memoizedColumns}

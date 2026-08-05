@@ -11,18 +11,17 @@ const InvoicesTable = ({
     pagination,
     search,
     print,
-    maxHeight,
     clearSelectionSignal,
     deselectSignal,
 }) => {
     const memoizedColumns = useMemo(() => columns, []);
 
     return (
-        <Card className="h-100 noselect">
+        <Card className="h-100 mb-0 noselect">
             <Card.Header>
                 <h3>Facturas</h3>
             </Card.Header>
-            <Card.Body>
+            <Card.Body style={{ minHeight: 0 }}>
                 <Table
                     data={data}
                     columns={memoizedColumns}
@@ -36,7 +35,6 @@ const InvoicesTable = ({
                     pagination={pagination}
                     search={search}
                     print={print}
-                    maxHeight={maxHeight}
                     clearSelectionSignal={clearSelectionSignal}
                     deselectSignal={deselectSignal}
                 />

@@ -12,6 +12,12 @@ import Select from 'react-select';
 const LIMIT = 20;
 const EMPTY_INVOICES = [];
 
+// Fixed vertical space above the tables: navbar (56) + content padding top
+// (24) + heading block (65) + toolbar (38 + 16 margin) + content padding
+// bottom (24). Tables get exactly the remaining viewport height, so the
+// page never shows a vertical scrollbar.
+const ABOVE_TABLES_OFFSET = 224;
+
 const DespachoView = ({ dateRange, showNoe, isActive }) => {
     // Independent selection state: accumulates invoices across pages, searches
     // and filter changes. Only explicit user actions ("Limpiar selección" or
@@ -105,79 +111,79 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
 
     return (
         <>
-            <div className="d-flex flex-wrap gap-3 mb-3">
-                <div style={{ minWidth: '220px' }}>
-                    <Select
-                        options={routeOptions}
-                        value={selectedRuta}
-                        onChange={setSelectedRuta}
-                        placeholder="Todas las rutas"
-                        isClearable
-                        isLoading={routesLoading}
-                        styles={darkSelectStyles}
-                        classNamePrefix="search-select"
-                        menuPortalTarget={document.body}
-                        menuPlacement="auto"
-                        loadingMessage={() => 'Cargando...'}
-                        noOptionsMessage={() => 'Sin resultados'}
-                    />
+            <div>
+                <div className="d-flex flex-wrap gap-3 mb-3">
+                    <div style={{ minWidth: '220px' }}>
+                        <Select
+                            options={routeOptions}
+                            value={selectedRuta}
+                            onChange={setSelectedRuta}
+                            placeholder="Todas las rutas"
+                            isClearable
+                            isLoading={routesLoading}
+                            styles={darkSelectStyles}
+                            classNamePrefix="search-select"
+                            menuPortalTarget={document.body}
+                            menuPlacement="auto"
+                            loadingMessage={() => 'Cargando...'}
+                            noOptionsMessage={() => 'Sin resultados'}
+                        />
+                    </div>
+                    {selectedRows.length > 0 && (
+                        <>
+                            <Button
+                                variant="outline-primary"
+                                size="sm"
+                                className="ms-auto align-self-center"
+                                onClick={() => setShowSelectionModal(true)}
+                            >
+                                Ver selección ({selectedRows.length})
+                            </Button>
+                            <Button
+                                variant="outline-danger"
+                                size="sm"
+                                className="align-self-center"
+                                onClick={handleClearSelection}
+                            >
+                                Limpiar selección
+                            </Button>
+                        </>
+                    )}
                 </div>
-                {selectedRows.length > 0 && (
-                    <>
-                        <Button
-                            variant="outline-primary"
-                            size="sm"
-                            className="ms-auto align-self-center"
-                            onClick={() => setShowSelectionModal(true)}
-                        >
-                            Ver selección ({selectedRows.length})
-                        </Button>
-                        <Button
-                            variant="outline-danger"
-                            size="sm"
-                            className="align-self-center"
-                            onClick={handleClearSelection}
-                        >
-                            Limpiar selección
-                        </Button>
-                    </>
-                )}
-            </div>
-            <div className="row g-3" style={{ height: 'calc(100vh - 240px)' }}>
-                <div className="col-12 col-xl-6">
-                    <InvoicesTable
-                        data={invoices}
-                        loading={isLoading}
-                        onRowSelect={setSelectedRows}
-                        maxHeight="calc(100vh - 360px)"
-                        sorting={{
-                            enabled: true,
-                            sortBy: sortByArr,
-                            onSort: handleSort,
-                        }}
-                        pagination={{
-                            enabled: true,
-                            page,
-                            totalPages,
-                            totalRows: total,
-                            pageSize: LIMIT,
-                            onPageChange: handlePageChange,
-                        }}
-                        search={{
-                            enabled: true,
-                            placeholder: 'Buscar por cliente o factura...',
-                            onSearch: handleSearch,
-                        }}
-                        clearSelectionSignal={clearSelectionSignal}
-                        deselectSignal={deselectSignal}
-                    />
-                </div>
-                <div className="col-12 col-xl-6">
-                    <ProductsTable
-                        data={productsSummary}
-                        totalSummary={invoicesTotalSummary}
-                        maxHeight="calc(100vh - 360px)"
-                    />
+                {/* The row AND the cols need this same definite height: with
+                    flex-wrap the row's flex line grows to the tallest content, so
+                    the tables must be pinned to the available height from inside. */}
+                <div className="row g-3" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>
+                    <div className="col-12 col-xl-6" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>
+                        <InvoicesTable
+                            data={invoices}
+                            loading={isLoading}
+                            onRowSelect={setSelectedRows}
+                            sorting={{
+                                enabled: true,
+                                sortBy: sortByArr,
+                                onSort: handleSort,
+                            }}
+                            pagination={{
+                                enabled: true,
+                                page,
+                                totalPages,
+                                totalRows: total,
+                                pageSize: LIMIT,
+                                onPageChange: handlePageChange,
+                            }}
+                            search={{
+                                enabled: true,
+                                placeholder: 'Buscar por cliente o factura...',
+                                onSearch: handleSearch,
+                            }}
+                            clearSelectionSignal={clearSelectionSignal}
+                            deselectSignal={deselectSignal}
+                        />
+                    </div>
+                    <div className="col-12 col-xl-6" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>
+                        <ProductsTable data={productsSummary} totalSummary={invoicesTotalSummary} />
+                    </div>
                 </div>
             </div>
             <SelectedInvoicesModal
