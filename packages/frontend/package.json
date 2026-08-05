@@ -35,7 +35,7 @@
         "web-vitals": "1.1.2"
     },
     "scripts": {
-        "start": "portless run --name dmmarket react-scripts start",
+        "start": "DANGEROUSLY_DISABLE_HOST_CHECK=true NODE_OPTIONS='--openssl-legacy-provider' portless run --name dmmarket react-scripts start",
         "build": "react-scripts build",
         "test": "react-scripts test",
         "eject": "react-scripts eject"
