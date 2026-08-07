@@ -1,5 +1,5 @@
 procs:
   server:
-    shell: pnpm dev:backend
+    shell: bun dev:backend
   client:
-    shell: pnpm dev:frontend
+    shell: bun dev:frontend

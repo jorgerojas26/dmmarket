@@ -1,5 +1,6 @@
 const knex = require("../../database");
 const fs = require("node:fs");
+const path = require("node:path");
 
 const GET_EMPLOYEES = async (_req, res) => {
   try {
@@ -119,7 +120,11 @@ const GET_SALES = async (req, res) => {
 };
 
 const FALLBACK_CREATE_TABLE = async (recursive_callback) => {
-  const migration = fs.readFileSync("./controllers/employees/create-table-vendedor-comisiones.sql", "utf8").toString();
+  let sqlPath = path.join(__dirname, "controllers/employees/create-table-vendedor-comisiones.sql");
+  if (typeof Bun !== "undefined" && Bun.embeddedFiles.length > 0) {
+    sqlPath = require("../../assets.js").default["./controllers/employees/create-table-vendedor-comisiones.sql"];
+  }
+  const migration = fs.readFileSync(sqlPath, "utf8").toString();
   await knex.raw(migration);
   recursive_callback();
 };
