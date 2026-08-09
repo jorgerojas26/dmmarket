@@ -65,9 +65,10 @@ export function useDashboardSalesRaw(dateRange, showNoe) {
     );
 }
 
-export function useDashboardParetoRaw(dateRange, showNoe) {
-    const key = dateRange?.from && dateRange?.to ? ['dashboard-pareto', dateRange.from, dateRange.to, showNoe] : null;
-    return useSWR(key, () => fetchDashboardPareto({ from: dateRange.from, to: dateRange.to, showNoe }), {
+export function useDashboardParetoRaw(dateRange, showNoe, modo = 'ventas') {
+    const key =
+        dateRange?.from && dateRange?.to ? ['dashboard-pareto', dateRange.from, dateRange.to, showNoe, modo] : null;
+    return useSWR(key, () => fetchDashboardPareto({ from: dateRange.from, to: dateRange.to, showNoe, modo }), {
         keepPreviousData: true,
     });
 }

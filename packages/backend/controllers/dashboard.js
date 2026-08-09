@@ -242,8 +242,108 @@ const GET_DASHBOARD_SALES = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pareto en 2 modos (query param `modo`):
+//   ventas (default)          — productos rankeados por ganancia neta
+//   compras-sin-vender        — productos comprados en el rango sin NINGUNA
+//                                venta en el mismo rango, rankeados por inversión
+// ─────────────────────────────────────────────────────────────────────────────
+
+const fetchSalesParetoRows = async ({ from, to, masterTable, slaveTable, idInvoice }) =>
+  knex
+    .select(
+      "productos.Descripcion as product",
+      knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
+      knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
+      knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
+    )
+    .from(slaveTable)
+    .innerJoin(masterTable, function () {
+      this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+    })
+    .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+    .whereBetween(`${masterTable}.Fecha`, [from, to])
+    .groupBy("productos.IdProducto")
+    .orderBy("netProfit", "DESC");
+
+// Compras del rango sin ventas en el mismo rango — 2 pasadas + merge en JS.
+// Las compras siempre viven en mastercomp/slavecomp; la exclusión usa las tablas
+// de ventas dinámicas (masterfact/slavefact o masternoe/slavenoe según showNoe).
+const fetchUnsoldPurchasesRows = async ({ from, to, masterTable, slaveTable, idInvoice }) => {
+  const [purchases, soldIds] = await Promise.all([
+    knex.raw(
+      `SELECT
+        productos.IdProducto AS productId,
+        productos.Descripcion AS product,
+        ROUND(SUM(slavecomp.Cantidad), 3) AS quantity,
+        ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) AS totalPurchased
+      FROM slavecomp
+      INNER JOIN mastercomp ON mastercomp.IdFactura = slavecomp.IdFactura AND mastercomp.Anulada = 0
+      INNER JOIN productos ON productos.IdProducto = slavecomp.IdProducto
+      WHERE mastercomp.Fecha BETWEEN :from AND :to
+      GROUP BY productos.IdProducto, productos.Descripcion`,
+      { from, to },
+    ),
+    knex.raw(
+      `SELECT DISTINCT ${slaveTable}.IdProducto AS productId
+      FROM ${slaveTable}
+      INNER JOIN ${masterTable}
+        ON ${masterTable}.${idInvoice} = ${slaveTable}.${idInvoice} AND ${masterTable}.Anulada = 0
+      WHERE ${masterTable}.Fecha BETWEEN :from AND :to`,
+      { from, to },
+    ),
+  ]);
+
+  const sold = new Set((soldIds[0] || []).map((r) => r.productId));
+  return (purchases[0] || []).filter((r) => !sold.has(r.productId));
+};
+
+// Acumulados + clasificación ABC en JS, parametrizado por la columna de valor.
+const buildParetoResponse = (rows, valueKey, cumulativeKey, summaryPctKey) => {
+  const total = rows.reduce((sum, r) => sum + Number(r[valueKey] || 0), 0);
+  let cumulative = 0;
+  const products = rows.map((r, i) => {
+    cumulative += Number(r[valueKey] || 0);
+    const cumulativePercent = total > 0 ? Math.round((cumulative / total) * 10000) / 100 : 0;
+    return {
+      ...r,
+      rank: i + 1,
+      [cumulativeKey]: Math.round(cumulative * 100) / 100,
+      cumulativePercent,
+      abcClass: cumulativePercent <= 80 ? "A" : cumulativePercent <= 95 ? "B" : "C",
+    };
+  });
+
+  // Resumen ABC
+  const classA = products.filter((d) => d.abcClass === "A");
+  const classB = products.filter((d) => d.abcClass === "B");
+  const classC = products.filter((d) => d.abcClass === "C");
+
+  const lastA = classA.length > 0 ? classA[classA.length - 1].cumulativePercent : 0;
+  const lastB = classB.length > 0 ? classB[classB.length - 1].cumulativePercent : lastA;
+
+  return {
+    products,
+    summary: {
+      classA: {
+        count: classA.length,
+        [summaryPctKey]: lastA,
+      },
+      classB: {
+        count: classB.length,
+        [summaryPctKey]: Math.round((lastB - lastA) * 100) / 100,
+      },
+      classC: {
+        count: classC.length,
+        [summaryPctKey]: Math.round((100 - lastB) * 100) / 100,
+      },
+      totalProducts: products.length,
+    },
+  };
+};
+
 const GET_DASHBOARD_PARETO = async (req, res) => {
-  const { from, to } = req.query;
+  const { from, to, modo } = req.query;
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
 
   if (!from || !to) {
@@ -251,63 +351,17 @@ const GET_DASHBOARD_PARETO = async (req, res) => {
   }
 
   try {
-    const rows = await knex
-      .select(
-        "productos.Descripcion as product",
-        knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
-        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
-        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
-      )
-      .from(slaveTable)
-      .innerJoin(masterTable, function () {
-        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
-      })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .whereBetween(`${masterTable}.Fecha`, [from, to])
-      .groupBy("productos.IdProducto")
-      .orderBy("netProfit", "DESC");
+    const isPurchasesMode = modo === "compras-sin-vender";
+    const rows = isPurchasesMode
+      ? await fetchUnsoldPurchasesRows({ from, to, masterTable, slaveTable, idInvoice })
+      : await fetchSalesParetoRows({ from, to, masterTable, slaveTable, idInvoice });
 
-    // Calcular acumulados en JS
-    const total = rows.reduce((sum, r) => sum + Number(r.netProfit || 0), 0);
-    let cumulative = 0;
-    const products = rows.map((r, i) => {
-      cumulative += Number(r.netProfit || 0);
-      const cumulativePercent = total > 0 ? Math.round((cumulative / total) * 10000) / 100 : 0;
-      return {
-        ...r,
-        rank: i + 1,
-        cumulativeProfit: Math.round(cumulative * 100) / 100,
-        cumulativePercent,
-        abcClass: cumulativePercent <= 80 ? "A" : cumulativePercent <= 95 ? "B" : "C",
-      };
-    });
+    // El modo ventas conserva EXACTAMENTE el shape anterior (netProfit/profitPercent).
+    const response = isPurchasesMode
+      ? buildParetoResponse(rows, "totalPurchased", "cumulativePurchased", "purchasedPercent")
+      : buildParetoResponse(rows, "netProfit", "cumulativeProfit", "profitPercent");
 
-    // Resumen ABC
-    const classA = products.filter((d) => d.abcClass === "A");
-    const classB = products.filter((d) => d.abcClass === "B");
-    const classC = products.filter((d) => d.abcClass === "C");
-
-    const lastA = classA.length > 0 ? classA[classA.length - 1].cumulativePercent : 0;
-    const lastB = classB.length > 0 ? classB[classB.length - 1].cumulativePercent : lastA;
-
-    res.status(200).json({
-      products,
-      summary: {
-        classA: {
-          count: classA.length,
-          profitPercent: lastA,
-        },
-        classB: {
-          count: classB.length,
-          profitPercent: Math.round((lastB - lastA) * 100) / 100,
-        },
-        classC: {
-          count: classC.length,
-          profitPercent: Math.round((100 - lastB) * 100) / 100,
-        },
-        totalProducts: products.length,
-      },
-    });
+    res.status(200).json(response);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });

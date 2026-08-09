@@ -121,3 +121,80 @@ describe("GET /api/dashboard/sales", () => {
     expect(res.body).toHaveProperty("groupSalesChart");
   });
 });
+
+// Rango amplio: las compras viven en 2021 y las ventas en 2026 (datos de la DB local).
+const WIDE_RANGE = { from: "2021-01-01", to: "2026-12-31" };
+
+describe("GET /api/dashboard/pareto", () => {
+  // 1. Modo por defecto = ventas, mismo shape de siempre
+  it("modo ventas (default) rankea por netProfit con profitPercent", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ ...WIDE_RANGE, showNoe: "false" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.products.length).toBeGreaterThan(0);
+    expect(res.body.products[0]).toHaveProperty("netProfit");
+    expect(res.body.products[0]).toHaveProperty("rank");
+    expect(res.body.products[0]).toHaveProperty("abcClass");
+    expect(res.body.summary.classA).toHaveProperty("profitPercent");
+    expect(res.body.summary).toHaveProperty("totalProducts");
+  });
+
+  // 2. Modo compras-sin-vender: solo comprados sin ventas en el rango
+  it("modo=compras-sin-vender devuelve productos comprados sin ventas en el rango", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ ...WIDE_RANGE, showNoe: "false", modo: "compras-sin-vender" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.products.length).toBeGreaterThan(0);
+    expect(res.body.summary.classA).toHaveProperty("purchasedPercent");
+    expect(res.body.summary).toHaveProperty("totalProducts");
+
+    for (const p of res.body.products) {
+      expect(p.totalPurchased).toBeGreaterThan(0);
+      expect(p.quantity).toBeGreaterThan(0);
+      expect(p).toHaveProperty("abcClass");
+      expect(p).toHaveProperty("cumulativePurchased");
+    }
+  });
+
+  // 3. Invariante: ningún producto del modo compras-sin-vender aparece en el pareto de ventas del mismo rango
+  it("ningún producto devuelto en compras-sin-vender tiene ventas en el rango", async () => {
+    const [unsold, sales] = await Promise.all([
+      request(app)
+        .get("/api/dashboard/pareto")
+        .query({ ...WIDE_RANGE, showNoe: "false", modo: "compras-sin-vender" }),
+      request(app)
+        .get("/api/dashboard/pareto")
+        .query({ ...WIDE_RANGE, showNoe: "false" }),
+    ]);
+
+    const soldNames = new Set(sales.body.products.map((p) => p.product));
+    const leaked = unsold.body.products.filter((p) => soldNames.has(p.product));
+    expect(leaked).toEqual([]);
+  });
+
+  // 4. Modo compras-sin-vender funciona con showNoe=true (exclusión contra tablas Noe)
+  it("modo=compras-sin-vender funciona con showNoe=true", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ ...WIDE_RANGE, showNoe: "true", modo: "compras-sin-vender" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty("products");
+    expect(res.body.summary.classA).toHaveProperty("purchasedPercent");
+  });
+
+  // 5. Rango sin datos → arrays vacíos y summary en 0
+  it("rango sin datos devuelve products vacío y totalProducts 0", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ from: "2000-01-01", to: "2000-01-02", showNoe: "false", modo: "compras-sin-vender" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.products).toEqual([]);
+    expect(res.body.summary.totalProducts).toBe(0);
+  });
+});

@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import * as dashboardApi from 'api/dashboard';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { SWRConfig } from 'hooks/swr-wrapper';
 import SalesDashboard from './SalesDashboard';
 
@@ -27,7 +28,11 @@ const mockData = {
 };
 
 const swrWrapper = ({ children }) => (
-    <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>{children}</SWRConfig>
+    <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+        <CurrencyRateContext.Provider value={{ currencyRate: { Cambio: 1 }, setCurrencyRate: jest.fn() }}>
+            {children}
+        </CurrencyRateContext.Provider>
+    </SWRConfig>
 );
 
 describe('SalesDashboard', () => {

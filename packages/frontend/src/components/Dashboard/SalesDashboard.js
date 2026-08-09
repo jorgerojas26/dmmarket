@@ -1,12 +1,39 @@
 import GroupSales from 'components/Cards/GroupSales';
 import { useDashboardParetoRaw, useDashboardSalesRaw } from 'hooks/useDashboard';
 import { DateTime } from 'luxon';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { computeComparison, formatCurrency, formatNumber, formatPercent } from 'utils/format';
 import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
 import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
+
+// Config del Pareto para el modo "compras sin vender": productos comprados en el
+// rango sin ninguna venta en el mismo rango, rankeados por inversión.
+const PURCHASES_PARETO_CONFIG = {
+    nameKey: 'product',
+    valueKey: 'totalPurchased',
+    quantityKey: 'quantity',
+    entityLabel: 'Producto',
+    valueLabel: 'Inversión',
+    valueAxisLabel: 'Inversión en Compras',
+    axisLegend: 'Productos comprados sin vender (ordenados por inversión)',
+    summaryValueKey: 'purchasedPercent',
+    summaryPctLabel: 'de inversión',
+    summaryTotalKey: 'totalProducts',
+    summaryTotalLabel: 'Total SKUs',
+    summaryTotalUnit: 'productos',
+    title: 'Análisis Pareto (ABC)',
+    subtitle: 'Compras sin vender: 80% del capital atascado en el 20% de los productos',
+    pdfTitle: 'Análisis Pareto (ABC) de Compras sin Vender',
+    allFilterLabel: 'Todos los productos',
+    emptyTableMessage: 'Sin productos en esta clase',
+};
+
+const PARETO_MODES = [
+    { key: 'ventas', label: 'Ganancia (Ventas)', color: '#3b82f6' },
+    { key: 'compras-sin-vender', label: 'Compras sin vender', color: '#f59e0b' },
+];
 
 function buildCompareRange(dateRange) {
     const fromDt = DateTime.fromISO(dateRange.from);
@@ -19,7 +46,10 @@ function buildCompareRange(dateRange) {
 
 const SalesDashboard = ({ dateRange, showNoe }) => {
     const { data, error, isLoading } = useDashboardSalesRaw(dateRange, showNoe);
-    const { data: paretoData, isLoading: paretoLoading } = useDashboardParetoRaw(dateRange, showNoe);
+    const [paretoMode, setParetoMode] = useState('ventas');
+    const { data: paretoData, isLoading: paretoLoading } = useDashboardParetoRaw(dateRange, showNoe, paretoMode);
+
+    const paretoConfig = paretoMode === 'compras-sin-vender' ? PURCHASES_PARETO_CONFIG : {};
 
     // Compare range for KPI delta badges — computed locally, not fetched
     const compareRange = useMemo(() => {
@@ -212,10 +242,33 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             {/* Pareto Analysis */}
             <div className="row g-3 mb-4">
                 <div className="col-12">
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
+                        {PARETO_MODES.map(({ key, label, color }) => (
+                            <button
+                                key={key}
+                                onClick={() => setParetoMode(key)}
+                                style={{
+                                    padding: '6px 16px',
+                                    borderRadius: 6,
+                                    border:
+                                        paretoMode === key ? `1.5px solid ${color}` : '1px solid rgba(255,255,255,0.1)',
+                                    background: paretoMode === key ? `${color}18` : 'transparent',
+                                    color: paretoMode === key ? color : '#9ca3af',
+                                    fontSize: 12,
+                                    fontWeight: paretoMode === key ? 600 : 400,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s',
+                                }}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
                     <ParetoChart
                         products={paretoData?.products || []}
                         summary={paretoData?.summary || null}
                         loading={paretoLoading}
+                        config={paretoConfig}
                     />
                 </div>
             </div>
