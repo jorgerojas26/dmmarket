@@ -2,14 +2,15 @@
  * Shared tooltip for all nivo charts — dark, consistent styling.
  *
  * Usage (inside a chart `tooltip` prop):
- *   <ChartTooltip title={datum.label} color={datum.color}>
+ *   <ChartTooltip title={datum.label} color={datum.color} description="Qué significa esto">
  *       <span>Label</span>
  *       <strong>Value</strong>
  *   </ChartTooltip>
  *
  * Children are rendered as label/value pairs in a 2-column grid.
+ * An optional `description` renders full-width (muted, italic) above the pairs.
  */
-const ChartTooltip = ({ title, color, children }) => (
+const ChartTooltip = ({ title, color, description, children }) => (
     <div
         style={{
             background: '#1a1d21',
@@ -47,6 +48,19 @@ const ChartTooltip = ({ title, color, children }) => (
             </div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', gap: '0 12px', justifyItems: 'start' }}>
+            {description && (
+                <div
+                    style={{
+                        gridColumn: '1 / -1',
+                        color: '#94a3b8',
+                        fontStyle: 'italic',
+                        marginBottom: 4,
+                        maxWidth: 260,
+                    }}
+                >
+                    {description}
+                </div>
+            )}
             {children}
         </div>
     </div>

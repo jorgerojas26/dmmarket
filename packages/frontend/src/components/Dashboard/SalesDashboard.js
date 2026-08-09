@@ -170,7 +170,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                 accent="amber"
                                 help={{
                                     que: 'Porcentaje de la venta que queda como ganancia neta (Ganancia Neta ÷ Venta Bruta).',
-                                    leer: '25% = por cada 100 pesos vendidos, 25 quedan como ganancia.',
+                                    leer: '25% = por cada 100 dólares vendidos, 25 quedan como ganancia.',
                                     servir: 'Es la salud del negocio: margen bajo con venta alta = mucho movimiento, poca ganancia.',
                                 }}
                             />

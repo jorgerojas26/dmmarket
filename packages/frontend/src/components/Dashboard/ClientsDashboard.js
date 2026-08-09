@@ -12,6 +12,16 @@ import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
 import SinFacturarTable from './SinFacturarTable';
 
+// Qué significa cada etiqueta de segmento (clasificación por venta del cliente en el periodo).
+// Debe coincidir con los SEGMENT_THRESHOLDS del backend (controllers/clients/dashboard.js).
+const SEGMENT_DESCRIPTIONS = {
+    'A: >100K': 'Clientes que compraron más de $100K en el periodo',
+    'B: 20K-100K': 'Clientes que compraron entre $20K y $100K',
+    'C: 5K-20K': 'Clientes que compraron entre $5K y $20K',
+    'D: 1K-5K': 'Clientes que compraron entre $1K y $5K',
+    'E: <1K': 'Clientes que compraron menos de $1K',
+};
+
 const nivoTheme = {
     axis: {
         ticks: { text: { fill: '#adb5bd', fontSize: 11 }, line: { stroke: '#2f3338' } },
@@ -124,6 +134,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
             id: s.segment,
             label: s.segment,
             value: s.revenue,
+            numClients: s.num_clients,
         }));
     }, [data?.revenueBySegment]);
 
@@ -328,7 +339,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                 accent="orange"
                                 help={{
                                     que: 'Qué porcentaje de las ventas del periodo viene de los 5 clientes que más compran.',
-                                    leer: '40% = 5 clientes generan 40 de cada 100 pesos vendidos.',
+                                    leer: '40% = 5 clientes generan 40 de cada 100 dólares vendidos.',
                                     servir: 'Mide la dependencia: número alto = la empresa depende de pocos clientes (frágil); número bajo = cartera más repartida y sana.',
                                 }}
                             />
@@ -454,7 +465,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                             title="Revenue por Segmento"
                             help={{
                                 que: 'Reparte las ventas del periodo según el tamaño de cada cliente: A (>$100K), B ($20K-$100K), C ($5K-$20K), D ($1K-$5K), E (<$1K).',
-                                leer: 'Cada porción es un segmento; cuanto más grande, más vende ese grupo.',
+                                leer: 'Cada porción es un segmento; cuanto más grande, más dinero aporta. Una porción del 60% = ese segmento genera 60 de cada 100 dólares vendidos. Pasa el cursor por una porción para ver cuántos clientes tiene y cuánto vende en promedio cada uno.',
                                 servir: 'Ver de dónde viene el dinero: si la torta depende de un solo segmento, la cartera es frágil.',
                             }}
                         />
@@ -477,7 +488,16 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                     arcLinkLabelsThickness={1}
                                     valueFormat={(v) => formatCurrency(v)}
                                     tooltip={({ datum }) => (
-                                        <ChartTooltip title={datum.label} color={datum.color}>
+                                        <ChartTooltip
+                                            title={datum.label}
+                                            color={datum.color}
+                                            description={
+                                                SEGMENT_DESCRIPTIONS[datum.label] ||
+                                                'Clientes agrupados por cuánto compraron en el periodo'
+                                            }
+                                        >
+                                            <span>Clientes</span>
+                                            <strong>{formatNumber(datum.data?.numClients ?? 0)}</strong>
                                             <span>Revenue</span>
                                             <strong>{formatCurrency(datum.value)}</strong>
                                             <span>% del total</span>
@@ -486,6 +506,14 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                                     ? ((datum.value / segmentTotal) * 100).toFixed(1)
                                                     : '0.0'}
                                                 %
+                                            </strong>
+                                            <span>Prom. por cliente</span>
+                                            <strong>
+                                                {formatCurrency(
+                                                    datum.data?.numClients > 0
+                                                        ? datum.value / datum.data.numClients
+                                                        : 0,
+                                                )}
                                             </strong>
                                         </ChartTooltip>
                                     )}
@@ -508,9 +536,9 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                             <PanelHelpTitle
                                 title="Cartera por Ruta"
                                 help={{
-                                    que: 'Para cada ruta: clientes asignados (azul) y clientes que compraron en el periodo (verde).',
-                                    leer: 'Pasa el mouse sobre una barra para ver el nombre de la ruta, su cobertura (%) y qué % de la cartera total representa.',
-                                    servir: 'Es el gráfico de la oportunidad: mucha barra azul y poca verde = clientes sin atender.',
+                                    que: 'Para cada ruta: clientes asignados (azul) y clientes que compraron en el periodo (verde). "Asignado" = el cliente tiene esa ruta en su registro: el vendedor de la ruta es quien debe atenderlo, haya comprado o no.',
+                                    leer: 'Cada ruta tiene dos barras: azul = su cartera (asignados) y verde = cuántos de esos compraron. Pasa el mouse sobre una barra para ver el nombre de la ruta, su cobertura (verdes ÷ azules) y qué % del total de clientes de la empresa representa.',
+                                    servir: 'Es el gráfico de la oportunidad: mucha barra azul y poca verde = una cartera grande que no está comprando.',
                                     accion: 'Selecciona esa ruta en el filtro para ver sus números completos.',
                                 }}
                             />
@@ -551,11 +579,15 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                     ]}
                                     tooltip={({ id, value, data }) => (
                                         <ChartTooltip title={data.Nombre}>
-                                            <span>{id}</span>
+                                            <span>
+                                                {id === 'Asignados'
+                                                    ? 'Clientes asignados (cartera)'
+                                                    : 'Compraron en el periodo'}
+                                            </span>
                                             <strong>{formatNumber(value)}</strong>
-                                            <span>Cobertura</span>
+                                            <span>Cobertura (verdes ÷ azules)</span>
                                             <strong>{formatPercent(data.coberturaPct ?? 0)}</strong>
-                                            <span>De los clientes</span>
+                                            <span>% del total de clientes</span>
                                             <strong>{formatPercent(data.sharePct ?? 0)}</strong>
                                         </ChartTooltip>
                                     )}
