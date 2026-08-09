@@ -28,7 +28,12 @@ const ProveedoresPage = () => {
 
     const { showNoe } = useContext(ShowNoeContext);
 
-    const { data: bestProviders = [], isLoading } = useBestProviders(dateRange, showNoe, mode);
+    const { data: bestProviders = [], isLoading } = useBestProviders(
+        dateRange,
+        showNoe,
+        mode,
+        activeView === 'reports',
+    );
 
     const onFilter = debounce((searchTerm) => {
         if (!searchTerm) {
@@ -98,42 +103,46 @@ const ProveedoresPage = () => {
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4">
-                    <div className={activeView === 'providers' ? '' : 'd-none'}>
-                        <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
-                            <h4 className="m-0 text-light">Desglose de Proveedores</h4>
-                            <DateRangePicker
-                                initialFrom={DateTime.now().startOf('year').toISODate()}
-                                initialTo={DateTime.now().toISODate()}
-                                onChange={handleDesgloseDateRangeChange}
-                            />
-                        </div>
-                        <div className="clients-content-wrapper">
-                            <ProvidersTable onRowSelect={handleProviderSelect} dateRange={desgloseDateRange} />
-                        </div>
-                    </div>
-                    <section className={activeView === 'reports' ? 'd-flex flex-column gap-3' : 'd-none'}>
-                        <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
-                            <h4 className="m-0 text-light">Reportes de proveedores</h4>
-                            <DateRangePicker
-                                initialFrom={DateTime.now().startOf('month').toISODate()}
-                                initialTo={DateTime.now().toISODate()}
-                                onChange={handleDateRangeChange}
-                            />
-                        </div>
-                        <div className="clients-content-wrapper">
-                            <div className="row justify-content-center g-3">
-                                <div className="col-12">
-                                    <ProviderReportCard
-                                        data={filteredData.length ? filteredData : bestProviders}
-                                        onFilter={onFilterCallback}
-                                        loading={isLoading}
-                                        mode={mode}
-                                        onModeChange={handleModeChange}
-                                    />
-                                </div>
+                    {activeView === 'providers' && (
+                        <div>
+                            <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
+                                <h4 className="m-0 text-light">Desglose de Proveedores</h4>
+                                <DateRangePicker
+                                    initialFrom={desgloseDateRange.from}
+                                    initialTo={desgloseDateRange.to}
+                                    onChange={handleDesgloseDateRangeChange}
+                                />
+                            </div>
+                            <div className="clients-content-wrapper">
+                                <ProvidersTable onRowSelect={handleProviderSelect} dateRange={desgloseDateRange} />
                             </div>
                         </div>
-                    </section>
+                    )}
+                    {activeView === 'reports' && (
+                        <section className="d-flex flex-column gap-3">
+                            <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
+                                <h4 className="m-0 text-light">Reportes de proveedores</h4>
+                                <DateRangePicker
+                                    initialFrom={dateRange.from}
+                                    initialTo={dateRange.to}
+                                    onChange={handleDateRangeChange}
+                                />
+                            </div>
+                            <div className="clients-content-wrapper">
+                                <div className="row justify-content-center g-3">
+                                    <div className="col-12">
+                                        <ProviderReportCard
+                                            data={filteredData.length ? filteredData : bestProviders}
+                                            onFilter={onFilterCallback}
+                                            loading={isLoading}
+                                            mode={mode}
+                                            onModeChange={handleModeChange}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    )}
                 </div>
             </div>
             {showModal && (

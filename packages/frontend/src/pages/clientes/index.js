@@ -137,78 +137,82 @@ const ClientesPage = () => {
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4">
-                    <div className={activeView === 'clients' ? '' : 'd-none'}>
-                        <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
-                            <h4 className="m-0 text-light">Desglose de Clientes</h4>
-                        </div>
-                        <div className="clients-content-wrapper">
-                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-                                <div style={{ minWidth: '220px' }}>
-                                    <Select
-                                        options={routeOptions}
-                                        value={selectedRuta}
-                                        onChange={handleRutaChange}
-                                        placeholder="Todas las rutas"
-                                        isClearable
-                                        isLoading={routesLoading}
-                                        styles={darkSelectStyles}
-                                        classNamePrefix="search-select"
-                                        menuPortalTarget={document.body}
-                                        menuPlacement="auto"
-                                        loadingMessage={() => 'Cargando...'}
-                                        noOptionsMessage={() => 'Sin resultados'}
+                    {activeView === 'clients' && (
+                        <div>
+                            <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
+                                <h4 className="m-0 text-light">Desglose de Clientes</h4>
+                            </div>
+                            <div className="clients-content-wrapper">
+                                <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                                    <div style={{ minWidth: '220px' }}>
+                                        <Select
+                                            options={routeOptions}
+                                            value={selectedRuta}
+                                            onChange={handleRutaChange}
+                                            placeholder="Todas las rutas"
+                                            isClearable
+                                            isLoading={routesLoading}
+                                            styles={darkSelectStyles}
+                                            classNamePrefix="search-select"
+                                            menuPortalTarget={document.body}
+                                            menuPlacement="auto"
+                                            loadingMessage={() => 'Cargando...'}
+                                            noOptionsMessage={() => 'Sin resultados'}
+                                        />
+                                    </div>
+                                    <DateRangePicker
+                                        initialFrom={desgloseDateRange.from}
+                                        initialTo={desgloseDateRange.to}
+                                        onChange={handleDesgloseDateRangeChange}
                                     />
                                 </div>
-                                <DateRangePicker
-                                    initialFrom={DateTime.now().startOf('year').toISODate()}
-                                    initialTo={DateTime.now().toISODate()}
-                                    onChange={handleDesgloseDateRangeChange}
+                            </div>
+                            <div className="clients-content-wrapper">
+                                <ClientsTable
+                                    onRowSelect={handleRowSelect}
+                                    ruta={selectedRuta?.value}
+                                    dateRange={desgloseDateRange}
                                 />
                             </div>
                         </div>
-                        <div className="clients-content-wrapper">
-                            <ClientsTable
-                                onRowSelect={handleRowSelect}
+                    )}
+                    {activeView === 'dashboard' && (
+                        <section className="d-flex flex-column gap-3">
+                            <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
+                                <h4 className="m-0 text-light">Dashboard de Clientes</h4>
+                                <div className="d-flex flex-wrap gap-3">
+                                    <div style={{ minWidth: '220px' }}>
+                                        <Select
+                                            options={routeOptions}
+                                            value={selectedRuta}
+                                            onChange={handleRutaChange}
+                                            placeholder="Todas las rutas"
+                                            isClearable
+                                            isLoading={routesLoading}
+                                            styles={darkSelectStyles}
+                                            classNamePrefix="search-select"
+                                            menuPortalTarget={document.body}
+                                            menuPlacement="auto"
+                                            loadingMessage={() => 'Cargando...'}
+                                            noOptionsMessage={() => 'Sin resultados'}
+                                        />
+                                    </div>
+                                    <DateRangePicker
+                                        initialFrom={dateRange.from}
+                                        initialTo={dateRange.to}
+                                        onChange={handleDateRangeChange}
+                                    />
+                                </div>
+                            </div>
+                            <ClientsDashboard
+                                key={dashboardRefreshKey}
+                                dateRange={dateRange}
+                                showNoe={showNoe}
                                 ruta={selectedRuta?.value}
-                                dateRange={desgloseDateRange}
+                                onClientSelect={handleRowSelect}
                             />
-                        </div>
-                    </div>
-                    <section className={activeView === 'dashboard' ? 'd-flex flex-column gap-3' : 'd-none'}>
-                        <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
-                            <h4 className="m-0 text-light">Dashboard de Clientes</h4>
-                            <div className="d-flex flex-wrap gap-3">
-                                <div style={{ minWidth: '220px' }}>
-                                    <Select
-                                        options={routeOptions}
-                                        value={selectedRuta}
-                                        onChange={handleRutaChange}
-                                        placeholder="Todas las rutas"
-                                        isClearable
-                                        isLoading={routesLoading}
-                                        styles={darkSelectStyles}
-                                        classNamePrefix="search-select"
-                                        menuPortalTarget={document.body}
-                                        menuPlacement="auto"
-                                        loadingMessage={() => 'Cargando...'}
-                                        noOptionsMessage={() => 'Sin resultados'}
-                                    />
-                                </div>
-                                <DateRangePicker
-                                    initialFrom={DateTime.now().startOf('month').toISODate()}
-                                    initialTo={DateTime.now().toISODate()}
-                                    onChange={handleDateRangeChange}
-                                />
-                            </div>
-                        </div>
-                        <ClientsDashboard
-                            key={dashboardRefreshKey}
-                            dateRange={dateRange}
-                            showNoe={showNoe}
-                            ruta={selectedRuta?.value}
-                            onClientSelect={handleRowSelect}
-                        />
-                    </section>
+                        </section>
+                    )}
                 </div>
             </div>
             {showModal && (
