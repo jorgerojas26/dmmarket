@@ -155,8 +155,6 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
       activeClientsRow,
       retentionRow,
       frequencyRow,
-      crossSellRow,
-      revenueAtRiskRow,
       monthlyActive,
       waterfallRows,
       inactiveBuckets,
@@ -183,7 +181,9 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         return q.first();
       })(),
 
-      // 3. Retention rate ($)
+      // 3. Retention rate ($) — una pasada sobre el periodo anterior: LEFT JOIN
+      //    con los clientes activos del periodo actual y SUM condicional (antes
+      //    eran dos escaneos casi idénticos del periodo anterior).
       (async () => {
         const currentClients = knex(`${masterTable}`)
           .distinct(`${masterTable}.IdCliente`)
@@ -191,25 +191,23 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
           .andWhere("Anulada", 0);
         if (routeClients) currentClients.whereIn("IdCliente", routeClients);
 
-        const retainedRevenue = knex(`${masterTable} as mf`)
+        let q = knex(`${masterTable} as mf`)
           .innerJoin(`${slaveTable} as sf`, function () {
             this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
           })
-          .select(knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total`))
-          .whereBetween("mf.Fecha", [prevPeriod.from, prevPeriod.to])
-          .whereIn("mf.IdCliente", currentClients);
-        if (routeClients) retainedRevenue.whereIn("mf.IdCliente", routeClients);
-
-        const prevTotalRevenue = knex(`${masterTable} as mf`)
-          .innerJoin(`${slaveTable} as sf`, function () {
-            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-          })
-          .select(knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total`))
+          .leftJoin(currentClients.as("cur"), "cur.IdCliente", "mf.IdCliente")
+          .select(
+            knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as prev_total`),
+            knex.raw(
+              `ROUND(SUM(CASE WHEN cur.IdCliente IS NOT NULL THEN sf.Precio * sf.Cantidad ELSE 0 END), 2) as retained`,
+            ),
+          )
           .whereBetween("mf.Fecha", [prevPeriod.from, prevPeriod.to]);
-        if (routeClients) prevTotalRevenue.whereIn("mf.IdCliente", routeClients);
+        if (routeClients) q = q.whereIn("mf.IdCliente", routeClients);
 
-        const prevTotal = Number((await prevTotalRevenue.first())?.total) || 0;
-        const retained = Number((await retainedRevenue.first())?.total) || 0;
+        const row = await q.first();
+        const prevTotal = Number(row?.prev_total) || 0;
+        const retained = Number(row?.retained) || 0;
         return { retained, prevTotal, rate: prevTotal > 0 ? Math.round((retained / prevTotal) * 10000) / 100 : 0 };
       })(),
 
@@ -224,65 +222,20 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         return q.whereBetween("mf.Fecha", [from, to]).andWhere("mf.Anulada", 0).first();
       })(),
 
-      // 5. Cross-sell depth
-      (async () => {
-        let inner = knex
-          .select("mf.IdCliente", knex.raw(`COUNT(DISTINCT sf.IdProducto) as distinct_prods`))
-          .from(`${masterTable} as mf`)
-          .innerJoin(`${slaveTable} as sf`, function () {
-            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-          })
-          .whereBetween("mf.Fecha", [from, to])
-          .groupBy("mf.IdCliente");
-        if (routeClients) inner = inner.whereIn("mf.IdCliente", routeClients);
-
-        return knex
-          .select(knex.raw("ROUND(AVG(distinct_prods), 1) as avg_products"))
-          .from(inner.as("client_products"))
-          .first();
-      })(),
-
-      // 6. Revenue at risk (>60 days inactive)
-      (async () => {
-        let inner = knex
-          .select(
-            "mf.IdCliente",
-            knex.raw(`SUM(sf.Precio * sf.Cantidad) as total_usd`),
-            knex.raw(`MAX(mf.Fecha) as last_purchase`),
-          )
-          .from(`${masterTable} as mf`)
-          .innerJoin(`${slaveTable} as sf`, function () {
-            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-          })
-          .where("mf.Fecha", "<=", to)
-          .groupBy("mf.IdCliente");
-        if (routeClients) inner = inner.whereIn("mf.IdCliente", routeClients);
-
-        return knex
-          .select(knex.raw(`ROUND(SUM(total_usd), 2) as revenue_at_risk`), knex.raw(`COUNT(*) as clients_at_risk`))
-          .from(inner.as("client_last"))
-          .where(knex.raw(`DATEDIFF(?, last_purchase) > 60`, [to]))
-          .first();
-      })(),
-
-      // 7. Monthly active clients chart
+      // 5. Monthly active clients chart (solo masterfact: el revenue no se usa en el frontend)
       (async () => {
         let q = knex(`${masterTable} as mf`)
           .select(
             knex.raw("DATE_FORMAT(mf.Fecha, '%Y-%m') as month"),
             knex.raw("COUNT(DISTINCT mf.IdCliente) as count"),
-            knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as revenue`),
           )
-          .innerJoin(`${slaveTable} as sf`, function () {
-            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-          })
           .whereBetween("mf.Fecha", [from, to])
           .andWhere("mf.Anulada", 0);
         if (routeClients) q = q.whereIn("mf.IdCliente", routeClients);
         return q.groupBy(knex.raw("DATE_FORMAT(mf.Fecha, '%Y-%m')")).orderBy("month", "asc");
       })(),
 
-      // 8. Waterfall retention
+      // 6. Waterfall retention
       (async () => {
         const currentSub = knex(`${masterTable}`)
           .distinct(`${masterTable}.IdCliente`)
@@ -335,7 +288,10 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         };
       })(),
 
-      // 9. Inactive buckets
+      // 7. Inactive buckets + revenue at risk: una sola pasada sobre el historial
+      //    (toda la facturación hasta `to`), agrupada por bucket. El revenue en
+      //    riesgo (>60 días) se agrega con SUM condicional en la misma consulta
+      //    y se suma en JS — antes eran dos escaneos idénticos de la historia.
       (async () => {
         let inner = knex
           .select(
@@ -366,13 +322,15 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
           `),
             knex.raw("COUNT(*) as count"),
             knex.raw("ROUND(SUM(total_usd), 2) as revenue"),
+            knex.raw("SUM(CASE WHEN days_since > 60 THEN total_usd ELSE 0 END) as risk_amount"),
+            knex.raw("SUM(CASE WHEN days_since > 60 THEN 1 ELSE 0 END) as risk_clients"),
           )
           .from(inner.as("inactive_data"))
           .groupBy("bucket")
           .orderBy(knex.raw("MIN(days_since)"), "asc");
       })(),
 
-      // 10. Route coverage: clients assigned per route (global breakdown)
+      // 8. Route coverage: clients assigned per route (global breakdown)
       knex("clientes")
         .select(
           "clientes.Ruta as Id_Ruta",
@@ -383,7 +341,7 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         .whereNotNull("clientes.Ruta")
         .groupBy("clientes.Ruta"),
 
-      // 11. Route coverage: active clients per route in period
+      // 9. Route coverage: active clients per route in period
       knex(`${masterTable} as mf`)
         .select("clientes.Ruta as Id_Ruta", knex.raw("COUNT(DISTINCT mf.IdCliente) as activos"))
         .innerJoin("clientes", function () {
@@ -394,25 +352,42 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         .whereNotNull("clientes.Ruta")
         .groupBy("clientes.Ruta"),
 
-      // 12. Total clients (global, unaffected by route filter)
+      // 10. Total clients (global, unaffected by route filter)
       knex("clientes").count("* as total").first(),
 
-      // 13. Clients without a route assigned
+      // 11. Clients without a route assigned
       knex("clientes").whereNull("Ruta").count("* as total").first(),
 
-      // 14. Clients without invoices in the period (count only; same criteria as /api/clients/sin-facturar)
+      // 12. Clients without invoices in the period. Anti-join explícito (LEFT
+      //     JOIN ... IS NULL) en vez de NOT IN: misma semántica y sin el footgun
+      //     de NOT IN ante NULLs. No se puede derivar como total − activos porque
+      //     hay facturas con IdCliente huérfano (no existe en tabla clientes).
       (async () => {
         const invoicedInPeriod = knex(`${masterTable}`)
           .distinct(`${masterTable}.IdCliente`)
           .whereBetween("Fecha", [from, to])
           .andWhere("Anulada", 0);
 
-        let q = knex("clientes").countDistinct({ total: "IdCliente" }).whereNotIn("IdCliente", invoicedInPeriod);
-        if (routeClients) q = q.whereIn("IdCliente", routeClients);
+        let q = knex("clientes")
+          .count("* as total")
+          .leftJoin(invoicedInPeriod.as("inv"), "inv.IdCliente", "clientes.IdCliente")
+          .whereNull("inv.IdCliente");
+        if (routeClients) q = q.where("clientes.Ruta", ruta);
 
         return q.first();
       })(),
     ]);
+
+    // ── Derivados ──
+
+    // Revenue at risk: suma de los buckets con más de 60 días sin comprar.
+    const revenueAtRisk = inactiveBuckets.reduce(
+      (acc, r) => ({
+        amount: acc.amount + Number(r.risk_amount || 0),
+        clients: acc.clients + Number(r.risk_clients || 0),
+      }),
+      { amount: 0, clients: 0 },
+    );
 
     // ── Route coverage (global cartera breakdown, merged) ──
     const totalGlobal = Number(totalGlobalRow?.total) || 0;
@@ -451,16 +426,14 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
           rate: Number(retentionRow?.rate) || 0,
         },
         avgFrequency: Number(frequencyRow?.avg_frequency) || 0,
-        crossSellDepth: Number(crossSellRow?.avg_products) || 0,
         revenueAtRisk: {
-          amount: Number(revenueAtRiskRow?.revenue_at_risk) || 0,
-          clients: Number(revenueAtRiskRow?.clients_at_risk) || 0,
+          amount: Number(revenueAtRisk.amount) || 0,
+          clients: Number(revenueAtRisk.clients) || 0,
         },
       },
       monthlyActive: monthlyActive.map((r) => ({
         month: r.month,
         count: Number(r.count),
-        revenue: Number(r.revenue),
       })),
       revenueBySegment,
       waterfall: waterfallRows,
