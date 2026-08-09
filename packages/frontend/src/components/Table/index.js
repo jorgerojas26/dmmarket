@@ -500,6 +500,7 @@ const Table = ({
                                     <span className="sort-header-content">
                                         {column.render('Header')}
                                         {renderSortChevron(column)}
+                                        {column.headerHelp}
                                     </span>
                                 </th>
                             );

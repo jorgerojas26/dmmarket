@@ -4,7 +4,9 @@ import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import Popover from 'react-bootstrap/Popover';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
@@ -37,6 +39,48 @@ const DEFAULT_CONFIG = {
     emptyTableMessage: 'Sin productos en esta clase',
 };
 
+// ── ayuda de la columna "% Acum." ──
+// Botón "?" que se renderiza DESPUÉS del icono de sorting (slot headerHelp del
+// Table). Explica la columna con el patrón de PanelHelpTitle, sensible al modo:
+// Ganancia (ventas) o Inversión (compras sin vender).
+
+const CumulativePercentHelp = ({ valueLabel }) => {
+    const popover = (
+        <Popover id="help-cumulative-percent" className="kpi-help-popover">
+            <Popover.Body>
+                <div className="kpi-help-line">
+                    <span className="kpi-help-k">Qué muestra: </span>
+                    Cuánto aporta este producto a la {valueLabel} total, sumado con todos los que están arriba en el
+                    ranking.
+                </div>
+                <div className="kpi-help-line">
+                    <span className="kpi-help-k">Cómo leerlo: </span>
+                    El primero empieza con su propio porcentaje; cada fila siguiente suma el suyo al acumulado anterior.
+                    La última fila llega a 100%.
+                </div>
+                <div className="kpi-help-line">
+                    <span className="kpi-help-k">Para qué sirve: </span>
+                    Marca dónde se concentra el valor: al cruzar 80% termina la clase A y al cruzar 95% la clase B.
+                </div>
+            </Popover.Body>
+        </Popover>
+    );
+
+    return (
+        <OverlayTrigger trigger="click" rootClose placement="bottom" overlay={popover}>
+            <button
+                type="button"
+                className="panel-help-btn"
+                aria-label="Ayuda sobre % Acumulado"
+                title="¿Qué significa % Acumulado?"
+                onClick={(e) => e.stopPropagation()}
+            >
+                ?
+            </button>
+        </OverlayTrigger>
+    );
+};
+
 // ── table columns ──
 
 const buildColumns = (cfg) => {
@@ -44,10 +88,12 @@ const buildColumns = (cfg) => {
         {
             Header: '#',
             accessor: 'rank',
+            disableSortBy: true,
         },
         {
             Header: cfg.entityLabel,
             accessor: cfg.nameKey,
+            disableSortBy: true,
         },
         {
             Header: cfg.valueLabel,
@@ -68,11 +114,13 @@ const buildColumns = (cfg) => {
         {
             Header: '% Acum.',
             accessor: 'cumulativePercent',
+            headerHelp: <CumulativePercentHelp valueLabel={cfg.valueLabel} />,
             Cell: ({ value }) => `${value}%`,
         },
         {
             Header: 'Clase',
             accessor: 'abcClass',
+            disableSortBy: true,
             Cell: ({ value }) => {
                 if (!value) return '\u2014';
                 const colors = {
@@ -264,11 +312,16 @@ const CumulativeLine = ({ bars, xScale, innerHeight, innerWidth, data }) => {
 
 // ── component ──
 
-const ParetoChart = ({ products = [], summary = null, loading = false, config = {} }) => {
+const ParetoChart = ({ products = [], summary = null, loading = false, config = {}, sorting }) => {
     const cfg = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [abcFilter, setAbcFilter] = useState('all');
     const [tablePage, setTablePage] = useState(1);
+
+    // Nuevo dataset (rango, modo o sort) → volver a la página 1
+    useEffect(() => {
+        setTablePage(1);
+    }, [products]);
 
     /* ---- chart data: top N + "Resto" bar ---- */
     const chartData = useMemo(() => {
@@ -337,7 +390,10 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
     );
 
     // ── loading / empty ──
-    if (loading) {
+    // Solo carga inicial (sin datos previos) reemplaza el panel; durante un
+    // refetch (sort/rango/modo) se conserva el contenido previo y el Table
+    // muestra su spinner encima.
+    if (loading && !products.length) {
         return (
             <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
                 <div className="text-muted small">Cargando análisis Pareto…</div>
@@ -592,6 +648,8 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
                 columns={buildColumns(cfg)}
                 emptyMessage={cfg.emptyTableMessage}
                 maxHeight={null}
+                loading={loading}
+                sorting={sorting}
                 pagination={{
                     enabled: true,
                     page: tablePage,

@@ -316,6 +316,25 @@ const fetchUnsoldPurchasesRows = async ({ from, to, masterTable, slaveTable, idI
   return (purchases[0] || []).filter((r) => !sold.has(r.productId));
 };
 
+// Columnas ordenables por modo (whitelist — solo las que el UI expone como
+// sortables: valor, unidades y % acumulado). El ABC/cumulativo SIEMPRE se
+// calcula sobre el orden canónico por valor; el sort pedido reordena SOLO la
+// respuesta.
+const PARETO_SORT_COLUMNS = {
+  ventas: ["quantity", "netProfit", "cumulativePercent"],
+  "compras-sin-vender": ["quantity", "totalPurchased", "cumulativePercent"],
+};
+
+const sortProducts = (products, sortBy, sortDir) => {
+  const dir = sortDir === "asc" ? 1 : -1;
+  return [...products].sort((a, b) => {
+    const av = a[sortBy];
+    const bv = b[sortBy];
+    if (typeof av === "string") return dir * String(av).localeCompare(String(bv));
+    return dir * (Number(av || 0) - Number(bv || 0));
+  });
+};
+
 // Acumulados + clasificación ABC en JS, parametrizado por la columna de valor.
 const buildParetoResponse = (rows, valueKey, cumulativeKey, summaryPctKey) => {
   const total = rows.reduce((sum, r) => sum + Number(r[valueKey] || 0), 0);
@@ -375,9 +394,20 @@ const GET_DASHBOARD_PARETO = async (req, res) => {
       : await fetchSalesParetoRows({ from, to, masterTable, slaveTable, idInvoice });
 
     // El modo ventas conserva EXACTAMENTE el shape anterior (netProfit/profitPercent).
+    const valueKey = isPurchasesMode ? "totalPurchased" : "netProfit";
     const response = isPurchasesMode
       ? buildParetoResponse(rows, "totalPurchased", "cumulativePurchased", "purchasedPercent")
       : buildParetoResponse(rows, "netProfit", "cumulativeProfit", "profitPercent");
+
+    // Server-side sorting: whitelist por modo, default = orden canónico por valor.
+    const allowed = PARETO_SORT_COLUMNS[isPurchasesMode ? "compras-sin-vender" : "ventas"];
+    const sortBy = allowed.includes(req.query.sortBy) ? req.query.sortBy : valueKey;
+    const sortDir = req.query.sortDir === "asc" ? "asc" : "desc";
+
+    // ABC/cumulativo ya calculados en orden canónico — reordenar no los altera.
+    if (sortBy !== valueKey || sortDir !== "desc") {
+      response.products = sortProducts(response.products, sortBy, sortDir);
+    }
 
     res.status(200).json(response);
   } catch (error) {

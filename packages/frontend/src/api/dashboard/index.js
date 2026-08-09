@@ -10,9 +10,13 @@ export const fetchDashboardSales = async ({ from, to, showNoe, compareFrom, comp
     return response.json();
 };
 
-export const fetchDashboardPareto = async ({ from, to, showNoe, modo = 'ventas' }) => {
-    const url = `${BASE_URL}/pareto?from=${from}&to=${to}&showNoe=${showNoe}&modo=${modo}`;
-    const response = await fetch(url);
+export const fetchDashboardPareto = async ({ from, to, showNoe, modo = 'ventas', sortBy, sortDir }) => {
+    const params = new URLSearchParams({ from, to, showNoe, modo });
+    if (sortBy && sortDir) {
+        params.set('sortBy', sortBy);
+        params.set('sortDir', sortDir);
+    }
+    const response = await fetch(`${BASE_URL}/pareto?${params.toString()}`);
     if (!response.ok) throw new Error(`Pareto API error: ${response.status}`);
     return response.json();
 };

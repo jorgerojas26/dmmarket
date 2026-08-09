@@ -214,4 +214,54 @@ describe("GET /api/dashboard/pareto", () => {
     expect(missing).toEqual([]);
     expect(sales.body.products.length).toBeGreaterThan(0);
   });
+
+  // 7. Server-side sorting — % acumulado ascendente
+  it("ordena por % acumulado ascendente sin romper el ABC", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ ...WIDE_RANGE, showNoe: "false", sortBy: "cumulativePercent", sortDir: "asc" });
+
+    expect(res.status).toBe(200);
+    const pcts = res.body.products.map((p) => Number(p.cumulativePercent));
+    expect([...pcts].sort((a, b) => a - b)).toEqual(pcts);
+    expect(res.body.products[0]).toHaveProperty("abcClass");
+    expect(res.body.products[0]).toHaveProperty("netProfit");
+  });
+
+  // 8. Server-side sorting — por cantidad ascendente (numérico)
+  it("ordena por cantidad ascendente", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ ...WIDE_RANGE, showNoe: "false", sortBy: "quantity", sortDir: "asc" });
+
+    const qs = res.body.products.map((p) => Number(p.quantity));
+    expect([...qs].sort((a, b) => a - b)).toEqual(qs);
+  });
+
+  // 9. sortBy inválido cae al default del modo (netProfit desc)
+  it("sortBy inválido cae al orden canónico por ganancia", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ ...WIDE_RANGE, showNoe: "false", sortBy: "hack", sortDir: "desc" });
+
+    const profits = res.body.products.map((p) => Number(p.netProfit));
+    expect([...profits].sort((a, b) => b - a)).toEqual(profits);
+  });
+
+  // 10. Modo compras-sin-vender también ordena (% acumulado)
+  it("modo compras-sin-vender ordena por % acumulado ascendente", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({
+        ...WIDE_RANGE,
+        showNoe: "false",
+        modo: "compras-sin-vender",
+        sortBy: "cumulativePercent",
+        sortDir: "asc",
+      });
+
+    const pcts = res.body.products.map((p) => Number(p.cumulativePercent));
+    expect([...pcts].sort((a, b) => a - b)).toEqual(pcts);
+    expect(res.body.products[0]).toHaveProperty("totalPurchased");
+  });
 });

@@ -47,9 +47,22 @@ function buildCompareRange(dateRange) {
 const SalesDashboard = ({ dateRange, showNoe }) => {
     const { data, error, isLoading } = useDashboardSalesRaw(dateRange, showNoe);
     const [paretoMode, setParetoMode] = useState('ventas');
-    const { data: paretoData, isLoading: paretoLoading } = useDashboardParetoRaw(dateRange, showNoe, paretoMode);
-
+    const [paretoSort, setParetoSort] = useState(null); // { id, desc } | null = default del modo
     const paretoConfig = paretoMode === 'compras-sin-vender' ? PURCHASES_PARETO_CONFIG : {};
+    const paretoDefaultSortId = paretoMode === 'compras-sin-vender' ? 'totalPurchased' : 'netProfit';
+    const paretoSortBy = paretoSort || { id: paretoDefaultSortId, desc: true };
+    const { data: paretoData, isLoading: paretoLoading } = useDashboardParetoRaw(
+        dateRange,
+        showNoe,
+        paretoMode,
+        paretoSortBy.id,
+        paretoSortBy.desc ? 'desc' : 'asc',
+    );
+
+    const handleParetoModeChange = (key) => {
+        setParetoMode(key);
+        setParetoSort(null); // volver al orden canónico del modo
+    };
 
     // Compare range for KPI delta badges — computed locally, not fetched
     const compareRange = useMemo(() => {
@@ -246,7 +259,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                         {PARETO_MODES.map(({ key, label, color }) => (
                             <button
                                 key={key}
-                                onClick={() => setParetoMode(key)}
+                                onClick={() => handleParetoModeChange(key)}
                                 style={{
                                     padding: '6px 16px',
                                     borderRadius: 6,
@@ -269,6 +282,14 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                         summary={paretoData?.summary || null}
                         loading={paretoLoading}
                         config={paretoConfig}
+                        sorting={{
+                            enabled: true,
+                            sortBy: [paretoSortBy],
+                            onSort: (sortByList) => {
+                                const s = sortByList?.[0];
+                                if (s) setParetoSort({ id: s.id, desc: s.desc });
+                            },
+                        }}
                     />
                 </div>
             </div>
