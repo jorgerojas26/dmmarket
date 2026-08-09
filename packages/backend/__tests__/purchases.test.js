@@ -243,3 +243,9 @@ describe("GET /api/purchases — exclusión de facturas anuladas", () => {
     }
   }, 30000);
 });
+
+// Cierra el pool de knex al terminar: si no, las conexiones idle de mysql2 mantienen
+// el event loop vivo y jest fuerza el exit del worker ("failed to exit gracefully").
+afterAll(async () => {
+  await require("../database").destroy();
+});

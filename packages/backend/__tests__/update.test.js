@@ -50,21 +50,21 @@ describe("POST /api/update/check", () => {
     expect(res.body.latestVersion).toBe("1.0.0");
   });
 
-  it("sin release en GitHub responde 404 descriptivo", async () => {
+  it("sin release en GitHub responde 404", async () => {
     jest.spyOn(global, "fetch").mockResolvedValue({ ok: false, status: 404, text: async () => "" });
     const res = await request(app).post("/api/update/check");
     expect(res.status).toBe(404);
-    expect(res.body.error.message).toContain("No hay releases");
+    expect(res.body.error.message).toBe("No hay nuevas actualizaciones");
   });
 
-  it("error de red responde 502 descriptivo (no 500 genérico)", async () => {
+  it("error de red responde 502 (no 500 genérico)", async () => {
     jest.spyOn(global, "fetch").mockRejectedValue(new Error("network down"));
     const res = await request(app).post("/api/update/check");
     expect(res.status).toBe(502);
-    expect(res.body.error.message).toContain("GitHub");
+    expect(res.body.error.message).toBe("No se pudo contactar al servidor. Revisá tu conexión a internet.");
   });
 
-  it("release sin los assets del contrato responde error descriptivo", async () => {
+  it("release sin los assets del contrato responde error", async () => {
     jest.spyOn(global, "fetch").mockResolvedValue({
       ok: true,
       status: 200,
@@ -72,7 +72,7 @@ describe("POST /api/update/check", () => {
     });
     const res = await request(app).post("/api/update/check");
     expect(res.status).toBe(502);
-    expect(res.body.error.message).toContain("assets");
+    expect(res.body.error.message).toBe("Release inválida. Por favor contacte a su administrador");
   });
 });
 

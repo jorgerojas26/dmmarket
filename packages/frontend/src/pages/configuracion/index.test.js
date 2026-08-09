@@ -33,7 +33,8 @@ it('muestra sidebar con "Acerca de", texto estándar y versión', async () => {
     fetchMock.mockResolvedValue(jsonResponse(STATUS));
     render(<ConfiguracionPage />);
     expect(screen.getAllByText('Acerca de').length).toBeGreaterThan(0); // item sidebar + título panel
-    expect(screen.getByText(/sistema de reportes de distribución de alimentos/i)).toBeInTheDocument();
+    expect(screen.getByText('Versión instalada')).toBeInTheDocument();
+    expect(screen.getByText('Buscar actualizaciones')).toBeInTheDocument();
     expect(await screen.findByText('v1.0.0')).toBeInTheDocument();
 });
 

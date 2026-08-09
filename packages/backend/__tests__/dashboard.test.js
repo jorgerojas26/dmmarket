@@ -265,3 +265,9 @@ describe("GET /api/dashboard/pareto", () => {
     expect(res.body.products[0]).toHaveProperty("totalPurchased");
   });
 });
+
+// Cierra el pool de knex al terminar: si no, las conexiones idle de mysql2 mantienen
+// el event loop vivo y jest fuerza el exit del worker ("failed to exit gracefully").
+afterAll(async () => {
+  await require("../database").destroy();
+});

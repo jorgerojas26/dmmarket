@@ -25,6 +25,17 @@ const GET_STATUS = (_req, res) => {
   });
 };
 
+// Timeout del fetch a GitHub. Manual (no AbortSignal.timeout) para poder hacer unref():
+// un timer con ref() mantiene vivo el event loop 15s después de cada check (tests colgados,
+// proceso que no sale). El unref lo deja como best-effort: si el proceso se va a cerrar,
+// el timeout no lo retiene.
+function fetchWithTimeout(url, options = {}, ms = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  timer.unref();
+  return fetch(url, { ...options, signal: controller.signal });
+}
+
 // Los endpoints de update que tocan disco/procesos solo tienen sentido en el binario compilado:
 // en dev (nodemon) la descarga/apply se rechazan con 400. El check sí corre en dev (solo lee GitHub).
 const requireStandalone = (res) => {
@@ -37,12 +48,11 @@ const requireStandalone = (res) => {
 // El fetch lo hace el server (no el browser) — mismo origin, sin CORS.
 const POST_CHECK = async (_req, res) => {
   try {
-    const response = await fetch(GITHUB_API, {
+    const response = await fetchWithTimeout(GITHUB_API, {
       headers: {
         "User-Agent": "dmmarket-updater",
         Accept: "application/vnd.github+json",
       },
-      signal: AbortSignal.timeout(15000),
     });
 
     if (response.status === 404) {

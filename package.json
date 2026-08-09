@@ -17,7 +17,7 @@
     "build:windows": "bun --filter @dmmarket/backend build:windows",
     "release": "bun scripts/release.mjs",
     "test:backend": "bun --filter @dmmarket/backend test",
-    "test:frontend": "bun --filter @dmmarket/frontend test",
+    "test:frontend": "CI=true bun --filter @dmmarket/frontend test",
     "test": "bun run --parallel test:backend test:frontend",
     "postinstall": "bun run scripts/dedupe-nivo.mjs",
     "check": "biome check",
