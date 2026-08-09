@@ -4,6 +4,7 @@ import { DateTime } from 'luxon';
 import { useMemo } from 'react';
 import { computeComparison, formatCurrency, formatNumber, formatPercent } from 'utils/format';
 import KpiCard from './KpiCard';
+import PanelHelpTitle from './PanelHelpTitle';
 import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
 
@@ -82,6 +83,12 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                 comparison={computeComparison(kpis?.totalRawProfit, kpis?.compareRawProfit)}
                                 icon="money"
                                 accent="blue"
+                                help={{
+                                    que: 'El total facturado en el periodo, sin descontar el costo de la mercancía.',
+                                    leer: 'Es el tamaño bruto del negocio: lo que el cliente pagó. No es ganancia.',
+                                    servir: 'Ver cuánto vende la empresa en el periodo.',
+                                    accion: 'Compárala con Ganancia Neta: si la bruta crece pero la neta no, la rentabilidad se está perdiendo.',
+                                }}
                             />
                         </div>
                         <div>
@@ -91,6 +98,12 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                 comparison={computeComparison(kpis?.totalNetProfit, kpis?.compareNetProfit)}
                                 icon="chart"
                                 accent="green"
+                                help={{
+                                    que: 'Lo que queda de la venta después de restar el costo de la mercancía vendida.',
+                                    leer: 'Es la ganancia real del periodo: la Venta Bruta menos el costo.',
+                                    servir: 'Medir la rentabilidad de verdad, no solo la facturación.',
+                                    accion: 'Si el margen baja, revisa los costos de compra y los precios de venta.',
+                                }}
                             />
                         </div>
                         <div>
@@ -99,6 +112,11 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                 value={formatCurrency(kpis?.avgTicket)}
                                 icon="ticket"
                                 accent="purple"
+                                help={{
+                                    que: 'Cuánto vende en promedio cada factura (Venta Bruta ÷ número de facturas).',
+                                    leer: 'Ticket alto = clientes que compran más por visita; ticket bajo = ventas pequeñas y frecuentes.',
+                                    servir: 'Detectar si la venta se sostiene por volumen o por ticket.',
+                                }}
                             />
                         </div>
                         <div>
@@ -107,6 +125,11 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                 value={formatPercent(kpis?.avgMarginPercent)}
                                 icon="percent"
                                 accent="amber"
+                                help={{
+                                    que: 'Porcentaje de la venta que queda como ganancia neta (Ganancia Neta ÷ Venta Bruta).',
+                                    leer: '25% = por cada 100 pesos vendidos, 25 quedan como ganancia.',
+                                    servir: 'Es la salud del negocio: margen bajo con venta alta = mucho movimiento, poca ganancia.',
+                                }}
                             />
                         </div>
                         <div>
@@ -116,6 +139,11 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                 comparison={computeComparison(kpis?.totalQuantity, kpis?.compareQuantity)}
                                 icon="package"
                                 accent="cyan"
+                                help={{
+                                    que: 'Total de unidades vendidas en el periodo.',
+                                    leer: 'Complementa al dinero: muchas unidades con poco monto = productos baratos.',
+                                    servir: 'Ver el volumen físico de la operación.',
+                                }}
                             />
                         </div>
                         <div>
@@ -125,6 +153,11 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                 comparison={computeComparison(kpis?.totalInvoices, kpis?.compareInvoices)}
                                 icon="receipt"
                                 accent="pink"
+                                help={{
+                                    que: 'Número de facturas emitidas en el periodo.',
+                                    leer: 'Cada factura es una venta cerrada; no cuenta unidades, cuenta operaciones.',
+                                    servir: 'Medir cuántas ventas se concretan, independiente de su tamaño.',
+                                }}
                             />
                         </div>
                         <div style={{ gridColumn: '1 / -1' }}>
@@ -160,7 +193,15 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                         className="dashboard-panel d-flex flex-column"
                         style={{ padding: '16px 20px', height: '100%' }}
                     >
-                        <div className="dashboard-inline-title">Categorías</div>
+                        <PanelHelpTitle
+                            title="Categorías"
+                            help={{
+                                que: 'Reparte el margen bruto del periodo según la categoría de producto.',
+                                leer: 'Cada porción es una categoría; mientras más grande, más aporta a la ganancia.',
+                                servir: 'Ver de dónde viene la ganancia y qué categorías sostienen el negocio.',
+                                accion: 'Profundiza en el Pareto para ver los productos exactos de cada categoría.',
+                            }}
+                        />
                         <div style={{ flex: 1, minHeight: 0 }}>
                             <GroupSales chartData={chartData} />
                         </div>
@@ -182,7 +223,15 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Top Productos</div>
+                        <PanelHelpTitle
+                            title="Top Productos"
+                            help={{
+                                que: 'Los productos que más ganancia neta generan en el periodo, ordenados de mayor a menor.',
+                                leer: 'Incluye unidades vendidas y el margen promedio de cada producto.',
+                                servir: 'Identificar los productos que sostienen la rentabilidad.',
+                                accion: 'Revisa el Pareto para clasificarlos A/B/C y decidir el inventario.',
+                            }}
+                        />
                         <div style={{ height: 340, overflowY: 'auto' }}>
                             <RankedList
                                 data={data?.topProducts || []}
@@ -199,7 +248,15 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                 </div>
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Top Clientes</div>
+                        <PanelHelpTitle
+                            title="Top Clientes"
+                            help={{
+                                que: 'Los clientes que más ganancia neta generan en el periodo, ordenados de mayor a menor.',
+                                leer: 'Se ordena por ganancia, no por facturación: un cliente que compra mucho con margen bajo puede no aparecer aquí.',
+                                servir: 'Ver quiénes aportan la ganancia real de la empresa.',
+                                accion: 'Cruza con el dashboard de clientes para cuidar a los que más rentan.',
+                            }}
+                        />
                         <div style={{ height: 340, overflowY: 'auto' }}>
                             <RankedList
                                 data={data?.topClients || []}

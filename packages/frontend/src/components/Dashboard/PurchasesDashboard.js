@@ -3,6 +3,7 @@ import { usePurchasesDashboard, usePurchasesPareto } from 'hooks/usePurchases';
 import { useMemo } from 'react';
 import { computeComparison, formatCurrency, formatNumber } from 'utils/format';
 import KpiCard from './KpiCard';
+import PanelHelpTitle from './PanelHelpTitle';
 import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
 
@@ -89,6 +90,12 @@ const PurchasesDashboard = ({ dateRange }) => {
                                 comparison={computeComparison(kpis?.totalPurchased, kpis?.comparePurchased)}
                                 icon="money"
                                 accent="blue"
+                                help={{
+                                    que: 'El total invertido en mercancía en el periodo, según las facturas de compra.',
+                                    leer: 'Es el costo de lo que entró al inventario, sin importar si ya se vendió.',
+                                    servir: 'Ver cuánto dinero sale hacia los proveedores.',
+                                    accion: 'Compáralo con la Venta Bruta: comprar mucho sin vender acumula inventario.',
+                                }}
                             />
                         </div>
                         <div>
@@ -98,6 +105,11 @@ const PurchasesDashboard = ({ dateRange }) => {
                                 comparison={computeComparison(kpis?.totalQuantity, kpis?.compareQuantity)}
                                 icon="package"
                                 accent="cyan"
+                                help={{
+                                    que: 'Total de unidades compradas en el periodo.',
+                                    leer: 'Complementa al dinero: muchas unidades con poco monto = mercancía barata (abarrote).',
+                                    servir: 'Medir el volumen físico de las compras.',
+                                }}
                             />
                         </div>
                         <div>
@@ -107,6 +119,11 @@ const PurchasesDashboard = ({ dateRange }) => {
                                 comparison={computeComparison(kpis?.totalInvoices, kpis?.compareInvoices)}
                                 icon="receipt"
                                 accent="pink"
+                                help={{
+                                    que: 'Número de facturas de compra recibidas en el periodo.',
+                                    leer: 'Cada factura es una compra a un proveedor.',
+                                    servir: 'Ver cuántas operaciones de compra se generan, independiente de su tamaño.',
+                                }}
                             />
                         </div>
                         <div>
@@ -115,6 +132,11 @@ const PurchasesDashboard = ({ dateRange }) => {
                                 value={formatCurrency(kpis?.avgTicket)}
                                 icon="ticket"
                                 accent="purple"
+                                help={{
+                                    que: 'Cuánto se compra en promedio por factura (Total Comprado ÷ número de facturas).',
+                                    leer: 'Ticket alto = compras grandes y concentradas; ticket bajo = compras pequeñas y frecuentes.',
+                                    servir: 'Entender el patrón de abastecimiento.',
+                                }}
                             />
                         </div>
                         <div>
@@ -123,6 +145,12 @@ const PurchasesDashboard = ({ dateRange }) => {
                                 value={formatCurrency(kpis?.avgUnitCost)}
                                 icon="percent"
                                 accent="amber"
+                                help={{
+                                    que: 'Costo promedio por unidad comprada (Total Comprado ÷ unidades).',
+                                    leer: 'Es el precio de compra promedio ponderado del periodo.',
+                                    servir: 'Referencia para negociar con proveedores y detectar subidas de costos.',
+                                    accion: 'Si sube sin cambio de mezcla, negocia precios o busca otro proveedor.',
+                                }}
                             />
                         </div>
                         <div style={{ gridColumn: '1 / -1' }}>
@@ -158,7 +186,14 @@ const PurchasesDashboard = ({ dateRange }) => {
                         className="dashboard-panel d-flex flex-column"
                         style={{ padding: '16px 20px', height: '100%' }}
                     >
-                        <div className="dashboard-inline-title">Categorías</div>
+                        <PanelHelpTitle
+                            title="Categorías"
+                            help={{
+                                que: 'Reparte el total comprado del periodo según la categoría de producto.',
+                                leer: 'Cada porción es una categoría; mientras más grande, más dinero invertido en ella.',
+                                servir: 'Ver dónde se concentra la inversión en mercancía.',
+                            }}
+                        />
                         <div style={{ flex: 1, minHeight: 0 }}>
                             <GroupPurchases chartData={chartData} />
                         </div>
@@ -181,7 +216,15 @@ const PurchasesDashboard = ({ dateRange }) => {
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Top Productos</div>
+                        <PanelHelpTitle
+                            title="Top Productos"
+                            help={{
+                                que: 'Los productos que más monto comprado acumulan en el periodo, ordenados de mayor a menor.',
+                                leer: 'Incluye unidades y el costo promedio por unidad de cada producto.',
+                                servir: 'Identificar los productos donde se concentra la inversión.',
+                                accion: 'Revisa el Pareto para clasificarlos A/B/C y priorizar la negociación con proveedores.',
+                            }}
+                        />
                         <div style={{ height: 340, overflowY: 'auto' }}>
                             <RankedList
                                 data={data?.topProducts || []}
@@ -198,7 +241,14 @@ const PurchasesDashboard = ({ dateRange }) => {
                 </div>
                 <div className="col-12 col-lg-6">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="dashboard-inline-title">Top Proveedores</div>
+                        <PanelHelpTitle
+                            title="Top Proveedores"
+                            help={{
+                                que: 'Los proveedores a los que más se les compra en el periodo, ordenados de mayor a menor.',
+                                leer: 'Mientras más grande el monto, más depende la empresa de ese proveedor.',
+                                servir: 'Ver la concentración del abastecimiento: depender de pocos proveedores es un riesgo.',
+                            }}
+                        />
                         <div style={{ height: 340, overflowY: 'auto' }}>
                             <RankedList
                                 data={data?.topProviders || []}
