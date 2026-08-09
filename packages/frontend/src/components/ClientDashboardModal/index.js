@@ -281,6 +281,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                         useMesh
                         enableArea
                         areaOpacity={0.15}
+                        tooltip={() => null}
                         onMouseMove={(point, event) => {
                             if (point) {
                                 setChartTooltip({ visible: true, x: event.clientX, y: event.clientY, point });

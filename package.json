@@ -18,6 +18,7 @@
     "test:backend": "bun --filter @dmmarket/backend test",
     "test:frontend": "bun --filter @dmmarket/frontend test",
     "test": "bun run --parallel test:backend test:frontend",
+    "postinstall": "bun run scripts/dedupe-nivo.mjs",
     "check": "biome check",
     "check:write": "biome check --write",
     "check:unsafe": "biome check --write --unsafe",
@@ -27,7 +28,13 @@
   },
   "overrides": {
     "react-error-overlay": "6.0.9",
-    "@babel/core": ">=7.22.0"
+    "@babel/core": ">=7.22.0",
+    "@nivo/arcs": "0.74.0",
+    "@nivo/bar": "0.74.0",
+    "@nivo/core": "0.74.0",
+    "@nivo/line": "0.74.0",
+    "@nivo/pie": "0.74.0",
+    "@nivo/tooltip": "0.74.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.6"

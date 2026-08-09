@@ -1,8 +1,10 @@
 import { ResponsiveLine } from '@nivo/line';
+import ChartTooltip from 'components/ChartTooltip';
 import ClientSearch from 'components/ClientSearch';
 import { ShowNoeContext } from 'context/show_noe';
 import { useMonthlyAverage } from 'hooks/useClients';
 import { useContext, useState } from 'react';
+import { formatCurrency } from 'utils/format';
 
 const MonthlyAverageClient = () => {
     const [selectedClient, setSelectedClient] = useState(null);
@@ -39,6 +41,12 @@ const MonthlyAverageClient = () => {
                         pointBorderColor={{ from: 'serieColor' }}
                         pointLabelYOffset={-12}
                         useMesh={true}
+                        tooltip={({ point }) => (
+                            <ChartTooltip title={String(point.data.x)}>
+                                <span>Promedio mensual</span>
+                                <strong>{formatCurrency(point.data.y)}</strong>
+                            </ChartTooltip>
+                        )}
                     />
                 )}
                 {isLoading && (

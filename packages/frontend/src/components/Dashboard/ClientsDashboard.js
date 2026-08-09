@@ -4,7 +4,7 @@ import { ResponsivePie } from '@nivo/pie';
 import ChartTooltip from 'components/ChartTooltip';
 import { useClientsDashboard } from 'hooks/useClients';
 import { DateTime } from 'luxon';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { formatCurrency, formatNumber, formatPercent } from 'utils/format';
 import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
@@ -28,6 +28,76 @@ const nivoTheme = {
             fontSize: '13px',
         },
     },
+};
+
+// Waterfall row with hover tooltip (same styling as ChartTooltip).
+const WaterfallBar = ({ bar, barHeight }) => {
+    const [hovered, setHovered] = useState(false);
+
+    return (
+        <div
+            style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+        >
+            <span
+                style={{
+                    width: 70,
+                    fontSize: 12,
+                    color: bar.isTotal ? '#e4e6ea' : '#94a3b8',
+                    fontWeight: bar.isTotal ? 600 : 400,
+                    textAlign: 'right',
+                    flexShrink: 0,
+                }}
+            >
+                {bar.label}
+            </span>
+            <div style={{ flex: 1, position: 'relative', height: barHeight }}>
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: `${bar.x}%`,
+                        height: '100%',
+                        width: `${bar.width}%`,
+                        minWidth: 3,
+                        background: bar.color,
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        paddingRight: bar.width > 10 ? 8 : 0,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#fff',
+                        transition: 'width 0.4s ease',
+                    }}
+                >
+                    {bar.width > 10 ? formatNumber(Math.abs(bar.value)) : ''}
+                </div>
+            </div>
+            {bar.width <= 10 && (
+                <span style={{ width: 50, fontSize: 12, color: '#94a3b8', flexShrink: 0 }}>
+                    {formatNumber(Math.abs(bar.value))}
+                </span>
+            )}
+            {hovered && (
+                <div
+                    style={{
+                        position: 'absolute',
+                        left: 80,
+                        bottom: barHeight + 6,
+                        zIndex: 10,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <ChartTooltip title={bar.label} color={bar.color}>
+                        <span>Clientes</span>
+                        <strong>{formatNumber(Math.abs(bar.value))}</strong>
+                    </ChartTooltip>
+                </div>
+            )}
+        </div>
+    );
 };
 
 const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
@@ -157,48 +227,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {bars.map((bar) => (
-                    <div key={bar.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span
-                            style={{
-                                width: 70,
-                                fontSize: 12,
-                                color: bar.isTotal ? '#e4e6ea' : '#94a3b8',
-                                fontWeight: bar.isTotal ? 600 : 400,
-                                textAlign: 'right',
-                                flexShrink: 0,
-                            }}
-                        >
-                            {bar.label}
-                        </span>
-                        <div style={{ flex: 1, position: 'relative', height: barHeight }}>
-                            <div
-                                style={{
-                                    position: 'absolute',
-                                    left: `${bar.x}%`,
-                                    height: '100%',
-                                    width: `${bar.width}%`,
-                                    minWidth: 3,
-                                    background: bar.color,
-                                    borderRadius: 4,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'flex-end',
-                                    paddingRight: bar.width > 10 ? 8 : 0,
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#fff',
-                                    transition: 'width 0.4s ease',
-                                }}
-                            >
-                                {bar.width > 10 ? formatNumber(Math.abs(bar.value)) : ''}
-                            </div>
-                        </div>
-                        {bar.width <= 10 && (
-                            <span style={{ width: 50, fontSize: 12, color: '#94a3b8', flexShrink: 0 }}>
-                                {formatNumber(Math.abs(bar.value))}
-                            </span>
-                        )}
-                    </div>
+                    <WaterfallBar key={bar.label} bar={bar} barHeight={barHeight} />
                 ))}
                 <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4 }}>
                     Neto: {w.gained - w.lost >= 0 ? '+' : ''}

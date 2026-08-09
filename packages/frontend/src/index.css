@@ -213,11 +213,13 @@ table tfoot td {
 }
 
 /* ── Dashboard section panels (charts & tables — no card wrapper) ── */
+/* NOTE: no `overflow: hidden` — it would clip nivo tooltips (absolute-positioned
+   inside the chart wrapper) near the panel edges. All children are inset by the
+   panel's padding, so nothing needs corner clipping. */
 .dashboard-panel {
     background: #1e2126;
     border: 1px solid #2d3138;
     border-radius: 12px;
-    overflow: hidden;
 }
 .dashboard-panel-header {
     display: flex;
