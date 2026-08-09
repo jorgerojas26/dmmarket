@@ -150,6 +150,23 @@ describe("GET_PROVIDERS_LIST", () => {
     const db = require("../database");
     expect(db.orderBy).toHaveBeenCalledWith("total_ventas", "desc");
   });
+
+  it("should filter sales and purchases by date range", async () => {
+    req.query.from = "2026-01-01";
+    req.query.to = "2026-12-31";
+    await controller.GET_PROVIDERS_LIST(req, res);
+
+    const db = require("../database");
+    expect(db.whereBetween).toHaveBeenCalledWith("mf.Fecha", ["2026-01-01", "2026-12-31"]);
+    expect(db.andWhereBetween).toHaveBeenCalledWith("mc.Fecha", ["2026-01-01", "2026-12-31"]);
+  });
+
+  it("should not apply date filters when no range is given", async () => {
+    await controller.GET_PROVIDERS_LIST(req, res);
+    const db = require("../database");
+    expect(db.whereBetween).not.toHaveBeenCalled();
+    expect(db.andWhereBetween).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET_PROVIDER_SUMMARY", () => {

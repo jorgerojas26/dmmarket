@@ -2,6 +2,8 @@ const BASE_URL = '/api/providers';
 
 export const fetchProvidersList = async ({
     search,
+    from,
+    to,
     page = 1,
     limit = 20,
     sortBy = 'total_ventas',
@@ -10,6 +12,8 @@ export const fetchProvidersList = async ({
 }) => {
     const params = new URLSearchParams();
     if (search) params.append('search', search);
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
     params.append('page', page);
     params.append('limit', limit);
     params.append('sortBy', sortBy);

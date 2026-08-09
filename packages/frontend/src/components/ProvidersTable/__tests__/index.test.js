@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as providersApi from 'api/providers';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { SWRConfig } from 'hooks/swr-wrapper';
 import ProvidersTable from '../index';
@@ -20,7 +21,11 @@ jest.mock('pdfmake/build/vfs_fonts', () => ({
 
 const swrWrapper = ({ children }) => (
     <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
-        <ShowNoeContext.Provider value={{ showNoe: false, setShowNoe: jest.fn() }}>{children}</ShowNoeContext.Provider>
+        <ShowNoeContext.Provider value={{ showNoe: false, setShowNoe: jest.fn() }}>
+            <CurrencyRateContext.Provider value={{ currencyRate: { Cambio: 36.5 }, setCurrencyRate: jest.fn() }}>
+                {children}
+            </CurrencyRateContext.Provider>
+        </ShowNoeContext.Provider>
     </SWRConfig>
 );
 
@@ -60,10 +65,9 @@ describe('ProvidersTable', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText('Proveedores')).toBeInTheDocument();
+            expect(screen.getByText('IdProveedor')).toBeInTheDocument();
         });
 
-        expect(screen.getByText('IdProveedor')).toBeInTheDocument();
         expect(screen.getByText('Empresa')).toBeInTheDocument();
         expect(screen.getByText('Total Compras')).toBeInTheDocument();
         expect(screen.getByText('# Compras')).toBeInTheDocument();

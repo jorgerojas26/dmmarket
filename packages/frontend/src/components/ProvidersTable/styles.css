@@ -2,22 +2,6 @@
     color: #f8fafc;
 }
 
-.providers-table__header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.providers-table__header h3 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #f8fafc;
-}
-
 .providers-table__search {
     position: relative;
     min-width: 220px;
@@ -163,11 +147,6 @@ input[type="search"].providers-table__input,
 }
 
 @media (max-width: 575.98px) {
-    .providers-table__header {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
     .providers-table__search {
         min-width: 0;
         flex: 1 1 auto;

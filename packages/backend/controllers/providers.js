@@ -1,7 +1,7 @@
 const knex = require("../database");
 
 const GET_PROVIDERS_LIST = async (req, res) => {
-  const { search, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
+  const { search, from, to, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
   const showNoe = req.query.showNoe === "true";
   const offset = (Number(page) - 1) * Number(limit);
 
@@ -29,6 +29,38 @@ const GET_PROVIDERS_LIST = async (req, res) => {
   const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
 
   try {
+    // Purchase totals subquery (per provider, limited to the date range when given)
+    const purchaseDataSubquery = knex
+      .select(
+        "mc.IdProveedor",
+        knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as total_compras"),
+        knex.raw("COUNT(DISTINCT mc.IdFactura) as num_compras"),
+      )
+      .from("mastercomp as mc")
+      .leftJoin("slavecomp as sc", "sc.IdFactura", "mc.IdFactura")
+      .where("mc.Anulada", 0)
+      .groupBy("mc.IdProveedor");
+
+    // Sales totals subquery (per provider, limited to the date range when given)
+    const salesDataSubquery = knex
+      .select(
+        "pr.Proveedor",
+        knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_ventas`),
+        knex.raw(`COUNT(DISTINCT mf.${idInvoice}) as num_ventas`),
+      )
+      .from("productos as pr")
+      .leftJoin(`${slaveTable} as sf`, "sf.IdProducto", "pr.IdProducto")
+      .leftJoin(`${masterTable} as mf`, function () {
+        this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
+      })
+      .groupBy("pr.Proveedor");
+
+    if (from && to) {
+      purchaseDataSubquery.andWhereBetween("mc.Fecha", [from, to]);
+      // WHERE (not join condition) so slave rows outside the range are excluded
+      salesDataSubquery.whereBetween(`mf.Fecha`, [from, to]);
+    }
+
     // Build data query with subquery LEFT JOINs so metrics don't cross-multiply
     const dataQuery = knex
       .select(
@@ -40,38 +72,8 @@ const GET_PROVIDERS_LIST = async (req, res) => {
         knex.raw("COALESCE(sales_data.num_ventas, 0) as num_ventas"),
       )
       .from("proveedores as p")
-      .leftJoin(
-        knex
-          .select(
-            "mc.IdProveedor",
-            knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as total_compras"),
-            knex.raw("COUNT(DISTINCT mc.IdFactura) as num_compras"),
-          )
-          .from("mastercomp as mc")
-          .leftJoin("slavecomp as sc", "sc.IdFactura", "mc.IdFactura")
-          .where("mc.Anulada", 0)
-          .groupBy("mc.IdProveedor")
-          .as("purchase_data"),
-        "purchase_data.IdProveedor",
-        "p.IdProveedor",
-      )
-      .leftJoin(
-        knex
-          .select(
-            "pr.Proveedor",
-            knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_ventas`),
-            knex.raw(`COUNT(DISTINCT mf.${idInvoice}) as num_ventas`),
-          )
-          .from("productos as pr")
-          .leftJoin(`${slaveTable} as sf`, "sf.IdProducto", "pr.IdProducto")
-          .leftJoin(`${masterTable} as mf`, function () {
-            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-          })
-          .groupBy("pr.Proveedor")
-          .as("sales_data"),
-        "sales_data.Proveedor",
-        "p.IdProveedor",
-      );
+      .leftJoin(purchaseDataSubquery.as("purchase_data"), "purchase_data.IdProveedor", "p.IdProveedor")
+      .leftJoin(salesDataSubquery.as("sales_data"), "sales_data.Proveedor", "p.IdProveedor");
 
     // Count query
     const countQuery = knex.countDistinct({ total: "p.IdProveedor" }).from("proveedores as p");

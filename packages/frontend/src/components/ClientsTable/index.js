@@ -3,6 +3,7 @@ import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { useClientsList } from 'hooks/useClients';
+import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
@@ -13,7 +14,7 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 const LIMIT = 20;
 
-const ClientsTable = ({ onRowSelect, ruta }) => {
+const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
@@ -23,6 +24,8 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
     const { data: result, isLoading } = useClientsList({
         search,
         ruta,
+        from: dateRange?.from,
+        to: dateRange?.to,
         page,
         limit: LIMIT,
         sortBy: sort.sortBy,
@@ -51,6 +54,8 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
                 const allResult = await fetchClientsList({
                     search,
                     ruta,
+                    from: dateRange?.from,
+                    to: dateRange?.to,
                     page: 1,
                     limit: total || 9999,
                     sortBy: sort.sortBy,
@@ -92,6 +97,11 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
                 );
 
                 const subtitleParts = [];
+                if (dateRange) {
+                    subtitleParts.push(
+                        `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} - ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
+                    );
+                }
                 if (search) subtitleParts.push(`Búsqueda: "${search}"`);
                 if (ruta) subtitleParts.push(`Ruta: "${ruta}"`);
                 const subtitle =
@@ -136,7 +146,7 @@ const ClientsTable = ({ onRowSelect, ruta }) => {
                 console.error('Failed to print clients list:', err);
             }
         },
-        [search, ruta, total, sort, showNoe, currencyRate],
+        [search, ruta, total, sort, showNoe, currencyRate, dateRange],
     );
 
     const totalPages = Math.ceil(total / LIMIT);

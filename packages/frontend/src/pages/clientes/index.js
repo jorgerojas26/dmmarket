@@ -27,6 +27,10 @@ const ClientesPage = () => {
         from: DateTime.now().startOf('month').toISODate(),
         to: DateTime.now().toISODate(),
     });
+    const [desgloseDateRange, setDesgloseDateRange] = useState({
+        from: DateTime.now().startOf('year').toISODate(),
+        to: DateTime.now().toISODate(),
+    });
     const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
     const [selectedClient, setSelectedClient] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -64,6 +68,10 @@ const ClientesPage = () => {
     const handleDateRangeChange = useCallback(({ from, to }) => {
         setDateRange({ from, to });
         setDashboardRefreshKey((k) => k + 1);
+    }, []);
+
+    const handleDesgloseDateRangeChange = useCallback(({ from, to }) => {
+        setDesgloseDateRange({ from, to });
     }, []);
 
     const handleRowSelect = useCallback((client) => {
@@ -134,7 +142,7 @@ const ClientesPage = () => {
                             <h4 className="m-0 text-light">Desglose de Clientes</h4>
                         </div>
                         <div className="clients-content-wrapper">
-                            <div className="d-flex flex-wrap gap-3 mb-3">
+                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                                 <div style={{ minWidth: '220px' }}>
                                     <Select
                                         options={routeOptions}
@@ -151,10 +159,19 @@ const ClientesPage = () => {
                                         noOptionsMessage={() => 'Sin resultados'}
                                     />
                                 </div>
+                                <DateRangePicker
+                                    initialFrom={DateTime.now().startOf('year').toISODate()}
+                                    initialTo={DateTime.now().toISODate()}
+                                    onChange={handleDesgloseDateRangeChange}
+                                />
                             </div>
                         </div>
                         <div className="clients-content-wrapper">
-                            <ClientsTable onRowSelect={handleRowSelect} ruta={selectedRuta?.value} />
+                            <ClientsTable
+                                onRowSelect={handleRowSelect}
+                                ruta={selectedRuta?.value}
+                                dateRange={desgloseDateRange}
+                            />
                         </div>
                     </div>
                     <section className={activeView === 'dashboard' ? 'd-flex flex-column gap-3' : 'd-none'}>

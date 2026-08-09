@@ -264,7 +264,7 @@ const GET_CLIENT_ROUTES = async (_req, res) => {
 };
 
 const GET_CLIENTS_LIST = async (req, res) => {
-  const { search, ruta, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
+  const { search, ruta, from, to, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
   const offset = (Number(page) - 1) * Number(limit);
 
@@ -301,6 +301,9 @@ const GET_CLIENTS_LIST = async (req, res) => {
       .from("clientes")
       .leftJoin(masterTable, function () {
         this.on("clientes.IdCliente", `${masterTable}.IdCliente`).andOn(`${masterTable}.Anulada`, 0);
+        if (from && to) {
+          this.andOnBetween(`${masterTable}.Fecha`, [from, to]);
+        }
       })
       .leftJoin(slaveTable, `${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`);
 

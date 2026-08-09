@@ -17,11 +17,11 @@ import useSWR from 'hooks/swr-wrapper';
  * Null key = no fetch.
  */
 export function useClientsList(
-    { search, ruta, page = 1, limit = 20, sortBy = 'total_ventas', sortDir = 'desc', showNoe },
+    { search, ruta, from, to, page = 1, limit = 20, sortBy = 'total_ventas', sortDir = 'desc', showNoe },
     enabled = true,
 ) {
-    const key = enabled ? ['clients-list', search, ruta, page, limit, sortBy, sortDir, showNoe] : null;
-    return useSWR(key, () => fetchClientsList({ search, ruta, page, limit, sortBy, sortDir, showNoe }), {
+    const key = enabled ? ['clients-list', search, ruta, from, to, page, limit, sortBy, sortDir, showNoe] : null;
+    return useSWR(key, () => fetchClientsList({ search, ruta, from, to, page, limit, sortBy, sortDir, showNoe }), {
         keepPreviousData: true,
     });
 }

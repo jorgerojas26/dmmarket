@@ -3,6 +3,7 @@ import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { useProvidersList } from 'hooks/useProviders';
+import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
@@ -14,7 +15,7 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 const LIMIT = 20;
 
-const ProvidersTable = ({ onRowSelect }) => {
+const ProvidersTable = ({ onRowSelect, dateRange }) => {
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
@@ -23,6 +24,8 @@ const ProvidersTable = ({ onRowSelect }) => {
 
     const { data: result, isLoading } = useProvidersList({
         search,
+        from: dateRange?.from,
+        to: dateRange?.to,
         page,
         limit: LIMIT,
         sortBy: sort.sortBy,
@@ -50,6 +53,8 @@ const ProvidersTable = ({ onRowSelect }) => {
             try {
                 const allResult = await fetchProvidersList({
                     search,
+                    from: dateRange?.from,
+                    to: dateRange?.to,
                     page: 1,
                     limit: total || 9999,
                     sortBy: sort.sortBy,
@@ -110,7 +115,15 @@ const ProvidersTable = ({ onRowSelect }) => {
                         },
                         { text: 'R.I.F.: J-41270446-0', style: 'header' },
                         {
-                            text: search ? `Listado de Proveedores — Búsqueda: "${search}"` : 'Listado de Proveedores',
+                            text: [
+                                'Listado de Proveedores',
+                                ...(dateRange
+                                    ? [
+                                          ` — Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} - ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
+                                      ]
+                                    : []),
+                                ...(search ? [` — Búsqueda: "${search}"`] : []),
+                            ].join(''),
                             style: 'subheader',
                         },
                         {
@@ -141,7 +154,7 @@ const ProvidersTable = ({ onRowSelect }) => {
                 console.error('Failed to print providers list:', err);
             }
         },
-        [search, total, sort, showNoe, currencyRate],
+        [search, total, sort, showNoe, currencyRate, dateRange],
     );
 
     const totalPages = Math.ceil(total / LIMIT);
@@ -160,9 +173,6 @@ const ProvidersTable = ({ onRowSelect }) => {
 
     return (
         <section className="providers-table-panel">
-            <header className="providers-table__header">
-                <h3>Proveedores</h3>
-            </header>
             <div className="providers-table__body">
                 <Table
                     data={dataArr}

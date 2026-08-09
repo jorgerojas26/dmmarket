@@ -15,11 +15,11 @@ import useSWR from 'hooks/swr-wrapper';
  * Providers list (paginated, searchable).
  */
 export function useProvidersList(
-    { search, page = 1, limit = 20, sortBy = 'total_ventas', sortDir = 'desc', showNoe },
+    { search, from, to, page = 1, limit = 20, sortBy = 'total_ventas', sortDir = 'desc', showNoe },
     enabled = true,
 ) {
-    const key = enabled ? ['providers-list', search, page, limit, sortBy, sortDir, showNoe] : null;
-    return useSWR(key, () => fetchProvidersList({ search, page, limit, sortBy, sortDir, showNoe }), {
+    const key = enabled ? ['providers-list', search, from, to, page, limit, sortBy, sortDir, showNoe] : null;
+    return useSWR(key, () => fetchProvidersList({ search, from, to, page, limit, sortBy, sortDir, showNoe }), {
         keepPreviousData: true,
     });
 }

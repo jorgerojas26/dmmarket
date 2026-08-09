@@ -15,6 +15,10 @@ const ProveedoresPage = () => {
         from: DateTime.now().startOf('month').toISODate(),
         to: DateTime.now().toISODate(),
     });
+    const [desgloseDateRange, setDesgloseDateRange] = useState({
+        from: DateTime.now().startOf('year').toISODate(),
+        to: DateTime.now().toISODate(),
+    });
     const [activeView, setActiveView] = useState('providers');
     const [mode, setMode] = useState('ventas');
     const [selectedProvider, setSelectedProvider] = useState(null);
@@ -37,6 +41,10 @@ const ProveedoresPage = () => {
 
     const handleDateRangeChange = useCallback(({ from, to }) => {
         setDateRange({ from, to });
+    }, []);
+
+    const handleDesgloseDateRangeChange = useCallback(({ from, to }) => {
+        setDesgloseDateRange({ from, to });
     }, []);
 
     const handleModeChange = useCallback((newMode) => {
@@ -62,23 +70,23 @@ const ProveedoresPage = () => {
                 eventKey: 'providers',
                 label: 'Desglose',
                 icon: (
-                <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                >
-                    <line x1="8" y1="6" x2="21" y2="6" />
-                    <line x1="8" y1="12" x2="21" y2="12" />
-                    <line x1="8" y1="18" x2="21" y2="18" />
-                    <line x1="3" y1="6" x2="3.01" y2="6" />
-                    <line x1="3" y1="12" x2="3.01" y2="12" />
-                    <line x1="3" y1="18" x2="3.01" y2="18" />
-                </svg>
+                    <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <line x1="8" y1="6" x2="21" y2="6" />
+                        <line x1="8" y1="12" x2="21" y2="12" />
+                        <line x1="8" y1="18" x2="21" y2="18" />
+                        <line x1="3" y1="6" x2="3.01" y2="6" />
+                        <line x1="3" y1="12" x2="3.01" y2="12" />
+                        <line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
                 ),
             },
         ],
@@ -91,8 +99,16 @@ const ProveedoresPage = () => {
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4">
                     <div className={activeView === 'providers' ? '' : 'd-none'}>
+                        <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
+                            <h4 className="m-0 text-light">Desglose de Proveedores</h4>
+                            <DateRangePicker
+                                initialFrom={DateTime.now().startOf('year').toISODate()}
+                                initialTo={DateTime.now().toISODate()}
+                                onChange={handleDesgloseDateRangeChange}
+                            />
+                        </div>
                         <div className="clients-content-wrapper">
-                            <ProvidersTable onRowSelect={handleProviderSelect} />
+                            <ProvidersTable onRowSelect={handleProviderSelect} dateRange={desgloseDateRange} />
                         </div>
                     </div>
                     <section className={activeView === 'reports' ? 'd-flex flex-column gap-3' : 'd-none'}>
