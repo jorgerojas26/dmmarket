@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react';
 import { Badge, Button, ProgressBar } from 'react-bootstrap';
 import './styles.css';
 
-// Widget global de auto-update (navbar). Solo visible en el binario compilado (standalone):
-// en dev se oculta entero. Flujo: status → check (GitHub) → descargar → reiniciar.
+// Widget global de auto-update (navbar). Visible siempre: en dev permite probar el check contra
+// GitHub real; el flujo completo (descarga/apply) solo opera en el binario compilado.
+// Flujo: status → check (GitHub) → descargar → reiniciar.
 const UpdateChecker = () => {
     const [status, setStatus] = useState(null);
     const [checking, setChecking] = useState(false);
@@ -46,7 +47,7 @@ const UpdateChecker = () => {
         return () => clearInterval(id);
     }, [downloading]);
 
-    if (!status?.standalone) return null;
+    if (!status) return null;
 
     const handleCheck = async () => {
         setChecking(true);

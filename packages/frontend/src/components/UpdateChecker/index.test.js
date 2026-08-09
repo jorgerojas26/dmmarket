@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import UpdateChecker from './index';
 
@@ -30,12 +30,11 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-it('no renderiza nada si no es binario compilado (dev)', async () => {
+it('se renderiza también en dev (no compilado): badge + botón', async () => {
     fetchMock.mockResolvedValue(jsonResponse(DEV_STATUS));
     render(<UpdateChecker />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(screen.queryByText(/Buscar actualizaciones/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/v1\.0\.0/)).not.toBeInTheDocument();
+    await screen.findByText('v1.0.0');
+    expect(screen.getByText('Buscar actualizaciones')).toBeInTheDocument();
 });
 
 it('muestra versión actual + botón en el binario compilado', async () => {

@@ -1,6 +1,17 @@
 const request = require("supertest");
 const app = require("../index");
 
+const GITHUB_RELEASE = (tagName) => ({
+  tag_name: tagName,
+  name: `DMMarket ${tagName}`,
+  body: "Notas de la release",
+  published_at: "2026-08-09T00:00:00Z",
+  assets: [
+    { name: "dmmarket-app.exe", browser_download_url: "https://github.com/x/dmmarket-app.exe" },
+    { name: "dmmarket-app.exe.sha256", browser_download_url: "https://github.com/x/dmmarket-app.exe.sha256" },
+  ],
+});
+
 describe("GET /api/update/status", () => {
   it("responde 200 con currentVersion, platform y standalone", async () => {
     const res = await request(app).get("/api/update/status");
@@ -11,13 +22,61 @@ describe("GET /api/update/status", () => {
   });
 });
 
-describe("endpoints de update en dev (no compilado)", () => {
-  it("POST /api/update/check responde 400 (solo binario)", async () => {
-    const res = await request(app).post("/api/update/check");
-    expect(res.status).toBe(400);
-    expect(res.body.error.message).toContain("binario");
+describe("POST /api/update/check", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
+  it("responde updateAvailable true con release más nueva (comparación semver)", async () => {
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValue({ ok: true, status: 200, json: async () => GITHUB_RELEASE("v99.0.0") });
+    const res = await request(app).post("/api/update/check");
+    expect(res.status).toBe(200);
+    expect(res.body.updateAvailable).toBe(true);
+    expect(res.body.latestVersion).toBe("99.0.0");
+    expect(res.body.notes).toBe("Notas de la release");
+    expect(res.body.assetUrl).toBe("https://github.com/x/dmmarket-app.exe");
+    expect(res.body.sha256AssetUrl).toBe("https://github.com/x/dmmarket-app.exe.sha256");
+  });
+
+  it("responde updateAvailable false con release igual o menor a la actual", async () => {
+    jest
+      .spyOn(global, "fetch")
+      .mockResolvedValue({ ok: true, status: 200, json: async () => GITHUB_RELEASE("v1.0.0") });
+    const res = await request(app).post("/api/update/check");
+    expect(res.status).toBe(200);
+    expect(res.body.updateAvailable).toBe(false);
+    expect(res.body.latestVersion).toBe("1.0.0");
+  });
+
+  it("sin release en GitHub responde 404 descriptivo", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue({ ok: false, status: 404, text: async () => "" });
+    const res = await request(app).post("/api/update/check");
+    expect(res.status).toBe(404);
+    expect(res.body.error.message).toContain("No hay releases");
+  });
+
+  it("error de red responde 502 descriptivo (no 500 genérico)", async () => {
+    jest.spyOn(global, "fetch").mockRejectedValue(new Error("network down"));
+    const res = await request(app).post("/api/update/check");
+    expect(res.status).toBe(502);
+    expect(res.body.error.message).toContain("GitHub");
+  });
+
+  it("release sin los assets del contrato responde error descriptivo", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ tag_name: "v2.0.0", body: "", assets: [{ name: "otro.bin", browser_download_url: "x" }] }),
+    });
+    const res = await request(app).post("/api/update/check");
+    expect(res.status).toBe(502);
+    expect(res.body.error.message).toContain("assets");
+  });
+});
+
+describe("endpoints de update que tocan disco/procesos en dev (no compilado)", () => {
   it("POST /api/update/download responde 400 (solo binario)", async () => {
     const res = await request(app).post("/api/update/download").send({ assetUrl: "x", sha256AssetUrl: "y" });
     expect(res.status).toBe(400);

@@ -25,8 +25,8 @@ const GET_STATUS = (_req, res) => {
   });
 };
 
-// Los endpoints de update solo tienen sentido en el binario compilado: en dev (nodemon)
-// el check/descarga/apply se rechazan con 400.
+// Los endpoints de update que tocan disco/procesos solo tienen sentido en el binario compilado:
+// en dev (nodemon) la descarga/apply se rechazan con 400. El check sí corre en dev (solo lee GitHub).
 const requireStandalone = (res) => {
   if (IS_STANDALONE) return true;
   res.status(400).json({ error: { message: "El auto-update solo está disponible en el binario compilado" } });
@@ -36,8 +36,6 @@ const requireStandalone = (res) => {
 // Consulta GitHub Releases y compara semver contra la versión actual.
 // El fetch lo hace el server (no el browser) — mismo origin, sin CORS.
 const POST_CHECK = async (_req, res) => {
-  if (!requireStandalone(res)) return;
-
   try {
     const response = await fetch(GITHUB_API, {
       headers: {
