@@ -266,14 +266,19 @@ const GET_CLIENT_ROUTES = async (_req, res) => {
 const GET_CLIENTS_LIST = async (req, res) => {
   const { search, ruta, from, to, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
-  const offset = (Number(page) - 1) * Number(limit);
+  const pageNum = Number(page);
+  const limitNum = Number(limit);
+  const offset = (pageNum - 1) * limitNum;
 
+  // Two-pass aggregation (like the dashboard refactor): slavefact joins
+  // multiply rows per invoice line, so masterfact counts run on their own
+  // pass (1 row per invoice) and money totals on another.
   const sortCol = (() => {
     switch (sortBy) {
       case "IdCliente":
-        return "clientes.IdCliente";
+        return "IdCliente";
       case "Empresa":
-        return "clientes.Empresa";
+        return "Empresa";
       case "num_ventas":
         return "num_ventas";
       case "utilidad":
@@ -283,56 +288,81 @@ const GET_CLIENTS_LIST = async (req, res) => {
     }
   })();
 
-  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? 1 : -1;
+
+  const applyRange = (query) => {
+    if (from && to) query.andWhereBetween("mf.Fecha", [from, to]);
+    return query;
+  };
 
   try {
-    // Build data query with LEFT JOINs so clients with 0 sales still appear
-    const dataQuery = knex
-      .select(
-        "clientes.IdCliente",
-        "clientes.Empresa",
-        knex.raw(`MAX(${masterTable}.Fecha) as last_factura`),
-        knex.raw(`COALESCE(ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2), 0) as total_ventas`),
-        knex.raw(`COUNT(DISTINCT ${masterTable}.${idInvoice}) as num_ventas`),
-        knex.raw(
-          `COALESCE(ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2), 0) as utilidad`,
-        ),
-      )
-      .from("clientes")
-      .leftJoin(masterTable, function () {
-        this.on("clientes.IdCliente", `${masterTable}.IdCliente`).andOn(`${masterTable}.Anulada`, 0);
-        if (from && to) {
-          this.andOnBetween(`${masterTable}.Fecha`, [from, to]);
-        }
-      })
-      .leftJoin(slaveTable, `${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`);
+    // 1. Clients matching search/ruta (no pagination: they are the source of
+    //    truth for `total` and for keeping clients with 0 sales in the list).
+    let clientsQuery = knex("clientes").select("IdCliente", "Empresa");
+    if (search) clientsQuery = clientsQuery.where("clientes.Empresa", "like", `%${search}%`);
+    if (ruta) clientsQuery = clientsQuery.where("clientes.Ruta", ruta);
+    const clients = await clientsQuery;
 
-    // Count query (from clientes directly with same search filter)
-    const countQuery = knex.countDistinct({ total: "clientes.IdCliente" }).from("clientes");
-
-    if (search) {
-      dataQuery.where("clientes.Empresa", "like", `%${search}%`);
-      countQuery.where("clientes.Empresa", "like", `%${search}%`);
+    if (clients.length === 0) {
+      return res.status(200).json({ data: [], total: 0, page: pageNum, limit: limitNum });
     }
 
-    if (ruta) {
-      dataQuery.where("clientes.Ruta", ruta);
-      countQuery.where("clientes.Ruta", ruta);
-    }
+    const clientIds = clients.map((c) => c.IdCliente);
 
-    const [{ total }] = await countQuery;
+    // 2. Invoice counts per client from masterfact only (no row multiplication).
+    const masterAgg = await applyRange(
+      knex(`${masterTable} as mf`)
+        .select("mf.IdCliente")
+        .select(knex.raw("MAX(mf.Fecha) as last_factura"))
+        .select(knex.raw("COUNT(*) as num_ventas"))
+        .whereIn("mf.IdCliente", clientIds)
+        .andWhere("mf.Anulada", 0),
+    ).groupBy("mf.IdCliente");
 
-    const data = await dataQuery
-      .groupBy("clientes.IdCliente")
-      .orderBy(sortCol, sortDirection)
-      .limit(Number(limit))
-      .offset(Number(offset));
+    // 3. Money totals per client from slavefact (index-only scan thanks to
+    //    idx_slavefact_ventas covering (IdFactura, Precio, Cantidad, Costo)).
+    const slaveAgg = await applyRange(
+      knex(`${slaveTable} as sf`)
+        .innerJoin(`${masterTable} as mf`, function () {
+          this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
+        })
+        .select("mf.IdCliente")
+        .select(knex.raw("COALESCE(ROUND(SUM(sf.Precio * sf.Cantidad), 2), 0) as total_ventas"))
+        .select(knex.raw("COALESCE(ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2), 0) as utilidad"))
+        .whereIn("mf.IdCliente", clientIds),
+    ).groupBy("mf.IdCliente");
+
+    const masterMap = new Map(masterAgg.map((r) => [r.IdCliente, r]));
+    const slaveMap = new Map(slaveAgg.map((r) => [r.IdCliente, r]));
+
+    const rows = clients.map((c) => {
+      const m = masterMap.get(c.IdCliente);
+      const s = slaveMap.get(c.IdCliente);
+      return {
+        IdCliente: c.IdCliente,
+        Empresa: c.Empresa,
+        last_factura: m ? m.last_factura : null,
+        total_ventas: Number(s ? s.total_ventas : 0) || 0,
+        num_ventas: Number(m ? m.num_ventas : 0) || 0,
+        utilidad: Number(s ? s.utilidad : 0) || 0,
+      };
+    });
+
+    rows.sort((a, b) => {
+      const va = a[sortCol];
+      const vb = b[sortCol];
+      const cmp =
+        sortCol === "IdCliente" || sortCol === "Empresa"
+          ? String(va ?? "").localeCompare(String(vb ?? ""))
+          : Number(va || 0) - Number(vb || 0);
+      return cmp * sortDirection;
+    });
 
     res.status(200).json({
-      data,
-      total: Number(total),
-      page: Number(page),
-      limit: Number(limit),
+      data: rows.slice(offset, offset + limitNum),
+      total: rows.length,
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (error) {
     console.error(error);
