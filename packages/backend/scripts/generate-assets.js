@@ -18,6 +18,10 @@ function walk(dir) {
 
 walk(BUILD_DIR);
 files.push(path.join("controllers", "employees", "create-table-vendedor-comisiones.sql"));
+// Migraciones knex: el mini-migrator (migrate.js) las aplica al arrancar el binario.
+for (const entry of fs.readdirSync(path.join(ROOT, "migrations")).sort()) {
+  files.push(path.join("migrations", entry));
+}
 
 const normalized = files.map((f) => f.split(path.sep).join("/"));
 

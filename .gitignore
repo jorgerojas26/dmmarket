@@ -10,6 +10,8 @@ packages/backend/client/
 packages/backend/assets.js
 packages/backend/dmmarket-app
 packages/backend/dmmarket-app.exe
+packages/backend/dmmarket-app.exe.sha256
+packages/backend/.dmmarket-update/
 tags
 .playwright-cli
 bdsolser_md_nieto.dump

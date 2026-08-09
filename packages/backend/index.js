@@ -39,6 +39,7 @@ const providers_routes = require("./routes/providers");
 const dashboard_routes = require("./routes/dashboard");
 const sales_routes = require("./routes/sales");
 const purchases_routes = require("./routes/purchases");
+const update_routes = require("./routes/update");
 
 //app.use(express.static(path.join(__dirname, "public")));
 
@@ -55,6 +56,7 @@ app.use("/api/providers", providers_routes);
 app.use("/api/dashboard", dashboard_routes);
 app.use("/api/sales", sales_routes);
 app.use("/api/purchases", purchases_routes);
+app.use("/api/update", update_routes);
 
 app.use("/api/*", (req, res) => {
   res.status(404).json({
@@ -87,10 +89,24 @@ app.get("/*", (_request, response) => {
   }
 });
 
+const { runEmbeddedMigrations } = require("./migrate");
+const { cleanupStartup } = require("./cleanup");
+
 const BASE_PORT = 8000;
 const MAX_PORT_ATTEMPTS = 100;
 
 if (require.main === module) {
+  bootstrap().catch((error) => {
+    console.error("Fallo al iniciar la aplicación:", error);
+    process.exit(1);
+  });
+}
+
+// En el binario compilado: limpieza de arranque, migraciones pendientes (si una falla, no se levanta
+// el server con la DB medio migrada), y después el server. En dev estos pasos no hacen nada.
+async function bootstrap() {
+  cleanupStartup();
+  await runEmbeddedMigrations();
   startServer(BASE_PORT);
 }
 

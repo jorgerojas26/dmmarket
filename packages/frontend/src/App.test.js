@@ -15,6 +15,9 @@ jest.mock('pages/compras', () => () => <div>COMPRAS_PAGE</div>);
 jest.mock('pages/clientes', () => () => <div>CLIENTES_PAGE</div>);
 jest.mock('./pages/proveedores', () => () => <div>PROVEEDORES_PAGE</div>);
 
+// UpdateChecker hace fetch de red al montarse; fuera del scope de este test.
+jest.mock('components/UpdateChecker', () => () => null);
+
 const renderAt = (path) =>
     render(
         <MemoryRouter initialEntries={[path]}>

@@ -10,6 +10,7 @@ import { Link, Redirect, Route, Switch, useLocation } from 'react-router-dom';
 import { CurrencyRateContext } from './context/currency_rate';
 import ProveedoresPage from './pages/proveedores';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
+import UpdateChecker from 'components/UpdateChecker';
 
 function App() {
     const location = useLocation();
@@ -68,6 +69,7 @@ function App() {
                                         gap: '20px',
                                     }}
                                 >
+                                    <UpdateChecker />
                                     <span className="text-light">Facturas</span>
                                     <div>
                                         <label className="switch">
