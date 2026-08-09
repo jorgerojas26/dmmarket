@@ -15,8 +15,8 @@ jest.mock('pages/compras', () => () => <div>COMPRAS_PAGE</div>);
 jest.mock('pages/clientes', () => () => <div>CLIENTES_PAGE</div>);
 jest.mock('./pages/proveedores', () => () => <div>PROVEEDORES_PAGE</div>);
 
-// UpdateChecker hace fetch de red al montarse; fuera del scope de este test.
-jest.mock('components/UpdateChecker', () => () => null);
+// ConfiguracionPage hace fetch de red al montarse; fuera del scope de este test.
+jest.mock('./pages/configuracion', () => () => <div>CONFIGURACION_PAGE</div>);
 
 const renderAt = (path) =>
     render(
@@ -45,5 +45,15 @@ describe('App navigation', () => {
         renderAt('/productos');
         expect(screen.queryByText('PRODUCTOS_PAGE')).not.toBeInTheDocument();
         expect(screen.getByText('SISTEMA DE REPORTES')).toBeInTheDocument();
+    });
+
+    it('renders the configuracion page at /configuracion (gear icon route)', () => {
+        renderAt('/configuracion');
+        expect(screen.getByText('CONFIGURACION_PAGE')).toBeInTheDocument();
+    });
+
+    it('shows the gear icon in the navbar (title Configuración)', () => {
+        renderAt('/ventas');
+        expect(screen.getAllByTitle('Configuración').length).toBeGreaterThan(0);
     });
 });

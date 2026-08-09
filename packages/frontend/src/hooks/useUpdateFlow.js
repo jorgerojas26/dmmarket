@@ -1,12 +1,9 @@
 import { applyUpdate, checkForUpdate, downloadUpdate, fetchUpdateStatus, getDownloadProgress } from 'api/update';
 import { useEffect, useState } from 'react';
-import { Badge, Button, ProgressBar } from 'react-bootstrap';
-import './styles.css';
 
-// Widget global de auto-update (navbar). Visible siempre: en dev permite probar el check contra
-// GitHub real; el flujo completo (descarga/apply) solo opera en el binario compilado.
-// Flujo: status → check (GitHub) → descargar → reiniciar.
-const UpdateChecker = () => {
+// Estado y acciones del flujo de auto-update: status → check (GitHub) → descargar → reiniciar.
+// El check corre en dev también (solo lee GitHub); descarga/apply solo operan en el binario compilado.
+const useUpdateFlow = () => {
     const [status, setStatus] = useState(null);
     const [checking, setChecking] = useState(false);
     const [checkResult, setCheckResult] = useState(null);
@@ -46,8 +43,6 @@ const UpdateChecker = () => {
         }, 400);
         return () => clearInterval(id);
     }, [downloading]);
-
-    if (!status) return null;
 
     const handleCheck = async () => {
         setChecking(true);
@@ -99,65 +94,23 @@ const UpdateChecker = () => {
 
     const percent = progress.total ? Math.min(100, Math.round((progress.bytes / progress.total) * 100)) : 0;
 
-    return (
-        <div className="update-checker d-flex align-items-center gap-2">
-            <Badge pill bg="dark" className="border border-secondary">
-                v{status.currentVersion}
-            </Badge>
-
-            {checking ? (
-                <span className="text-light small">Buscando…</span>
-            ) : (
-                <Button size="sm" variant="outline-light" onClick={handleCheck}>
-                    Buscar actualizaciones
-                </Button>
-            )}
-
-            {checkResult && (
-                <div className="update-checker__result d-flex flex-column gap-1">
-                    {checkResult.updateAvailable ? (
-                        <>
-                            <span className="text-warning small fw-bold">
-                                Versión {checkResult.latestVersion} disponible
-                            </span>
-                            {checkResult.notes && (
-                                <details className="update-checker__notes">
-                                    <summary className="small text-secondary">Notas de la versión</summary>
-                                    <pre>{checkResult.notes}</pre>
-                                </details>
-                            )}
-
-                            {downloading && (
-                                <div className="d-flex align-items-center gap-2">
-                                    <ProgressBar now={percent} label={`${percent}%`} />
-                                </div>
-                            )}
-                            {!downloading && !downloaded && (
-                                <Button size="sm" variant="success" onClick={handleDownload}>
-                                    Descargar actualización
-                                </Button>
-                            )}
-                            {downloaded && !applying && !applied && (
-                                <>
-                                    <span className="text-info small">Descargado — Reiniciar para actualizar</span>
-                                    <Button size="sm" variant="primary" onClick={handleApply}>
-                                        Reiniciar ahora
-                                    </Button>
-                                </>
-                            )}
-                        </>
-                    ) : (
-                        <span className="text-success small">Estás al día (v{checkResult.latestVersion})</span>
-                    )}
-                </div>
-            )}
-
-            {checkError && <span className="text-danger small">{checkError}</span>}
-            {downloadError && <span className="text-danger small">{downloadError}</span>}
-            {applyError && <span className="text-danger small">{applyError}</span>}
-            {(applying || applied) && <span className="text-info small">Actualizando — la app se reiniciará…</span>}
-        </div>
-    );
+    return {
+        status,
+        checking,
+        checkResult,
+        checkError,
+        downloading,
+        downloaded,
+        downloadError,
+        progress,
+        applying,
+        applied,
+        applyError,
+        percent,
+        handleCheck,
+        handleDownload,
+        handleApply,
+    };
 };
 
-export default UpdateChecker;
+export default useUpdateFlow;

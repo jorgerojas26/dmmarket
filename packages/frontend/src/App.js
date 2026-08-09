@@ -1,4 +1,5 @@
 import { ShowNoeContext } from 'context/show_noe';
+import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import ClientesPage from 'pages/clientes';
 import ComprasPage from 'pages/compras';
 import VentasPage from 'pages/ventas';
@@ -8,9 +9,10 @@ import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Link, Redirect, Route, Switch, useLocation } from 'react-router-dom';
 import { CurrencyRateContext } from './context/currency_rate';
+import ConfiguracionPage from './pages/configuracion';
 import ProveedoresPage from './pages/proveedores';
-import { useCurrencyRates } from 'hooks/useCurrencyRates';
-import UpdateChecker from 'components/UpdateChecker';
+
+const SIDEBAR_ROUTES = ['/ventas', '/compras', '/clientes', '/proveedores', '/configuracion'];
 
 function App() {
     const location = useLocation();
@@ -32,10 +34,7 @@ function App() {
                     variant="dark"
                     className={
                         'app-navbar' +
-                        (location.pathname.includes('/ventas') ||
-                        location.pathname.includes('/compras') ||
-                        location.pathname.includes('/clientes') ||
-                        location.pathname.includes('/proveedores')
+                        (SIDEBAR_ROUTES.some((route) => location.pathname.includes(route))
                             ? ' has-clients-sidebar'
                             : '')
                     }
@@ -48,10 +47,10 @@ function App() {
                         <Navbar.Collapse id="basic-navbar-nav">
                             <Container fluid className="d-flex gap-5 justify-content-between align-items-center">
                                 <Nav className="me-auto">
-                                    {['ventas', 'compras', 'clientes', 'proveedores'].map((route, index) => {
+                                    {['ventas', 'compras', 'clientes', 'proveedores'].map((route) => {
                                         return (
                                             <Link
-                                                key={index}
+                                                key={route}
                                                 to={`/${route}`}
                                                 className={`text-decoration-none nav-link${
                                                     location.pathname.includes(route) ? ' active' : ''
@@ -69,7 +68,28 @@ function App() {
                                         gap: '20px',
                                     }}
                                 >
-                                    <UpdateChecker />
+                                    <Link
+                                        to="/configuracion"
+                                        title="Configuración"
+                                        className={`text-decoration-none nav-link p-1${
+                                            location.pathname.includes('/configuracion') ? ' active' : ''
+                                        }`}
+                                    >
+                                        <svg
+                                            width="20"
+                                            height="20"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <title>Configuración</title>
+                                            <circle cx="12" cy="12" r="3" />
+                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                        </svg>
+                                    </Link>
                                     <span className="text-light">Facturas</span>
                                     <div>
                                         <label className="switch">
@@ -101,6 +121,7 @@ function App() {
                         <Route path="/compras" component={ComprasPage} />
                         <Route path="/clientes" component={ClientesPage} />
                         <Route path="/proveedores" component={ProveedoresPage} />
+                        <Route path="/configuracion" component={ConfiguracionPage} />
                     </Switch>
                 </Container>
             </Container>
