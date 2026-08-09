@@ -46,15 +46,15 @@ const POST_CHECK = async (_req, res) => {
     });
 
     if (response.status === 404) {
-      return res.status(404).json({ error: { message: "No hay releases publicadas en GitHub" } });
+      return res.status(404).json({ error: { message: "No hay nuevas actualizaciones" } });
     }
     if (response.status === 403 || response.status === 429) {
       return res.status(429).json({
-        error: { message: "GitHub limitó las peticiones (rate limit). Probá de nuevo más tarde." },
+        error: { message: "Hubo un error. Intente de nuevo más tarde" },
       });
     }
     if (!response.ok) {
-      return res.status(502).json({ error: { message: `GitHub respondió con error (HTTP ${response.status})` } });
+      return res.status(502).json({ error: { message: `HTTP error: ${response.status}` } });
     }
 
     const release = await response.json();
@@ -63,7 +63,7 @@ const POST_CHECK = async (_req, res) => {
     if (!exe || !sha256) {
       return res.status(502).json({
         error: {
-          message: "La última release no tiene los assets esperados (dmmarket-app.exe y dmmarket-app.exe.sha256)",
+          message: "Release inválida. Por favor contacte a su administrador",
         },
       });
     }
@@ -83,7 +83,7 @@ const POST_CHECK = async (_req, res) => {
       sha256AssetUrl: sha256.browser_download_url,
     });
   } catch (_error) {
-    res.status(502).json({ error: { message: "No se pudo contactar a GitHub. Revisá tu conexión a internet." } });
+    res.status(502).json({ error: { message: "No se pudo contactar al servidor. Revisá tu conexión a internet." } });
   }
 };
 
@@ -94,7 +94,9 @@ const POST_DOWNLOAD = async (req, res) => {
 
   const { assetUrl, sha256AssetUrl } = req.body || {};
   if (!assetUrl || !sha256AssetUrl) {
-    return res.status(400).json({ error: { message: "Faltan las URLs de descarga. Volvé a buscar actualizaciones." } });
+    return res
+      .status(400)
+      .json({ error: { message: "Faltan las URLs de descarga. Vuelve a buscar actualizaciones." } });
   }
   if (downloadState.active) {
     return res.status(409).json({ error: { message: "Ya hay una descarga en curso" } });
@@ -195,7 +197,7 @@ const POST_APPLY = (_req, res) => {
     return res.status(400).json({ error: { message: "El auto-update solo está disponible en Windows" } });
   }
   if (!fs.existsSync(NEW_EXE)) {
-    return res.status(400).json({ error: { message: "No hay una actualización descargada. Descargala primero." } });
+    return res.status(400).json({ error: { message: "No hay una actualización descargada. Descárgala primero." } });
   }
 
   const exeName = path.basename(process.execPath);

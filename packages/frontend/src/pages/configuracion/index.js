@@ -58,29 +58,12 @@ const ConfiguracionPage = () => {
                                 <h3>Acerca de</h3>
                             </div>
                             <div className="dashboard-panel-body configuracion-about__body">
-                                <p>
-                                    DMMarket es el sistema de reportes de distribución de alimentos: ventas, compras,
-                                    clientes y proveedores en una sola aplicación de escritorio.
-                                </p>
-                                <p>
-                                    Esta es una aplicación local: se instala como un único ejecutable y los datos se
-                                    consultan directamente de la base de datos de la empresa.
-                                </p>
-
                                 <div className="configuracion-about__version">
                                     <span>Versión instalada</span>
                                     <Badge pill bg="dark" className="border border-secondary">
                                         {status ? `v${status.currentVersion}` : '…'}
                                     </Badge>
-                                </div>
-
-                                <div className="configuracion-about__update">
-                                    <h4>Actualizaciones</h4>
-                                    <p>
-                                        El sistema puede buscar versiones nuevas de forma manual. Cuando haya una
-                                        disponible, se descarga, se verifica y se aplica al reiniciar la aplicación.
-                                    </p>
-
+                        
                                     {checking ? (
                                         <span className="text-secondary">Buscando…</span>
                                     ) : (
@@ -88,7 +71,9 @@ const ConfiguracionPage = () => {
                                             Buscar actualizaciones
                                         </Button>
                                     )}
+                                </div>
 
+                                <div className="configuracion-about__update">
                                     {checkResult && (
                                         <div className="configuracion-about__result">
                                             {checkResult.updateAvailable ? (
