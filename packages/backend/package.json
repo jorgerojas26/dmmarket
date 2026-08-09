@@ -6,6 +6,9 @@
   "scripts": {
     "start": "nodemon index.js",
     "test": "jest",
+    "migrate": "knex migrate:latest",
+    "migrate:rollback": "knex migrate:rollback",
+    "migrate:make": "knex migrate:make",
     "build:prepare": "bun --filter @dmmarket/frontend build && mkdir -p client && rm -rf client/build && cp -R ../frontend/build client/build && node scripts/generate-assets.js",
     "build": "bun run build:prepare && bun build --compile index.js --minify --external mysql --outfile dmmarket-app",
     "build:windows": "bun run build:prepare && bun build --compile --target=bun-windows-x64 index.js --minify --external mysql --outfile dmmarket-app.exe"

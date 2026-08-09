@@ -1,108 +1,199 @@
 const knex = require("../database");
 
-const buildDashboardQuery = ({ masterTable, slaveTable, idInvoice, hasCompare }) => {
-  // Statement 1 — KPIs del período actual
-  const kpisCurrent = `
-    SELECT 
-      ROUND(SUM(s.rawProfit), 2) as totalRawProfit,
-      ROUND(SUM(s.netProfit), 2) as totalNetProfit,
-      ROUND(SUM(s.quantity), 3) as totalQuantity,
-      COUNT(DISTINCT s.invoiceCount) as totalInvoices,
-      ROUND(SUM(s.rawProfit) / NULLIF(COUNT(DISTINCT s.invoiceCount), 0), 2) as avgTicket,
-      ROUND(AVG(s.averageProfitPercent), 2) as avgMarginPercent
-    FROM (
-      SELECT 
-        SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad) as rawProfit,
-        SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad) as netProfit,
-        SUM(${slaveTable}.Cantidad) as quantity,
-        ${masterTable}.${idInvoice} as invoiceCount,
-        AVG((${slaveTable}.Precio - ${slaveTable}.Costo) / NULLIF(${slaveTable}.Precio, 0) * 100) as averageProfitPercent
-      FROM ${slaveTable}
-      INNER JOIN ${masterTable} ON ${masterTable}.${idInvoice} = ${slaveTable}.${idInvoice} AND ${masterTable}.Anulada = 0
-      WHERE ${masterTable}.Fecha BETWEEN :from AND :to
-      GROUP BY ${masterTable}.${idInvoice}
-    ) s`;
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard de ventas en 2 escaneos pesados + 3 lookups triviales (antes 6
+// escaneos completos de slavefact):
+//
+//   Q1 — nivel factura (49K filas p/ año): KPIs, mejor vendedor, top clientes
+//   Q2 — nivel producto (3.3K filas p/ año): top productos, torta por categoría
+//   Q3 — solo si hay compare: KPIs del período anterior (1 fila)
+//   L1/L2/L3 — nombres de vendedores, clientes y grupos (tablas de 9-1960 filas)
+//
+// Los nombres se resuelven en JS con lookups baratos en vez de joins: además de
+// evitar joins en el scan pesado, esto reproduce EXACTAMENTE el INNER JOIN del
+// código anterior (facturas con cliente/vendedor/grupo faltante se excluyen de
+// los rankings pero cuentan en los KPIs).
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // Statement 2 — Mejor vendedor (top 1 por total ventas)
-  const bestEmployee = `
-    SELECT 
-      ${masterTable}.IdVend as id,
-      vendedores.Empresa as name,
-      ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalSales
-    FROM ${slaveTable}
-    INNER JOIN ${masterTable} ON ${masterTable}.${idInvoice} = ${slaveTable}.${idInvoice} AND ${masterTable}.Anulada = 0
-    INNER JOIN vendedores ON vendedores.idVend = ${masterTable}.IdVend
-    WHERE ${masterTable}.Fecha BETWEEN :from AND :to
-    GROUP BY ${masterTable}.IdVend
-    ORDER BY totalSales DESC
-    LIMIT 1`;
+const round2 = (n) => Math.round(Number(n) * 100) / 100;
+const round3 = (n) => Math.round(Number(n) * 1000) / 1000;
 
-  // Statement 3 — Top 30 productos por ganancia neta
-  const topProducts = `
-    SELECT 
-      productos.Descripcion as product,
-      ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity,
-      ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit,
-      ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit,
-      ROUND(AVG((${slaveTable}.Precio - ${slaveTable}.Costo) / NULLIF(${slaveTable}.Precio, 0) * 100), 2) as averageProfitPercent
-    FROM ${slaveTable}
-    INNER JOIN ${masterTable} ON ${masterTable}.${idInvoice} = ${slaveTable}.${idInvoice} AND ${masterTable}.Anulada = 0
-    INNER JOIN productos ON productos.IdProducto = ${slaveTable}.IdProducto
-    WHERE ${masterTable}.Fecha BETWEEN :from AND :to
-    GROUP BY productos.IdProducto
-    ORDER BY netProfit DESC
-    LIMIT 30`;
+// Statement 1 — nivel factura: KPIs + datos para vendedor y clientes
+const invoicesQuery = `
+  SELECT
+    mf.${"${idInvoice}"} AS invoiceId,
+    mf.IdVend AS vendId,
+    mf.IdCliente AS clientId,
+    SUM(sf.Precio * sf.Cantidad) AS rawProfit,
+    SUM((sf.Precio - sf.Costo) * sf.Cantidad) AS netProfit,
+    SUM(sf.Cantidad) AS quantity,
+    AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100) AS profitPercent
+  FROM ${"${slaveTable}"} sf
+  INNER JOIN ${"${masterTable}"} mf
+    ON mf.${"${idInvoice}"} = sf.${"${idInvoice}"} AND mf.Anulada = 0
+  WHERE mf.Fecha BETWEEN :from AND :to
+  GROUP BY mf.${"${idInvoice}"}, mf.IdVend, mf.IdCliente`;
 
-  // Statement 4 — Top 30 clientes por utilidad neta
-  const topClients = `
-    SELECT 
-      clientes.Empresa as client,
-      ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as total_USD,
-      ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit
-    FROM ${slaveTable}
-    INNER JOIN ${masterTable} ON ${masterTable}.${idInvoice} = ${slaveTable}.${idInvoice} AND ${masterTable}.Anulada = 0
-    INNER JOIN clientes ON clientes.IdCliente = ${masterTable}.IdCliente
-    WHERE ${masterTable}.Fecha BETWEEN :from AND :to
-    GROUP BY clientes.IdCliente
-    ORDER BY netProfit DESC
-    LIMIT 30`;
+// Statement 2 — nivel producto: top productos + torta por categoría
+const productsQuery = `
+  SELECT
+    productos.IdProducto AS productId,
+    productos.Descripcion AS product,
+    productos.Grupo AS grupoId,
+    SUM(sf.Cantidad) AS quantity,
+    SUM(sf.Precio * sf.Cantidad) AS rawProfit,
+    SUM((sf.Precio - sf.Costo) * sf.Cantidad) AS netProfit,
+    AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100) AS profitPercent
+  FROM ${"${slaveTable}"} sf
+  INNER JOIN ${"${masterTable}"} mf
+    ON mf.${"${idInvoice}"} = sf.${"${idInvoice}"} AND mf.Anulada = 0
+  INNER JOIN productos ON productos.IdProducto = sf.IdProducto
+  WHERE mf.Fecha BETWEEN :from AND :to
+  GROUP BY productos.IdProducto, productos.Descripcion, productos.Grupo`;
 
-  // Statement 5 — KPIs comparativos
-  const kpisCompare = hasCompare
-    ? kpisCurrent.replaceAll(":from", ":compareFrom").replaceAll(":to", ":compareTo")
-    : `SELECT NULL as totalRawProfit, NULL as totalNetProfit, NULL as totalQuantity, NULL as totalInvoices`;
+// Statement 3 — KPIs comparativos (1 fila, sin datos de detalle)
+const kpisCompareQuery = `
+  SELECT
+    ROUND(SUM(s.rawProfit), 2) AS totalRawProfit,
+    ROUND(SUM(s.netProfit), 2) AS totalNetProfit,
+    ROUND(SUM(s.quantity), 3) AS totalQuantity,
+    COUNT(DISTINCT s.invoiceCount) AS totalInvoices
+  FROM (
+    SELECT
+      SUM(sf.Precio * sf.Cantidad) AS rawProfit,
+      SUM((sf.Precio - sf.Costo) * sf.Cantidad) AS netProfit,
+      SUM(sf.Cantidad) AS quantity,
+      mf.${"${idInvoice}"} AS invoiceCount
+    FROM ${"${slaveTable}"} sf
+    INNER JOIN ${"${masterTable}"} mf
+      ON mf.${"${idInvoice}"} = sf.${"${idInvoice}"} AND mf.Anulada = 0
+    WHERE mf.Fecha BETWEEN :compareFrom AND :compareTo
+    GROUP BY mf.${"${idInvoice}"}
+  ) s`;
 
-  // Statement 6 — Gráfico de categorías (torta)
-  const groupSales = `
-    SELECT 
-      grupos.Descripcion as categoria,
-      ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit,
-      ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit
-    FROM ${slaveTable}
-    INNER JOIN ${masterTable} ON ${masterTable}.${idInvoice} = ${slaveTable}.${idInvoice} AND ${masterTable}.Anulada = 0
-    INNER JOIN productos ON productos.IdProducto = ${slaveTable}.IdProducto
-    INNER JOIN grupos ON grupos.idGrupo = productos.Grupo
-    WHERE ${masterTable}.Fecha BETWEEN :from AND :to
-    GROUP BY grupos.idGrupo`;
+const buildDashboardSql = ({ masterTable, slaveTable, idInvoice, hasCompare }) => {
+  const statements = [invoicesQuery, productsQuery];
 
-  return [kpisCurrent, bestEmployee, topProducts, topClients, kpisCompare, groupSales].join(";");
+  if (hasCompare) {
+    statements.push(kpisCompareQuery);
+  } else {
+    statements.push(
+      `SELECT NULL AS totalRawProfit, NULL AS totalNetProfit, NULL AS totalQuantity, NULL AS totalInvoices`,
+    );
+  }
+
+  return statements
+    .join(";")
+    .replaceAll("${idInvoice}", idInvoice)
+    .replaceAll("${masterTable}", masterTable)
+    .replaceAll("${slaveTable}", slaveTable);
 };
 
-const formatKpis = (currentResultSet, compareResultSet) => {
-  const c = currentResultSet?.[0] ? currentResultSet[0] : {};
-  const p = compareResultSet?.[0] ? compareResultSet[0] : {};
+// ── Lookups de nombres (tablas pequeñas) ────────────────────────────────────
+
+const fetchNameLookups = async () => {
+  const [vendedores, clientes, grupos] = await Promise.all([
+    knex.select("idVend as id", "Empresa as name").from("vendedores"),
+    knex.select("IdCliente as id", "Empresa as name").from("clientes"),
+    knex.select("idGrupo as id", "Descripcion as name").from("grupos"),
+  ]);
+  return {
+    vendName: new Map(vendedores.map((v) => [v.id, v.name])),
+    clientName: new Map(clientes.map((c) => [c.id, c.name])),
+    groupName: new Map(grupos.map((g) => [g.id, g.name])),
+  };
+};
+
+// ── Agregaciones en JS sobre los resultados de Q1 ───────────────────────────
+
+const computeKpis = (invoices) => {
+  const totalRawProfit = invoices.reduce((sum, r) => sum + Number(r.rawProfit || 0), 0);
+  const totalNetProfit = invoices.reduce((sum, r) => sum + Number(r.netProfit || 0), 0);
+  const totalQuantity = invoices.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
+  const totalInvoices = invoices.length;
+  const avgTicket = totalInvoices > 0 ? totalRawProfit / totalInvoices : 0;
+  const marginSum = invoices.reduce((sum, r) => sum + Number(r.profitPercent || 0), 0);
+  const avgMarginPercent = totalInvoices > 0 ? marginSum / totalInvoices : 0;
 
   return {
-    totalRawProfit: Number(c.totalRawProfit) || 0,
-    totalNetProfit: Number(c.totalNetProfit) || 0,
-    totalQuantity: Number(c.totalQuantity) || 0,
-    totalInvoices: Number(c.totalInvoices) || 0,
-    avgTicket: Number(c.avgTicket) || 0,
-    avgMarginPercent: Number(c.avgMarginPercent) || 0,
-    compareRawProfit: p.totalRawProfit != null ? Number(p.totalRawProfit) : null,
-    compareNetProfit: p.totalNetProfit != null ? Number(p.totalNetProfit) : null,
-    compareQuantity: p.totalQuantity != null ? Number(p.totalQuantity) : null,
-    compareInvoices: p.totalInvoices != null ? Number(p.totalInvoices) : null,
+    totalRawProfit: round2(totalRawProfit),
+    totalNetProfit: round2(totalNetProfit),
+    totalQuantity: round3(totalQuantity),
+    totalInvoices,
+    avgTicket: round2(avgTicket),
+    avgMarginPercent: round2(avgMarginPercent),
+  };
+};
+
+const computeBestEmployee = (invoices, nameLookups) => {
+  const byVendor = new Map();
+  for (const r of invoices) {
+    const name = nameLookups.vendName.get(r.vendId);
+    if (!name) continue; // equivalente al INNER JOIN original
+    const entry = byVendor.get(r.vendId) || { id: r.vendId, name, totalSales: 0 };
+    entry.totalSales += Number(r.rawProfit || 0);
+    byVendor.set(r.vendId, entry);
+  }
+  const best = [...byVendor.values()].sort((a, b) => b.totalSales - a.totalSales)[0];
+  return best ? { ...best, totalSales: round2(best.totalSales) } : null;
+};
+
+const computeTopClients = (invoices, nameLookups) => {
+  const byClient = new Map();
+  for (const r of invoices) {
+    const name = nameLookups.clientName.get(r.clientId);
+    if (!name) continue; // equivalente al INNER JOIN original
+    const entry = byClient.get(r.clientId) || { client: name, total_USD: 0, netProfit: 0 };
+    entry.total_USD += Number(r.rawProfit || 0);
+    entry.netProfit += Number(r.netProfit || 0);
+    byClient.set(r.clientId, entry);
+  }
+  return [...byClient.values()]
+    .sort((a, b) => b.netProfit - a.netProfit)
+    .slice(0, 30)
+    .map((c) => ({ ...c, total_USD: round2(c.total_USD), netProfit: round2(c.netProfit) }));
+};
+
+// ── Agregaciones en JS sobre los resultados de Q2 ───────────────────────────
+
+const computeTopProducts = (products) =>
+  [...products]
+    .sort((a, b) => b.netProfit - a.netProfit)
+    .slice(0, 30)
+    .map((p) => ({
+      product: p.product,
+      quantity: round2(p.quantity),
+      rawProfit: round2(p.rawProfit),
+      netProfit: round2(p.netProfit),
+      averageProfitPercent: round2(p.profitPercent),
+    }));
+
+const computeGroupSales = (products, nameLookups) => {
+  const byGroup = new Map();
+  for (const p of products) {
+    const name = nameLookups.groupName.get(p.grupoId);
+    if (!name) continue; // equivalente al INNER JOIN de grupos original
+    const entry = byGroup.get(p.grupoId) || { categoria: name, rawProfit: 0, netProfit: 0 };
+    entry.rawProfit += Number(p.rawProfit || 0);
+    entry.netProfit += Number(p.netProfit || 0);
+    byGroup.set(p.grupoId, entry);
+  }
+  return [...byGroup.values()]
+    .sort((a, b) => a.categoria.localeCompare(b.categoria))
+    .map((g) => ({
+      categoria: g.categoria,
+      rawProfit: round2(g.rawProfit),
+      netProfit: round2(g.netProfit),
+    }));
+};
+
+const formatCompareKpis = (compareRow) => {
+  const c = compareRow || {};
+  return {
+    compareRawProfit: c.totalRawProfit != null ? Number(c.totalRawProfit) : null,
+    compareNetProfit: c.totalNetProfit != null ? Number(c.totalNetProfit) : null,
+    compareQuantity: c.totalQuantity != null ? Number(c.totalQuantity) : null,
+    compareInvoices: c.totalInvoices != null ? Number(c.totalInvoices) : null,
   };
 };
 
@@ -110,34 +201,38 @@ const GET_DASHBOARD_SALES = async (req, res) => {
   const { from, to, compareFrom, compareTo } = req.query;
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
 
-  // Validar parámetros obligatorios
   if (!from || !to) {
     return res.status(400).json({ error: "from and to are required" });
   }
 
   try {
     const hasCompare = !!(compareFrom && compareTo);
+    const sql = buildDashboardSql({ masterTable, slaveTable, idInvoice, hasCompare });
 
-    // Construir SQL multi-statement con named bindings (:from, :to, :compareFrom, :compareTo)
-    const sql = buildDashboardQuery({ masterTable, slaveTable, idInvoice, hasCompare });
-
-    // Pasar solo los bindings que el SQL realmente usa
     const bindings = { from, to };
     if (hasCompare) {
       bindings.compareFrom = compareFrom;
       bindings.compareTo = compareTo;
     }
 
-    // Una sola llamada a MySQL. knex reemplaza :from/:to/:compareFrom/:compareTo con ? + escaping.
+    // El multi-statement corre en UNA conexión del pool; los lookups de nombres
+    // son independientes y corren en paralelo.
     const [results] = await knex.raw(sql, bindings);
+    const nameLookups = await fetchNameLookups();
 
-    // results es un array de arrays: results[0] = KPIs, results[1] = bestEmployee, etc.
+    const invoices = results[0] || [];
+    const products = results[1] || [];
+    const compareRow = results[2]?.[0];
+
     const response = {
-      kpis: formatKpis(results[0], results[4]),
-      bestEmployee: results[1][0] || null,
-      topProducts: results[2] || [],
-      topClients: results[3] || [],
-      groupSalesChart: results[5] || [],
+      kpis: {
+        ...computeKpis(invoices),
+        ...formatCompareKpis(compareRow),
+      },
+      bestEmployee: computeBestEmployee(invoices, nameLookups),
+      topProducts: computeTopProducts(products),
+      topClients: computeTopClients(invoices, nameLookups),
+      groupSalesChart: computeGroupSales(products, nameLookups),
     };
 
     res.status(200).json(response);
