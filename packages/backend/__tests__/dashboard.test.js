@@ -197,4 +197,21 @@ describe("GET /api/dashboard/pareto", () => {
     expect(res.body.products).toEqual([]);
     expect(res.body.summary.totalProducts).toBe(0);
   });
+
+  // 6. Modo ventas solo incluye productos con compras en el rango (SKUs legacy fuera)
+  it("modo ventas excluye productos sin compras en el rango", async () => {
+    const [sales, purchased] = await Promise.all([
+      request(app)
+        .get("/api/dashboard/pareto")
+        .query({ ...WIDE_RANGE, showNoe: "false" }),
+      request(app)
+        .get("/api/purchases/pareto")
+        .query({ ...WIDE_RANGE }),
+    ]);
+
+    const boughtNames = new Set(purchased.body.products.map((p) => p.product));
+    const missing = sales.body.products.filter((p) => !boughtNames.has(p.product));
+    expect(missing).toEqual([]);
+    expect(sales.body.products.length).toBeGreaterThan(0);
+  });
 });

@@ -244,27 +244,45 @@ const GET_DASHBOARD_SALES = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pareto en 2 modos (query param `modo`):
-//   ventas (default)          — productos rankeados por ganancia neta
+//   ventas (default)          — productos COMPRADOS en el rango y vendidos,
+//                                rankeados por ganancia neta (los SKUs legacy
+//                                sin compras en el rango quedan fuera)
 //   compras-sin-vender        — productos comprados en el rango sin NINGUNA
 //                                venta en el mismo rango, rankeados por inversión
+// Ambos modos trabajan sobre la misma población: productos con compras en el rango.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const fetchSalesParetoRows = async ({ from, to, masterTable, slaveTable, idInvoice }) =>
-  knex
-    .select(
-      "productos.Descripcion as product",
-      knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
-      knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
-      knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
-    )
-    .from(slaveTable)
-    .innerJoin(masterTable, function () {
-      this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
-    })
-    .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-    .whereBetween(`${masterTable}.Fecha`, [from, to])
-    .groupBy("productos.IdProducto")
-    .orderBy("netProfit", "DESC");
+const fetchSalesParetoRows = async ({ from, to, masterTable, slaveTable, idInvoice }) => {
+  // 2 pasadas + merge en JS: ventas del rango + productos comprados en el rango.
+  const [sales, boughtIds] = await Promise.all([
+    knex
+      .select(
+        "productos.IdProducto as productId",
+        "productos.Descripcion as product",
+        knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
+        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
+      )
+      .from(slaveTable)
+      .innerJoin(masterTable, function () {
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .whereBetween(`${masterTable}.Fecha`, [from, to])
+      .groupBy("productos.IdProducto")
+      .orderBy("netProfit", "DESC"),
+    knex.raw(
+      `SELECT DISTINCT slavecomp.IdProducto AS productId
+      FROM slavecomp
+      INNER JOIN mastercomp ON mastercomp.IdFactura = slavecomp.IdFactura AND mastercomp.Anulada = 0
+      WHERE mastercomp.Fecha BETWEEN :from AND :to`,
+      { from, to },
+    ),
+  ]);
+
+  const bought = new Set((boughtIds[0] || []).map((r) => r.productId));
+  return sales.filter((r) => bought.has(r.productId));
+};
 
 // Compras del rango sin ventas en el mismo rango — 2 pasadas + merge en JS.
 // Las compras siempre viven en mastercomp/slavecomp; la exclusión usa las tablas
