@@ -50,17 +50,21 @@ const CumulativePercentHelp = ({ valueLabel }) => {
             <Popover.Body>
                 <div className="kpi-help-line">
                     <span className="kpi-help-k">Qué muestra: </span>
-                    Cuánto aporta este producto a la {valueLabel} total, sumado con todos los que están arriba en el
-                    ranking.
+                    Qué parte de la {valueLabel.toLowerCase()} del periodo ya está contada al llegar a esta fila: es el
+                    porcentaje de este producto más el de todos los que están arriba de él. Es el mismo dato que dibuja
+                    la línea azul del gráfico.
                 </div>
                 <div className="kpi-help-line">
                     <span className="kpi-help-k">Cómo leerlo: </span>
-                    El primero empieza con su propio porcentaje; cada fila siguiente suma el suyo al acumulado anterior.
-                    La última fila llega a 100%.
+                    En la fila 1 no hay nadie arriba, así que muestra solo su porcentaje (ej. 40%). La fila 2 suma el
+                    suyo al de la fila 1: si el 2º aporta 15%, su acumulado es 55%. Así sucesivamente, hasta que la
+                    última fila llega a 100%.
                 </div>
                 <div className="kpi-help-line">
                     <span className="kpi-help-k">Para qué sirve: </span>
-                    Marca dónde se concentra el valor: al cruzar 80% termina la clase A y al cruzar 95% la clase B.
+                    Ver en cuántos productos está concentrado el valor: al llegar a 80% termina la clase A (pocos
+                    productos, casi toda la {valueLabel.toLowerCase()}) y al 95% la clase B. El resto es la cola (clase
+                    C).
                 </div>
             </Popover.Body>
         </Popover>
