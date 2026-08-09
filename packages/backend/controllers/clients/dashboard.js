@@ -62,7 +62,7 @@ const computeAbc = (sortedRevenues, grandTotal) => {
   const lastB = classB.length > 0 ? classB[classB.length - 1].cumulativePercent : lastA;
 
   return {
-    clients: abcClients.slice(0, 50),
+    clients: abcClients,
     summary: {
       totalClients: abcClients.length,
       classA: { count: classA.length, revenuePercent: lastA },
@@ -292,17 +292,32 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
       //    (toda la facturación hasta `to`), agrupada por bucket. El revenue en
       //    riesgo (>60 días) se agrega con SUM condicional en la misma consulta
       //    y se suma en JS — antes eran dos escaneos idénticos de la historia.
+      //    El "revenue" de cada bucket y el revenue en riesgo usan la ventana de
+      //    los últimos 12 meses de actividad previos a la última compra del
+      //    cliente (no todo su histórico), vía un JOIN contra una tabla derivada
+      //    con el MAX(Fecha) por cliente (MySQL no permite MAX anidado en un CASE
+      //    dentro del mismo GROUP BY).
       (async () => {
+        const lastByClient = knex(`${masterTable}`)
+          .select(`${masterTable}.IdCliente`, knex.raw("MAX(Fecha) as last"))
+          .where("Fecha", "<=", to)
+          .andWhere("Anulada", 0)
+          .groupBy("IdCliente");
+
         let inner = knex
           .select(
             "mf.IdCliente",
-            knex.raw(`SUM(sf.Precio * sf.Cantidad) as total_usd`),
-            knex.raw(`MAX(mf.Fecha) as last_purchase`),
+            knex.raw(
+              `SUM(CASE WHEN mf.Fecha >= DATE_SUB(l.last, INTERVAL 12 MONTH) THEN sf.Precio * sf.Cantidad ELSE 0 END) as win_usd`,
+            ),
             knex.raw(`DATEDIFF(?, MAX(mf.Fecha)) as days_since`, [to]),
           )
           .from(`${masterTable} as mf`)
           .innerJoin(`${slaveTable} as sf`, function () {
             this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
+          })
+          .innerJoin(lastByClient.as("l"), function () {
+            this.on("l.IdCliente", "mf.IdCliente").andOn("mf.Fecha", "<=", "l.last");
           })
           .where("mf.Fecha", "<=", to)
           .groupBy("mf.IdCliente");
@@ -321,8 +336,8 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
             END as bucket
           `),
             knex.raw("COUNT(*) as count"),
-            knex.raw("ROUND(SUM(total_usd), 2) as revenue"),
-            knex.raw("SUM(CASE WHEN days_since > 60 THEN total_usd ELSE 0 END) as risk_amount"),
+            knex.raw("ROUND(SUM(win_usd), 2) as revenue"),
+            knex.raw("SUM(CASE WHEN days_since > 60 THEN win_usd ELSE 0 END) as risk_amount"),
             knex.raw("SUM(CASE WHEN days_since > 60 THEN 1 ELSE 0 END) as risk_clients"),
           )
           .from(inner.as("inactive_data"))

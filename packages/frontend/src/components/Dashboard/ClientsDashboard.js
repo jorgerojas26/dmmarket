@@ -325,7 +325,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                 accent="amber"
                                 help={{
                                     que: 'Clientes de la cartera que no emitieron ninguna factura dentro del periodo elegido.',
-                                    leer: 'Es el complemento de Activos Periodo: Total − Activos. Número alto = gran parte de la cartera sin mover.',
+                                    leer: 'Número alto = gran parte de la cartera sin mover. No es exactamente Total − Activos: hay facturas de clientes sin ficha en la cartera (huérfanos) que cuentan como activos, así que este número se calcula directo de los clientes sin facturas.',
                                     servir: 'Ver el tamaño de la oportunidad de recuperación en un vistazo.',
                                     accion: 'Baja al panel "Clientes Sin Facturar" para ver quiénes son y retomarlos.',
                                 }}
@@ -377,8 +377,8 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                 icon="money"
                                 accent="pink"
                                 help={{
-                                    que: 'Ventas acumuladas de los clientes que llevan más de 60 días sin comprar.',
-                                    leer: 'Es el dinero "dormido": clientes que compraron fuerte alguna vez y dejaron de hacerlo.',
+                                    que: 'Cuánto facturaron, en sus últimos 12 meses de actividad, los clientes que llevan más de 60 días sin comprar.',
+                                    leer: 'Es el dinero "dormido" medido por lo que vendía el cliente en el año previo a dejar de comprar (no toda su historia). Número alto = clientes que movían dinero real y se fueron.',
                                     servir: 'Priorizar la recuperación de clientes antes de que se pierdan.',
                                     accion: 'Combínalo con el gráfico "Inactividad por Días" para ubicar y contactar a esos clientes.',
                                 }}
@@ -619,7 +619,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                             title="Inactividad por Días"
                             help={{
                                 que: 'Clasifica a los clientes según cuántos días llevan sin comprar: 0-7, 8-15, 16-30, 31-60, 61-90 y más de 90 días.',
-                                leer: 'Cada barra es un rango de días; mientras más clientes en 61-90 y +90 días, más cartera se está perdiendo.',
+                                leer: 'Cada barra es un rango de días; mientras más clientes en 61-90 y +90 días, más cartera se está perdiendo. El revenue de cada barra es lo que facturaba el cliente en sus últimos 12 meses de actividad.',
                                 servir: 'Es el semáforo de abandono: actuar antes de que los clientes se pierdan definitivamente.',
                                 accion: 'Combínalo con "Revenue en Riesgo" para saber cuánto dinero está dormido.',
                             }}
@@ -650,7 +650,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                         <ChartTooltip title={String(data.bucket)}>
                                             <span>{id}</span>
                                             <strong>{formatNumber(value)}</strong>
-                                            <span>Revenue</span>
+                                            <span>Revenue (últimos 12m de actividad)</span>
                                             <strong>{formatCurrency(data['Revenue ($)'] ?? 0)}</strong>
                                         </ChartTooltip>
                                     )}
