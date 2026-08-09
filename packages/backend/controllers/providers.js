@@ -3,18 +3,23 @@ const knex = require("../database");
 const GET_PROVIDERS_LIST = async (req, res) => {
   const { search, from, to, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
   const showNoe = req.query.showNoe === "true";
-  const offset = (Number(page) - 1) * Number(limit);
+  const pageNum = Number(page);
+  const limitNum = Number(limit);
+  const offset = (pageNum - 1) * limitNum;
 
   const masterTable = showNoe ? "masternoe" : "masterfact";
   const slaveTable = showNoe ? "slavenoe" : "slavefact";
   const idInvoice = showNoe ? "IdNoe" : "IdFactura";
 
+  // Two-pass aggregation + JS merge (same pattern as GET_CLIENTS_LIST): the
+  // derived subqueries were materialized by MySQL without indexes, which made
+  // full-history loads crawl. Now each metric runs as its own bounded query.
   const sortCol = (() => {
     switch (sortBy) {
       case "IdProveedor":
-        return "p.IdProveedor";
+        return "IdProveedor";
       case "Empresa":
-        return "p.Empresa";
+        return "Empresa";
       case "total_compras":
         return "total_compras";
       case "num_compras":
@@ -26,72 +31,111 @@ const GET_PROVIDERS_LIST = async (req, res) => {
     }
   })();
 
-  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? 1 : -1;
+
+  const applyRange = (query, column) => {
+    if (from && to) query.andWhereBetween(column, [from, to]);
+    return query;
+  };
 
   try {
-    // Purchase totals subquery (per provider, limited to the date range when given)
-    const purchaseDataSubquery = knex
-      .select(
-        "mc.IdProveedor",
-        knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as total_compras"),
-        knex.raw("COUNT(DISTINCT mc.IdFactura) as num_compras"),
-      )
-      .from("mastercomp as mc")
-      .leftJoin("slavecomp as sc", "sc.IdFactura", "mc.IdFactura")
-      .where("mc.Anulada", 0)
-      .groupBy("mc.IdProveedor");
+    // 1. Providers matching search (source of truth for `total`; providers
+    //    without purchases/sales still appear with zeros).
+    let providersQuery = knex("proveedores as p").select("p.IdProveedor", "p.Empresa");
+    if (search) providersQuery = providersQuery.where("p.Empresa", "like", `%${search}%`);
+    const providers = await providersQuery;
 
-    // Sales totals subquery (per provider, limited to the date range when given)
-    const salesDataSubquery = knex
-      .select(
-        "pr.Proveedor",
-        knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_ventas`),
-        knex.raw(`COUNT(DISTINCT mf.${idInvoice}) as num_ventas`),
-      )
-      .from("productos as pr")
-      .leftJoin(`${slaveTable} as sf`, "sf.IdProducto", "pr.IdProducto")
-      .leftJoin(`${masterTable} as mf`, function () {
-        this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-      })
-      .groupBy("pr.Proveedor");
-
-    if (from && to) {
-      purchaseDataSubquery.andWhereBetween("mc.Fecha", [from, to]);
-      // WHERE (not join condition) so slave rows outside the range are excluded
-      salesDataSubquery.whereBetween(`mf.Fecha`, [from, to]);
+    if (providers.length === 0) {
+      return res.status(200).json({ data: [], total: 0, page: pageNum, limit: limitNum });
     }
 
-    // Build data query with subquery LEFT JOINs so metrics don't cross-multiply
-    const dataQuery = knex
-      .select(
-        "p.IdProveedor",
-        "p.Empresa",
-        knex.raw("COALESCE(purchase_data.total_compras, 0) as total_compras"),
-        knex.raw("COALESCE(purchase_data.num_compras, 0) as num_compras"),
-        knex.raw("COALESCE(sales_data.total_ventas, 0) as total_ventas"),
-        knex.raw("COALESCE(sales_data.num_ventas, 0) as num_ventas"),
-      )
-      .from("proveedores as p")
-      .leftJoin(purchaseDataSubquery.as("purchase_data"), "purchase_data.IdProveedor", "p.IdProveedor")
-      .leftJoin(salesDataSubquery.as("sales_data"), "sales_data.Proveedor", "p.IdProveedor");
+    const providerIds = providers.map((p) => p.IdProveedor);
 
-    // Count query
-    const countQuery = knex.countDistinct({ total: "p.IdProveedor" }).from("proveedores as p");
+    // 2. Purchases: invoice counts from mastercomp (1 row per purchase invoice)
+    //    and money totals from the slavecomp join.
+    const purchasesCounts = await applyRange(
+      knex("mastercomp as mc")
+        .select("mc.IdProveedor")
+        .select(knex.raw("COUNT(*) as num_compras"))
+        .whereIn("mc.IdProveedor", providerIds)
+        .andWhere("mc.Anulada", 0),
+      "mc.Fecha",
+    ).groupBy("mc.IdProveedor");
 
-    if (search) {
-      dataQuery.where("p.Empresa", "like", `%${search}%`);
-      countQuery.where("p.Empresa", "like", `%${search}%`);
-    }
+    const purchasesTotals = await applyRange(
+      knex("slavecomp as sc")
+        .innerJoin("mastercomp as mc", function () {
+          this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
+        })
+        .select("mc.IdProveedor")
+        .select(knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as total_compras"))
+        .whereIn("mc.IdProveedor", providerIds),
+      "mc.Fecha",
+    ).groupBy("mc.IdProveedor");
 
-    const [{ total }] = await countQuery;
+    // 3. Sales: providers are mapped through productos (product -> provider),
+    //    so both passes join productos -> slavefact -> masterfact.
+    const salesCounts = await applyRange(
+      knex("productos as pr")
+        .innerJoin(`${slaveTable} as sf`, "sf.IdProducto", "pr.IdProducto")
+        .innerJoin(`${masterTable} as mf`, function () {
+          this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
+        })
+        .select("pr.Proveedor")
+        .select(knex.raw(`COUNT(DISTINCT mf.${idInvoice}) as num_ventas`))
+        .whereIn("pr.Proveedor", providerIds),
+      "mf.Fecha",
+    ).groupBy("pr.Proveedor");
 
-    const data = await dataQuery.orderBy(sortCol, sortDirection).limit(Number(limit)).offset(Number(offset));
+    const salesTotals = await applyRange(
+      knex("productos as pr")
+        .innerJoin(`${slaveTable} as sf`, "sf.IdProducto", "pr.IdProducto")
+        .innerJoin(`${masterTable} as mf`, function () {
+          this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
+        })
+        .select("pr.Proveedor")
+        .select(knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_ventas"))
+        .whereIn("pr.Proveedor", providerIds),
+      "mf.Fecha",
+    ).groupBy("pr.Proveedor");
+
+    // 4. Merge, sort and paginate in JS.
+    const toMap = (rows, key) => new Map(rows.map((r) => [r[key], r]));
+    const purchasesCountsMap = toMap(purchasesCounts, "IdProveedor");
+    const purchasesTotalsMap = toMap(purchasesTotals, "IdProveedor");
+    const salesCountsMap = toMap(salesCounts, "Proveedor");
+    const salesTotalsMap = toMap(salesTotals, "Proveedor");
+
+    const rows = providers.map((p) => {
+      const pc = purchasesCountsMap.get(p.IdProveedor);
+      const pt = purchasesTotalsMap.get(p.IdProveedor);
+      const sc = salesCountsMap.get(p.IdProveedor);
+      const st = salesTotalsMap.get(p.IdProveedor);
+      return {
+        IdProveedor: p.IdProveedor,
+        Empresa: p.Empresa,
+        total_compras: Number(pt ? pt.total_compras : 0) || 0,
+        num_compras: Number(pc ? pc.num_compras : 0) || 0,
+        total_ventas: Number(st ? st.total_ventas : 0) || 0,
+        num_ventas: Number(sc ? sc.num_ventas : 0) || 0,
+      };
+    });
+
+    rows.sort((a, b) => {
+      const va = a[sortCol];
+      const vb = b[sortCol];
+      const cmp =
+        sortCol === "IdProveedor" || sortCol === "Empresa"
+          ? String(va ?? "").localeCompare(String(vb ?? ""))
+          : Number(va || 0) - Number(vb || 0);
+      return cmp * sortDirection;
+    });
 
     res.status(200).json({
-      data,
-      total: Number(total),
-      page: Number(page),
-      limit: Number(limit),
+      data: rows.slice(offset, offset + limitNum),
+      total: rows.length,
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (error) {
     console.error(error);

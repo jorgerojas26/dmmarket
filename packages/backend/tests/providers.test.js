@@ -10,6 +10,7 @@ const makeBuilder = (value) => {
     innerJoin: jest.fn(() => b),
     where: jest.fn(() => b),
     andWhere: jest.fn(() => b),
+    whereIn: jest.fn(() => b),
     whereBetween: jest.fn(() => b),
     andWhereBetween: jest.fn(() => b),
     groupBy: jest.fn(() => b),
@@ -17,6 +18,7 @@ const makeBuilder = (value) => {
     orderByRaw: jest.fn(() => b),
     limit: jest.fn(() => b),
     offset: jest.fn(() => b),
+    on: jest.fn(() => b),
     // Real knex `.first()` returns the row OBJECT, not an array
     first: jest.fn(() => {
       const v = resolved();
@@ -32,47 +34,51 @@ const makeBuilder = (value) => {
 };
 
 describe("GET_PROVIDERS_LIST", () => {
-  let req, res, controller;
+  let req, res, controller, mockDb;
 
-  beforeEach(() => {
+  // Each of the 5 knex() calls returns a builder with its own resolved value,
+  // in call order: providers -> purchases counts -> purchases totals ->
+  // sales counts -> sales totals.
+  const setup = ([providers, purchasesCounts, purchasesTotals, salesCounts, salesTotals]) => {
     jest.resetModules();
     jest.restoreAllMocks();
-
-    const dataResult = [
-      {
-        IdProveedor: 1,
-        Empresa: "Proveedor A",
-        total_compras: 1000,
-        num_compras: 5,
-        total_ventas: 2000,
-        num_ventas: 10,
-      },
-    ];
-
-    // Create a builder that returns `[{ total: 2 }]` for count queries
-    const db = makeBuilder([{ total: 2 }]);
-    // Override offset so the data query (await db.offset(n)) returns dataResult
-    db.offset = jest.fn(() => ({
-      then: jest.fn((cb) => Promise.resolve(dataResult).then(cb)),
-    }));
-
-    jest.doMock("../database", () => db);
+    mockDb = jest.fn();
+    mockDb.raw = jest.fn((x) => x);
+    mockDb
+      .mockReturnValueOnce(makeBuilder(providers))
+      .mockReturnValueOnce(makeBuilder(purchasesCounts))
+      .mockReturnValueOnce(makeBuilder(purchasesTotals))
+      .mockReturnValueOnce(makeBuilder(salesCounts))
+      .mockReturnValueOnce(makeBuilder(salesTotals));
+    jest.doMock("../database", () => mockDb);
     controller = require("../controllers/providers");
 
     req = {
-      query: { page: "1", limit: "20", showNoe: "false" },
+      query: { page: "1", limit: "20", sortBy: "total_ventas", sortDir: "desc" },
     };
     res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn().mockReturnThis(),
     };
+  };
+
+  beforeEach(() => {
+    const providers = [
+      { IdProveedor: 1, Empresa: "Proveedor A" },
+      { IdProveedor: 2, Empresa: "Proveedor B" },
+    ];
+    const purchasesCounts = [{ IdProveedor: 1, num_compras: 5 }];
+    const purchasesTotals = [{ IdProveedor: 1, total_compras: 1000 }];
+    const salesCounts = [{ Proveedor: 1, num_ventas: 10 }];
+    const salesTotals = [{ Proveedor: 1, total_ventas: 2000 }];
+    setup([providers, purchasesCounts, purchasesTotals, salesCounts, salesTotals]);
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it("should return paginated list with all 6 columns", async () => {
+  it("should return paginated list with all 6 columns, defaulting providers without data to 0", async () => {
     await controller.GET_PROVIDERS_LIST(req, res);
 
     expect(res.status).toHaveBeenCalledWith(200);
@@ -86,43 +92,76 @@ describe("GET_PROVIDERS_LIST", () => {
     );
 
     const { data } = res.json.mock.calls[0][0];
-    expect(data[0]).toHaveProperty("IdProveedor");
-    expect(data[0]).toHaveProperty("Empresa");
-    expect(data[0]).toHaveProperty("total_compras");
-    expect(data[0]).toHaveProperty("num_compras");
-    expect(data[0]).toHaveProperty("total_ventas");
-    expect(data[0]).toHaveProperty("num_ventas");
+    expect(data[0]).toEqual({
+      IdProveedor: 1,
+      Empresa: "Proveedor A",
+      total_compras: 1000,
+      num_compras: 5,
+      total_ventas: 2000,
+      num_ventas: 10,
+    });
+    // Provider without purchases/sales still appears with zeros
+    expect(data[1]).toEqual({
+      IdProveedor: 2,
+      Empresa: "Proveedor B",
+      total_compras: 0,
+      num_compras: 0,
+      total_ventas: 0,
+      num_ventas: 0,
+    });
   });
 
   it("should filter by search query", async () => {
     req.query.search = "Proveedor";
     await controller.GET_PROVIDERS_LIST(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
+
+    const providersBuilder = mockDb.mock.results[0].value;
+    expect(providersBuilder.where).toHaveBeenCalledWith("p.Empresa", "like", "%Proveedor%");
   });
 
-  it("should handle showNoe=true", async () => {
+  it("should restrict all aggregates to the filtered provider ids", async () => {
+    await controller.GET_PROVIDERS_LIST(req, res);
+
+    for (let i = 1; i <= 4; i++) {
+      const builder = mockDb.mock.results[i].value;
+      expect(builder.whereIn).toHaveBeenCalledWith(expect.any(String), [1, 2]);
+    }
+  });
+
+  it("should handle showNoe=true with masternoe/slavenoe and IdNoe", async () => {
     req.query.showNoe = "true";
     await controller.GET_PROVIDERS_LIST(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
+
+    const salesCountsBuilder = mockDb.mock.results[3].value;
+    const salesTotalsBuilder = mockDb.mock.results[4].value;
+    expect(salesCountsBuilder.innerJoin).toHaveBeenCalledWith("slavenoe as sf", "sf.IdProducto", "pr.IdProducto");
+    expect(salesCountsBuilder.innerJoin).toHaveBeenCalledWith("masternoe as mf", expect.any(Function));
+    expect(salesTotalsBuilder.innerJoin).toHaveBeenCalledWith("slavenoe as sf", "sf.IdProducto", "pr.IdProducto");
+    expect(salesTotalsBuilder.innerJoin).toHaveBeenCalledWith("masternoe as mf", expect.any(Function));
   });
 
   it("should handle pagination parameters", async () => {
     req.query.page = "2";
-    req.query.limit = "10";
+    req.query.limit = "2";
     await controller.GET_PROVIDERS_LIST(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
+
+    const { data, page, limit } = res.json.mock.calls[0][0];
+    expect(page).toBe(2);
+    expect(limit).toBe(2);
+    expect(data).toHaveLength(0);
   });
 
   it("should return 500 on database error", async () => {
     jest.resetModules();
     jest.restoreAllMocks();
-    const failDb = makeBuilder(() => {
-      throw new Error("DB error");
+    const failDb = jest.fn(() => {
+      const b = makeBuilder([]);
+      b.then = jest.fn((_onFulfilled, onRejected) =>
+        Promise.reject(new Error("DB error")).catch(onRejected || (() => {})),
+      );
+      return b;
     });
-    // Rejected promise on the count query
-    failDb.then = jest.fn((_onFulfilled, onRejected) =>
-      Promise.reject(new Error("DB error")).catch(onRejected || (() => {})),
-    );
+    failDb.raw = jest.fn((x) => x);
     jest.doMock("../database", () => failDb);
     controller = require("../controllers/providers");
 
@@ -131,24 +170,35 @@ describe("GET_PROVIDERS_LIST", () => {
   });
 
   it("should return empty data array when no providers match", async () => {
-    jest.resetModules();
-    jest.restoreAllMocks();
-    const emptyDb = makeBuilder([{ total: 0 }]);
-    emptyDb.offset = jest.fn(() => ({
-      then: jest.fn((cb) => Promise.resolve([]).then(cb)),
-    }));
-    jest.doMock("../database", () => emptyDb);
-    controller = require("../controllers/providers");
-
+    setup([[], [], [], [], []]);
     await controller.GET_PROVIDERS_LIST(req, res);
+
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: [], total: 0 }));
+    // Aggregates never run when there are no providers
+    expect(mockDb).toHaveBeenCalledTimes(1);
   });
 
   it("should order by total_ventas DESC by default", async () => {
+    const providers = [
+      { IdProveedor: 1, Empresa: "Proveedor A" },
+      { IdProveedor: 2, Empresa: "Proveedor B" },
+    ];
+    const purchasesCounts = [{ IdProveedor: 1, num_compras: 5 }];
+    const purchasesTotals = [{ IdProveedor: 1, total_compras: 1000 }];
+    const salesCounts = [
+      { Proveedor: 1, num_ventas: 10 },
+      { Proveedor: 2, num_ventas: 99 },
+    ];
+    const salesTotals = [
+      { Proveedor: 1, total_ventas: 2000 },
+      { Proveedor: 2, total_ventas: 5000 },
+    ];
+    setup([providers, purchasesCounts, purchasesTotals, salesCounts, salesTotals]);
+
     await controller.GET_PROVIDERS_LIST(req, res);
-    const db = require("../database");
-    expect(db.orderBy).toHaveBeenCalledWith("total_ventas", "desc");
+    const { data } = res.json.mock.calls[0][0];
+    expect(data.map((r) => r.IdProveedor)).toEqual([2, 1]);
   });
 
   it("should filter sales and purchases by date range", async () => {
@@ -156,16 +206,23 @@ describe("GET_PROVIDERS_LIST", () => {
     req.query.to = "2026-12-31";
     await controller.GET_PROVIDERS_LIST(req, res);
 
-    const db = require("../database");
-    expect(db.whereBetween).toHaveBeenCalledWith("mf.Fecha", ["2026-01-01", "2026-12-31"]);
-    expect(db.andWhereBetween).toHaveBeenCalledWith("mc.Fecha", ["2026-01-01", "2026-12-31"]);
+    const purchasesCountsBuilder = mockDb.mock.results[1].value;
+    const purchasesTotalsBuilder = mockDb.mock.results[2].value;
+    const salesCountsBuilder = mockDb.mock.results[3].value;
+    const salesTotalsBuilder = mockDb.mock.results[4].value;
+    expect(purchasesCountsBuilder.andWhereBetween).toHaveBeenCalledWith("mc.Fecha", ["2026-01-01", "2026-12-31"]);
+    expect(purchasesTotalsBuilder.andWhereBetween).toHaveBeenCalledWith("mc.Fecha", ["2026-01-01", "2026-12-31"]);
+    expect(salesCountsBuilder.andWhereBetween).toHaveBeenCalledWith("mf.Fecha", ["2026-01-01", "2026-12-31"]);
+    expect(salesTotalsBuilder.andWhereBetween).toHaveBeenCalledWith("mf.Fecha", ["2026-01-01", "2026-12-31"]);
   });
 
   it("should not apply date filters when no range is given", async () => {
     await controller.GET_PROVIDERS_LIST(req, res);
-    const db = require("../database");
-    expect(db.whereBetween).not.toHaveBeenCalled();
-    expect(db.andWhereBetween).not.toHaveBeenCalled();
+
+    for (let i = 1; i <= 4; i++) {
+      const builder = mockDb.mock.results[i].value;
+      expect(builder.andWhereBetween).not.toHaveBeenCalled();
+    }
   });
 });
 
