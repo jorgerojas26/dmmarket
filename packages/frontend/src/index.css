@@ -437,6 +437,11 @@ div.card-body {
     padding: 1rem;
     flex: 0 0 auto;
     width: 100%;
+    position: relative;
+    transition:
+        width 0.2s ease,
+        flex-basis 0.2s ease,
+        padding 0.2s ease;
 }
 
 .clientes-content {
@@ -514,6 +519,86 @@ div.card-body {
 }
 .clients-sidebar .nav-link.active .nav-icon {
     opacity: 1;
+}
+
+/* ── Sidebar collapse ── */
+.clients-sidebar .nav-label {
+    display: inline-block;
+    overflow: hidden;
+    max-width: 300px;
+    white-space: nowrap;
+    opacity: 1;
+    transition:
+        max-width 0.2s ease,
+        opacity 0.15s ease;
+}
+
+.sidebar-collapse-btn {
+    position: absolute;
+    top: 50%;
+    right: -14px;
+    transform: translateY(-50%);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #373b3e;
+    border-radius: 50%;
+    background: #1a1d21;
+    color: #8b92a0;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+.sidebar-collapse-btn:hover {
+    background: #2a2d33;
+    color: #c4cad4;
+}
+.sidebar-collapse-btn svg {
+    transition: transform 0.2s ease;
+}
+.clients-sidebar.collapsed .sidebar-collapse-btn svg {
+    transform: rotate(180deg);
+}
+
+@media (min-width: 768px) {
+    .clients-sidebar.collapsed {
+        flex: 0 0 64px;
+        width: 64px;
+        padding: 1rem 0.75rem;
+    }
+
+    .clients-sidebar.collapsed .nav-link {
+        justify-content: center;
+        gap: 0;
+        padding: 10px;
+    }
+
+    .clients-sidebar.collapsed .nav-label {
+        max-width: 0;
+        opacity: 0;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .clients-sidebar.collapsed {
+        flex: 0 0 auto;
+        width: auto;
+    }
+
+    .clients-sidebar.collapsed .nav-label {
+        max-width: 0;
+        opacity: 0;
+    }
+}
+
+body.sidebar-collapsed .navbar.has-clients-sidebar::after {
+    background: linear-gradient(to right, #1a1d21 64px, #373b3e 64px);
 }
 /* Keep Bootstrap defaults for top-nav links */
 
