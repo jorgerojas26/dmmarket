@@ -2,6 +2,7 @@ import InvoicesTable from 'components/InvoicesTable';
 import SelectedInvoicesModal from 'components/Modals/SelectedInvoicesModal';
 import ProductsTable from 'components/ProductsTable';
 import { darkSelectStyles } from 'components/selectStyles';
+import { fetchInvoiceList } from 'api/invoice';
 import { useClientRoutes } from 'hooks/useClients';
 import { useInvoiceList } from 'hooks/useInvoice';
 import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
@@ -18,6 +19,21 @@ const EMPTY_INVOICES = [];
 // page never shows a vertical scrollbar.
 const ABOVE_TABLES_OFFSET = 224;
 
+// "Select all" suma (unión) las filas del filtro actual a la selección acumulada:
+// nunca sobreescribe el historial previo (p.ej. select-all sin ruta → filtro de
+// ruta → select-all de nuevo debe volver al total original).
+export const unionSelection = (prev, incoming, idOf) => {
+    const prevIds = new Set(prev.map(idOf));
+    return [...prev, ...incoming.filter((row) => !prevIds.has(idOf(row)))];
+};
+
+// "Deselect all" resta del historial acumulado TODAS las filas del filtro actual
+// (todas las páginas), conservando la selección de otros filtros.
+export const diffSelection = (prev, incoming, idOf) => {
+    const incomingIds = new Set(incoming.map(idOf));
+    return prev.filter((row) => !incomingIds.has(idOf(row)));
+};
+
 const DespachoView = ({ dateRange, showNoe, isActive }) => {
     // Independent selection state: accumulates invoices across pages, searches
     // and filter changes. Only explicit user actions ("Limpiar selección" or
@@ -30,9 +46,8 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     const [sortDir, setSortDir] = useState('desc');
     const [search, setSearch] = useState('');
     const [selectedRuta, setSelectedRuta] = useState(null);
-    const [clearSelectionSignal, setClearSelectionSignal] = useState(0);
     const [showSelectionModal, setShowSelectionModal] = useState(false);
-    const [deselectSignal, setDeselectSignal] = useState({ key: 0, ids: [] });
+    const [selectAllLoading, setSelectAllLoading] = useState(false);
 
     const { productsSummary, invoicesTotalSummary } = useInvoiceDispatch(selectedRows);
 
@@ -94,11 +109,64 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     }, []);
 
     const handleClearSelection = useCallback(() => {
-        setClearSelectionSignal((key) => key + 1);
+        setSelectedRows([]);
     }, []);
 
+    // "Seleccionar todo" del header: trae TODAS las facturas que matchean los
+    // filtros actuales (rango, ruta, búsqueda) y las SUMA a la selección
+    // existente (unión) — no reemplaza el historial acumulado.
+    const handleSelectAll = useCallback(async () => {
+        if (total === 0 || selectAllLoading) return;
+        setSelectAllLoading(true);
+        try {
+            const res = await fetchInvoiceList({
+                from: dateRange.from,
+                to: dateRange.to,
+                showNoe,
+                page: 1,
+                limit: total,
+                sortBy,
+                sortDir,
+                search: search || undefined,
+                ruta: selectedRuta?.value,
+            });
+            const rows = res.data || [];
+            setSelectedRows((prev) => unionSelection(prev, rows, (inv) => inv.invoiceId));
+        } catch (error) {
+            console.error('Error al seleccionar todas las facturas:', error);
+        } finally {
+            setSelectAllLoading(false);
+        }
+    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading]);
+
+    // "Deseleccionar todo": resta TODAS las facturas del filtro actual (todas las
+    // páginas) de la selección acumulada; conserva las de otros filtros.
+    const handleDeselectAll = useCallback(async () => {
+        if (total === 0 || selectAllLoading) return;
+        setSelectAllLoading(true);
+        try {
+            const res = await fetchInvoiceList({
+                from: dateRange.from,
+                to: dateRange.to,
+                showNoe,
+                page: 1,
+                limit: total,
+                sortBy,
+                sortDir,
+                search: search || undefined,
+                ruta: selectedRuta?.value,
+            });
+            const rows = res.data || [];
+            setSelectedRows((prev) => diffSelection(prev, rows, (inv) => inv.invoiceId));
+        } catch (error) {
+            console.error('Error al deseleccionar las facturas:', error);
+        } finally {
+            setSelectAllLoading(false);
+        }
+    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading]);
+
     const handleRemoveSelectedInvoice = useCallback((invoiceId) => {
-        setDeselectSignal((prev) => ({ key: prev.key + 1, ids: [invoiceId] }));
+        setSelectedRows((prev) => prev.filter((inv) => inv.invoiceId !== invoiceId));
     }, []);
 
     const handleClearAll = useCallback(() => {
@@ -157,8 +225,11 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                     <div className="col-12 col-xl-6" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>
                         <InvoicesTable
                             data={invoices}
-                            loading={isLoading}
+                            loading={isLoading || selectAllLoading}
                             onRowSelect={setSelectedRows}
+                            selectedRows={selectedRows}
+                            onSelectAll={handleSelectAll}
+                            onDeselectAll={handleDeselectAll}
                             sorting={{
                                 enabled: true,
                                 sortBy: sortByArr,
@@ -177,8 +248,6 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                                 placeholder: 'Buscar por cliente o factura...',
                                 onSearch: handleSearch,
                             }}
-                            clearSelectionSignal={clearSelectionSignal}
-                            deselectSignal={deselectSignal}
                         />
                     </div>
                     <div className="col-12 col-xl-6" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>

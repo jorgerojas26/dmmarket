@@ -153,6 +153,18 @@ const Table = ({
     /** Keep selection when `data` changes (react-table resets it by default). Enables cross-page multi-select. */
     preserveSelection = false,
 
+    // ── controlled selection (parent owns the list) ──
+    /** When provided, selection becomes fully controlled: the parent keeps the
+        array of selected row originals, the Table only renders checkboxes and
+        reports toggles via `onRowSelect`. Enables "select all" across pages. */
+    selectedRows,
+    /** Called when the user checks the header "select all" box (cross-page). */
+    onSelectAll,
+    /** Called when the user unchecks the header box with everything of the
+        current filter selected — the parent removes ALL rows matching the
+        current filter (every page), not just the visible page. */
+    onDeselectAll,
+
     // ── layout ──
     /** Fill the parent's height (flex column): the table body stretches and scrolls internally. */
     fillHeight = false,
@@ -198,6 +210,15 @@ const Table = ({
     const { getTableProps, getTableBodyProps, headerGroups, footerGroups, rows, prepareRow, state, dispatch } =
         useTable(tableOptions, ...plugins);
 
+    /* ── Controlled selection (parent owns the list) ── */
+    const isControlled = Array.isArray(selectedRows);
+    const idOf = useMemo(() => (getRowId ? (row) => getRowId(row) : (row) => row.id), [getRowId]);
+    const selectedIdSet = useMemo(
+        () => (isControlled ? new Set(selectedRows.map(idOf)) : null),
+        [isControlled, selectedRows, idOf],
+    );
+    const lastSelectedIndexRef = useRef(null);
+
     /* ── Sync selection state → parent callback ── */
     // Cache selected row objects by stable row id so the callback can report
     // selections accumulated across pages (see `preserveSelection`).
@@ -205,7 +226,7 @@ const Table = ({
     const lastSelectionRef = useRef(null);
 
     useEffect(() => {
-        if (onRowSelect && multiSelect) {
+        if (onRowSelect && multiSelect && !isControlled) {
             const cache = selectedRowsCacheRef.current;
             rows.forEach((r) => {
                 if (r.isSelected) cache[r.id] = r.original;
@@ -222,25 +243,25 @@ const Table = ({
                 onRowSelect(allSelected);
             }
         }
-    }, [state.selectedRowIds]);
+    }, [state.selectedRowIds, isControlled]);
 
     /* ── Global selection clear (signal from parent) ── */
     useEffect(() => {
-        if (clearSelectionSignal && dispatch) {
+        if (clearSelectionSignal && dispatch && !isControlled) {
             dispatch({ type: actions.resetSelectedRows });
         }
-    }, [clearSelectionSignal, dispatch]);
+    }, [clearSelectionSignal, dispatch, isControlled]);
 
     /* ── Targeted row deselection (e.g. removing one invoice from a selection modal) ── */
     useEffect(() => {
-        if (deselectSignal?.ids?.length && dispatch) {
+        if (deselectSignal?.ids?.length && dispatch && !isControlled) {
             // Los ids de otra página no existen en rowsById: react-table no puede
             // togglarlos (crashea). Se eliminan del cache de selección y con el
             // reducer propio; el efecto de sync notifica al padre con la lista nueva.
             deselectSignal.ids.forEach((id) => delete selectedRowsCacheRef.current[id]);
             dispatch({ type: REMOVE_SELECTED_ROWS, ids: deselectSignal.ids });
         }
-    }, [deselectSignal, dispatch]);
+    }, [deselectSignal, dispatch, isControlled]);
 
     /* ── Notify sorted/filtered rows (for external consumers like PDF export) ── */
     useEffect(() => {
@@ -313,7 +334,7 @@ const Table = ({
         [print?.onGlobalPrint],
     );
 
-    /* ── Select-all handler ── */
+    /* ── Select-all handler (uncontrolled mode: current page only) ── */
     const handleToggleAll = useCallback(() => {
         const allChecked = rows.length > 0 && rows.every((r) => r.isSelected);
         if (allChecked) {
@@ -330,7 +351,32 @@ const Table = ({
     /* ── Row renderers ── */
 
     const SelectRow = ({ row, multiSelect: multi }) => {
+        const isSel = isControlled ? selectedIdSet.has(row.id) : row.isSelected;
+
         const handleClick = (e) => {
+            if (isControlled) {
+                // Controlled: compute the new list from the parent's selection.
+                if (e.shiftKey && !e.ctrlKey && multi && lastSelectedIndexRef.current != null) {
+                    const last = lastSelectedIndexRef.current;
+                    const [from, to] = last < row.index ? [last, row.index] : [row.index, last];
+                    const rangeIds = new Set();
+                    rows.slice(from, to + 1).forEach((r) => rangeIds.add(r.id));
+                    const next = selectedRows.filter((o) => !rangeIds.has(idOf(o)));
+                    rows.slice(from, to + 1).forEach((r) => {
+                        if (r.index !== last && !selectedIdSet.has(r.id)) next.push(r.original);
+                    });
+                    onRowSelect(next);
+                } else {
+                    const next = selectedIdSet.has(row.id)
+                        ? selectedRows.filter((o) => idOf(o) !== row.id)
+                        : [...selectedRows, row.original];
+                    onRowSelect(next);
+                }
+                lastSelectedIndexRef.current = row.index;
+                return;
+            }
+
+            // Uncontrolled: internal react-table state.
             const lastIdx = Object.keys(state.selectedRowIds).pop();
             const newIdx = row.index;
 
@@ -351,10 +397,10 @@ const Table = ({
         return (
             <tr
                 {...row.getRowProps({ onClick: handleClick })}
-                className={row.isSelected ? 'row-selected' : ''}
+                className={isSel ? 'row-selected' : ''}
                 style={{
-                    background: row.isSelected ? '#2d3748' : 'transparent',
-                    color: row.isSelected ? '#e4e6ea' : '#c4cad4',
+                    background: isSel ? '#2d3748' : 'transparent',
+                    color: isSel ? '#e4e6ea' : '#c4cad4',
                     cursor: 'pointer',
                 }}
             >
@@ -363,13 +409,13 @@ const Table = ({
                         style={{
                             width: 40,
                             textAlign: 'center',
-                            background: row.isSelected ? '#2d3748' : 'transparent',
+                            background: isSel ? '#2d3748' : 'transparent',
                         }}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <input
                             type="checkbox"
-                            checked={row.isSelected}
+                            checked={isSel}
                             readOnly
                             style={{ cursor: 'pointer', pointerEvents: 'none' }}
                         />
@@ -381,15 +427,15 @@ const Table = ({
                         title={cell.value}
                         {...cell.getCellProps()}
                         style={{
-                            background: row.isSelected ? '#2d3748' : 'transparent',
-                            color: row.isSelected ? '#e4e6ea' : '#c4cad4',
+                            background: isSel ? '#2d3748' : 'transparent',
+                            color: isSel ? '#e4e6ea' : '#c4cad4',
                         }}
                     >
                         {cell.render('Cell')}
                     </td>
                 ))}
                 {hasPerRowPrint && (
-                    <RowActionCell onPrint={print.onRowPrint} rowData={row.original} isSelected={row.isSelected} />
+                    <RowActionCell onPrint={print.onRowPrint} rowData={row.original} isSelected={isSel} />
                 )}
             </tr>
         );
@@ -428,7 +474,9 @@ const Table = ({
             if (onRowSelect || onRowClick) return <ClickableRow row={row} onClick={onRowSelect || onRowClick} />;
             return <StaticRow row={row} />;
         },
-        [onRowSelect, multiSelect, onRowClick, prepareRow],
+        // SelectRow cierra sobre selectedRows/selectedIdSet: cuando la selección
+        // cambia, hay que recrear el renderer o la fila muestra estado viejo.
+        [onRowSelect, multiSelect, onRowClick, prepareRow, isControlled, selectedIdSet, selectedRows, idOf],
     );
 
     /* ── Loading spinner ── */
@@ -477,8 +525,42 @@ const Table = ({
 
     /* ── Table head ── */
     const thead = (() => {
-        const allChecked = rows.length > 0 && rows.every((r) => r.isSelected);
-        const someChecked = rows.some((r) => r.isSelected) && !allChecked;
+        const visibleIds = new Set(rows.map((r) => r.id));
+        // "Todo seleccionado" se define sobre las filas VISIBLES, no por comparar
+        // cantidades: con selección acumulada de un select-all previo (otro
+        // filtro) el length del padre supera al total del filtro actual aunque
+        // las visibles ya no estén seleccionadas.
+        const allVisibleSelected = isControlled && visibleIds.size > 0 && rows.every((r) => selectedIdSet.has(r.id));
+        const someVisibleSelected =
+            isControlled && visibleIds.size > 0 && rows.some((r) => selectedIdSet.has(r.id)) && !allVisibleSelected;
+
+        const handleHeaderCheck = isControlled
+            ? () => {
+                  if (allVisibleSelected) {
+                      // Uncheck: el padre quita TODAS las filas del filtro actual
+                      // (todas las páginas), conservando la selección acumulada
+                      // de otros filtros. Fallback sin onDeselectAll: solo las
+                      // filas de la página visible.
+                      if (onDeselectAll) onDeselectAll();
+                      else onRowSelect(selectedRows.filter((o) => !visibleIds.has(idOf(o))));
+                  } else if (onSelectAll) {
+                      // Select ALL across pages (parent fetches the full dataset)
+                      onSelectAll();
+                  } else {
+                      handleToggleAll();
+                  }
+              }
+            : handleToggleAll;
+
+        let allChecked;
+        let someChecked;
+        if (isControlled) {
+            allChecked = allVisibleSelected;
+            someChecked = someVisibleSelected;
+        } else {
+            allChecked = rows.length > 0 && rows.every((r) => r.isSelected);
+            someChecked = rows.some((r) => r.isSelected) && !allChecked;
+        }
 
         return (
             <thead>
@@ -498,7 +580,7 @@ const Table = ({
                                     ref={(el) => {
                                         if (el) el.indeterminate = someChecked;
                                     }}
-                                    onChange={handleToggleAll}
+                                    onChange={handleHeaderCheck}
                                     style={{ cursor: 'pointer' }}
                                 />
                             </th>

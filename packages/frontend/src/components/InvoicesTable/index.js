@@ -7,6 +7,9 @@ const InvoicesTable = ({
     data,
     loading,
     onRowSelect,
+    selectedRows,
+    onSelectAll,
+    onDeselectAll,
     sorting,
     pagination,
     search,
@@ -27,6 +30,9 @@ const InvoicesTable = ({
                     columns={memoizedColumns}
                     loading={loading}
                     onRowSelect={onRowSelect}
+                    selectedRows={selectedRows}
+                    onSelectAll={onSelectAll}
+                    onDeselectAll={onDeselectAll}
                     multiSelect
                     getRowId={(row) => row.invoiceId}
                     preserveSelection
