@@ -748,6 +748,7 @@ const DesgloseView = ({ isActive }) => {
                                     onGlobalPrint: handlePrintAllFacturas,
                                     perRowPrint: true,
                                     onRowPrint: handlePrintFacturaRow,
+                                    storageKey: 'ventas-facturas',
                                 }}
                             />
                         </div>
@@ -787,6 +788,7 @@ const DesgloseView = ({ isActive }) => {
                                 print={{
                                     enabled: true,
                                     onGlobalPrint: handlePrintAllProductos,
+                                    storageKey: 'ventas-productos',
                                 }}
                             />
                         </div>

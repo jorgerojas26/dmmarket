@@ -80,6 +80,7 @@ const EmployeeSales = ({ data, loading, onRowSelect }) => {
                     print={{
                         enabled: true,
                         onGlobalPrint: handlePrint,
+                        storageKey: 'empleados',
                     }}
                 />
             </div>

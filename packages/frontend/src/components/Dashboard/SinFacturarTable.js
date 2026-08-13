@@ -208,6 +208,7 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
                     enabled: true,
                     onGlobalPrint: handlePrintAll,
                     globalPrintLabel: 'Imprimir',
+                    storageKey: 'sin-facturar',
                 }}
                 maxHeight={500}
             />

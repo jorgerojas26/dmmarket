@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button, Modal, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
 import Select from 'react-select';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { darkSelectStyles } from 'components/selectStyles';
+import useLocalStorage from 'hooks/useLocalStorage';
 import './PrintConfigModal.css';
 
 /**
@@ -25,7 +26,9 @@ import './PrintConfigModal.css';
  * `sortBy` is `[{ id, desc }]` in priority order (empty = table's current
  * order).
  */
-const getColumnKey = (col) => col.accessor ?? col.id ?? col.Header;
+// Robustez: las columnas guardadas pueden ser objetos (config vieja) o keys
+// string (config nueva) — ambos se resuelven a la misma key.
+const getColumnKey = (col) => (typeof col === 'string' ? col : (col?.accessor ?? col?.id ?? col?.Header));
 
 const getColumnLabel = (col) => (typeof col.Header === 'string' ? col.Header : String(getColumnKey(col)));
 
@@ -208,12 +211,55 @@ const SortRuleItem = ({ rule, label, onToggleDirection, onRemove }) => {
     );
 };
 
-const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait', onClose, onPrint }) => {
-    const [selectedKeys, setSelectedKeys] = useState(() => new Set(columns.map(getColumnKey)));
+// Normaliza lo guardado (o los defaults) contra las columnas ACTUALES de la
+// tabla: descarta keys que ya no existen y valida orientación/moneda/orden.
+const normalizeConfig = (saved, columns, initialOrientation) => {
+    const validKeys = columns.map(getColumnKey);
+    const allKeys = new Set(validKeys);
+
+    if (saved) {
+        const savedKeys = Array.isArray(saved.columns)
+            ? saved.columns.map(getColumnKey).filter((k) => allKeys.has(k))
+            : [];
+        const columnsSet = new Set(savedKeys.length > 0 ? savedKeys : validKeys);
+        const savedSort = Array.isArray(saved.sortBy) ? saved.sortBy.filter((s) => s && columnsSet.has(s.id)) : [];
+        return {
+            columns: columnsSet,
+            orientation: saved.orientation === 'landscape' ? 'landscape' : 'portrait',
+            currency: saved.currency === 'Bs' ? 'Bs' : 'USD',
+            sortRules: savedSort.map((s) => ({ key: s.id, desc: Boolean(s.desc) })),
+        };
+    }
+    return {
+        columns: allKeys,
+        orientation: initialOrientation === 'landscape' ? 'landscape' : 'portrait',
+        currency: 'USD',
+        sortRules: [],
+    };
+};
+
+// Forma persistida (array de keys, no objetos columna).
+const toPersistedConfig = ({ columns, orientation, currency, sortRules }) => ({
+    columns: [...columns],
+    orientation,
+    currency,
+    sortBy: sortRules.map((rule) => ({ id: rule.key, desc: rule.desc })),
+});
+
+const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait', storageKey, onClose, onPrint }) => {
+    // Configuración guardada de ESTA tabla (per-table, keyed por `storageKey`).
+    // Sin storageKey → no persiste nada. El modal se REMONTA en cada apertura
+    // (Table le cambia el `key`), así que el estado inicial se lee de
+    // localStorage de forma determinista, sin efectos.
+    const [savedConfig, setSavedConfig] = useLocalStorage(storageKey ? `print-config:${storageKey}` : null, null);
+    const [config, setConfig] = useState(() => normalizeConfig(savedConfig, columns, initialOrientation));
     const [columnQuery, setColumnQuery] = useState('');
-    const [orientation, setOrientation] = useState(initialOrientation);
-    const [currency, setCurrency] = useState('USD');
-    const [sortRules, setSortRules] = useState([]);
+
+    // Único punto de escritura: estado + localStorage en el mismo handler.
+    const updateConfig = (next) => {
+        setConfig(next);
+        if (storageKey) setSavedConfig(toPersistedConfig(next));
+    };
 
     // 4px of movement required before a drag starts, so handle clicks never
     // turn into accidental drags.
@@ -222,29 +268,18 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
     );
 
-    // Every time the modal opens, start with all columns checked, the default
-    // orientation and no sort criteria.
-    useEffect(() => {
-        if (show) {
-            setSelectedKeys(new Set(columns.map(getColumnKey)));
-            setColumnQuery('');
-            setOrientation(initialOrientation);
-            setCurrency('USD');
-            setSortRules([]);
-        }
-    }, [show, columns, initialOrientation]);
+    const { columns: selectedKeys, orientation, currency, sortRules } = config;
 
     const toggleColumn = (key) => {
         if (selectedKeys.has(key)) {
-            setSelectedKeys((prev) => {
-                const next = new Set(prev);
-                next.delete(key);
-                return next;
+            updateConfig({
+                ...config,
+                columns: new Set([...selectedKeys].filter((k) => k !== key)),
+                // A sort criterion on a hidden column is meaningless — drop it.
+                sortRules: sortRules.filter((rule) => rule.key !== key),
             });
-            // A sort criterion on a hidden column is meaningless — drop it.
-            setSortRules((rules) => rules.filter((rule) => rule.key !== key));
         } else {
-            setSelectedKeys((prev) => new Set(prev).add(key));
+            updateConfig({ ...config, columns: new Set(selectedKeys).add(key) });
         }
     };
 
@@ -269,25 +304,26 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
 
     const addSortRule = (option) => {
         if (!option || !selectedKeys.has(option.value) || sortedKeys.has(option.value)) return;
-        setSortRules((rules) => [...rules, { key: option.value, desc: false }]);
+        updateConfig({ ...config, sortRules: [...sortRules, { key: option.value, desc: false }] });
     };
 
     const toggleSortDirection = (key) => {
-        setSortRules((rules) => rules.map((rule) => (rule.key === key ? { ...rule, desc: !rule.desc } : rule)));
+        updateConfig({
+            ...config,
+            sortRules: sortRules.map((rule) => (rule.key === key ? { ...rule, desc: !rule.desc } : rule)),
+        });
     };
 
     const removeSortRule = (key) => {
-        setSortRules((rules) => rules.filter((rule) => rule.key !== key));
+        updateConfig({ ...config, sortRules: sortRules.filter((rule) => rule.key !== key) });
     };
 
     const handleDragEnd = ({ active, over }) => {
         if (!over || active.id === over.id) return;
-        setSortRules((rules) => {
-            const from = rules.findIndex((rule) => rule.key === active.id);
-            const to = rules.findIndex((rule) => rule.key === over.id);
-            if (from === -1 || to === -1) return rules;
-            return arrayMove(rules, from, to);
-        });
+        const from = sortRules.findIndex((rule) => rule.key === active.id);
+        const to = sortRules.findIndex((rule) => rule.key === over.id);
+        if (from === -1 || to === -1) return;
+        updateConfig({ ...config, sortRules: arrayMove(sortRules, from, to) });
     };
 
     const handlePrint = () => {
@@ -323,17 +359,16 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
                                 <button
                                     type="button"
                                     disabled={allChecked}
-                                    onClick={() => setSelectedKeys(new Set(columns.map(getColumnKey)))}
+                                    onClick={() =>
+                                        updateConfig({ ...config, columns: new Set(columns.map(getColumnKey)) })
+                                    }
                                 >
                                     Todas
                                 </button>
                                 <button
                                     type="button"
                                     disabled={selectedKeys.size === 0}
-                                    onClick={() => {
-                                        setSelectedKeys(new Set());
-                                        setSortRules([]);
-                                    }}
+                                    onClick={() => updateConfig({ ...config, columns: new Set(), sortRules: [] })}
                                 >
                                     Ninguna
                                 </button>
@@ -440,7 +475,7 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
                                         type="radio"
                                         name="print-orientation"
                                         value={orientation}
-                                        onChange={setOrientation}
+                                        onChange={(v) => updateConfig({ ...config, orientation: v })}
                                         className="pc-segmented"
                                     >
                                         <ToggleButton
@@ -465,7 +500,7 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
                                         type="radio"
                                         name="print-currency"
                                         value={currency}
-                                        onChange={setCurrency}
+                                        onChange={(v) => updateConfig({ ...config, currency: v })}
                                         className="pc-segmented"
                                     >
                                         <ToggleButton id="print-currency-usd" value="USD" variant="outline-secondary">

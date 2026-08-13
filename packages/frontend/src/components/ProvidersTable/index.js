@@ -204,6 +204,7 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                         enabled: true,
                         onGlobalPrint: handlePrintAll,
                         globalPrintLabel: 'Imprimir',
+                        storageKey: 'proveedores',
                     }}
                 />
             </div>

@@ -23,7 +23,7 @@ const textSortType = (rowA, rowB, columnId) => {
     return a.localeCompare(b, 'es', { sensitivity: 'base', ignorePunctuation: true });
 };
 
-const ProductsTable = ({ data, totalSummary }) => {
+const ProductsTable = ({ data, totalSummary, printStorageKey }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
 
     // Rows in the table's current sort order (for PDF export).
@@ -127,6 +127,7 @@ const ProductsTable = ({ data, totalSummary }) => {
                     print={{
                         enabled: true,
                         onGlobalPrint: handlePrint,
+                        storageKey: printStorageKey,
                     }}
                     sorting={{
                         enabled: true,

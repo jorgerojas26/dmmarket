@@ -201,6 +201,7 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                         enabled: true,
                         onGlobalPrint: handlePrintAll,
                         globalPrintLabel: 'Imprimir',
+                        storageKey: 'clientes',
                     }}
                     maxHeight={700}
                 />

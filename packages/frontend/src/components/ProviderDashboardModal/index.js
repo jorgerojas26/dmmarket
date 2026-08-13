@@ -835,6 +835,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     perRowPrint: Boolean(c.onRowPrint),
                     onRowPrint: c.onRowPrint,
                     defaultOrientation: 'portrait',
+                    storageKey: `proveedor-${tab}`,
                 }}
                 pagination={{
                     enabled: true,

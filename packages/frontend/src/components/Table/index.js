@@ -48,6 +48,7 @@ import './styles.css';
  * @param {object}         [props.print]                              - Print config.
  * @param {boolean}         props.print.enabled
  * @param {Function}       [props.print.onGlobalPrint]                - Global‑print callback. Runs after the config dialog; receives `{ columns, orientation, currency, sortBy }` (columns = selected column definitions, currency = 'USD' | 'Bs', sortBy = `[{ id, desc }]` in priority order, empty = unsorted).
+ * @param {string}         [props.print.storageKey]                   - Unique id for this table. Persists the print config (columns/orientation/currency/sort) in localStorage per table.
  * @param {string}         [props.print.defaultOrientation='portrait'] - Page orientation preselected in the config dialog.
  * @param {string}         [props.print.globalPrintLabel='Imprimir']  - Global‑print button label.
  * @param {boolean}        [props.print.perRowPrint=false]            - Show per‑row print button.
@@ -321,9 +322,14 @@ const Table = ({
 
     /* ── Global print (config dialog runs first) ── */
     const [showPrintConfig, setShowPrintConfig] = useState(false);
+    // Incrementa en cada apertura para REMONTAR el modal con estado fresco:
+    // PrintConfigModal lee su config guardada en el inicializador de useState
+    // (determinista, sin efectos).
+    const [printOpenCount, setPrintOpenCount] = useState(0);
 
     const handlePrintButtonClick = useCallback(() => {
         setShowPrintConfig(true);
+        setPrintOpenCount((c) => c + 1);
     }, []);
 
     const handlePrintConfirm = useCallback(
@@ -862,9 +868,11 @@ const Table = ({
             {paginationBar}
             {hasPrintBtn && (
                 <PrintConfigModal
+                    key={printOpenCount}
                     show={showPrintConfig}
                     columns={columns}
                     initialOrientation={print?.defaultOrientation}
+                    storageKey={print?.storageKey}
                     onClose={() => setShowPrintConfig(false)}
                     onPrint={handlePrintConfirm}
                 />

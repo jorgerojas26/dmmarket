@@ -251,7 +251,11 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                         />
                     </div>
                     <div className="col-12 col-xl-6" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>
-                        <ProductsTable data={productsSummary} totalSummary={invoicesTotalSummary} />
+                        <ProductsTable
+                            data={productsSummary}
+                            totalSummary={invoicesTotalSummary}
+                            printStorageKey="despacho-productos"
+                        />
                     </div>
                 </div>
             </div>
