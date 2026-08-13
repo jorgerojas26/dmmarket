@@ -14,6 +14,7 @@ jest.mock('pages/ventas', () => () => <div>VENTAS_PAGE</div>);
 jest.mock('pages/compras', () => () => <div>COMPRAS_PAGE</div>);
 jest.mock('pages/clientes', () => () => <div>CLIENTES_PAGE</div>);
 jest.mock('./pages/proveedores', () => () => <div>PROVEEDORES_PAGE</div>);
+jest.mock('pages/inventario', () => () => <div>INVENTARIO_PAGE</div>);
 
 // ConfiguracionPage hace fetch de red al montarse; fuera del scope de este test.
 jest.mock('./pages/configuracion', () => () => <div>CONFIGURACION_PAGE</div>);
@@ -55,5 +56,11 @@ describe('App navigation', () => {
     it('shows the gear icon in the navbar (title Configuración)', () => {
         renderAt('/ventas');
         expect(screen.getAllByTitle('Configuración').length).toBeGreaterThan(0);
+    });
+
+    it('shows "inventario" in the navbar and renders the page at /inventario', () => {
+        renderAt('/inventario');
+        expect(screen.getByText('inventario')).toBeInTheDocument();
+        expect(screen.getByText('INVENTARIO_PAGE')).toBeInTheDocument();
     });
 });

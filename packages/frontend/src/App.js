@@ -2,6 +2,7 @@ import { ShowNoeContext } from 'context/show_noe';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import ClientesPage from 'pages/clientes';
 import ComprasPage from 'pages/compras';
+import InventarioPage from 'pages/inventario';
 import VentasPage from 'pages/ventas';
 import { useContext, useEffect } from 'react';
 import Container from 'react-bootstrap/Container';
@@ -12,7 +13,7 @@ import { CurrencyRateContext } from './context/currency_rate';
 import ConfiguracionPage from './pages/configuracion';
 import ProveedoresPage from './pages/proveedores';
 
-const SIDEBAR_ROUTES = ['/ventas', '/compras', '/clientes', '/proveedores', '/configuracion'];
+const SIDEBAR_ROUTES = ['/ventas', '/compras', '/clientes', '/proveedores', '/inventario', '/configuracion'];
 
 function App() {
     const location = useLocation();
@@ -47,7 +48,7 @@ function App() {
                         <Navbar.Collapse id="basic-navbar-nav">
                             <Container fluid className="d-flex gap-5 justify-content-between align-items-center">
                                 <Nav className="me-auto">
-                                    {['ventas', 'compras', 'clientes', 'proveedores'].map((route) => {
+                                    {['ventas', 'compras', 'clientes', 'proveedores', 'inventario'].map((route) => {
                                         return (
                                             <Link
                                                 key={route}
@@ -121,6 +122,7 @@ function App() {
                         <Route path="/compras" component={ComprasPage} />
                         <Route path="/clientes" component={ClientesPage} />
                         <Route path="/proveedores" component={ProveedoresPage} />
+                        <Route path="/inventario" component={InventarioPage} />
                         <Route path="/configuracion" component={ConfiguracionPage} />
                     </Switch>
                 </Container>

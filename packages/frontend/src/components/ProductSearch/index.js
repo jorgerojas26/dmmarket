@@ -3,9 +3,10 @@ import SearchInput from 'components/SearchInput';
 
 const ProductSearch = ({ onSelect }) => {
     const loadProductVariants = async (inputValue) => {
-        const products = await fetchProducts({ filter: inputValue });
+        const result = await fetchProducts({ search: inputValue });
+        const products = result?.data || [];
 
-        if (products && products.length > 0) {
+        if (products.length > 0) {
             const records = products.map((record) => {
                 const product_name = record.Descripcion;
 

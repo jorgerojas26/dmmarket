@@ -21,10 +21,11 @@ import './PrintConfigModal.css';
  * multi-column sort for the printed rows (drag to reorder priority, toggle
  * asc/desc per criterion), and choose the page orientation and the currency
  * for monetary values. On confirm it calls
- * `onPrint({ columns, orientation, currency, sortBy })` where `columns` is the
- * filtered array of column definitions, `currency` is 'USD' | 'Bs' and
+ * `onPrint({ columns, orientation, currency, sortBy, extra })` where `columns`
+ * is the filtered array of column definitions, `currency` is 'USD' | 'Bs',
  * `sortBy` is `[{ id, desc }]` in priority order (empty = table's current
- * order).
+ * order) and `extra` is the map of enabled toggles declared via `filters`
+ * (`[{ key, label }]`, e.g. `{ stockOnly: true }`).
  */
 // Robustez: las columnas guardadas pueden ser objetos (config vieja) o keys
 // string (config nueva) — ambos se resuelven a la misma key.
@@ -213,7 +214,7 @@ const SortRuleItem = ({ rule, label, onToggleDirection, onRemove }) => {
 
 // Normaliza lo guardado (o los defaults) contra las columnas ACTUALES de la
 // tabla: descarta keys que ya no existen y valida orientación/moneda/orden.
-const normalizeConfig = (saved, columns, initialOrientation) => {
+const normalizeConfig = (saved, columns, initialOrientation, filters = []) => {
     const validKeys = columns.map(getColumnKey);
     const allKeys = new Set(validKeys);
 
@@ -228,6 +229,7 @@ const normalizeConfig = (saved, columns, initialOrientation) => {
             orientation: saved.orientation === 'landscape' ? 'landscape' : 'portrait',
             currency: saved.currency === 'Bs' ? 'Bs' : 'USD',
             sortRules: savedSort.map((s) => ({ key: s.id, desc: Boolean(s.desc) })),
+            extra: Object.fromEntries(filters.map((f) => [f.key, Boolean(saved.extra?.[f.key])])),
         };
     }
     return {
@@ -235,24 +237,34 @@ const normalizeConfig = (saved, columns, initialOrientation) => {
         orientation: initialOrientation === 'landscape' ? 'landscape' : 'portrait',
         currency: 'USD',
         sortRules: [],
+        extra: Object.fromEntries(filters.map((f) => [f.key, false])),
     };
 };
 
 // Forma persistida (array de keys, no objetos columna).
-const toPersistedConfig = ({ columns, orientation, currency, sortRules }) => ({
+const toPersistedConfig = ({ columns, orientation, currency, sortRules, extra }) => ({
     columns: [...columns],
     orientation,
     currency,
-    sortBy: sortRules.map((rule) => ({ id: rule.key, desc: rule.desc })),
+    sortBy: sortRules.map((rule) => ({ key: rule.key, desc: rule.desc })),
+    extra,
 });
 
-const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait', storageKey, onClose, onPrint }) => {
+const PrintConfigModal = ({
+    show,
+    columns = [],
+    initialOrientation = 'portrait',
+    storageKey,
+    filters = [],
+    onClose,
+    onPrint,
+}) => {
     // Configuración guardada de ESTA tabla (per-table, keyed por `storageKey`).
     // Sin storageKey → no persiste nada. El modal se REMONTA en cada apertura
     // (Table le cambia el `key`), así que el estado inicial se lee de
     // localStorage de forma determinista, sin efectos.
     const [savedConfig, setSavedConfig] = useLocalStorage(storageKey ? `print-config:${storageKey}` : null, null);
-    const [config, setConfig] = useState(() => normalizeConfig(savedConfig, columns, initialOrientation));
+    const [config, setConfig] = useState(() => normalizeConfig(savedConfig, columns, initialOrientation, filters));
     const [columnQuery, setColumnQuery] = useState('');
 
     // Único punto de escritura: estado + localStorage en el mismo handler.
@@ -268,7 +280,7 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
     );
 
-    const { columns: selectedKeys, orientation, currency, sortRules } = config;
+    const { columns: selectedKeys, orientation, currency, sortRules, extra } = config;
 
     const toggleColumn = (key) => {
         if (selectedKeys.has(key)) {
@@ -336,6 +348,7 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
             sortBy: sortRules
                 .filter((rule) => selectedKeys.has(rule.key))
                 .map((rule) => ({ id: rule.key, desc: rule.desc })),
+            extra,
         });
     };
 
@@ -513,6 +526,33 @@ const PrintConfigModal = ({ show, columns = [], initialOrientation = 'portrait',
                                 </div>
                             </div>
                         </section>
+
+                        {/* ── Extra filters ── */}
+                        {filters.length > 0 && (
+                            <section className="pc-section">
+                                <span className="pc-section-title">Filtros</span>
+                                <div className="pc-filter-list">
+                                    {filters.map((f) => (
+                                        <button
+                                            key={f.key}
+                                            type="button"
+                                            role="checkbox"
+                                            aria-checked={Boolean(extra[f.key])}
+                                            className={`pc-filter-item${extra[f.key] ? ' checked' : ''}`}
+                                            onClick={() =>
+                                                updateConfig({
+                                                    ...config,
+                                                    extra: { ...extra, [f.key]: !extra[f.key] },
+                                                })
+                                            }
+                                        >
+                                            <span className="pc-filter-check">{extra[f.key] && <CheckIcon />}</span>
+                                            <span className="pc-filter-label">{f.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
                     </div>
                 </div>
             </Modal.Body>
