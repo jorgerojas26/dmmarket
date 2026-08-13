@@ -405,13 +405,16 @@ const Table = ({
                 }}
             >
                 {hasSelectCol && (
+                    // Sin stopPropagation: el click en la celda del checkbox
+                    // burbujea al tr y togglea la fila (el input es readOnly +
+                    // pointerEvents:none, así que el click aterriza en el td).
                     <td
                         style={{
                             width: 40,
                             textAlign: 'center',
                             background: isSel ? '#2d3748' : 'transparent',
+                            cursor: 'pointer',
                         }}
-                        onClick={(e) => e.stopPropagation()}
                     >
                         <input
                             type="checkbox"

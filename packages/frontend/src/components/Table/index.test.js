@@ -166,4 +166,15 @@ describe('Table — selección controlada (selectedRows)', () => {
         expect(screen.getByText('B1').closest('tr').className).toContain('row-selected');
         expect(screen.getByText('B2').closest('tr').className).not.toContain('row-selected');
     });
+
+    it('el click en la celda del checkbox de una fila la selecciona (regresión stopPropagation)', () => {
+        const onRowSelect = jest.fn();
+        const onSelectAll = jest.fn();
+        render(controlledElement([{ id: 'A1' }, { id: 'A2' }], [], onRowSelect, onSelectAll));
+
+        const rowInput = screen.getByText('A1').closest('tr').querySelector('input');
+        fireEvent.click(rowInput);
+
+        expect(onRowSelect).toHaveBeenLastCalledWith([{ id: 'A1' }]);
+    });
 });
