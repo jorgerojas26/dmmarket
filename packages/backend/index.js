@@ -95,11 +95,37 @@ const { cleanupStartup } = require("./cleanup");
 const BASE_PORT = 8000;
 const MAX_PORT_ATTEMPTS = 100;
 
+// En Windows el binario se lanza con doble clic: si la app muere al arrancar, la consola
+// se cierra sin mostrar nada. Con esto el error queda visible en pantalla (espera Enter)
+// y además se escribe a dmmarket-error.log junto al exe, con el estado del .env.
+function failStartup(error) {
+  console.error("Fallo al iniciar la aplicación:", error);
+  if (IS_STANDALONE) {
+    const logPath = path.join(process.cwd(), "dmmarket-error.log");
+    const envSummary = {
+      CWD: process.cwd(),
+      DATABASE_HOST: process.env.DATABASE_HOST,
+      DATABASE_PORT: process.env.DATABASE_PORT,
+      DATABASE_USER: process.env.DATABASE_USER,
+      DATABASE_NAME: process.env.DATABASE_NAME,
+      DATABASE_PASSWORD_SET: Boolean(process.env.DATABASE_PASSWORD),
+    };
+    fs.writeFileSync(
+      logPath,
+      `${new Date().toISOString()}\n${error.stack || error}\n\n.env detectado: ${JSON.stringify(envSummary, null, 2)}\n`,
+    );
+    console.log(`\nEl detalle se guardó en: ${logPath}`);
+  }
+  if (process.platform === "win32") {
+    console.log("\nPresiona Enter para cerrar...");
+    process.stdin.once("data", () => process.exit(1));
+    return;
+  }
+  process.exit(1);
+}
+
 if (require.main === module) {
-  bootstrap().catch((error) => {
-    console.error("Fallo al iniciar la aplicación:", error);
-    process.exit(1);
-  });
+  bootstrap().catch(failStartup);
 }
 
 // En el binario compilado: limpieza de arranque, migraciones pendientes (si una falla, no se levanta
