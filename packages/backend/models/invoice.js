@@ -26,9 +26,21 @@ exports.GET_INVOICES = async ({
   const offset = (Number(page) - 1) * Number(limit);
   const dbSortColumn = buildSortColumn(sortBy, masterTable, idInvoice);
   // ── Step 1: Get paginated invoice IDs ──
+  // El query de ids lleva los MISMOS joins que el Step 2 (slavefact/productos/
+  // grupos): el limit/paginación/sort y el count deben operar sobre el mismo
+  // set "sobreviviente". Sin los joins, el total se calcula sobre masterfact
+  // completo (29184) mientras el data solo devuelve facturas con líneas
+  // válidas (28781): facturas con productos huérfanos (sin fila en productos o
+  // sin grupo) se cuentan pero nunca se entregan → select-all pedía limit de
+  // más y faltaban filas. DISTINCT cubre el join con clientes (filtro ruta) y
+  // el join de utilidad que pueden duplicar filas por factura.
   const idQuery = knex
     .select(`${masterTable}.${idInvoice} as invoiceId`)
+    .distinct()
     .from(masterTable)
+    .innerJoin(slaveTable, `${slaveTable}.${idInvoice}`, `${masterTable}.${idInvoice}`)
+    .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+    .innerJoin("grupos", "grupos.IdGrupo", "productos.Grupo")
     .where(`${masterTable}.Anulada`, 0)
     .whereBetween(`${masterTable}.Fecha`, [from, to]);
 
@@ -46,7 +58,8 @@ exports.GET_INVOICES = async ({
     idQuery.innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`).where("clientes.Ruta", ruta);
   }
 
-  // Count total distinct invoices
+  // Count sobre el mismo query (ya DISTINCT por invoiceId) → total = facturas
+  // que el data realmente devuelve.
   const [{ total }] = await knex.count("* as total").from(idQuery.clone().as("sq"));
 
   // Sorting by profit needs the per-invoice profit aggregation joined in.
