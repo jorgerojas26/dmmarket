@@ -8,6 +8,11 @@
 // (refactor en controllers/dashboard.js), no en este índice.
 
 exports.up = async (knex) => {
+  // El dump de Solser trae columnas `DEFAULT '0000-00-00'`. Con el sql_mode estricto
+  // por defecto (NO_ZERO_DATE) cualquier ALTER TABLE falla con error 1067. El docker
+  // local corre con --sql-mode=""; acá se relaja la sesión de esta migración nomás.
+  await knex.raw("SET SESSION sql_mode = ''");
+
   const [{ c }] = await knex("information_schema.statistics").count("* as c").where({
     table_schema: process.env.DATABASE_NAME,
     table_name: "masterfact",

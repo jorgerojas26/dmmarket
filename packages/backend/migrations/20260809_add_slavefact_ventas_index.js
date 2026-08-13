@@ -8,6 +8,9 @@
 // IdFactura, también cubre los joins existentes por factura.
 
 exports.up = async (knex) => {
+  // Igual que en masterfact: relaja NO_ZERO_DATE para poder ALTER TABLE slavefact.
+  await knex.raw("SET SESSION sql_mode = ''");
+
   const [{ c }] = await knex("information_schema.statistics").count("* as c").where({
     table_schema: process.env.DATABASE_NAME,
     table_name: "slavefact",
