@@ -229,6 +229,15 @@ th.sortable-header:hover {
     transition: background 0.12s;
 }
 
+/* ── Row height ── */
+/* El `table { height: 100% }` global estira la tabla y Chrome reparte el
+   espacio extra entre las filas → con pocas filas crecen para llenar el
+   contenedor. Acá las filas conservan su alto natural; el contenedor
+   (overflow: auto) absorbe el espacio sobrante. */
+div.table-container > table {
+    height: auto;
+}
+
 /* ── Summary row ── */
 .summary-value {
     font-weight: 700;
