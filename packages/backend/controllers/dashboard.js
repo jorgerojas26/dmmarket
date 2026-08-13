@@ -299,7 +299,8 @@ const fetchUnsoldPurchasesRows = async ({ from, to, masterTable, slaveTable, idI
       INNER JOIN mastercomp ON mastercomp.IdFactura = slavecomp.IdFactura AND mastercomp.Anulada = 0
       INNER JOIN productos ON productos.IdProducto = slavecomp.IdProducto
       WHERE mastercomp.Fecha BETWEEN :from AND :to
-      GROUP BY productos.IdProducto, productos.Descripcion`,
+      GROUP BY productos.IdProducto, productos.Descripcion
+      ORDER BY totalPurchased DESC`,
       { from, to },
     ),
     knex.raw(

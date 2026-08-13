@@ -160,6 +160,20 @@ describe("GET /api/dashboard/pareto", () => {
     }
   });
 
+  // 2b. Orden canónico por defecto en compras-sin-vender: inversión desc + acumulado creciente
+  // (regresión: el SQL no traía ORDER BY y el re-sort default se salta en el handler → gráfico desordenado)
+  it("modo=compras-sin-vender devuelve productos ordenados por totalPurchased desc", async () => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ ...WIDE_RANGE, showNoe: "false", modo: "compras-sin-vender" });
+
+    expect(res.status).toBe(200);
+    const values = res.body.products.map((p) => Number(p.totalPurchased || 0));
+    const cums = res.body.products.map((p) => p.cumulativePercent);
+    expect([...values].sort((a, b) => b - a)).toEqual(values);
+    expect([...cums].sort((a, b) => a - b)).toEqual(cums);
+  });
+
   // 3. Invariante: ningún producto del modo compras-sin-vender aparece en el pareto de ventas del mismo rango
   it("ningún producto devuelto en compras-sin-vender tiene ventas en el rango", async () => {
     const [unsold, sales] = await Promise.all([
