@@ -94,6 +94,20 @@ const getPageNumbers = (current, totalPages, windowSize = 5) => {
     return pages;
 };
 
+// Acción de reducer propio para deseleccionar por id SIN depender de rowsById
+// (react-table solo puede togglear filas de la página actual; un id de otra
+// página crashea el reducer de useRowSelect con `rowsById[id].isGrouped`).
+const REMOVE_SELECTED_ROWS = 'removeSelectedRows';
+
+const useRemoveSelectedRows = (hooks) => {
+    hooks.stateReducers.push((state, action) => {
+        if (action.type !== REMOVE_SELECTED_ROWS) return state;
+        const selectedRowIds = { ...(state.selectedRowIds || {}) };
+        action.ids.forEach((id) => delete selectedRowIds[id]);
+        return { ...state, selectedRowIds };
+    });
+};
+
 const Table = ({
     // ── core ──
     data = [],
@@ -151,7 +165,10 @@ const Table = ({
     const plugins = useMemo(() => {
         const list = [];
         if (sorting?.enabled) list.push(useSortBy);
-        if (onRowSelect && multiSelect) list.push(useRowSelect);
+        if (onRowSelect && multiSelect) {
+            list.push(useRowSelect);
+            list.push(useRemoveSelectedRows);
+        }
         return list;
     }, [sorting?.enabled, multiSelect, !!onRowSelect]);
 
@@ -217,9 +234,11 @@ const Table = ({
     /* ── Targeted row deselection (e.g. removing one invoice from a selection modal) ── */
     useEffect(() => {
         if (deselectSignal?.ids?.length && dispatch) {
-            deselectSignal.ids.forEach((id) => {
-                dispatch({ type: actions.toggleRowSelected, id });
-            });
+            // Los ids de otra página no existen en rowsById: react-table no puede
+            // togglarlos (crashea). Se eliminan del cache de selección y con el
+            // reducer propio; el efecto de sync notifica al padre con la lista nueva.
+            deselectSignal.ids.forEach((id) => delete selectedRowsCacheRef.current[id]);
+            dispatch({ type: REMOVE_SELECTED_ROWS, ids: deselectSignal.ids });
         }
     }, [deselectSignal, dispatch]);
 
