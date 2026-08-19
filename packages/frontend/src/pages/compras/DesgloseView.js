@@ -5,6 +5,7 @@ import ProveedorSearch from 'components/ProveedorSearch';
 import PurchasesReportTable from 'components/PurchasesReportTable';
 import productosColumns from 'components/PurchasesReportTable/productosColumns';
 import { CurrencyRateContext } from 'context/currency_rate';
+import useMediaQuery from 'hooks/useMediaQuery';
 import { usePurchasesInvoices, usePurchasesProducts } from 'hooks/usePurchases';
 import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
@@ -56,6 +57,11 @@ const DesgloseView = ({ isActive = true }) => {
     const [productosPage, setProductosPage] = useState(1);
     const [productosSort, setProductosSort] = useState({ sortBy: 'monto', sortDir: 'desc' });
     const [productosSearch, setProductosSearch] = useState('');
+
+    // ── Responsive: en pantallas <1400px las dos tablas van en tabs (default
+    //    Productos); en pantallas extra grandes (≥1400px) van lado a lado. ──
+    const isWide = useMediaQuery('(min-width: 1400px)');
+    const [activeTab, setActiveTab] = useState('productos');
 
     // --- Sync filters back to URL ---
     useEffect(() => {
@@ -437,6 +443,86 @@ const DesgloseView = ({ isActive = true }) => {
     const facturasData = facturasRes?.data || [];
     const productosData = productosRes?.data || [];
 
+    // Tabla de facturas y de productos: se reutilizan en el layout lado a lado
+    // (pantallas ≥1400px) y en el layout con tabs (pantallas de laptop).
+    const facturasTable = (
+        <>
+            {facturasError && (
+                <div className="alert alert-danger">Error al cargar las facturas: {facturasError.message}</div>
+            )}
+            <PurchasesReportTable
+                data={facturasData}
+                loading={facturasLoading}
+                fillHeight
+                sorting={{
+                    enabled: true,
+                    sortBy: facturasSortBy,
+                    onSort: handleFacturasSort,
+                }}
+                pagination={{
+                    enabled: true,
+                    page: facturasPage,
+                    totalPages: Math.ceil(facturasTotal / 20),
+                    totalRows: facturasTotal,
+                    pageSize: 20,
+                    onPageChange: handleFacturasPageChange,
+                }}
+                search={{
+                    enabled: true,
+                    placeholder: 'Buscar por proveedor o factura...',
+                    onSearch: handleFacturasSearch,
+                }}
+                print={{
+                    enabled: true,
+                    onGlobalPrint: handlePrintAllFacturas,
+                    storageKey: 'compras-facturas',
+                }}
+            />
+        </>
+    );
+
+    const productosTable = (
+        <>
+            {productosError && (
+                <div className="alert alert-danger">Error al cargar los productos: {productosError.message}</div>
+            )}
+            <PurchasesReportTable
+                data={productosData}
+                loading={productosLoading}
+                columns={productosColumns}
+                fillHeight
+                sorting={{
+                    enabled: true,
+                    sortBy: productosSortBy,
+                    onSort: handleProductosSort,
+                }}
+                pagination={{
+                    enabled: true,
+                    page: productosPage,
+                    totalPages: Math.ceil(productosTotal / 20),
+                    totalRows: productosTotal,
+                    pageSize: 20,
+                    onPageChange: handleProductosPageChange,
+                }}
+                search={{
+                    enabled: true,
+                    placeholder: 'Buscar producto...',
+                    onSearch: handleProductosSearch,
+                }}
+                print={{
+                    enabled: true,
+                    onGlobalPrint: handlePrintAllProductos,
+                    storageKey: 'compras-productos',
+                }}
+            />
+        </>
+    );
+
+    const reportTabs = [
+        { key: 'productos', label: 'Productos' },
+        { key: 'facturas', label: 'Facturas' },
+    ];
+
     return (
         <div className="report-page">
             {/* Header row: heading + date range */}
@@ -459,101 +545,53 @@ const DesgloseView = ({ isActive = true }) => {
                 </div>
             </div>
 
-            {/* Side-by-side tables */}
-            {/* report-row: reparte el alto disponible entre ambas columnas
-                (lado a lado ≥992px, apiladas debajo); las tablas con fillHeight
-                absorben el resto y scrollean internamente, la página nunca
-                saca scrollbar del contenedor padre. */}
-            <div className="report-row">
-                {/* Facturas table */}
-                <div className="report-col">
-                    <div className="dashboard-panel h-100 d-flex flex-column">
-                        <div className="dashboard-panel-header">
-                            <h3>Facturas de Compra</h3>
-                        </div>
-                        <div className="dashboard-panel-body flex-grow-1" style={{ minHeight: 0 }}>
-                            {facturasError && (
-                                <div className="alert alert-danger">
-                                    Error al cargar las facturas: {facturasError.message}
-                                </div>
-                            )}
-                            <PurchasesReportTable
-                                data={facturasData}
-                                loading={facturasLoading}
-                                fillHeight
-                                sorting={{
-                                    enabled: true,
-                                    sortBy: facturasSortBy,
-                                    onSort: handleFacturasSort,
-                                }}
-                                pagination={{
-                                    enabled: true,
-                                    page: facturasPage,
-                                    totalPages: Math.ceil(facturasTotal / 20),
-                                    totalRows: facturasTotal,
-                                    pageSize: 20,
-                                    onPageChange: handleFacturasPageChange,
-                                }}
-                                search={{
-                                    enabled: true,
-                                    placeholder: 'Buscar por proveedor o factura...',
-                                    onSearch: handleFacturasSearch,
-                                }}
-                                print={{
-                                    enabled: true,
-                                    onGlobalPrint: handlePrintAllFacturas,
-                                    storageKey: 'compras-facturas',
-                                }}
-                            />
+            {/* Tables: lado a lado en pantallas ≥1400px; en laptops, una sola
+                tabla con tabs (Facturas / Productos, default Productos). */}
+            {isWide ? (
+                <div className="report-row">
+                    {/* Facturas table */}
+                    <div className="report-col">
+                        <div className="dashboard-panel h-100 d-flex flex-column">
+                            <div className="dashboard-panel-header">
+                                <h3>Facturas de Compra</h3>
+                            </div>
+                            <div className="dashboard-panel-body flex-grow-1" style={{ minHeight: 0 }}>
+                                {facturasTable}
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Productos table */}
-                <div className="report-col">
-                    <div className="dashboard-panel h-100 d-flex flex-column">
-                        <div className="dashboard-panel-header">
-                            <h3>Productos Comprados</h3>
-                        </div>
-                        <div className="dashboard-panel-body flex-grow-1" style={{ minHeight: 0 }}>
-                            {productosError && (
-                                <div className="alert alert-danger">
-                                    Error al cargar los productos: {productosError.message}
-                                </div>
-                            )}
-                            <PurchasesReportTable
-                                data={productosData}
-                                loading={productosLoading}
-                                columns={productosColumns}
-                                fillHeight
-                                sorting={{
-                                    enabled: true,
-                                    sortBy: productosSortBy,
-                                    onSort: handleProductosSort,
-                                }}
-                                pagination={{
-                                    enabled: true,
-                                    page: productosPage,
-                                    totalPages: Math.ceil(productosTotal / 20),
-                                    totalRows: productosTotal,
-                                    pageSize: 20,
-                                    onPageChange: handleProductosPageChange,
-                                }}
-                                search={{
-                                    enabled: true,
-                                    placeholder: 'Buscar producto...',
-                                    onSearch: handleProductosSearch,
-                                }}
-                                print={{
-                                    enabled: true,
-                                    onGlobalPrint: handlePrintAllProductos,
-                                    storageKey: 'compras-productos',
-                                }}
-                            />
+                    {/* Productos table */}
+                    <div className="report-col">
+                        <div className="dashboard-panel h-100 d-flex flex-column">
+                            <div className="dashboard-panel-header">
+                                <h3>Productos Comprados</h3>
+                            </div>
+                            <div className="dashboard-panel-body flex-grow-1" style={{ minHeight: 0 }}>
+                                {productosTable}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            ) : (
+                <div className="report-tabs">
+                    <div className="report-tab-nav">
+                        {reportTabs.map((t) => (
+                            <button
+                                key={t.key}
+                                type="button"
+                                className={`report-tab-button${activeTab === t.key ? ' active' : ''}`}
+                                onClick={() => setActiveTab(t.key)}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="report-tab-content">
+                        {activeTab === 'productos' ? productosTable : facturasTable}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
