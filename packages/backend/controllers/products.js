@@ -69,11 +69,22 @@ const GET_PRODUCTS = async (req, res) => {
     const [{ total }] = await countQuery;
     const data = await dataQuery;
 
+    // Totals: sumas de TODA la data filtrada (independientes de la página), para
+    // que el pie de la tabla no dependa de la página visible.
+    const totalsQuery = knex
+      .select(knex.raw("ROUND(SUM(productos.Existencia), 2) as existencia"))
+      .from("productos")
+      .leftJoin("grupos", "grupos.IdGrupo", "productos.Grupo")
+      .leftJoin("proveedores", "proveedores.IdProveedor", "productos.Proveedor");
+    applyFilters(totalsQuery);
+    const [totals] = await totalsQuery;
+
     res.status(200).json({
       data,
       total: Number(total),
       page: limit ? pageNum : 1,
       limit: limit ? limitNum : null,
+      totals,
     });
   } catch (error) {
     console.error(error);

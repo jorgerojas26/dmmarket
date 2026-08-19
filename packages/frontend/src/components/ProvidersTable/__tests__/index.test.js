@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as providersApi from 'api/providers';
 import { CurrencyRateContext } from 'context/currency_rate';
@@ -161,16 +161,37 @@ describe('ProvidersTable', () => {
         expect(screen.getByPlaceholderText('Buscar por empresa...')).toBeInTheDocument();
     });
 
-    it('formats currency values correctly', async () => {
+    it('formats currency values correctly (es-VE)', async () => {
         await act(async () => {
             render(<ProvidersTable />, { wrapper: swrWrapper });
         });
 
         await waitFor(() => {
-            expect(screen.getByText('$1000.50')).toBeInTheDocument();
-            expect(screen.getByText('$2000.75')).toBeInTheDocument();
-            expect(screen.getByText('$500.00')).toBeInTheDocument();
-            expect(screen.getByText('$1500.25')).toBeInTheDocument();
+            expect(screen.getByText('$1.000,50')).toBeInTheDocument();
+            expect(screen.getByText('$2.000,75')).toBeInTheDocument();
+            expect(screen.getByText('$500,00')).toBeInTheDocument();
+            expect(screen.getByText('$1.500,25')).toBeInTheDocument();
         });
+    });
+
+    it('shows global totals (all pages) in the footer', async () => {
+        providersApi.fetchProvidersList.mockResolvedValue({
+            ...mockProvidersData,
+            totals: { total_compras: 1500.5, num_compras: 7, total_ventas: 3501, num_ventas: 18 },
+        });
+
+        const { container } = render(<ProvidersTable />, { wrapper: swrWrapper });
+
+        await waitFor(() => {
+            expect(screen.getByText('Proveedor A')).toBeInTheDocument();
+        });
+
+        const footer = container.querySelector('tfoot');
+        expect(footer).not.toBeNull();
+        // Totales globales (suma de ambas filas del mock), formato es-VE.
+        expect(within(footer).getByText('$1.500,50')).toBeInTheDocument();
+        expect(within(footer).getByText('$3.501,00')).toBeInTheDocument();
+        expect(within(footer).getByText('7')).toBeInTheDocument();
+        expect(within(footer).getByText('18')).toBeInTheDocument();
     });
 });

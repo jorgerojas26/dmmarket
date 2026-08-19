@@ -1,10 +1,5 @@
+import { formatQuantity } from 'utils/format';
 import columns from './columns';
-
-const formatPeso = (value) => {
-    const num = Number(value);
-    if (Number.isNaN(num) || num === 0) return '';
-    return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
-};
 
 /**
  * Productos columns (DesgloseView): shared columns + Peso column
@@ -16,13 +11,13 @@ const productosColumns = [
     {
         Header: 'Peso',
         accessor: 'peso',
-        Cell: ({ value }) => formatPeso(value),
+        Cell: ({ value }) => formatQuantity(value),
         Footer: ({ data, summary }) => {
             // `summary` es el total de todas las páginas (server-side); si no
             // viene, se reduce la página visible (fallback).
             const total =
                 summary != null ? Number(summary) : data.reduce((acc, current) => acc + (current.peso || 0), 0);
-            return formatPeso(total);
+            return formatQuantity(total);
         },
     },
     ...columns.slice(2),

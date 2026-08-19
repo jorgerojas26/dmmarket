@@ -11,6 +11,7 @@ const PurchasesReportTable = ({
     fillHeight,
     columns: customColumns,
     print,
+    summaries,
 }) => {
     const memoizedColumns = customColumns || columns;
 
@@ -26,6 +27,7 @@ const PurchasesReportTable = ({
             pagination={pagination}
             search={search}
             print={print}
+            summaries={summaries}
         />
     );
 };

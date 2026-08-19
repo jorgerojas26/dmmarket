@@ -16,13 +16,13 @@ const LIMIT = 20;
 const formatPrice = (value) => {
     const num = Number(value);
     if (Number.isNaN(num)) return '';
-    return `$${num.toFixed(2)}`;
+    return `$${num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const formatStock = (value) => {
     const num = Number(value);
     if (Number.isNaN(num)) return '';
-    return num.toFixed(2);
+    return num.toLocaleString('es-VE', { maximumFractionDigits: 3 });
 };
 
 // Spanish-aware alphabetical sort: handles accents, ñ and case
@@ -76,7 +76,13 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
         }
     }, []);
 
-    const stockTotal = useMemo(() => dataArr.reduce((acc, item) => acc + Number(item.Existencia || 0), 0), [dataArr]);
+    // Total de stock de TODA la data filtrada (todas las páginas), calculado en
+    // el backend; si no viene, se reduce la página visible (fallback).
+    const stockTotal = useMemo(() => {
+        const global = result?.totals?.existencia;
+        if (global != null) return Number(global);
+        return dataArr.reduce((acc, item) => acc + Number(item.Existencia || 0), 0);
+    }, [result, dataArr]);
 
     const memoizedColumns = useMemo(
         () => [
@@ -92,7 +98,7 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
 
     const summaries = useMemo(
         () => ({
-            Existencia: stockTotal ? stockTotal.toFixed(2) : '',
+            Existencia: stockTotal ? stockTotal.toLocaleString('es-VE', { maximumFractionDigits: 3 }) : '',
         }),
         [stockTotal],
     );

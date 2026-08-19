@@ -282,6 +282,22 @@ const GET_INVOICES = async (req, res) => {
       .limit(limit)
       .offset(offset);
 
+    // Totals: sumas de TODA la data filtrada (independientes de la página), para
+    // que el pie de la tabla no dependa de la página visible.
+    const [totals] = await knex
+      .select(
+        knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as monto"),
+        knex.raw("ROUND(SUM(sc.Cantidad), 3) as unidades"),
+      )
+      .from("slavecomp as sc")
+      .innerJoin("mastercomp as mc", function () {
+        this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
+      })
+      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .whereBetween("mc.Fecha", [from, to])
+      .modify(buildFilters);
+
     res.status(200).json({
       data,
       pagination: {
@@ -289,6 +305,7 @@ const GET_INVOICES = async (req, res) => {
         limit,
         total: Number(total),
       },
+      totals,
     });
   } catch (error) {
     console.error(error);
@@ -364,6 +381,21 @@ const GET_PRODUCTS = async (req, res) => {
       .limit(limit)
       .offset(offset);
 
+    // Totals: sumas de TODA la data filtrada (independientes de la página).
+    const [totals] = await knex
+      .select(
+        knex.raw("ROUND(SUM(sc.Cantidad), 3) as quantity"),
+        knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as monto"),
+      )
+      .from("slavecomp as sc")
+      .innerJoin("mastercomp as mc", function () {
+        this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
+      })
+      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .whereBetween("mc.Fecha", [from, to])
+      .modify(buildFilters);
+
     res.status(200).json({
       data,
       pagination: {
@@ -371,6 +403,7 @@ const GET_PRODUCTS = async (req, res) => {
         limit,
         total: Number(total),
       },
+      totals,
     });
   } catch (error) {
     console.error(error);

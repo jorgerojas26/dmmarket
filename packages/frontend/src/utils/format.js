@@ -15,6 +15,16 @@ export const formatMoney = (val, currency = 'USD', rate) => {
 
 export const formatNumber = (val) => Number(val).toLocaleString('es-VE');
 
+/**
+ * Cantidades/pesos (hasta 3 decimales) en formato es-VE: separador de miles con
+ * punto y decimal con coma (p.ej. 11.139,3). Valores 0/NaN → ''.
+ */
+export const formatQuantity = (val) => {
+    const num = Number(val);
+    if (Number.isNaN(num) || num === 0) return '';
+    return num.toLocaleString('es-VE', { maximumFractionDigits: 3 });
+};
+
 export const formatPercent = (val) => `${Number(val).toFixed(1)}%`;
 
 export const computeComparison = (current, previous) => {

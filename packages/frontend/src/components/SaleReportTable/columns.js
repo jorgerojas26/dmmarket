@@ -1,3 +1,5 @@
+import { formatCurrency, formatQuantity } from 'utils/format';
+
 const columns = [
     {
         Header: 'Producto',
@@ -10,29 +12,25 @@ const columns = [
             // `summary` es el total de todas las páginas (server-side); si no
             // viene, se reduce la página visible (fallback).
             const total = summary != null ? Number(summary) : data.reduce((acc, current) => acc + current.quantity, 0);
-            return Number(total).toFixed(2);
+            return formatQuantity(total);
         },
     },
     {
         Header: 'Bruto',
         accessor: 'rawProfit',
-        Cell: ({ value }) => {
-            return value != null ? `$${value.toLocaleString()}` : '';
-        },
+        Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
         Footer: ({ data, summary }) => {
             const total = summary != null ? Number(summary) : data.reduce((acc, current) => acc + current.rawProfit, 0);
-            return `$${Number(total.toFixed(2)).toLocaleString()}`;
+            return formatCurrency(total);
         },
     },
     {
         Header: 'Utilidad',
         accessor: 'netProfit',
-        Cell: ({ value }) => {
-            return value != null ? `$${value.toLocaleString()}` : '';
-        },
+        Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
         Footer: ({ data, summary }) => {
             const total = summary != null ? Number(summary) : data.reduce((acc, current) => acc + current.netProfit, 0);
-            return `$${Number(total.toFixed(2)).toLocaleString()}`;
+            return formatCurrency(total);
         },
     },
     {

@@ -131,11 +131,26 @@ const GET_PROVIDERS_LIST = async (req, res) => {
       return cmp * sortDirection;
     });
 
+    // Totales globales: `rows` ya es el set COMPLETO filtrado (la paginación es
+    // un slice en JS), así que la suma sobre `rows` cubre todas las páginas.
+    const totals = rows.reduce(
+      (acc, r) => ({
+        total_compras: acc.total_compras + r.total_compras,
+        num_compras: acc.num_compras + r.num_compras,
+        total_ventas: acc.total_ventas + r.total_ventas,
+        num_ventas: acc.num_ventas + r.num_ventas,
+      }),
+      { total_compras: 0, num_compras: 0, total_ventas: 0, num_ventas: 0 },
+    );
+    totals.total_compras = Math.round(totals.total_compras * 100) / 100;
+    totals.total_ventas = Math.round(totals.total_ventas * 100) / 100;
+
     res.status(200).json({
       data: rows.slice(offset, offset + limitNum),
       total: rows.length,
       page: pageNum,
       limit: limitNum,
+      totals,
     });
   } catch (error) {
     console.error(error);

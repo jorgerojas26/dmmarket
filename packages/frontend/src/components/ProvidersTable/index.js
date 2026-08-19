@@ -7,7 +7,7 @@ import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatMoney, formatNumber } from 'utils/format';
+import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import './styles.css';
 
@@ -159,13 +159,36 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
 
     const totalPages = Math.ceil(total / LIMIT);
 
+    // Totales globales de TODOS los proveedores filtrados (todas las páginas),
+    // calculados en el backend; se muestran en el pie de la tabla.
+    const summaries = useMemo(
+        () =>
+            result?.totals
+                ? {
+                      total_compras: formatCurrency(result.totals.total_compras),
+                      num_compras: formatNumber(result.totals.num_compras || 0),
+                      total_ventas: formatCurrency(result.totals.total_ventas),
+                      num_ventas: formatNumber(result.totals.num_ventas || 0),
+                  }
+                : null,
+        [result],
+    );
+
     const columns = useMemo(
         () => [
             { Header: 'IdProveedor', accessor: 'IdProveedor' },
             { Header: 'Empresa', accessor: 'Empresa' },
-            { Header: 'Total Compras', accessor: 'total_compras', Cell: ({ value }) => `$${Number(value).toFixed(2)}` },
+            {
+                Header: 'Total Compras',
+                accessor: 'total_compras',
+                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
+            },
             { Header: '# Compras', accessor: 'num_compras' },
-            { Header: 'Total Ventas', accessor: 'total_ventas', Cell: ({ value }) => `$${Number(value).toFixed(2)}` },
+            {
+                Header: 'Total Ventas',
+                accessor: 'total_ventas',
+                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
+            },
             { Header: '# Ventas', accessor: 'num_ventas' },
         ],
         [],
@@ -181,6 +204,8 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                     onRowClick={onRowSelect}
                     className="providers-table"
                     emptyMessage="Sin datos"
+                    showFooter={!!summaries}
+                    summaries={summaries}
                     // En laptops la tabla se comprime a calc(100vh - 251px) (heading
                     // + toolbar + paginación + navbar + padding) para no sacar
                     // scrollbar del contenedor padre; en pantallas altas conserva

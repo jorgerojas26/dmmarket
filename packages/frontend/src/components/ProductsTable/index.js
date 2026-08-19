@@ -3,17 +3,12 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useRef } from 'react';
 import { Card } from 'react-bootstrap';
+import { formatCurrency, formatQuantity } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import { CurrencyRateContext } from '../../context/currency_rate';
 import pdf from './pdf';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
-
-const formatPeso = (value) => {
-    const num = Number(value);
-    if (Number.isNaN(num) || num === 0) return '';
-    return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
-};
 
 // Spanish-aware alphabetical sort: handles accents, ñ and case
 // (react-table's default alphanumeric compares raw UTF-16 code units).
@@ -56,13 +51,13 @@ const ProductsTable = ({ data, totalSummary, printStorageKey }) => {
             {
                 Header: 'Peso',
                 accessor: 'peso',
-                Cell: ({ value }) => formatPeso(value),
+                Cell: ({ value }) => formatQuantity(value),
             },
             { Header: 'Total', accessor: 'total' },
             {
                 Header: 'Utilidad',
                 accessor: 'utilidad',
-                Cell: ({ value }) => (value != null ? `$${Number(value).toFixed(2)}` : ''),
+                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
             },
         ],
         [],
@@ -70,10 +65,10 @@ const ProductsTable = ({ data, totalSummary, printStorageKey }) => {
 
     const summaries = useMemo(
         () => ({
-            quantity: quantityTotal ? quantityTotal.toFixed(2) : '',
-            peso: formatPeso(pesoTotal),
-            total: totalSummary ? `$${totalSummary.toFixed(2)}` : '',
-            utilidad: utilidadTotal ? `$${utilidadTotal.toFixed(2)}` : '',
+            quantity: quantityTotal ? formatQuantity(quantityTotal) : '',
+            peso: formatQuantity(pesoTotal),
+            total: totalSummary != null ? formatCurrency(totalSummary) : '',
+            utilidad: utilidadTotal ? formatCurrency(utilidadTotal) : '',
         }),
         [quantityTotal, pesoTotal, totalSummary, utilidadTotal],
     );
