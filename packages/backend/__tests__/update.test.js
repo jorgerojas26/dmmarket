@@ -1,5 +1,8 @@
 const request = require("supertest");
 const app = require("../index");
+const { ASSETS_BY_PLATFORM, buildUpdateSh } = require("../controllers/update");
+
+const platformAssets = ASSETS_BY_PLATFORM[process.platform];
 
 const GITHUB_RELEASE = (tagName) => ({
   tag_name: tagName,
@@ -9,6 +12,8 @@ const GITHUB_RELEASE = (tagName) => ({
   assets: [
     { name: "dmmarket-app.exe", browser_download_url: "https://github.com/x/dmmarket-app.exe" },
     { name: "dmmarket-app.exe.sha256", browser_download_url: "https://github.com/x/dmmarket-app.exe.sha256" },
+    { name: "dmmarket-app-mac", browser_download_url: "https://github.com/x/dmmarket-app-mac" },
+    { name: "dmmarket-app-mac.sha256", browser_download_url: "https://github.com/x/dmmarket-app-mac.sha256" },
   ],
 });
 
@@ -36,8 +41,8 @@ describe("POST /api/update/check", () => {
     expect(res.body.updateAvailable).toBe(true);
     expect(res.body.latestVersion).toBe("99.0.0");
     expect(res.body.notes).toBe("Notas de la release");
-    expect(res.body.assetUrl).toBe("https://github.com/x/dmmarket-app.exe");
-    expect(res.body.sha256AssetUrl).toBe("https://github.com/x/dmmarket-app.exe.sha256");
+    expect(res.body.assetUrl).toBe(`https://github.com/x/${platformAssets.binary}`);
+    expect(res.body.sha256AssetUrl).toBe(`https://github.com/x/${platformAssets.sha}`);
   });
 
   it("responde updateAvailable false con release igual o menor a la actual", async () => {
@@ -92,5 +97,23 @@ describe("endpoints de update que tocan disco/procesos en dev (no compilado)", (
     const res = await request(app).get("/api/update/progress");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ active: false, bytes: 0, total: 0 });
+  });
+});
+
+describe("buildUpdateSh (macOS/Linux)", () => {
+  it("genera la secuencia de reemplazo y relanzamiento del binario", () => {
+    const sh = buildUpdateSh("/app/dmmarket-app", "/app/.dmmarket-update/new-app");
+    expect(sh.startsWith("#!/bin/sh")).toBe(true);
+    expect(sh).toContain('mv -f "/app/dmmarket-app" "/app/dmmarket-app.old"');
+    expect(sh).toContain('mv -f "/app/.dmmarket-update/new-app" "/app/dmmarket-app"');
+    expect(sh).toContain('chmod +x "/app/dmmarket-app"');
+    expect(sh).toContain('nohup "/app/dmmarket-app" >/dev/null 2>&1 &');
+    expect(sh).toContain('rm -f "/app/dmmarket-app.old"');
+    expect(sh.endsWith("exit 0")).toBe(true);
+  });
+
+  it("incluye un sleep para dejar morir el proceso viejo", () => {
+    const sh = buildUpdateSh("/app/dm", "/tmp/new");
+    expect(sh).toContain("sleep 3");
   });
 });

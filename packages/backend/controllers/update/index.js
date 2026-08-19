@@ -10,9 +10,17 @@ const IS_STANDALONE = typeof Bun !== "undefined" && Bun.embeddedFiles.length > 0
 
 const GITHUB_API = "https://api.github.com/repos/jorgerojas26/dmmarket/releases/latest";
 
+// Par de assets (binario + hash) por plataforma. Cada release sube ambos
+// pares: dmmarket-app.exe (Windows) y dmmarket-app-mac (macOS).
+const ASSETS_BY_PLATFORM = {
+  win32: { binary: "dmmarket-app.exe", sha: "dmmarket-app.exe.sha256" },
+  darwin: { binary: "dmmarket-app-mac", sha: "dmmarket-app-mac.sha256" },
+};
+
 // Carpeta de descarga al lado del binario (cwd del proceso; el .env también se lee de ahí).
 const UPDATE_DIR = path.join(process.cwd(), ".dmmarket-update");
-const NEW_EXE = path.join(UPDATE_DIR, "new.exe");
+// Nombre del binario descargado según plataforma (se renombra sobre el actual al aplicar).
+const NEW_BINARY = path.join(UPDATE_DIR, process.platform === "win32" ? "new.exe" : "new-app");
 
 // Estado de descarga en memoria para el polling de progreso (una descarga a la vez).
 const downloadState = { active: false, bytes: 0, total: 0 };
@@ -68,9 +76,15 @@ const POST_CHECK = async (_req, res) => {
     }
 
     const release = await response.json();
-    const exe = release.assets?.find((asset) => asset.name === "dmmarket-app.exe");
-    const sha256 = release.assets?.find((asset) => asset.name === "dmmarket-app.exe.sha256");
-    if (!exe || !sha256) {
+    const assetsFor = ASSETS_BY_PLATFORM[process.platform];
+    if (!assetsFor) {
+      return res.status(400).json({
+        error: { message: "El auto-update no está disponible en esta plataforma" },
+      });
+    }
+    const binary = release.assets?.find((asset) => asset.name === assetsFor.binary);
+    const sha256 = release.assets?.find((asset) => asset.name === assetsFor.sha);
+    if (!binary || !sha256) {
       return res.status(502).json({
         error: {
           message: "Release inválida. Por favor contacte a su administrador",
@@ -89,7 +103,7 @@ const POST_CHECK = async (_req, res) => {
       latestVersion,
       notes: release.body || "",
       publishedAt: release.published_at || null,
-      assetUrl: exe.browser_download_url,
+      assetUrl: binary.browser_download_url,
       sha256AssetUrl: sha256.browser_download_url,
     });
   } catch (_error) {
@@ -116,7 +130,7 @@ const POST_DOWNLOAD = async (req, res) => {
   downloadState.bytes = 0;
   downloadState.total = 0;
   fs.mkdirSync(UPDATE_DIR, { recursive: true });
-  const tmpPath = path.join(UPDATE_DIR, "new.exe.tmp");
+  const tmpPath = `${NEW_BINARY}.tmp`;
   fs.rmSync(tmpPath, { force: true });
 
   try {
@@ -153,7 +167,7 @@ const POST_DOWNLOAD = async (req, res) => {
       throw new Error("La verificación sha256 falló: el binario descargado no coincide con la release");
     }
 
-    fs.renameSync(tmpPath, NEW_EXE);
+    fs.renameSync(tmpPath, NEW_BINARY);
     res.status(200).json({ success: true, message: "Actualización descargada y verificada" });
   } catch (error) {
     fs.rmSync(tmpPath, { force: true });
@@ -196,30 +210,58 @@ function buildUpdateBat(exeName) {
   ].join("\r\n");
 }
 
-// Aplica el update: escribe update.bat junto al binario, lo lanza detached y el proceso sale.
-// Truco del rename de Windows: un exe en ejecución no se puede sobrescribir ni borrar, pero sí renombrar.
-// El bat espera 3s (muerte del proceso viejo), renombra el actual a .old.exe, mueve el nuevo,
-// lo arranca y borra el viejo (best-effort; la limpieza de arranque cubre el race del del).
+// Genera el update.sh para macOS/Linux (función pura para poder testearla).
+// En Unix un binario en ejecución sí se puede renombrar/mover: el script espera
+// la muerte del proceso (3s), mueve el actual a .old, coloca el nuevo en su
+// lugar, lo marca ejecutable y lo relanza en background. No usa comillas
+// problemáticas porque las rutas viajan como argumento interpolado.
+function buildUpdateSh(execPath, newBinary) {
+  return [
+    "#!/bin/sh",
+    "sleep 3",
+    `mv -f "${execPath}" "${execPath}.old"`,
+    `mv -f "${newBinary}" "${execPath}"`,
+    `chmod +x "${execPath}"`,
+    `nohup "${execPath}" >/dev/null 2>&1 &`,
+    `rm -f "${execPath}.old"`,
+    "exit 0",
+  ].join("\n");
+}
+
+// Aplica el update según plataforma:
+// - Windows: update.bat (truco del rename — un exe en ejecución no se puede
+//   sobrescribir ni borrar, pero sí renombrar). El bat espera 3s, renombra el
+//   actual a .old.exe, mueve el nuevo, lo arranca y borra el viejo.
+// - macOS/Linux: update.sh (ver buildUpdateSh).
 const POST_APPLY = (_req, res) => {
   if (!requireStandalone(res)) return;
 
-  if (process.platform !== "win32") {
-    return res.status(400).json({ error: { message: "El auto-update solo está disponible en Windows" } });
-  }
-  if (!fs.existsSync(NEW_EXE)) {
-    return res.status(400).json({ error: { message: "No hay una actualización descargada. Descárgala primero." } });
-  }
+  const { spawn } = require("node:child_process");
+  if (process.platform === "win32") {
+    if (!fs.existsSync(NEW_BINARY)) {
+      return res.status(400).json({ error: { message: "No hay una actualización descargada. Descárgala primero." } });
+    }
 
-  const exeName = path.basename(process.execPath);
-  const batPath = path.join(process.cwd(), "update.bat");
-  fs.writeFileSync(batPath, buildUpdateBat(exeName));
+    const exeName = path.basename(process.execPath);
+    const batPath = path.join(process.cwd(), "update.bat");
+    fs.writeFileSync(batPath, buildUpdateBat(exeName));
 
-  const child = require("node:child_process").spawn("cmd", ["/c", batPath], {
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  child.unref();
+    const child = spawn("cmd", ["/c", batPath], { detached: true, stdio: "ignore", windowsHide: true });
+    child.unref();
+  } else if (process.platform === "darwin") {
+    if (!fs.existsSync(NEW_BINARY)) {
+      return res.status(400).json({ error: { message: "No hay una actualización descargada. Descárgala primero." } });
+    }
+
+    const shPath = path.join(process.cwd(), "update.sh");
+    fs.writeFileSync(shPath, buildUpdateSh(process.execPath, NEW_BINARY));
+    fs.chmodSync(shPath, 0o755);
+
+    const child = spawn("/bin/sh", [shPath], { detached: true, stdio: "ignore" });
+    child.unref();
+  } else {
+    return res.status(400).json({ error: { message: "El auto-update solo está disponible en Windows y macOS" } });
+  }
 
   res.status(200).json({ success: true, message: "Actualización aplicada. La app se reiniciará." });
   // Delay para dejar flush de la respuesta antes de salir.
@@ -233,4 +275,6 @@ module.exports = {
   GET_PROGRESS,
   POST_APPLY,
   buildUpdateBat,
+  buildUpdateSh,
+  ASSETS_BY_PLATFORM,
 };

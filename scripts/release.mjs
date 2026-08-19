@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 const REPO = "jorgerojas26/dmmarket";
 const EXE = "dmmarket-app.exe";
 const SHA_FILE = "dmmarket-app.exe.sha256";
+const MAC_BIN = "dmmarket-app-mac";
+const MAC_SHA_FILE = "dmmarket-app-mac.sha256";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const backendDir = path.join(root, "packages", "backend");
@@ -52,15 +54,32 @@ if (runQuiet(`git ls-remote --exit-code origin refs/tags/${tag}`)) {
 
 console.log(`Publicando release ${tag} para ${REPO}`);
 
-// ── 2. Build Windows ───────────────────────────────────────────────────────
+// ── 2. Builds ───────────────────────────────────────────────────────────────
+// build:windows ya corre build:prepare (frontend + assets.js + version.js),
+// así que el binario macOS se compila DESPUÉS reutilizando ese output (sin
+// repetir el build del frontend).
 run("bun", ["--filter", "@dmmarket/backend", "build:windows"], { cwd: root });
 
-// ── 3. sha256 del binario ──────────────────────────────────────────────────
+const sha256Of = (filePath) => createHash("sha256").update(readFileSync(filePath)).digest("hex");
+
+// Binario macOS: se compila para el host (bun compila a la plataforma actual)
+// y se renombra como asset de la release.
+const macBinPath = path.join(backendDir, MAC_BIN);
+run("bun", ["build", "--compile", "index.js", "--minify", "--external", "mysql", "--outfile", MAC_BIN], {
+  cwd: backendDir,
+});
+if (!existsSync(macBinPath)) fail(`No se encontró ${MAC_BIN} después del build.`);
+
+// ── 3. sha256 de los binarios ───────────────────────────────────────────────
 const exePath = path.join(backendDir, EXE);
 if (!existsSync(exePath)) fail(`No se encontró ${EXE} después del build.`);
-const hash = createHash("sha256").update(readFileSync(exePath)).digest("hex");
-writeFileSync(path.join(backendDir, SHA_FILE), hash); // 64 chars, nada más
-console.log(`sha256 (${EXE}): ${hash}`);
+const exeHash = sha256Of(exePath);
+writeFileSync(path.join(backendDir, SHA_FILE), exeHash); // 64 chars, nada más
+console.log(`sha256 (${EXE}): ${exeHash}`);
+
+const macHash = sha256Of(macBinPath);
+writeFileSync(path.join(backendDir, MAC_SHA_FILE), macHash);
+console.log(`sha256 (${MAC_BIN}): ${macHash}`);
 
 // ── 4. Notas de la release: commits desde el último tag ────────────────────
 const previousTag = runQuiet("git describe --tags --abbrev=0");
@@ -79,6 +98,8 @@ run("gh", [
   notes || `Release ${version}`,
   exePath,
   path.join(backendDir, SHA_FILE),
+  macBinPath,
+  path.join(backendDir, MAC_SHA_FILE),
 ]);
 
 // ── 6. Tag local + push ────────────────────────────────────────────────────
@@ -87,6 +108,9 @@ run("git", ["push", "origin", tag]);
 
 // ── 7. Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n✓ Release ${tag} publicada: https://github.com/${REPO}/releases/tag/${tag}`);
-console.log(`  Binario: https://github.com/${REPO}/releases/download/${tag}/${EXE}`);
-console.log(`  Hash:    https://github.com/${REPO}/releases/download/${tag}/${SHA_FILE}`);
-console.log(`  sha256:  ${hash}`);
+console.log(`  Binario Windows: https://github.com/${REPO}/releases/download/${tag}/${EXE}`);
+console.log(`  Hash Windows:    https://github.com/${REPO}/releases/download/${tag}/${SHA_FILE}`);
+console.log(`  Binario macOS:   https://github.com/${REPO}/releases/download/${tag}/${MAC_BIN}`);
+console.log(`  Hash macOS:      https://github.com/${REPO}/releases/download/${tag}/${MAC_SHA_FILE}`);
+console.log(`  sha256 (win):    ${exeHash}`);
+console.log(`  sha256 (mac):    ${macHash}`);
