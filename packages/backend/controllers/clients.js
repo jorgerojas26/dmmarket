@@ -250,22 +250,20 @@ const GET_CLIENT_SUMMARY = async (req, res) => {
 
 const GET_CLIENT_ROUTES = async (_req, res) => {
   try {
+    // innerJoin: solo rutas que tienen nombre oficial en la tabla `rutas`.
+    // Los valores sucios en clientes.Ruta (p.ej. '-1', 'G', 'val') no tienen
+    // fila en `rutas` y quedan fuera del selector automáticamente.
     const response = await knex
-      .select(
-        "clientes.Ruta as Id_Ruta",
-        knex.raw("COALESCE(rutas.Nombre, clientes.Ruta) as Nombre"),
-        knex.raw("COUNT(*) as clientes"),
-      )
+      .select("clientes.Ruta as Id_Ruta", "rutas.Nombre as Nombre", knex.raw("COUNT(*) as clientes"))
       .from("clientes")
-      .leftJoin("rutas", "rutas.Id_Ruta", "clientes.Ruta")
-      .whereNotNull("clientes.Ruta")
+      .innerJoin("rutas", "rutas.Id_Ruta", "clientes.Ruta")
       .groupBy("clientes.Ruta")
       .orderBy("clientes.Ruta");
 
     res.status(200).json(response);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Internal server error" });
+    res.status(500).json({ error: "Error al obtener las rutas" });
   }
 };
 
