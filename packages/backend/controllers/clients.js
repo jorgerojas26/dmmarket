@@ -181,6 +181,7 @@ const GET_CLIENT_SALES = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ error: "Error al obtener las ventas del cliente" });
   }
 };
 
@@ -206,8 +207,11 @@ const GET_CLIENT_SUMMARY = async (req, res) => {
     const totalCount = Number(aggregate.totalCount) || 0;
     const avgTicket = totalCount > 0 ? Math.round((totalAmount / totalCount) * 100) / 100 : null;
 
-    // avgDaysBetweenSales using CTE + window function LAG()
-    const saleDatesQuery = knex
+    // avgDaysBetweenSales: promedio de días entre ventas consecutivas del
+    // cliente en el período. (MySQL 5.7 no soporta CTEs ni window functions —
+    // LAG() es de 8.0+. Se traen las fechas y se promedia en JS, robusto a la
+    // versión del motor y sin consultas con sintaxis que 5.7 rechaza.)
+    const saleDates = await knex
       .distinct(`${masterTable}.Fecha as fecha`)
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
@@ -217,19 +221,18 @@ const GET_CLIENT_SUMMARY = async (req, res) => {
       .andWhere(`${masterTable}.IdCliente`, clientId)
       .orderBy(`${masterTable}.Fecha`, "asc");
 
-    const gapsQuery = knex
-      .select(knex.raw("DATEDIFF(fecha, LAG(fecha) OVER (ORDER BY fecha)) as gap"))
-      .from("sale_dates");
-
-    const [avgDaysResult] = await knex
-      .with("sale_dates", saleDatesQuery)
-      .with("gaps", gapsQuery)
-      .select(knex.raw("ROUND(AVG(gap), 1) as avgDaysBetweenSales"))
-      .from("gaps")
-      .whereNotNull("gap");
-
-    const avgDaysBetweenSales =
-      avgDaysResult && avgDaysResult.avgDaysBetweenSales != null ? Number(avgDaysResult.avgDaysBetweenSales) : null;
+    const DAY_MS = 86400000;
+    // mysql2 devuelve columnas DATE como objetos Date (y a veces string) —
+    // new Date() maneja ambos; las fechas DATE sin hora parsean a medianoche UTC.
+    const dayOf = (d) => new Date(d).getTime();
+    let avgDaysBetweenSales = null;
+    if (saleDates.length > 1) {
+      let totalGap = 0;
+      for (let i = 1; i < saleDates.length; i++) {
+        totalGap += (dayOf(saleDates[i].fecha) - dayOf(saleDates[i - 1].fecha)) / DAY_MS;
+      }
+      avgDaysBetweenSales = Math.round((totalGap / (saleDates.length - 1)) * 10) / 10;
+    }
 
     res.status(200).json({
       totalAmount,
@@ -239,6 +242,9 @@ const GET_CLIENT_SUMMARY = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    // Nunca dejar la petición colgada: ante un error se responde 500 (antes solo
+    // se logueaba y el cliente esperaba hasta agotar su timeout).
+    res.status(500).json({ error: "Error al obtener el resumen del cliente" });
   }
 };
 
