@@ -743,15 +743,44 @@ div.card-body {
     }
 }
 
+/* ── Sidebar en móvil (<768px) ──
+   En pantallas pequeñas el sidebar lateral deja de ser columna: pasa a ser
+   una barra de TABS horizontales (scrollables si no caben) con icono+label
+   siempre visibles. Se ignora el estado colapsado (el colapso a iconos es
+   una feature del sidebar lateral en desktop) y se oculta el botón de
+   colapso, que no tiene sentido en una barra horizontal. */
 @media (max-width: 767.98px) {
-    .clients-sidebar.collapsed {
+    .clients-sidebar {
         flex: 0 0 auto;
-        width: auto;
+        width: 100%;
+        padding: 0.5rem;
+        border-right: none;
+        border-bottom: 1px solid #373b3e;
     }
 
+    .clients-sidebar .sidebar-collapse-btn {
+        display: none;
+    }
+
+    .clients-sidebar .nav {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 6px;
+        padding-bottom: 4px;
+    }
+
+    .clients-sidebar .nav-link {
+        flex-shrink: 0;
+        white-space: nowrap;
+        padding: 8px 14px;
+        margin-bottom: 0;
+    }
+
+    /* El estado colapsado no aplica en móvil: los labels siempre se ven */
     .clients-sidebar.collapsed .nav-label {
-        max-width: 0;
-        opacity: 0;
+        max-width: none;
+        opacity: 1;
     }
 }
 
@@ -886,6 +915,99 @@ input:checked + .slider:before {
 @media (max-width: 767.98px) {
     .navbar.has-clients-sidebar::after {
         background: #1a1d21;
+    }
+}
+
+/* ── Top Navbar responsive ──
+   Desktop (≥1200px): brand | links (me-auto) | acciones a la derecha, todo
+   en una fila. Mobile (<1200px, expand="xl"): el collapse se despliega como
+   panel vertical — links apilados con área táctil amplia (44px+) y las
+   acciones (switch Facturas/NOE y REF) debajo, ordenadas. */
+.app-navbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.app-navbar-actions .app-navbar-icon {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 8px;
+}
+
+.app-navbar-switch {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.app-navbar-switch > span {
+    font-size: 0.8rem;
+    color: #9ca3af;
+}
+
+.app-navbar-ref {
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+/* Toggler limpio (hamburguesa) */
+.app-navbar .navbar-toggler {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+
+.app-navbar .navbar-toggler:hover,
+.app-navbar .navbar-toggler:focus {
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.app-navbar .navbar-toggler:focus {
+    box-shadow: 0 0 0 0.15rem rgba(59, 130, 246, 0.25);
+}
+
+@media (max-width: 1199.98px) {
+    .app-navbar .navbar-collapse {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 10px 0 14px;
+    }
+
+    .app-navbar .app-navbar-links {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .app-navbar .app-navbar-links .nav-link {
+        display: block;
+        padding: 12px 16px;
+        margin: 0;
+        border-bottom: 1px solid #2a2e33;
+        border-radius: 0;
+        border-left: 3px solid transparent;
+    }
+
+    .app-navbar .app-navbar-links .nav-link:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .app-navbar .app-navbar-links .nav-link.active {
+        border-left-color: #3b82f6;
+        background: rgba(59, 130, 246, 0.08);
+    }
+
+    .app-navbar .app-navbar-actions {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        width: 100%;
+        padding: 14px 16px 4px;
     }
 }
 

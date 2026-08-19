@@ -41,56 +41,54 @@ function App() {
                     }
                     expand="xl"
                 >
-                    <Container fluid>
-                        <Navbar.Brand>SISTEMA DE REPORTES</Navbar.Brand>
+                    <Container fluid className="app-navbar-inner">
+                        <Navbar.Brand className="app-navbar-brand">SISTEMA DE REPORTES</Navbar.Brand>
 
                         <Navbar.Toggle aria-controls="basic-navbar-nav" />
+
                         <Navbar.Collapse id="basic-navbar-nav">
-                            <Container fluid className="d-flex gap-5 justify-content-between align-items-center">
-                                <Nav className="me-auto">
-                                    {['ventas', 'compras', 'clientes', 'proveedores', 'inventario'].map((route) => {
-                                        return (
-                                            <Link
-                                                key={route}
-                                                to={`/${route}`}
-                                                className={`text-decoration-none nav-link${
-                                                    location.pathname.includes(route) ? ' active' : ''
-                                                }`}
-                                            >
-                                                {route}
-                                            </Link>
-                                        );
-                                    })}
-                                </Nav>
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '20px',
-                                    }}
-                                >
+                            {/* En desktop: links a la izquierda (me-auto) y acciones a la
+                                derecha. En mobile el collapse se apila en columna: links con
+                                área táctil amplia y las acciones debajo, como panel. */}
+                            <Nav className="me-auto app-navbar-links">
+                                {['ventas', 'compras', 'clientes', 'proveedores', 'inventario'].map((route) => (
                                     <Link
-                                        to="/configuracion"
-                                        title="Configuración"
-                                        className={`text-decoration-none nav-link p-1${
-                                            location.pathname.includes('/configuracion') ? ' active' : ''
+                                        key={route}
+                                        to={`/${route}`}
+                                        className={`text-decoration-none nav-link${
+                                            location.pathname.includes(route) ? ' active' : ''
                                         }`}
                                     >
-                                        <svg
-                                            width="20"
-                                            height="20"
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                        >
-                                            <title>Configuración</title>
-                                            <circle cx="12" cy="12" r="3" />
-                                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                                        </svg>
+                                        {route}
                                     </Link>
+                                ))}
+                            </Nav>
+
+                            <div className="app-navbar-actions">
+                                <Link
+                                    to="/configuracion"
+                                    title="Configuración"
+                                    className={`text-decoration-none nav-link app-navbar-icon${
+                                        location.pathname.includes('/configuracion') ? ' active' : ''
+                                    }`}
+                                >
+                                    <svg
+                                        width="20"
+                                        height="20"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    >
+                                        <title>Configuración</title>
+                                        <circle cx="12" cy="12" r="3" />
+                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                                    </svg>
+                                </Link>
+
+                                <div className="app-navbar-switch">
                                     <span className="text-light">Facturas</span>
                                     <div>
                                         <label className="switch">
@@ -104,13 +102,14 @@ function App() {
                                     </div>
                                     <span className="text-light">Notas de entrega</span>
                                 </div>
-                                <div className="text-light">
+
+                                <div className="text-light app-navbar-ref">
                                     <span>
                                         REF: <span className="fw-bold text-info">{currencyRate?.Cambio}</span>{' '}
                                         {currencyRate?.Simbolo}
                                     </span>
                                 </div>
-                            </Container>
+                            </div>
                         </Navbar.Collapse>
                     </Container>
                 </Navbar>
