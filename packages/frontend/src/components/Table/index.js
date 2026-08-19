@@ -50,7 +50,7 @@ import './styles.css';
  * @param {Function}       [props.print.onGlobalPrint]                - Global‑print callback. Runs after the config dialog; receives `{ columns, orientation, currency, sortBy, extra }` (columns = selected column definitions, currency = 'USD' | 'Bs', sortBy = `[{ id, desc }]` in priority order, empty = unsorted; extra = enabled toggles from `print.filters`).
  * @param {string}         [props.print.storageKey]                   - Unique id for this table. Persists the print config (columns/orientation/currency/sort/filters) in localStorage per table.
  * @param {string}         [props.print.defaultOrientation='portrait'] - Page orientation preselected in the config dialog.
- * @param {string}         [props.print.globalPrintLabel='Imprimir']  - Global‑print button label.
+ * @param {boolean}        [props.print.enabled]                  - Show the global print button (icon-only).
  * @param {boolean}        [props.print.perRowPrint=false]            - Show per‑row print button.
  * @param {Function}       [props.print.onRowPrint]                   - Per‑row print callback `(rowData)`.
  * @param {Array<{key: string, label: string}>} [props.print.filters] - Extra boolean toggles shown in the print config dialog (e.g. `[{ key: 'stockOnly', label: 'Solo productos con stock > 0' }]`). State lands in the config passed to `onGlobalPrint` as `extra[key]`.
@@ -748,8 +748,14 @@ const Table = ({
             )}
             {hasPrintBtn && (
                 <div className="table-toolbar-right">
-                    <button className="table-toolbar-btn" onClick={handlePrintButtonClick}>
-                        {print.globalPrintLabel || 'Imprimir'}
+                    <button
+                        type="button"
+                        className="table-toolbar-btn"
+                        onClick={handlePrintButtonClick}
+                        title="Imprimir"
+                        aria-label="Imprimir"
+                    >
+                        <PrintIcon />
                     </button>
                 </div>
             )}

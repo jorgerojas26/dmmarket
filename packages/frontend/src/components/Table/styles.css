@@ -63,13 +63,16 @@ input[type="search"].table-search-input,
 }
 
 .table-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
     background: #2d3138;
     border: 1px solid #3a3f48;
     color: #c4cad4;
-    padding: 4px 12px;
     border-radius: 4px;
-    font-size: 0.78rem;
-    font-weight: 600;
     cursor: pointer;
     transition:
         background 0.15s,

@@ -201,7 +201,6 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                     print={{
                         enabled: true,
                         onGlobalPrint: handlePrintAll,
-                        globalPrintLabel: 'Imprimir',
                         storageKey: 'clientes',
                     }}
                 />

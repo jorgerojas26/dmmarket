@@ -295,14 +295,14 @@ describe('ProviderDashboardModal', () => {
             screen.getByText('Clientes').click();
         });
         await waitFor(() => {
-            expect(screen.getByText('Imprimir')).toBeInTheDocument();
+            expect(screen.getByLabelText('Imprimir')).toBeInTheDocument();
         });
 
         act(() => {
             screen.getByText('Productos').click();
         });
         await waitFor(() => {
-            expect(screen.getAllByText('Imprimir').length).toBeGreaterThan(0);
+            expect(screen.getAllByLabelText('Imprimir').length).toBeGreaterThan(0);
         });
     });
 

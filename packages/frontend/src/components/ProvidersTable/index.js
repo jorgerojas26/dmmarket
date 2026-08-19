@@ -207,7 +207,6 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                     print={{
                         enabled: true,
                         onGlobalPrint: handlePrintAll,
-                        globalPrintLabel: 'Imprimir',
                         storageKey: 'proveedores',
                     }}
                 />

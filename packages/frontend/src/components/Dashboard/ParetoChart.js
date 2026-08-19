@@ -669,7 +669,6 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
                 print={{
                     enabled: true,
                     onGlobalPrint: handlePrint,
-                    globalPrintLabel: 'Imprimir',
                     storageKey: `pareto-${cfg.valueKey}`,
                 }}
             />
