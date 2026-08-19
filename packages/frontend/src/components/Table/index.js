@@ -666,13 +666,17 @@ const Table = ({
                                     typeof col.accessor === 'string' ? summaries[col.accessor] : undefined;
 
                                 if (col.Footer && typeof col.Footer === 'function') {
-                                    // Existing Footer renderer (receives { column, data, rows })
+                                    // Existing Footer renderer. `summary` es el valor de
+                                    // `summaries` para esta columna (total de TODA la data
+                                    // filtrada, no solo la página visible); si viene, el
+                                    // Footer lo usa en lugar de reducir `data`.
                                     return (
                                         <td key={col.accessor || idx}>
                                             {col.Footer({
                                                 column: col,
                                                 data,
                                                 rows,
+                                                summary: summaryVal,
                                             })}
                                         </td>
                                     );

@@ -17,10 +17,11 @@ const productosColumns = [
         Header: 'Peso',
         accessor: 'peso',
         Cell: ({ value }) => formatPeso(value),
-        Footer: ({ data }) => {
-            const total = data.reduce((acc, current) => {
-                return acc + (current.peso || 0);
-            }, 0);
+        Footer: ({ data, summary }) => {
+            // `summary` es el total de todas las páginas (server-side); si no
+            // viene, se reduce la página visible (fallback).
+            const total =
+                summary != null ? Number(summary) : data.reduce((acc, current) => acc + (current.peso || 0), 0);
             return formatPeso(total);
         },
     },

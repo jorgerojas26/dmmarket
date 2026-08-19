@@ -28,8 +28,10 @@ const columns = [
         Header: 'Monto',
         accessor: 'monto',
         Cell: ({ value }) => (value != null ? `$${value.toLocaleString()}` : ''),
-        Footer: ({ data }) => {
-            const total = data.reduce((acc, cur) => acc + (cur.monto || 0), 0);
+        Footer: ({ data, summary }) => {
+            // `summary` es el total de todas las páginas (calculado server-side);
+            // si no viene, se reduce la página visible (fallback).
+            const total = summary != null ? Number(summary) : data.reduce((acc, cur) => acc + (cur.monto || 0), 0);
             return `$${Number(total.toFixed(2)).toLocaleString()}`;
         },
     },
@@ -37,8 +39,8 @@ const columns = [
         Header: 'Utilidad',
         accessor: 'utilidad',
         Cell: ({ value }) => (value != null ? `$${value.toLocaleString()}` : ''),
-        Footer: ({ data }) => {
-            const total = data.reduce((acc, cur) => acc + (cur.utilidad || 0), 0);
+        Footer: ({ data, summary }) => {
+            const total = summary != null ? Number(summary) : data.reduce((acc, cur) => acc + (cur.utilidad || 0), 0);
             return `$${Number(total.toFixed(2)).toLocaleString()}`;
         },
     },

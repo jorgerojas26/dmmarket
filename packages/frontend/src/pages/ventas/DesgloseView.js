@@ -725,6 +725,26 @@ const DesgloseView = ({ isActive }) => {
     const facturasData = facturasRes?.data || [];
     const productosData = productosRes?.data || [];
 
+    // Totales de TODA la data filtrada (todas las páginas), calculados en el
+    // backend. El pie de cada tabla los usa en lugar de la página visible.
+    const facturasSummaries = useMemo(
+        () => ({
+            monto: facturasRes?.totals?.monto,
+            utilidad: facturasRes?.totals?.utilidad,
+        }),
+        [facturasRes],
+    );
+
+    const productosSummaries = useMemo(
+        () => ({
+            quantity: productosRes?.totals?.quantity,
+            peso: productosRes?.totals?.peso,
+            rawProfit: productosRes?.totals?.rawProfit,
+            netProfit: productosRes?.totals?.netProfit,
+        }),
+        [productosRes],
+    );
+
     // Tabla de facturas y de productos: se reutilizan en el layout lado a lado
     // (pantallas ≥1400px) y en el layout con tabs (pantallas de laptop).
     const facturasTable = (
@@ -733,6 +753,7 @@ const DesgloseView = ({ isActive }) => {
             loading={facturasLoading}
             columns={facturasColumns}
             fillHeight
+            summaries={facturasSummaries}
             onRowClick={handleFacturaRowClick}
             sorting={{
                 enabled: true,
@@ -768,6 +789,7 @@ const DesgloseView = ({ isActive }) => {
             loading={productosLoading}
             columns={productosColumns}
             fillHeight
+            summaries={productosSummaries}
             sorting={{
                 enabled: true,
                 sortBy: productosSortBy,

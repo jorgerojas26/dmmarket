@@ -13,6 +13,7 @@ const SaleReportTable = ({
     fillHeight,
     columns: customColumns,
     print,
+    summaries,
 }) => {
     const defaultColumns = useMemo(() => columns, []);
     const memoizedColumns = customColumns || defaultColumns;
@@ -30,6 +31,7 @@ const SaleReportTable = ({
             search={search}
             onRowClick={onRowClick}
             print={print}
+            summaries={summaries}
         />
     );
 };

@@ -6,10 +6,10 @@ const columns = [
     {
         Header: 'Cantidad',
         accessor: 'quantity',
-        Footer: ({ data }) => {
-            const total = data.reduce((acc, current) => {
-                return acc + current.quantity;
-            }, 0);
+        Footer: ({ data, summary }) => {
+            // `summary` es el total de todas las páginas (server-side); si no
+            // viene, se reduce la página visible (fallback).
+            const total = summary != null ? Number(summary) : data.reduce((acc, current) => acc + current.quantity, 0);
             return Number(total).toFixed(2);
         },
     },
@@ -19,10 +19,8 @@ const columns = [
         Cell: ({ value }) => {
             return value != null ? `$${value.toLocaleString()}` : '';
         },
-        Footer: ({ data }) => {
-            const total = data.reduce((acc, current) => {
-                return acc + current.rawProfit;
-            }, 0);
+        Footer: ({ data, summary }) => {
+            const total = summary != null ? Number(summary) : data.reduce((acc, current) => acc + current.rawProfit, 0);
             return `$${Number(total.toFixed(2)).toLocaleString()}`;
         },
     },
@@ -32,10 +30,8 @@ const columns = [
         Cell: ({ value }) => {
             return value != null ? `$${value.toLocaleString()}` : '';
         },
-        Footer: ({ data }) => {
-            const total = data.reduce((acc, current) => {
-                return acc + current.netProfit;
-            }, 0);
+        Footer: ({ data, summary }) => {
+            const total = summary != null ? Number(summary) : data.reduce((acc, current) => acc + current.netProfit, 0);
             return `$${Number(total.toFixed(2)).toLocaleString()}`;
         },
     },
