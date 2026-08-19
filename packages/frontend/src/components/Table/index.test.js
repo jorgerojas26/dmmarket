@@ -178,3 +178,34 @@ describe('Table — selección controlada (selectedRows)', () => {
         expect(onRowSelect).toHaveBeenLastCalledWith([{ id: 'A1' }]);
     });
 });
+
+describe('Table — estado vacío', () => {
+    it('muestra icono + título + subtítulo por defecto', () => {
+        const { container } = render(<Table data={[]} columns={columns} />);
+
+        expect(container.querySelector('.table-empty')).not.toBeNull();
+        expect(container.querySelector('.table-empty-icon')).not.toBeNull();
+        expect(screen.getByText('Sin datos')).toBeInTheDocument();
+        expect(screen.getByText('No hay registros para mostrar.')).toBeInTheDocument();
+    });
+
+    it('no muestra el mensaje mientras carga', () => {
+        render(<Table data={[]} columns={columns} loading />);
+
+        expect(screen.queryByText('Sin datos')).not.toBeInTheDocument();
+    });
+
+    it('respeta emptyMessage y emptySubtitle personalizados', () => {
+        render(
+            <Table
+                data={[]}
+                columns={columns}
+                emptyMessage="Sin productos"
+                emptySubtitle="Agrega productos primero."
+            />,
+        );
+
+        expect(screen.getByText('Sin productos')).toBeInTheDocument();
+        expect(screen.getByText('Agrega productos primero.')).toBeInTheDocument();
+    });
+});

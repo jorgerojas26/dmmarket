@@ -116,6 +116,8 @@ const Table = ({
     loading,
     columns = [],
     emptyMessage = 'Sin datos',
+    /** Texto secundario bajo `emptyMessage` cuando la tabla está vacía. */
+    emptySubtitle = 'No hay registros para mostrar.',
     className,
     maxHeight = 350,
 
@@ -624,21 +626,20 @@ const Table = ({
     })();
 
     /* ── Table body ── */
+    const isEmpty = !loading && rows.length === 0;
+
     const tbody = (
-        <tbody {...getTableBodyProps()}>
+        <tbody {...getTableBodyProps()} className={isEmpty ? 'table-body-empty' : undefined}>
             {rows.length > 0
                 ? rows.map((row) => renderRow(row))
                 : !loading && (
-                      <tr>
-                          <td
-                              colSpan={totalColSpan}
-                              style={{
-                                  textAlign: 'center',
-                                  padding: '2.5rem',
-                                  color: '#94a3b8',
-                              }}
-                          >
-                              {emptyMessage}
+                      <tr className="table-empty-row">
+                          <td colSpan={totalColSpan} className="table-empty-cell">
+                              <span className="table-empty-content">
+                                  <EmptyIcon />
+                                  <span className="table-empty-title">{emptyMessage}</span>
+                                  {emptySubtitle && <span className="table-empty-subtitle">{emptySubtitle}</span>}
+                              </span>
                           </td>
                       </tr>
                   )}
@@ -872,7 +873,7 @@ const Table = ({
                 </div>
             )}
             {tableToolbar}
-            <div className="table-container" style={tableContainerStyle}>
+            <div className={`table-container${isEmpty ? ' table-empty' : ''}`} style={tableContainerStyle}>
                 {tableElement}
                 {spinner}
             </div>
@@ -931,6 +932,25 @@ const PrintIcon = () => (
         <polyline points="6 9 6 2 18 2 18 9" />
         <path d="M6 12H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2" />
         <rect x="6" y="14" width="12" height="8" />
+    </svg>
+);
+
+const EmptyIcon = () => (
+    <svg
+        className="table-empty-icon"
+        xmlns="http://www.w3.org/2000/svg"
+        width="44"
+        height="44"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+    >
+        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+        <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
     </svg>
 );
 

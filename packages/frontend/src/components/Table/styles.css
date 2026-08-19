@@ -246,3 +246,71 @@ div.table-container > table {
     font-weight: 700;
     color: #e4e6ea;
 }
+
+/* ── Empty state ──
+   Con `table { height: auto }` (arriba), una tabla vacía se ve como un recuadro
+   chico con el mensaje arriba y el resto del contenedor vacío. Cuando no hay
+   filas, la tabla se estira para llenar el contenedor y el mensaje queda
+   centrado (icono + título + subtítulo). */
+div.table-container.table-empty {
+    display: flex;
+    flex-direction: column;
+}
+
+div.table-container.table-empty > table {
+    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+div.table-container.table-empty > table thead {
+    display: table;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+div.table-container.table-empty > table tbody.table-body-empty {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+}
+
+div.table-container.table-empty tbody.table-body-empty tr.table-empty-row {
+    flex: 1 1 auto;
+    display: flex;
+}
+
+div.table-container.table-empty tbody.table-body-empty td.table-empty-cell {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: none;
+}
+
+.table-empty-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 32px 16px;
+    text-align: center;
+    max-width: 340px;
+}
+
+.table-empty-icon {
+    color: #4b5563;
+}
+
+.table-empty-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #c4cad4;
+}
+
+.table-empty-subtitle {
+    font-size: 0.82rem;
+    color: #6b7280;
+}
