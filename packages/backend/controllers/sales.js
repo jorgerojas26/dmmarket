@@ -65,7 +65,10 @@ const GET_FACTURAS = async (req, res) => {
         if (proveedorId) q.andWhere("productos.Proveedor", proveedorId);
         if (search) {
           q.andWhere(function () {
-            this.where("clientes.Empresa", "like", `%${search}%`).orWhere(`mf.${idInvoice}`, "like", `%${search}%`);
+            this.where("clientes.Empresa", "like", `%${search}%`)
+              .orWhere(`mf.${idInvoice}`, "like", `%${search}%`)
+              .orWhere("productos.Descripcion", "like", `%${search}%`)
+              .orWhere("productos.IdProducto", "like", `%${search}%`);
           });
         }
       });
@@ -100,7 +103,10 @@ const GET_FACTURAS = async (req, res) => {
         if (proveedorId) q.andWhere("productos.Proveedor", proveedorId);
         if (search) {
           q.andWhere(function () {
-            this.where("clientes.Empresa", "like", `%${search}%`).orWhere(`mf.${idInvoice}`, "like", `%${search}%`);
+            this.where("clientes.Empresa", "like", `%${search}%`)
+              .orWhere(`mf.${idInvoice}`, "like", `%${search}%`)
+              .orWhere("productos.Descripcion", "like", `%${search}%`)
+              .orWhere("productos.IdProducto", "like", `%${search}%`);
           });
         }
       })

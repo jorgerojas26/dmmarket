@@ -740,7 +740,7 @@ const DesgloseView = ({ isActive }) => {
                                 }}
                                 search={{
                                     enabled: true,
-                                    placeholder: 'Buscar por cliente o factura...',
+                                    placeholder: 'Buscar por cliente, factura o producto...',
                                     onSearch: handleFacturasSearch,
                                 }}
                                 print={{
