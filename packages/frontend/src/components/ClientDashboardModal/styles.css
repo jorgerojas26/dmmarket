@@ -149,18 +149,13 @@
     font-weight: 700;
 }
 
-/* Dashboard grid */
+/* Dashboard grid — apilado vertical: el gráfico arriba y la tabla abajo,
+   ambos a ancho completo. */
 .client-dashboard-modal .dashboard-grid {
     display: grid;
-    grid-template-columns: 5fr 7fr;
+    grid-template-columns: 1fr;
     gap: 1rem;
     align-items: stretch;
-}
-
-@media (max-width: 991px) {
-    .client-dashboard-modal .dashboard-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* Chart */
@@ -234,11 +229,11 @@
     padding: 0;
 }
 
-.client-dashboard-modal .table-container {
+/* La tabla de ventas tiene un alto máximo (maxHeight del Table) y scrollea
+   internamente con el header fijo; el card-body no debe estirarse más. */
+.client-dashboard-modal .sales-card .card-body > .table-container {
     flex: 1 1 auto;
-    max-height: none;
-    height: 100%;
-    overflow: auto;
+    min-height: 0;
 }
 
 .client-dashboard-modal .table {

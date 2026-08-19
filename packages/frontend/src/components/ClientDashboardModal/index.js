@@ -351,32 +351,30 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                 </Badge>
             </div>
             <div className="card-body">
-                <div className="table-container">
-                    <Table
-                        data={salesData?.data || []}
-                        columns={[
-                            { Header: 'Vendedor', accessor: 'vendedor' },
-                            {
-                                Header: 'Fecha',
-                                accessor: 'fecha',
-                                Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }),
-                            },
-                            { Header: 'Monto', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
-                        ]}
-                        loading={salesLoading}
-                        className="table"
-                        maxHeight={null}
-                        emptyMessage="Sin ventas en este período"
-                        pagination={{
-                            enabled: true,
-                            page: salesPage,
-                            totalPages,
-                            totalRows: salesData?.total ?? 0,
-                            pageSize: LIMIT,
-                            onPageChange: setSalesPage,
-                        }}
-                    />
-                </div>
+                <Table
+                    data={salesData?.data || []}
+                    columns={[
+                        { Header: 'Vendedor', accessor: 'vendedor' },
+                        {
+                            Header: 'Fecha',
+                            accessor: 'fecha',
+                            Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }),
+                        },
+                        { Header: 'Monto', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
+                    ]}
+                    loading={salesLoading}
+                    className="table"
+                    maxHeight={420}
+                    emptyMessage="Sin ventas en este período"
+                    pagination={{
+                        enabled: true,
+                        page: salesPage,
+                        totalPages,
+                        totalRows: salesData?.total ?? 0,
+                        pageSize: LIMIT,
+                        onPageChange: setSalesPage,
+                    }}
+                />
             </div>
         </div>
     );
