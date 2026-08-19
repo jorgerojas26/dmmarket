@@ -31,6 +31,14 @@ const buildDarkSelectStyles = () => ({
         ...base,
         color: '#e9ecef',
     }),
+    // El value-container hace flex-wrap por defecto: un placeholder largo se
+    // parte en dos líneas y el control crece de alto (layout shift al cargar).
+    // Forzamos una sola línea; el ellipsis lo aplica el CSS de .search-select__*.
+    valueContainer: (base) => ({
+        ...base,
+        flexWrap: 'nowrap',
+        overflow: 'hidden',
+    }),
     dropdownIndicator: (base) => ({
         ...base,
         color: '#adb5bd',

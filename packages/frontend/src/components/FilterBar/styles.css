@@ -1,0 +1,200 @@
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    /* Reserva el alto de UNA fila desde el inicio: al añadir/quitar filtros la
+       barra no cambia de alto, así el contenido de abajo (tablas) nunca se
+       desplaza (sin layout shift). */
+    min-height: 40px;
+}
+
+.filter-bar-add-wrap {
+    position: relative;
+}
+
+.filter-bar-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.9rem;
+    background: #26292f;
+    color: #adb5bd;
+    border: 1px dashed #3a3f46;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        color 0.15s ease,
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.filter-bar-add:hover {
+    color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.filter-bar-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 1050;
+    min-width: 190px;
+    background: #1e2126;
+    border: 1px solid #2f3338;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    padding: 0.3rem;
+}
+
+.filter-bar-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #e9ecef;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.filter-bar-menu-item:hover {
+    background: #26292f;
+    color: #0d6efd;
+}
+
+.filter-bar-menu-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: #adb5bd;
+}
+
+.filter-bar-menu-item:hover .filter-bar-menu-icon {
+    color: #0d6efd;
+}
+
+.filter-bar-menu-empty {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.filter-bar-clear-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.75rem;
+    background: transparent;
+    border: 1px solid #373b3e;
+    border-radius: 8px;
+    color: #adb5bd;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition:
+        color 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.filter-bar-clear-all:hover {
+    color: #dc3545;
+    border-color: #dc3545;
+}
+
+.filter-bar-chips {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+    /* Una sola fila: si los chips no caben, scrollean horizontalmente en vez de
+       envolverse a otra línea (que desplazaría el contenido). */
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.35rem 0.25rem 0.6rem;
+    background: #26292f;
+    border: 1px solid #2f3338;
+    border-radius: 8px;
+}
+
+.filter-chip.expanded {
+    background: transparent;
+    border-color: transparent;
+    padding: 0;
+}
+
+.filter-chip-name {
+    color: #6c757d;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.filter-chip-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.filter-chip-select-input {
+    width: 220px;
+}
+
+.filter-chip-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.4rem;
+    background: transparent;
+    border: none;
+    color: #e9ecef;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.filter-chip-tag:hover {
+    background: rgba(13, 110, 253, 0.12);
+}
+
+.filter-chip-tag .filter-chip-value {
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+.filter-chip-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: #6c757d;
+    font-size: 0.8rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.filter-chip-clear:hover {
+    color: #dc3545;
+    background: rgba(220, 53, 69, 0.12);
+}

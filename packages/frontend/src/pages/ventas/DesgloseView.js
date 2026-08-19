@@ -4,10 +4,11 @@ import ClientSearch from 'components/ClientSearch';
 import DateRangePicker from 'components/DateRangePicker';
 import FacturaDetailModal from 'components/FacturaDetailModal';
 import facturasColumns from 'components/FacturasTable/columns';
+import FilterBar from 'components/FilterBar';
 import GroupSearch from 'components/GroupSearch';
+import ProveedorSearch from 'components/ProveedorSearch';
 import SaleReportTable from 'components/SaleReportTable';
 import productosColumns from 'components/SaleReportTable/productosColumns';
-import ProveedorSearch from 'components/ProveedorSearch';
 import { darkSelectStyles } from 'components/selectStyles';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
@@ -75,6 +76,18 @@ const DesgloseView = ({ isActive }) => {
     const [selectedEmployee, setSelectedEmployee] = useState(initialEmployee);
     const [selectedRuta, setSelectedRuta] = useState(initialRuta);
     const [selectedProveedor, setSelectedProveedor] = useState(initialProveedor);
+
+    // Filtros añadidos a la barra FilterBar (revelación progresiva). Los que
+    // vienen aplicados desde la URL se muestran como chips desde el inicio.
+    const [activeFilters, setActiveFilters] = useState(() => {
+        const keys = [];
+        if (urlClientId) keys.push('client');
+        if (urlGroupId) keys.push('group');
+        if (urlEmployeeId) keys.push('employee');
+        if (urlRutaId) keys.push('ruta');
+        if (urlProveedorId) keys.push('proveedor');
+        return keys;
+    });
 
     // ---- Facturas table state ----
     const [facturasPage, setFacturasPage] = useState(1);
@@ -272,6 +285,46 @@ const DesgloseView = ({ isActive }) => {
         setFacturasPage(1);
         setProductosPage(1);
     }, []);
+
+    // Añadir/quitar filtros de la barra FilterBar
+    const handleFilterAdd = useCallback((key) => {
+        setActiveFilters((f) => (f.includes(key) ? f : [...f, key]));
+    }, []);
+
+    const handleFilterClear = useCallback(
+        (key) => {
+            setActiveFilters((f) => f.filter((k) => k !== key));
+            switch (key) {
+                case 'ruta':
+                    handleRutaSelect(null);
+                    break;
+                case 'client':
+                    handleClientSelect(null);
+                    break;
+                case 'group':
+                    handleGroupSelect(null);
+                    break;
+                case 'employee':
+                    handleEmployeeSelect(null);
+                    break;
+                case 'proveedor':
+                    handleProveedorSelect(null);
+                    break;
+                default:
+                    break;
+            }
+        },
+        [handleRutaSelect, handleClientSelect, handleGroupSelect, handleEmployeeSelect, handleProveedorSelect],
+    );
+
+    const handleClearAllFilters = useCallback(() => {
+        setActiveFilters([]);
+        handleRutaSelect(null);
+        handleClientSelect(null);
+        handleGroupSelect(null);
+        handleEmployeeSelect(null);
+        handleProveedorSelect(null);
+    }, [handleRutaSelect, handleClientSelect, handleGroupSelect, handleEmployeeSelect, handleProveedorSelect]);
 
     // Facturas handlers
     const handleFacturasPageChange = useCallback((page) => {
@@ -746,6 +799,65 @@ const DesgloseView = ({ isActive }) => {
         { key: 'facturas', label: 'Facturas' },
     ];
 
+    // ---- Defs de la barra de filtros (FilterBar, revelación progresiva) ----
+    const filterDefs = [
+        {
+            key: 'ruta',
+            label: 'Ruta',
+            added: activeFilters.includes('ruta'),
+            value: selectedRuta,
+            valueLabel: selectedRuta?.label,
+            render: () => (
+                <Select
+                    options={routeOptions}
+                    value={selectedRuta}
+                    onChange={handleRutaSelect}
+                    placeholder="Seleccionar ruta"
+                    isClearable
+                    isLoading={routesLoading}
+                    styles={darkSelectStyles}
+                    classNamePrefix="search-select"
+                    menuPortalTarget={document.body}
+                    menuPlacement="auto"
+                    loadingMessage={() => 'Cargando...'}
+                    noOptionsMessage={() => 'Sin resultados'}
+                />
+            ),
+        },
+        {
+            key: 'client',
+            label: 'Cliente',
+            added: activeFilters.includes('client'),
+            value: selectedClient,
+            valueLabel: selectedClient?.name,
+            render: () => <ClientSearch onSelect={handleClientSelect} defaultValue={clientDefaultValue} />,
+        },
+        {
+            key: 'group',
+            label: 'Categoría',
+            added: activeFilters.includes('group'),
+            value: selectedGroup,
+            valueLabel: selectedGroup?.name,
+            render: () => <GroupSearch onSelect={handleGroupSelect} defaultValue={groupDefaultValue} />,
+        },
+        {
+            key: 'employee',
+            label: 'Vendedor',
+            added: activeFilters.includes('employee'),
+            value: selectedEmployee,
+            valueLabel: selectedEmployee?.name,
+            render: () => <EmployeeSearch onSelect={handleEmployeeSelect} defaultValue={employeeDefaultValue} />,
+        },
+        {
+            key: 'proveedor',
+            label: 'Proveedor',
+            added: activeFilters.includes('proveedor'),
+            value: selectedProveedor,
+            valueLabel: selectedProveedor?.Empresa || selectedProveedor?.name,
+            render: () => <ProveedorSearch onSelect={handleProveedorSelect} defaultValue={proveedorDefaultValue} />,
+        },
+    ];
+
     return (
         <div className="report-page">
             {/* Header row: heading + date range */}
@@ -758,37 +870,14 @@ const DesgloseView = ({ isActive }) => {
                 />
             </div>
 
-            {/* Filter selectors */}
-            <div className="d-flex flex-wrap gap-3 mb-3">
-                <div style={{ minWidth: '220px' }}>
-                    <Select
-                        options={routeOptions}
-                        value={selectedRuta}
-                        onChange={handleRutaSelect}
-                        placeholder="Todas las rutas"
-                        isClearable
-                        isLoading={routesLoading}
-                        styles={darkSelectStyles}
-                        classNamePrefix="search-select"
-                        menuPortalTarget={document.body}
-                        menuPlacement="auto"
-                        loadingMessage={() => 'Cargando...'}
-                        noOptionsMessage={() => 'Sin resultados'}
-                    />
-                </div>
-                <div style={{ minWidth: '220px' }}>
-                    <ClientSearch onSelect={handleClientSelect} defaultValue={clientDefaultValue} />
-                </div>
-                <div style={{ minWidth: '220px' }}>
-                    <GroupSearch onSelect={handleGroupSelect} defaultValue={groupDefaultValue} />
-                </div>
-                <div style={{ minWidth: '220px' }}>
-                    <EmployeeSearch onSelect={handleEmployeeSelect} defaultValue={employeeDefaultValue} />
-                </div>
-                <div style={{ minWidth: '220px' }}>
-                    <ProveedorSearch onSelect={handleProveedorSelect} defaultValue={proveedorDefaultValue} />
-                </div>
-            </div>
+            {/* Filter selectors — barra de filtros con revelación progresiva:
+                solo se muestran los filtros que el usuario añade. */}
+            <FilterBar
+                filters={filterDefs}
+                onAdd={handleFilterAdd}
+                onClear={handleFilterClear}
+                onClearAll={handleClearAllFilters}
+            />
 
             {/* Tables: lado a lado en pantallas ≥1400px; en laptops, una sola
                 tabla con tabs (Facturas / Productos, default Productos). */}

@@ -880,12 +880,28 @@ input:checked + .slider:before {
 }
 
 /* --- Value / placeholder text --- */
+/* El value-container de react-select hace flex-wrap por defecto: un placeholder
+   largo se parte en dos líneas y el control crece de alto (layout shift al
+   cargar). Forzamos una sola línea con ellipsis y alto estable del control. */
+.search-select__value-container {
+    flex-wrap: nowrap;
+    overflow: hidden;
+}
+
 .search-select__single-value {
     color: #e9ecef;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 100%;
 }
 
 .search-select__placeholder {
     color: #adb5bd;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 100%;
 }
 
 .search-select__input-container {
