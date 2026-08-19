@@ -11,6 +11,8 @@ packages/backend/assets.js
 packages/backend/dmmarket-app
 packages/backend/dmmarket-app.exe
 packages/backend/dmmarket-app.exe.sha256
+packages/backend/dmmarket-app-mac
+packages/backend/dmmarket-app-mac.sha256
 packages/backend/.dmmarket-update/
 tags
 .playwright-cli
