@@ -60,9 +60,9 @@ import './styles.css';
  * Examples for totalPages=20:
  *   current=1  => [1, 2, 3, 4, 5, '...', 20]
  *   current=6  => [1, '...', 5, 6, 7, '...', 20]
- *   current=18 => [1, '...', 16, 17, 18, 19, 20]
+ *   current=18 => [1, '...', 17, 18, 19, '...', 20]
  */
-const getPageNumbers = (current, totalPages, windowSize = 5) => {
+const getPageNumbers = (current, totalPages, windowSize = 3) => {
     if (totalPages <= windowSize + 4) {
         // Small set — show all
         const pages = [];
@@ -781,18 +781,21 @@ const Table = ({
             // Row-info label
             const showRowInfo = totalRows != null && totalRows > 0;
             let rowInfoLabel = '';
+            let compactRowInfoLabel = '';
             if (showRowInfo) {
                 const from = (page - 1) * pageSize + 1;
                 const to = Math.min(page * pageSize, totalRows);
                 rowInfoLabel = `Mostrando ${from}–${to} de ${totalRows} ${totalRows === 1 ? 'resultado' : 'resultados'}`;
+                compactRowInfoLabel = `${from}–${to} de ${totalRows}`;
             }
 
-            const pageNumbers = getPageNumbers(page, totalPages, 5);
+            const pageNumbers = getPageNumbers(page, totalPages, 3);
 
             return (
                 <div className="table-pagination">
-                    {/* ── Row info ── */}
+                    {/* ── Row info (full on large screens, compact on small) ── */}
                     {showRowInfo && <span className="table-pagination-rowinfo">{rowInfoLabel}</span>}
+                    {showRowInfo && <span className="table-pagination-rowinfo-compact">{compactRowInfoLabel}</span>}
 
                     {/* ── Page controls ── */}
                     {totalPages > 1 && (
@@ -808,7 +811,12 @@ const Table = ({
                                 <ChevronLeft />
                             </button>
 
-                            {/* Page numbers */}
+                            {/* Page text (compact mode — small screens; page numbers hidden via CSS) */}
+                            <span className="table-pagination-pagetext">
+                                Página {page} de {totalPages}
+                            </span>
+
+                            {/* Page numbers (hidden on small screens) */}
                             {pageNumbers.map((p, idx) =>
                                 p === '...' ? (
                                     <span key={`ellipsis-${idx}`} className="table-pagination-ellipsis">

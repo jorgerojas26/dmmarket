@@ -27,6 +27,8 @@ import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
+const PAGE_SIZE = 50;
+
 const formatCurrency = (value) => {
     const num = Number(value);
     if (Number.isNaN(num)) return '$0.00';
@@ -168,7 +170,7 @@ const DesgloseView = ({ isActive }) => {
             ruta: selectedRuta?.value,
             proveedorId: selectedProveedor?.IdProveedor,
             page: facturasPage,
-            limit: 20,
+            limit: PAGE_SIZE,
             sortBy: facturasSort.sortBy,
             sortDir: facturasSort.sortDir,
             search: facturasSearch || undefined,
@@ -187,7 +189,7 @@ const DesgloseView = ({ isActive }) => {
             ruta: selectedRuta?.value,
             proveedorId: selectedProveedor?.IdProveedor,
             page: productosPage,
-            limit: 20,
+            limit: PAGE_SIZE,
             sortBy: productosSort.sortBy,
             sortDir: productosSort.sortDir,
             search: productosSearch || undefined,
@@ -763,9 +765,9 @@ const DesgloseView = ({ isActive }) => {
             pagination={{
                 enabled: true,
                 page: facturasPage,
-                totalPages: Math.ceil(facturasTotal / 20),
+                totalPages: Math.ceil(facturasTotal / PAGE_SIZE),
                 totalRows: facturasTotal,
-                pageSize: 20,
+                pageSize: PAGE_SIZE,
                 onPageChange: handleFacturasPageChange,
             }}
             search={{
@@ -798,9 +800,9 @@ const DesgloseView = ({ isActive }) => {
             pagination={{
                 enabled: true,
                 page: productosPage,
-                totalPages: Math.ceil(productosTotal / 20),
+                totalPages: Math.ceil(productosTotal / PAGE_SIZE),
                 totalRows: productosTotal,
-                pageSize: 20,
+                pageSize: PAGE_SIZE,
                 onPageChange: handleProductosPageChange,
             }}
             search={{

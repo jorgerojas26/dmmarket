@@ -139,7 +139,10 @@ th.sortable-header:hover {
     height: 10px;
 }
 
-/* ── Pagination bar ── */
+/* ── Pagination bar ──
+   Sin flex-wrap: la barra SIEMPRE ocupa una sola línea en cualquier ancho. El
+   rowinfo es elástico y se trunca con "…" cuando no cabe; los controles de
+   página nunca se comprimen ni saltan a otra línea (no hay layout shifts). */
 .table-pagination {
     display: flex;
     align-items: center;
@@ -147,7 +150,6 @@ th.sortable-header:hover {
     gap: 12px;
     padding: 10px 8px 6px;
     border-top: 1px solid #2d3138;
-    flex-wrap: wrap;
 }
 
 /* Row-count info */
@@ -156,6 +158,24 @@ th.sortable-header:hover {
     font-size: 0.78rem;
     font-weight: 500;
     white-space: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Compact row-count info ("1–50 de 86496") — visible solo en pantallas
+   pequeñas, donde el mensaje completo "Mostrando …" no cabe cómodo. */
+.table-pagination-rowinfo-compact {
+    display: none;
+    color: #9ca3af;
+    font-size: 0.78rem;
+    font-weight: 500;
+    white-space: nowrap;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Page-controls wrapper */
@@ -164,6 +184,17 @@ th.sortable-header:hover {
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+}
+
+/* Page text ("Página X de Y") — visible solo en pantallas pequeñas, donde
+   se ocultan los números de página para dejar una barra compacta y estable. */
+.table-pagination-pagetext {
+    display: none;
+    color: #9ca3af;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 0 4px;
 }
 
 /* Shared button styles */
@@ -224,6 +255,29 @@ th.sortable-header:hover {
 /* Prev/Next — icon-only look */
 .table-pagination-btn svg {
     flex-shrink: 0;
+}
+
+/* ── Modo compacto en pantallas pequeñas (<1400px) ──
+   Se ocultan los números de página y el mensaje completo de filas; queda
+   «1–50 de 86496 · ‹ Página X de Y ›» con el contador compacto. En
+   pantallas grandes se muestra la paginación completa con números. */
+@media (max-width: 1399.98px) {
+    .table-pagination-rowinfo {
+        display: none;
+    }
+
+    .table-pagination-rowinfo-compact {
+        display: inline;
+    }
+
+    .table-pagination-num,
+    .table-pagination-ellipsis {
+        display: none;
+    }
+
+    .table-pagination-pagetext {
+        display: inline;
+    }
 }
 
 /* ── Clickable row ── */

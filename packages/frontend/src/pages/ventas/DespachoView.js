@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from 'react-bootstrap';
 import Select from 'react-select';
 
-const LIMIT = 20;
+const LIMIT = 50;
 const EMPTY_INVOICES = [];
 
 // "Select all" suma (unión) las filas del filtro actual a la selección acumulada:

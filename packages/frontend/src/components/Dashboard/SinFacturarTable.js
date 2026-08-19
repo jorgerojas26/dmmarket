@@ -12,7 +12,7 @@ import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
-const LIMIT = 20;
+const LIMIT = 50;
 
 /**
  * Server-side table of clients without any invoice in [from, to].

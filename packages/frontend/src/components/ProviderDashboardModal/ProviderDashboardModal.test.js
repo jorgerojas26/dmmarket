@@ -355,7 +355,7 @@ describe('ProviderDashboardModal', () => {
                 from: expect.any(String),
                 to: expect.any(String),
                 page: 1,
-                limit: 20,
+                limit: 50,
                 showNoe: true,
                 search: undefined,
                 sortBy: 'fecha',
@@ -414,7 +414,7 @@ describe('ProviderDashboardModal', () => {
                 fecha: '2024-01-01',
                 monto: 100,
             }),
-            total: 50,
+            total: 120,
         });
 
         renderModal(true);
@@ -428,7 +428,7 @@ describe('ProviderDashboardModal', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText('Mostrando 1–20 de 50 resultados')).toBeInTheDocument();
+            expect(screen.getByText('Mostrando 1–50 de 120 resultados')).toBeInTheDocument();
         });
     });
 

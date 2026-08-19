@@ -69,7 +69,7 @@ const mockInvoices = {
         { invoiceId: 'PUR-001', proveedor: 'Proveedor A', fecha: '2026-07-15', monto: 1500.5, unidades: 10 },
         { invoiceId: 'PUR-002', proveedor: 'Proveedor B', fecha: '2026-07-20', monto: 800, unidades: 5 },
     ],
-    pagination: { page: 1, limit: 20, total: 2 },
+    pagination: { page: 1, limit: 50, total: 2 },
 };
 
 const mockProducts = {
@@ -77,7 +77,7 @@ const mockProducts = {
         { product: 'Arroz 1kg', quantity: 100, monto: 2200, avgUnitCost: 22 },
         { product: 'Aceite 1L', quantity: 50, monto: 1100, avgUnitCost: 22 },
     ],
-    pagination: { page: 1, limit: 20, total: 2 },
+    pagination: { page: 1, limit: 50, total: 2 },
 };
 
 const renderView = (history) => {
@@ -114,10 +114,10 @@ describe('DesgloseView (compras)', () => {
 
         expect(screen.getByText('Costo Prom.')).toBeInTheDocument();
         expect(api.fetchPurchasesInvoices).toHaveBeenCalledWith(
-            expect.objectContaining({ from: expect.any(String), to: expect.any(String), page: 1, limit: 20 }),
+            expect.objectContaining({ from: expect.any(String), to: expect.any(String), page: 1, limit: 50 }),
         );
         expect(api.fetchPurchasesProducts).toHaveBeenCalledWith(
-            expect.objectContaining({ from: expect.any(String), to: expect.any(String), page: 1, limit: 20 }),
+            expect.objectContaining({ from: expect.any(String), to: expect.any(String), page: 1, limit: 50 }),
         );
     });
 
@@ -190,11 +190,11 @@ describe('DesgloseView (compras)', () => {
     it('resets pagination to page 1 when a filter changes', async () => {
         api.fetchPurchasesInvoices.mockResolvedValue({
             data: mockInvoices.data,
-            pagination: { page: 1, limit: 20, total: 30 },
+            pagination: { page: 1, limit: 50, total: 80 },
         });
         api.fetchPurchasesProducts.mockResolvedValue({
             data: mockProducts.data,
-            pagination: { page: 1, limit: 20, total: 30 },
+            pagination: { page: 1, limit: 50, total: 80 },
         });
 
         renderView(history);

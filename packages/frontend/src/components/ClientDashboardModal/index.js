@@ -9,7 +9,7 @@ import { Badge, Modal, Spinner } from 'react-bootstrap';
 import { formatCurrency } from 'utils/format';
 import './styles.css';
 
-const LIMIT = 20;
+const LIMIT = 50;
 const CHART_LIMIT = 1000;
 
 const IconSales = () => (

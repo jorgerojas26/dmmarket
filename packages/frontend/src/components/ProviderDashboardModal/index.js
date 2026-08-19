@@ -24,7 +24,7 @@ import './styles.css';
 
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
 
-const LIMIT = 20;
+const LIMIT = 50;
 
 const CLIENTS_COLUMNS = [
     { Header: 'Cliente', accessor: 'cliente' },
