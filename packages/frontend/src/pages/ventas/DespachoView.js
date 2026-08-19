@@ -6,6 +6,7 @@ import { fetchInvoiceList } from 'api/invoice';
 import { useClientRoutes } from 'hooks/useClients';
 import { useInvoiceList } from 'hooks/useInvoice';
 import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
+import useMediaQuery from 'hooks/useMediaQuery';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from 'react-bootstrap';
 import Select from 'react-select';
@@ -42,6 +43,12 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     const [selectedRuta, setSelectedRuta] = useState(null);
     const [showSelectionModal, setShowSelectionModal] = useState(false);
     const [selectAllLoading, setSelectAllLoading] = useState(false);
+
+    // ── Responsive: en pantallas <1400px las dos tablas van en tabs (default
+    //    Facturas, la tabla principal del despacho); en pantallas extra grandes
+    //    (≥1400px) van lado a lado. ──
+    const isWide = useMediaQuery('(min-width: 1400px)');
+    const [activeTab, setActiveTab] = useState('facturas');
 
     const { productsSummary, invoicesTotalSummary } = useInvoiceDispatch(selectedRows);
 
@@ -171,6 +178,50 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     const sortByArr = [{ id: sortBy, desc: sortDir === 'desc' }];
     const totalPages = Math.ceil(total / LIMIT);
 
+    // Tabla de facturas y de productos: se reutilizan en el layout lado a lado
+    // (pantallas ≥1400px) y en el layout con tabs (pantallas de laptop).
+    const invoicesTable = (
+        <InvoicesTable
+            data={invoices}
+            loading={isLoading || selectAllLoading}
+            onRowSelect={setSelectedRows}
+            selectedRows={selectedRows}
+            onSelectAll={handleSelectAll}
+            onDeselectAll={handleDeselectAll}
+            sorting={{
+                enabled: true,
+                sortBy: sortByArr,
+                onSort: handleSort,
+            }}
+            pagination={{
+                enabled: true,
+                page,
+                totalPages,
+                totalRows: total,
+                pageSize: LIMIT,
+                onPageChange: handlePageChange,
+            }}
+            search={{
+                enabled: true,
+                placeholder: 'Buscar por cliente o factura...',
+                onSearch: handleSearch,
+            }}
+        />
+    );
+
+    const productsTable = (
+        <ProductsTable
+            data={productsSummary}
+            totalSummary={invoicesTotalSummary}
+            printStorageKey="despacho-productos"
+        />
+    );
+
+    const reportTabs = [
+        { key: 'facturas', label: 'Facturas' },
+        { key: 'productos', label: 'Productos' },
+    ];
+
     return (
         <div className="report-page">
             <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
@@ -212,47 +263,32 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                         </>
                     )}
                 </div>
-                {/* report-row-xl: reparte el alto disponible entre ambas tablas
-                    (lado a lado ≥1200px, apiladas debajo); las tablas (fillHeight)
-                    absorben el resto y scrollean internamente, la página nunca
-                    saca scrollbar del contenedor padre. */}
-                <div className="report-row-xl">
-                    <div className="report-col">
-                        <InvoicesTable
-                            data={invoices}
-                            loading={isLoading || selectAllLoading}
-                            onRowSelect={setSelectedRows}
-                            selectedRows={selectedRows}
-                            onSelectAll={handleSelectAll}
-                            onDeselectAll={handleDeselectAll}
-                            sorting={{
-                                enabled: true,
-                                sortBy: sortByArr,
-                                onSort: handleSort,
-                            }}
-                            pagination={{
-                                enabled: true,
-                                page,
-                                totalPages,
-                                totalRows: total,
-                                pageSize: LIMIT,
-                                onPageChange: handlePageChange,
-                            }}
-                            search={{
-                                enabled: true,
-                                placeholder: 'Buscar por cliente o factura...',
-                                onSearch: handleSearch,
-                            }}
-                        />
+                {/* Tables: lado a lado en pantallas ≥1400px; en laptops, una sola
+                    tabla con tabs (Facturas / Productos, default Facturas). */}
+                {isWide ? (
+                    <div className="report-row-xl">
+                        <div className="report-col">{invoicesTable}</div>
+                        <div className="report-col">{productsTable}</div>
                     </div>
-                    <div className="report-col">
-                        <ProductsTable
-                            data={productsSummary}
-                            totalSummary={invoicesTotalSummary}
-                            printStorageKey="despacho-productos"
-                        />
+                ) : (
+                    <div className="report-tabs">
+                        <div className="report-tab-nav">
+                            {reportTabs.map((t) => (
+                                <button
+                                    key={t.key}
+                                    type="button"
+                                    className={`report-tab-button${activeTab === t.key ? ' active' : ''}`}
+                                    onClick={() => setActiveTab(t.key)}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="report-tab-content">
+                            {activeTab === 'facturas' ? invoicesTable : productsTable}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
             <SelectedInvoicesModal
                 show={showSelectionModal}
