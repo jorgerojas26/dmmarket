@@ -438,7 +438,7 @@ const DesgloseView = ({ isActive = true }) => {
     const productosData = productosRes?.data || [];
 
     return (
-        <div>
+        <div className="report-page">
             {/* Header row: heading + date range */}
             <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
                 <h4 className="m-0 p-0 bg-red text-light">Desglose de Compras</h4>
@@ -460,14 +460,18 @@ const DesgloseView = ({ isActive = true }) => {
             </div>
 
             {/* Side-by-side tables */}
-            <div className="row g-3">
+            {/* report-row: reparte el alto disponible entre ambas columnas
+                (lado a lado ≥992px, apiladas debajo); las tablas con fillHeight
+                absorben el resto y scrollean internamente, la página nunca
+                saca scrollbar del contenedor padre. */}
+            <div className="report-row">
                 {/* Facturas table */}
-                <div className="col-12 col-lg-6">
-                    <div className="dashboard-panel">
+                <div className="report-col">
+                    <div className="dashboard-panel h-100 d-flex flex-column">
                         <div className="dashboard-panel-header">
                             <h3>Facturas de Compra</h3>
                         </div>
-                        <div className="dashboard-panel-body">
+                        <div className="dashboard-panel-body flex-grow-1" style={{ minHeight: 0 }}>
                             {facturasError && (
                                 <div className="alert alert-danger">
                                     Error al cargar las facturas: {facturasError.message}
@@ -476,7 +480,7 @@ const DesgloseView = ({ isActive = true }) => {
                             <PurchasesReportTable
                                 data={facturasData}
                                 loading={facturasLoading}
-                                maxHeight={620}
+                                fillHeight
                                 sorting={{
                                     enabled: true,
                                     sortBy: facturasSortBy,
@@ -506,12 +510,12 @@ const DesgloseView = ({ isActive = true }) => {
                 </div>
 
                 {/* Productos table */}
-                <div className="col-12 col-lg-6">
-                    <div className="dashboard-panel">
+                <div className="report-col">
+                    <div className="dashboard-panel h-100 d-flex flex-column">
                         <div className="dashboard-panel-header">
                             <h3>Productos Comprados</h3>
                         </div>
-                        <div className="dashboard-panel-body">
+                        <div className="dashboard-panel-body flex-grow-1" style={{ minHeight: 0 }}>
                             {productosError && (
                                 <div className="alert alert-danger">
                                     Error al cargar los productos: {productosError.message}
@@ -521,7 +525,7 @@ const DesgloseView = ({ isActive = true }) => {
                                 data={productosData}
                                 loading={productosLoading}
                                 columns={productosColumns}
-                                maxHeight={620}
+                                fillHeight
                                 sorting={{
                                     enabled: true,
                                     sortBy: productosSortBy,

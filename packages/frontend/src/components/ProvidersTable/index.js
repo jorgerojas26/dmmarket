@@ -181,7 +181,11 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                     onRowClick={onRowSelect}
                     className="providers-table"
                     emptyMessage="Sin datos"
-                    maxHeight={620}
+                    // En laptops la tabla se comprime a calc(100vh - 251px) (heading
+                    // + toolbar + paginación + navbar + padding) para no sacar
+                    // scrollbar del contenedor padre; en pantallas altas conserva
+                    // el tope fijo de 620px.
+                    maxHeight="min(620px, calc(100vh - 251px))"
                     sorting={{
                         enabled: true,
                         sortBy: [{ id: sort.sortBy, desc: sort.sortDir === 'desc' }],

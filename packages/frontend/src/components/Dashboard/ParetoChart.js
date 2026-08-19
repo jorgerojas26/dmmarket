@@ -651,7 +651,11 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
                 data={tableData}
                 columns={buildColumns(cfg)}
                 emptyMessage={cfg.emptyTableMessage}
-                maxHeight={null}
+                // La tabla nunca debe exceder el alto del viewport: se le reserva
+                // el espacio del navbar + heading + toolbar (mismo offset que
+                // DespachoView). En pantallas altas crece hasta el offset, en
+                // laptops se comprime y scrollea internamente.
+                maxHeight="calc(100vh - 224px)"
                 loading={loading}
                 sorting={sorting}
                 pagination={{

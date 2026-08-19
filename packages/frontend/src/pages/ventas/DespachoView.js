@@ -13,12 +13,6 @@ import Select from 'react-select';
 const LIMIT = 20;
 const EMPTY_INVOICES = [];
 
-// Fixed vertical space above the tables: navbar (56) + content padding top
-// (24) + heading block (65) + toolbar (38 + 16 margin) + content padding
-// bottom (24). Tables get exactly the remaining viewport height, so the
-// page never shows a vertical scrollbar.
-const ABOVE_TABLES_OFFSET = 224;
-
 // "Select all" suma (unión) las filas del filtro actual a la selección acumulada:
 // nunca sobreescribe el historial previo (p.ej. select-all sin ruta → filtro de
 // ruta → select-all de nuevo debe volver al total original).
@@ -178,8 +172,8 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     const totalPages = Math.ceil(total / LIMIT);
 
     return (
-        <>
-            <div>
+        <div className="report-page">
+            <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <div className="d-flex flex-wrap gap-3 mb-3">
                     <div style={{ minWidth: '220px' }}>
                         <Select
@@ -218,11 +212,12 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                         </>
                     )}
                 </div>
-                {/* The row AND the cols need this same definite height: with
-                    flex-wrap the row's flex line grows to the tallest content, so
-                    the tables must be pinned to the available height from inside. */}
-                <div className="row g-3" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>
-                    <div className="col-12 col-xl-6" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>
+                {/* report-row-xl: reparte el alto disponible entre ambas tablas
+                    (lado a lado ≥1200px, apiladas debajo); las tablas (fillHeight)
+                    absorben el resto y scrollean internamente, la página nunca
+                    saca scrollbar del contenedor padre. */}
+                <div className="report-row-xl">
+                    <div className="report-col">
                         <InvoicesTable
                             data={invoices}
                             loading={isLoading || selectAllLoading}
@@ -250,7 +245,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                             }}
                         />
                     </div>
-                    <div className="col-12 col-xl-6" style={{ height: `calc(100vh - ${ABOVE_TABLES_OFFSET}px)` }}>
+                    <div className="report-col">
                         <ProductsTable
                             data={productsSummary}
                             totalSummary={invoicesTotalSummary}
@@ -267,7 +262,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                 onClear={handleClearAll}
                 onClose={() => setShowSelectionModal(false)}
             />
-        </>
+        </div>
     );
 };
 

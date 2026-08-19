@@ -138,7 +138,7 @@ const ClientesPage = () => {
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4">
                     {activeView === 'clients' && (
-                        <div>
+                        <div className="report-page">
                             <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
                                 <h4 className="m-0 text-light">Desglose de Clientes</h4>
                             </div>
@@ -167,7 +167,12 @@ const ClientesPage = () => {
                                     />
                                 </div>
                             </div>
-                            <div className="clients-content-wrapper">
+                            {/* La tabla absorbe el alto restante (flex) y scrollea
+                                internamente; la página nunca saca scrollbar. */}
+                            <div
+                                className="clients-content-wrapper"
+                                style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+                            >
                                 <ClientsTable
                                     onRowSelect={handleRowSelect}
                                     ruta={selectedRuta?.value}

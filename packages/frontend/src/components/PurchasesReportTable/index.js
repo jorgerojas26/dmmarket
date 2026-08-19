@@ -8,6 +8,7 @@ const PurchasesReportTable = ({
     pagination,
     search,
     maxHeight,
+    fillHeight,
     columns: customColumns,
     print,
 }) => {
@@ -19,6 +20,7 @@ const PurchasesReportTable = ({
             loading={loading}
             columns={memoizedColumns}
             showFooter
+            fillHeight={fillHeight}
             maxHeight={maxHeight != null ? maxHeight : null}
             sorting={sorting}
             pagination={pagination}

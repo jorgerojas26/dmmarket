@@ -10,6 +10,7 @@ const SaleReportTable = ({
     search,
     onRowClick,
     maxHeight,
+    fillHeight,
     columns: customColumns,
     print,
 }) => {
@@ -22,6 +23,7 @@ const SaleReportTable = ({
             loading={loading}
             columns={memoizedColumns}
             showFooter
+            fillHeight={fillHeight}
             maxHeight={maxHeight != null ? maxHeight : null}
             sorting={sorting}
             pagination={pagination}

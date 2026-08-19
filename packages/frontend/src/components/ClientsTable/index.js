@@ -171,14 +171,15 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
     );
 
     return (
-        <div className="dashboard-panel">
-            <div className="dashboard-panel-body">
+        <div className="dashboard-panel h-100 d-flex flex-column">
+            <div className="dashboard-panel-body flex-grow-1" style={{ minHeight: 0 }}>
                 <Table
                     data={dataArr}
                     columns={columns}
                     loading={isLoading}
                     onRowClick={onRowSelect}
                     emptyMessage="Sin datos"
+                    fillHeight
                     sorting={{
                         enabled: true,
                         sortBy: [{ id: sort.sortBy, desc: sort.sortDir === 'desc' }],
@@ -203,7 +204,6 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                         globalPrintLabel: 'Imprimir',
                         storageKey: 'clientes',
                     }}
-                    maxHeight={700}
                 />
             </div>
         </div>
