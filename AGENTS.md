@@ -22,3 +22,7 @@ All five roles use their default string names. See `docs/agents/triage-labels.md
 ### Domain docs
 
 Single-context repo — one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.
+
+### Release
+
+Publicar una release de DMMarket con changelog curado (legible para no técnicos). Carga el skill `skills/release/SKILL.md`. La fuente única de las notas de cada release es `CHANGELOG.md` (la lee `scripts/release.mjs`).
