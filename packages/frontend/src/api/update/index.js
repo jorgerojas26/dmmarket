@@ -12,6 +12,12 @@ export const checkForUpdate = async () => {
     return { status: response.status, data };
 };
 
+export const fetchUpdateHistory = async () => {
+    const response = await fetch(`${BASE_URL}/history`);
+    const data = await response.json().catch(() => null);
+    return { status: response.status, data };
+};
+
 export const downloadUpdate = async ({ assetUrl, sha256AssetUrl }) => {
     const response = await fetch(`${BASE_URL}/download`, {
         method: 'POST',

@@ -44,19 +44,154 @@
     gap: 10px;
 }
 
-.configuracion-about__result pre {
-    max-height: 220px;
-    overflow: auto;
-    font-size: 12px;
-    white-space: pre-wrap;
-    color: #cfd3da;
+.configuracion-about__progress {
+    width: 320px;
+}
+
+/* ── Historial de versiones ── */
+.configuracion-about__history {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid #2d3138;
+}
+
+.configuracion-about__history h4 {
+    margin: 0;
+    color: #e8eaed;
+    font-size: 16px;
+}
+
+.configuracion-about__history-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.configuracion-about__history-item {
     background: #16181c;
     border: 1px solid #2d3138;
     border-radius: 8px;
-    padding: 10px;
-    max-width: 640px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.configuracion-about__progress {
-    width: 320px;
+.configuracion-about__history-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.configuracion-about__history-date {
+    color: #9aa2ad;
+    font-size: 12px;
+}
+
+.configuracion-about__history-notes summary {
+    cursor: pointer;
+    font-size: 13px;
+}
+
+/* ── Notas de versión renderizadas como markdown ── */
+.configuracion-about__notes-markdown {
+    margin: 8px 0 0;
+    max-height: 260px;
+    overflow: auto;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #cfd3da;
+    background: #1a1d21;
+    border: 1px solid #2d3138;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.configuracion-about__notes-markdown > :first-child {
+    margin-top: 0;
+}
+
+.configuracion-about__notes-markdown > :last-child {
+    margin-bottom: 0;
+}
+
+.configuracion-about__notes-markdown p {
+    margin: 0 0 8px;
+}
+
+.configuracion-about__notes-markdown h1,
+.configuracion-about__notes-markdown h2,
+.configuracion-about__notes-markdown h3,
+.configuracion-about__notes-markdown h4,
+.configuracion-about__notes-markdown h5,
+.configuracion-about__notes-markdown h6 {
+    color: #e8eaed;
+    font-size: 14px;
+    font-weight: 700;
+    margin: 12px 0 6px;
+}
+
+.configuracion-about__notes-markdown h1:first-child,
+.configuracion-about__notes-markdown h2:first-child,
+.configuracion-about__notes-markdown h3:first-child {
+    margin-top: 0;
+}
+
+.configuracion-about__notes-markdown ul,
+.configuracion-about__notes-markdown ol {
+    margin: 0 0 8px;
+    padding-left: 20px;
+}
+
+.configuracion-about__notes-markdown li {
+    margin: 2px 0;
+}
+
+.configuracion-about__notes-markdown li::marker {
+    color: #6b7280;
+}
+
+.configuracion-about__notes-markdown a {
+    color: #93c5fd;
+    text-decoration: underline;
+}
+
+.configuracion-about__notes-markdown strong {
+    color: #e8eaed;
+}
+
+.configuracion-about__notes-markdown code {
+    font-size: 12px;
+    color: #e2a1c5;
+    background: #16181c;
+    border: 1px solid #2d3138;
+    border-radius: 4px;
+    padding: 0 4px;
+}
+
+.configuracion-about__notes-markdown pre {
+    margin: 8px 0;
+    padding: 10px;
+    overflow: auto;
+    font-size: 12px;
+    background: #16181c;
+    border: 1px solid #2d3138;
+    border-radius: 6px;
+}
+
+.configuracion-about__notes-markdown blockquote {
+    margin: 8px 0;
+    padding: 4px 12px;
+    border-left: 3px solid #3b82f6;
+    color: #9aa2ad;
+    background: #16181c;
+    border-radius: 0 6px 6px 0;
 }

@@ -1,8 +1,19 @@
+import { fetchUpdateHistory } from 'api/update';
 import Sidebar from 'components/Sidebar';
 import useUpdateFlow from 'hooks/useUpdateFlow';
-import { useMemo, useState } from 'react';
+import { DateTime } from 'luxon';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
+import ReactMarkdown from 'react-markdown';
 import './styles.css';
+
+// Renderiza las notas de una release como markdown (seguro: react-markdown
+// escapa el HTML crudo, no lo inyecta).
+const MarkdownNotes = ({ children }) => (
+    <div className="configuracion-about__notes-markdown">
+        <ReactMarkdown>{children}</ReactMarkdown>
+    </div>
+);
 
 const sidebarItems = [
     {
@@ -45,6 +56,30 @@ const ConfiguracionPage = () => {
     } = update;
     const { handleCheck, handleDownload, handleApply } = update;
 
+    // ── Historial de versiones (releases publicadas con sus notas) ──
+    const [history, setHistory] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(true);
+    const [historyError, setHistoryError] = useState(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchUpdateHistory()
+            .then(({ status: resStatus, data }) => {
+                if (cancelled) return;
+                if (resStatus === 200) setHistory(data || []);
+                else setHistoryError(data?.error?.message || 'No se pudo cargar el historial de versiones');
+            })
+            .catch(() => {
+                if (!cancelled) setHistoryError('No se pudo cargar el historial de versiones');
+            })
+            .finally(() => {
+                if (!cancelled) setHistoryLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const sidebarItemsMemo = useMemo(() => sidebarItems, []);
 
     return (
@@ -63,7 +98,7 @@ const ConfiguracionPage = () => {
                                     <Badge pill bg="dark" className="border border-secondary">
                                         {status ? `v${status.currentVersion}` : '…'}
                                     </Badge>
-                        
+
                                     {checking ? (
                                         <span className="text-secondary">Buscando…</span>
                                     ) : (
@@ -86,7 +121,7 @@ const ConfiguracionPage = () => {
                                                             <summary className="text-secondary">
                                                                 Notas de la versión
                                                             </summary>
-                                                            <pre>{checkResult.notes}</pre>
+                                                            <MarkdownNotes>{checkResult.notes}</MarkdownNotes>
                                                         </details>
                                                     )}
 
@@ -127,6 +162,48 @@ const ConfiguracionPage = () => {
                                     {applyError && <span className="text-danger">{applyError}</span>}
                                     {(applying || applied) && (
                                         <span className="text-info">Actualizando — la app se reiniciará…</span>
+                                    )}
+                                </div>
+
+                                <div className="configuracion-about__history">
+                                    <h4>Historial de versiones</h4>
+                                    {historyLoading ? (
+                                        <span className="text-secondary">Cargando…</span>
+                                    ) : historyError ? (
+                                        <span className="text-danger">{historyError}</span>
+                                    ) : (
+                                        <ul className="configuracion-about__history-list">
+                                            {history.map((r) => (
+                                                <li key={r.version} className="configuracion-about__history-item">
+                                                    <div className="configuracion-about__history-head">
+                                                        <Badge pill bg="dark" className="border border-secondary">
+                                                            v{r.version}
+                                                        </Badge>
+                                                        {r.publishedAt && (
+                                                            <span className="configuracion-about__history-date">
+                                                                {DateTime.fromISO(r.publishedAt).toFormat(
+                                                                    'dd MMM yyyy',
+                                                                    {
+                                                                        locale: 'es',
+                                                                    },
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                        {r.version === status?.currentVersion && (
+                                                            <span className="text-success">Instalada</span>
+                                                        )}
+                                                    </div>
+                                                    {r.notes && (
+                                                        <details className="configuracion-about__history-notes">
+                                                            <summary className="text-secondary">
+                                                                Notas de la versión
+                                                            </summary>
+                                                            <MarkdownNotes>{r.notes}</MarkdownNotes>
+                                                        </details>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
                                     )}
                                 </div>
                             </div>

@@ -9,6 +9,7 @@ const crypto = require("node:crypto");
 const IS_STANDALONE = typeof Bun !== "undefined" && Bun.embeddedFiles.length > 0;
 
 const GITHUB_API = "https://api.github.com/repos/jorgerojas26/dmmarket/releases/latest";
+const GITHUB_RELEASES_API = "https://api.github.com/repos/jorgerojas26/dmmarket/releases?per_page=10";
 
 // Par de assets (binario + hash) por plataforma. Cada release sube ambos
 // pares: dmmarket-app.exe (Windows) y dmmarket-app-mac (macOS).
@@ -108,6 +109,35 @@ const POST_CHECK = async (_req, res) => {
     });
   } catch (_error) {
     res.status(502).json({ error: { message: "No se pudo contactar al servidor. Revisá tu conexión a internet." } });
+  }
+};
+
+// Historial de versiones: las últimas releases publicadas (sin drafts ni
+// prereleases) con sus notas. Para el panel "Acerca de" de Configuración.
+const GET_HISTORY = async (_req, res) => {
+  try {
+    const response = await fetchWithTimeout(GITHUB_RELEASES_API, {
+      headers: {
+        "User-Agent": "dmmarket-updater",
+        Accept: "application/vnd.github+json",
+      },
+    });
+    if (!response.ok) {
+      return res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
+    }
+
+    const releases = await response.json();
+    const history = releases
+      .filter((r) => !r.draft && !r.prerelease)
+      .map((r) => ({
+        version: String(r.tag_name || "").replace(/^v/, ""),
+        publishedAt: r.published_at || null,
+        notes: r.body || "",
+      }));
+
+    res.status(200).json(history);
+  } catch (_error) {
+    res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
   }
 };
 
@@ -271,6 +301,7 @@ const POST_APPLY = (_req, res) => {
 module.exports = {
   GET_STATUS,
   POST_CHECK,
+  GET_HISTORY,
   POST_DOWNLOAD,
   GET_PROGRESS,
   POST_APPLY,
