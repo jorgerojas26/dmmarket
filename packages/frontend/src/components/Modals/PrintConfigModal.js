@@ -223,12 +223,17 @@ const normalizeConfig = (saved, columns, initialOrientation, filters = []) => {
             ? saved.columns.map(getColumnKey).filter((k) => allKeys.has(k))
             : [];
         const columnsSet = new Set(savedKeys.length > 0 ? savedKeys : validKeys);
-        const savedSort = Array.isArray(saved.sortBy) ? saved.sortBy.filter((s) => s && columnsSet.has(s.id)) : [];
+        // `key` was used by an earlier version of the persisted format.
+        const savedSort = Array.isArray(saved.sortBy)
+            ? saved.sortBy
+                  .map((s) => (s ? { key: s.id ?? s.key, desc: Boolean(s.desc) } : null))
+                  .filter((s) => s && columnsSet.has(s.key))
+            : [];
         return {
             columns: columnsSet,
             orientation: saved.orientation === 'landscape' ? 'landscape' : 'portrait',
             currency: saved.currency === 'Bs' ? 'Bs' : 'USD',
-            sortRules: savedSort.map((s) => ({ key: s.id, desc: Boolean(s.desc) })),
+            sortRules: savedSort,
             extra: Object.fromEntries(filters.map((f) => [f.key, Boolean(saved.extra?.[f.key])])),
         };
     }
@@ -241,12 +246,13 @@ const normalizeConfig = (saved, columns, initialOrientation, filters = []) => {
     };
 };
 
-// Forma persistida (array de keys, no objetos columna).
+// Forma persistida (array de keys, no objetos columna). `id` mantiene la
+// misma forma que el sortBy que recibe la impresión.
 const toPersistedConfig = ({ columns, orientation, currency, sortRules, extra }) => ({
     columns: [...columns],
     orientation,
     currency,
-    sortBy: sortRules.map((rule) => ({ key: rule.key, desc: rule.desc })),
+    sortBy: sortRules.map((rule) => ({ id: rule.key, desc: rule.desc })),
     extra,
 });
 

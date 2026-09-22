@@ -75,6 +75,29 @@ describe('PrintConfigModal — persistencia por tabla en localStorage', () => {
         expect(screen.getByRole('radio', { name: /Horizontal/ })).toBeChecked();
     });
 
+    it('persiste y restaura el orden de las filas', () => {
+        const { unmount } = renderModal();
+        const sortSelect = screen.getByRole('combobox');
+
+        fireEvent.mouseDown(sortSelect);
+        fireEvent.click(screen.getByText('Cliente', { selector: '.print-sort-select__option' }));
+        fireEvent.mouseDown(sortSelect);
+        fireEvent.click(screen.getByText('Total', { selector: '.print-sort-select__option' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Total: descendente' }));
+
+        expect(JSON.parse(localStorage.getItem('print-config:test-tabla')).sortBy).toEqual([
+            { id: 'client', desc: false },
+            { id: 'total', desc: true },
+        ]);
+
+        unmount();
+        renderModal();
+
+        expect(screen.getByLabelText('Arrastrar para cambiar prioridad de Cliente')).toBeTruthy();
+        expect(screen.getByLabelText('Arrastrar para cambiar prioridad de Total')).toBeTruthy();
+        expect(screen.getByLabelText('Total: descendente')).toHaveAttribute('aria-pressed', 'true');
+    });
+
     it('descarta columnas guardadas que ya no existen y cae a defaults si no queda ninguna', () => {
         localStorage.setItem(
             'print-config:test-tabla',

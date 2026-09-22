@@ -17,3 +17,5 @@ packages/backend/.dmmarket-update/
 tags
 .playwright-cli
 bdsolser_md_nieto.dump
+# Local Pi runtime state
+.atl/
