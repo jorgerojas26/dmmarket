@@ -40,14 +40,15 @@ const computeConcentration = (sortedRevenues, grandTotal) => {
   return concentration;
 };
 
-const computeAbc = (sortedRevenues, grandTotal) => {
+const computeAbc = (sortedRevenues, grandTotal, valueKey = "total_usd", summaryValueKey = "revenuePercent") => {
   let cumulative = 0;
   const abcClients = sortedRevenues.map((r, i) => {
-    cumulative += Number(r.total_usd || 0);
+    cumulative += Number(r[valueKey] || 0);
     const pct = grandTotal > 0 ? Math.round((cumulative / grandTotal) * 10000) / 100 : 0;
     return {
       name: r.name,
       total_usd: Number(r.total_usd),
+      [valueKey]: Number(r[valueKey] || 0),
       rank: i + 1,
       cumulativePercent: pct,
       abcClass: pct <= 80 ? "A" : pct <= 95 ? "B" : "C",
@@ -65,9 +66,9 @@ const computeAbc = (sortedRevenues, grandTotal) => {
     clients: abcClients,
     summary: {
       totalClients: abcClients.length,
-      classA: { count: classA.length, revenuePercent: lastA },
-      classB: { count: classB.length, revenuePercent: Math.round((lastB - lastA) * 100) / 100 },
-      classC: { count: classC.length, revenuePercent: 100 - lastB },
+      classA: { count: classA.length, [summaryValueKey]: lastA },
+      classB: { count: classB.length, [summaryValueKey]: Math.round((lastB - lastA) * 100) / 100 },
+      classC: { count: classC.length, [summaryValueKey]: 100 - lastB },
     },
   };
 };
@@ -124,6 +125,7 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         "mf.IdCliente",
         knex.raw(`COUNT(DISTINCT mf.??) as invoice_count`, [idInvoice]),
         knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_usd`),
+        knex.raw(`ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad`),
       )
       .from(`${slaveTable} as sf`)
       .innerJoin(`${masterTable} as mf`, function () {
@@ -142,6 +144,9 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
 
     const concentration = computeConcentration(allClientsRevenue, grandTotal);
     const abc = computeAbc(allClientsRevenue, grandTotal);
+    const utilityClients = [...allClientsRevenue].sort((a, b) => Number(b.utilidad || 0) - Number(a.utilidad || 0));
+    const grandUtility = utilityClients.reduce((sum, r) => sum + Number(r.utilidad || 0), 0);
+    const abcUtility = computeAbc(utilityClients, grandUtility, "utilidad", "utilityPercent");
     const revenueBySegment = computeSegments(allClientsRevenue, grandTotal);
     const treemapTop50 = allClientsRevenue.slice(0, 50).map((r) => ({
       name: r.name,
@@ -454,6 +459,7 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
       waterfall: waterfallRows,
       treemapTop50,
       abc,
+      abcUtility,
       inactiveBuckets: inactiveBuckets.map((r) => ({
         bucket: r.bucket,
         count: Number(r.count),
@@ -467,4 +473,4 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
   }
 };
 
-module.exports = { GET_CLIENTS_DASHBOARD };
+module.exports = { GET_CLIENTS_DASHBOARD, computeAbc };

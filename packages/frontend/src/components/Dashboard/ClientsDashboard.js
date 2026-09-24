@@ -40,6 +40,43 @@ const nivoTheme = {
     },
 };
 
+const CLIENT_PARETO_CONFIG = {
+    nameKey: 'name',
+    valueKey: 'total_usd',
+    quantityKey: null,
+    entityLabel: 'Cliente',
+    valueLabel: 'Venta total',
+    valueAxisLabel: 'Ventas totales',
+    axisLegend: 'Clientes (ordenados por ventas totales)',
+    summaryValueKey: 'revenuePercent',
+    summaryPctLabel: 'de ventas',
+    summaryTotalKey: 'totalClients',
+    summaryTotalLabel: 'Total Clientes',
+    summaryTotalUnit: 'clientes',
+    title: 'Análisis Pareto (ABC) de Clientes',
+    subtitle: '80% de las ventas viene del 20% de los clientes',
+    pdfTitle: 'Análisis Pareto (ABC) de Clientes',
+    allFilterLabel: 'Todos los clientes',
+    emptyTableMessage: 'Sin clientes en esta clase',
+};
+
+const CLIENT_UTILITY_PARETO_CONFIG = {
+    ...CLIENT_PARETO_CONFIG,
+    valueKey: 'utilidad',
+    valueLabel: 'Utilidad',
+    valueAxisLabel: 'Utilidad',
+    axisLegend: 'Clientes (ordenados por utilidad)',
+    summaryValueKey: 'utilityPercent',
+    summaryPctLabel: 'de utilidad',
+    subtitle: '80% de la utilidad viene del 20% de los clientes',
+    pdfTitle: 'Análisis Pareto (ABC) de Clientes por Utilidad',
+};
+
+const CLIENT_PARETO_MODES = [
+    { key: 'ventas', label: 'Ventas totales', color: '#3b82f6' },
+    { key: 'utilidad', label: 'Utilidad', color: '#22c55e' },
+];
+
 // Waterfall row with hover tooltip (same styling as ChartTooltip).
 const WaterfallBar = ({ bar, barHeight }) => {
     const [hovered, setHovered] = useState(false);
@@ -112,6 +149,9 @@ const WaterfallBar = ({ bar, barHeight }) => {
 
 const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
     const { data, error, isLoading } = useClientsDashboard(dateRange, showNoe, ruta);
+    const [paretoMode, setParetoMode] = useState('utilidad');
+    const paretoConfig = paretoMode === 'utilidad' ? CLIENT_UTILITY_PARETO_CONFIG : CLIENT_PARETO_CONFIG;
+    const paretoDataset = paretoMode === 'utilidad' ? data?.abcUtility : data?.abc;
 
     // ── Derived chart data ──
 
@@ -163,30 +203,6 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
     );
 
     const kpis = data?.kpis;
-
-    // ParetoChart config for clients — stable reference so internal memoization holds.
-    const paretoConfig = useMemo(
-        () => ({
-            nameKey: 'name',
-            valueKey: 'total_usd',
-            quantityKey: null,
-            entityLabel: 'Cliente',
-            valueLabel: 'Ventas',
-            valueAxisLabel: 'Ventas',
-            axisLegend: 'Clientes (ordenados por ventas)',
-            summaryValueKey: 'revenuePercent',
-            summaryPctLabel: 'de ventas',
-            summaryTotalKey: 'totalClients',
-            summaryTotalLabel: 'Total Clientes',
-            summaryTotalUnit: 'clientes',
-            title: 'Análisis Pareto (ABC) de Clientes',
-            subtitle: '80% de las ventas viene del 20% de los clientes',
-            pdfTitle: 'Análisis Pareto (ABC) de Clientes',
-            allFilterLabel: 'Todos los clientes',
-            emptyTableMessage: 'Sin clientes en esta clase',
-        }),
-        [],
-    );
 
     if (error) {
         return <div className="alert alert-danger">Error al cargar el dashboard: {error.message}</div>;
@@ -528,6 +544,46 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                 </div>
             </div>
 
+            {/* ABC Pareto */}
+            {paretoDataset?.summary && (
+                <div className="row g-3 mb-4">
+                    <div className="col-12">
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
+                            {CLIENT_PARETO_MODES.map(({ key, label, color }) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    aria-pressed={paretoMode === key}
+                                    onClick={() => setParetoMode(key)}
+                                    style={{
+                                        padding: '6px 16px',
+                                        borderRadius: 6,
+                                        border:
+                                            paretoMode === key
+                                                ? `1.5px solid ${color}`
+                                                : '1px solid rgba(255,255,255,0.1)',
+                                        background: paretoMode === key ? `${color}18` : 'transparent',
+                                        color: paretoMode === key ? color : '#9ca3af',
+                                        fontSize: 12,
+                                        fontWeight: paretoMode === key ? 600 : 400,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        <ParetoChart
+                            key={paretoMode}
+                            products={paretoDataset.clients}
+                            summary={paretoDataset.summary}
+                            config={paretoConfig}
+                        />
+                    </div>
+                </div>
+            )}
+
             {/* Route coverage: cartera by route */}
             {coverageRoutes.length > 0 && (
                 <div className="row g-3 mb-4">
@@ -687,15 +743,6 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                     </div>
                 </div>
             </div>
-
-            {/* ABC Pareto */}
-            {data?.abc?.summary && (
-                <div className="row g-3 mb-4">
-                    <div className="col-12">
-                        <ParetoChart products={data.abc.clients} summary={data.abc.summary} config={paretoConfig} />
-                    </div>
-                </div>
-            )}
 
             {/* Top 50 Treemap + Segment Table */}
             <div className="row g-3 mb-4">
