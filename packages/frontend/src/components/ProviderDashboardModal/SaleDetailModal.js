@@ -60,6 +60,11 @@ const SaleDetailModal = ({ show, onClose, sale }) => {
                                         accessor: 'subtotal',
                                         Cell: ({ value }) => formatCurrency(value),
                                     },
+                                    {
+                                        Header: 'Utilidad',
+                                        accessor: 'utilidad',
+                                        Cell: ({ value }) => formatCurrency(value),
+                                    },
                                 ]}
                                 className="provider-table"
                                 maxHeight={null}
@@ -69,6 +74,10 @@ const SaleDetailModal = ({ show, onClose, sale }) => {
                         <div className="purchase-total-row">
                             <span>Total</span>
                             <span className="purchase-total-amount">{formatCurrency(sale.total)}</span>
+                        </div>
+                        <div className="purchase-total-row">
+                            <span>Utilidad</span>
+                            <span className="purchase-total-amount">{formatCurrency(sale.utilidad)}</span>
                         </div>
                     </>
                 ) : (

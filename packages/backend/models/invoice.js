@@ -60,6 +60,15 @@ exports.GET_INVOICES = async ({
   // que el data realmente devuelve.
   const [{ total }] = await knex.count("* as total").from(idQuery.clone().as("sq"));
 
+  // Resumen de todas las facturas filtradas, no solo las de la página actual.
+  const filteredInvoiceIds = idQuery.clone().as("filtered_invoices");
+  const [totals] = await knex(`${slaveTable} as summary_sf`)
+    .innerJoin(filteredInvoiceIds, "filtered_invoices.invoiceId", `summary_sf.${idInvoice}`)
+    .select(
+      knex.raw("ROUND(COALESCE(SUM(summary_sf.Precio * summary_sf.Cantidad), 0), 2) as total"),
+      knex.raw("ROUND(COALESCE(SUM((summary_sf.Precio - summary_sf.Costo) * summary_sf.Cantidad), 0), 2) as utilidad"),
+    );
+
   // Sorting by profit needs the per-invoice profit aggregation joined in.
   // (Applied only to the ordered query so the count above stays cheap.)
   if (sortBy === "utilidad") {
@@ -78,7 +87,11 @@ exports.GET_INVOICES = async ({
   const invoiceIds = invoiceIdRows.map((r) => r.invoiceId);
 
   if (invoiceIds.length === 0) {
-    return { data: [], pagination: { page: Number(page), limit: Number(limit), total: Number(total) } };
+    return {
+      data: [],
+      pagination: { page: Number(page), limit: Number(limit), total: Number(total) },
+      totals,
+    };
   }
 
   // ── Step 2: Get line items for those invoice IDs ──
@@ -158,6 +171,7 @@ exports.GET_INVOICES = async ({
       limit: Number(limit),
       total: Number(total),
     },
+    totals,
   };
 };
 

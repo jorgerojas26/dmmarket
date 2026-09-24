@@ -139,6 +139,7 @@ const GET_INVOICE_DETAIL = async (req, res) => {
         "sf.Cantidad as cantidad",
         "sf.Precio as precio",
         knex.raw("ROUND(sf.Precio * sf.Cantidad, 2) as subtotal"),
+        knex.raw("ROUND((sf.Precio - sf.Costo) * sf.Cantidad, 2) as utilidad"),
       )
       .from(`${slaveTable} as sf`)
       .innerJoin(`${masterTable} as mf`, function () {
@@ -153,6 +154,7 @@ const GET_INVOICE_DETAIL = async (req, res) => {
     }
 
     const total = rows.reduce((acc, row) => acc + Number(row.subtotal || 0), 0);
+    const utilidad = rows.reduce((acc, row) => acc + Number(row.utilidad || 0), 0);
 
     const detail = {
       idFactura: rows[0].idFactura,
@@ -160,11 +162,13 @@ const GET_INVOICE_DETAIL = async (req, res) => {
       cliente: rows[0].cliente,
       vendedor: rows[0].vendedor,
       total: Math.round(total * 100) / 100,
+      utilidad: Math.round(utilidad * 100) / 100,
       productos: rows.map((r) => ({
         descripcion: r.descripcion,
         cantidad: Number(r.cantidad),
         precio: Number(r.precio),
         subtotal: Number(r.subtotal),
+        utilidad: Number(r.utilidad),
       })),
     };
 

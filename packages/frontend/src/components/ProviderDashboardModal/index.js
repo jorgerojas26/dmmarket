@@ -26,16 +26,45 @@ pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
 
 const LIMIT = 50;
 
+const currencyFooter =
+    (accessor) =>
+    ({ data, summary }) =>
+        formatCurrency(
+            summary != null ? Number(summary) : data.reduce((sum, row) => sum + Number(row[accessor] || 0), 0),
+        );
+
 const CLIENTS_COLUMNS = [
     { Header: 'Cliente', accessor: 'cliente' },
-    { Header: 'Total Ventas', accessor: 'totalVentas', Cell: ({ value }) => formatCurrency(value) },
+    {
+        Header: 'Total Ventas',
+        accessor: 'totalVentas',
+        Cell: ({ value }) => formatCurrency(value),
+        Footer: currencyFooter('totalVentas'),
+    },
     { Header: '# Ventas', accessor: 'numVentas' },
+    {
+        Header: 'Utilidad',
+        accessor: 'utilidad',
+        Cell: ({ value }) => formatCurrency(value),
+        Footer: currencyFooter('utilidad'),
+    },
 ];
 
 const PRODUCTS_COLUMNS = [
     { Header: 'Producto', accessor: 'producto' },
     { Header: 'Cantidad', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString() },
-    { Header: 'Total Ventas', accessor: 'totalVentas', Cell: ({ value }) => formatCurrency(value) },
+    {
+        Header: 'Total Ventas',
+        accessor: 'totalVentas',
+        Cell: ({ value }) => formatCurrency(value),
+        Footer: currencyFooter('totalVentas'),
+    },
+    {
+        Header: 'Utilidad',
+        accessor: 'utilidad',
+        Cell: ({ value }) => formatCurrency(value),
+        Footer: currencyFooter('utilidad'),
+    },
 ];
 
 /** Formats a cell value for PDF output, honoring the print currency option for money columns. */
@@ -44,6 +73,7 @@ const printCellValue = (col, row, currency, rate) => {
     switch (col.accessor) {
         case 'totalVentas':
         case 'monto':
+        case 'utilidad':
             return formatMoney(value, currency, rate);
         case 'cantidad':
             return Number(value).toLocaleString();
@@ -479,6 +509,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         String(Number(p.cantidad)),
                         formatMoney(p.precio, currency, rate),
                         formatMoney(p.subtotal, currency, rate),
+                        formatMoney(p.utilidad, currency, rate),
                     ]);
                     tables.push(
                         {
@@ -489,15 +520,16 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         {
                             style: 'table',
                             table: {
-                                widths: ['*', 'auto', 'auto', 'auto'],
+                                widths: ['*', 'auto', 'auto', 'auto', 'auto'],
                                 body: [
-                                    ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
+                                    ['Descripción', 'Cantidad', 'Precio', 'Subtotal', 'Utilidad'],
                                     ...rows,
                                     [
                                         '',
                                         '',
                                         { text: 'Total', bold: true },
                                         { text: formatMoney(detail.total, currency, rate), bold: true },
+                                        { text: formatMoney(detail.utilidad, currency, rate), bold: true },
                                     ],
                                 ],
                             },
@@ -677,6 +709,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     String(Number(p.cantidad)),
                     formatCurrency(p.precio),
                     formatCurrency(p.subtotal),
+                    formatCurrency(p.utilidad),
                 ]);
                 pdfMake
                     .createPdf({
@@ -693,15 +726,16 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             {
                                 style: 'table',
                                 table: {
-                                    widths: ['*', 'auto', 'auto', 'auto'],
+                                    widths: ['*', 'auto', 'auto', 'auto', 'auto'],
                                     body: [
-                                        ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
+                                        ['Descripción', 'Cantidad', 'Precio', 'Subtotal', 'Utilidad'],
                                         ...rows,
                                         [
                                             '',
                                             '',
                                             { text: 'Total', bold: true },
                                             { text: formatCurrency(detail.total), bold: true },
+                                            { text: formatCurrency(detail.utilidad), bold: true },
                                         ],
                                     ],
                                 },
@@ -786,7 +820,18 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     },
                     { Header: 'Cliente', accessor: 'cliente' },
                     { Header: 'Vendedor', accessor: 'vendedor' },
-                    { Header: 'Total', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
+                    {
+                        Header: 'Total',
+                        accessor: 'monto',
+                        Cell: ({ value }) => formatCurrency(value),
+                        Footer: currencyFooter('monto'),
+                    },
+                    {
+                        Header: 'Utilidad',
+                        accessor: 'utilidad',
+                        Cell: ({ value }) => formatCurrency(value),
+                        Footer: currencyFooter('utilidad'),
+                    },
                 ],
             },
             compras: {
@@ -850,6 +895,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 data={c.data?.data || []}
                 columns={c.columns}
                 loading={c.loading}
+                showFooter={!!c.data?.totals}
+                summaries={c.data?.totals}
                 emptyMessage={c.emptyMessage}
                 onRowClick={c.onRowClick}
                 print={{

@@ -68,9 +68,10 @@ describe("GET_CLIENTS_LIST", () => {
     await controller.GET_CLIENTS_LIST(req, res);
 
     expect(res.status).toHaveBeenCalledWith(200);
-    const { data, total, page, limit } = res.json.mock.calls[0][0];
+    const { data, total, page, limit, totals } = res.json.mock.calls[0][0];
 
     expect(total).toBe(3);
+    expect(totals).toEqual({ utilidad: 150 });
     expect(page).toBe(1);
     expect(limit).toBe(20);
 
@@ -375,5 +376,38 @@ describe("GET_CLIENTS_SIN_FACTURAR", () => {
 
     await controller.GET_CLIENTS_SIN_FACTURAR(req, res);
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe("GET_CLIENT_SALES", () => {
+  it("returns invoice utility and totals for the entire filtered range", async () => {
+    jest.resetModules();
+    jest.restoreAllMocks();
+    const data = [
+      { vendedor: "Vendedor A", fecha: "2026-05-10", monto: 500, utilidad: 125 },
+      { vendedor: "Vendedor B", fecha: "2026-05-01", monto: 300, utilidad: 80 },
+    ];
+    const mockDb = jest.fn();
+    mockDb.raw = jest.fn((sql) => sql);
+    mockDb.countDistinct = jest.fn(() => makeBuilder([[{ count: 2 }]]));
+    mockDb.select = jest
+      .fn()
+      .mockImplementationOnce(() => makeBuilder([data]))
+      .mockImplementationOnce(() => makeBuilder([[{ monto: 800, utilidad: 205 }]]));
+    jest.doMock("../database", () => mockDb);
+    const controller = require("../controllers/clients");
+    const req = {
+      params: { clientId: "C1" },
+      query: { from: "2026-05-01", to: "2026-05-31", page: "1", limit: "20" },
+      locals: { showNoe: { masterTable: "masterfact", slaveTable: "slavefact", idInvoice: "IdFactura" } },
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+
+    await controller.GET_CLIENT_SALES(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ data, total: 2, totals: { monto: 800, utilidad: 205 } }),
+    );
   });
 });

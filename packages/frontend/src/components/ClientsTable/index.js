@@ -150,6 +150,10 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
     );
 
     const totalPages = Math.ceil(total / LIMIT);
+    const summaries = useMemo(
+        () => (result?.totals ? { utilidad: formatMoney(result.totals.utilidad ?? 0) } : null),
+        [result],
+    );
 
     const columns = useMemo(
         () => [
@@ -177,6 +181,8 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                     data={dataArr}
                     columns={columns}
                     loading={isLoading}
+                    showFooter={!!summaries}
+                    summaries={summaries}
                     onRowClick={onRowSelect}
                     emptyMessage="Sin datos"
                     fillHeight

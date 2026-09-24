@@ -60,6 +60,11 @@ const FacturaDetailModal = ({ show, onClose, invoice }) => {
                                         accessor: 'subtotal',
                                         Cell: ({ value }) => formatCurrency(value),
                                     },
+                                    {
+                                        Header: 'Utilidad',
+                                        accessor: 'utilidad',
+                                        Cell: ({ value }) => formatCurrency(value),
+                                    },
                                 ]}
                                 className="provider-table"
                                 maxHeight={null}
@@ -69,6 +74,10 @@ const FacturaDetailModal = ({ show, onClose, invoice }) => {
                         <div className="purchase-total-row">
                             <span>Total</span>
                             <span className="purchase-total-amount">{formatCurrency(invoice.total)}</span>
+                        </div>
+                        <div className="purchase-total-row">
+                            <span>Utilidad</span>
+                            <span className="purchase-total-amount">{formatCurrency(invoice.utilidad)}</span>
                         </div>
                     </>
                 ) : (

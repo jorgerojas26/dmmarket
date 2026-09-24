@@ -37,6 +37,16 @@ const columns = [
     },
 
     {
+        Header: 'Utilidad',
+        accessor: 'utilidad',
+        Cell: ({ value }) => (value != null ? `$${Number(value).toLocaleString()}` : ''),
+        Footer: ({ data }) => {
+            const total = data.reduce((sum, row) => sum + Number(row.utilidad || 0), 0);
+            return total ? `$${total.toLocaleString()}` : 0;
+        },
+    },
+
+    {
         Header: 'Comisión',
         accessor: 'commissionTotal',
         Cell: ({ value }) => {

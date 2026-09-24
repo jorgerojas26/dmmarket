@@ -70,7 +70,7 @@ describe("GET_PROVIDERS_LIST", () => {
     const purchasesCounts = [{ IdProveedor: 1, num_compras: 5 }];
     const purchasesTotals = [{ IdProveedor: 1, total_compras: 1000 }];
     const salesCounts = [{ Proveedor: 1, num_ventas: 10 }];
-    const salesTotals = [{ Proveedor: 1, total_ventas: 2000 }];
+    const salesTotals = [{ Proveedor: 1, total_ventas: 2000, utilidad: 750 }];
     setup([providers, purchasesCounts, purchasesTotals, salesCounts, salesTotals]);
   });
 
@@ -78,7 +78,7 @@ describe("GET_PROVIDERS_LIST", () => {
     jest.restoreAllMocks();
   });
 
-  it("should return paginated list with all 6 columns, defaulting providers without data to 0", async () => {
+  it("should return paginated list with all 7 columns and utility totals", async () => {
     await controller.GET_PROVIDERS_LIST(req, res);
 
     expect(res.status).toHaveBeenCalledWith(200);
@@ -91,13 +91,15 @@ describe("GET_PROVIDERS_LIST", () => {
       }),
     );
 
-    const { data } = res.json.mock.calls[0][0];
+    const { data, totals } = res.json.mock.calls[0][0];
+    expect(totals.utilidad).toBe(750);
     expect(data[0]).toEqual({
       IdProveedor: 1,
       Empresa: "Proveedor A",
       total_compras: 1000,
       num_compras: 5,
       total_ventas: 2000,
+      utilidad: 750,
       num_ventas: 10,
     });
     // Provider without purchases/sales still appears with zeros
@@ -107,6 +109,7 @@ describe("GET_PROVIDERS_LIST", () => {
       total_compras: 0,
       num_compras: 0,
       total_ventas: 0,
+      utilidad: 0,
       num_ventas: 0,
     });
   });
@@ -191,8 +194,8 @@ describe("GET_PROVIDERS_LIST", () => {
       { Proveedor: 2, num_ventas: 99 },
     ];
     const salesTotals = [
-      { Proveedor: 1, total_ventas: 2000 },
-      { Proveedor: 2, total_ventas: 5000 },
+      { Proveedor: 1, total_ventas: 2000, utilidad: 800 },
+      { Proveedor: 2, total_ventas: 5000, utilidad: 1000 },
     ];
     setup([providers, purchasesCounts, purchasesTotals, salesCounts, salesTotals]);
 
@@ -337,13 +340,16 @@ describe("GET_PROVIDER_SALES", () => {
 
   it("should return paginated sales data", async () => {
     const mockSales = [
-      { cliente: "Client A", vendedor: "Vendor A", fecha: "2024-06-15", monto: 500 },
-      { cliente: "Client B", vendedor: "Vendor B", fecha: "2024-05-10", monto: 300 },
+      { cliente: "Client A", vendedor: "Vendor A", fecha: "2024-06-15", monto: 500, utilidad: 100 },
+      { cliente: "Client B", vendedor: "Vendor B", fecha: "2024-05-10", monto: 300, utilidad: 60 },
     ];
 
     const db = makeBuilder([]);
     db.countDistinct = jest.fn(() => makeBuilder([{ count: 2 }]));
-    db.select = jest.fn(() => makeBuilder(mockSales));
+    db.select = jest
+      .fn()
+      .mockImplementationOnce(() => makeBuilder(mockSales))
+      .mockImplementationOnce(() => makeBuilder([{ monto: 800, utilidad: 160 }]));
 
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");
@@ -352,6 +358,7 @@ describe("GET_PROVIDER_SALES", () => {
     expect(res.status).toHaveBeenCalledWith(200);
     const called = res.json.mock.calls[0][0];
     expect(called.data).toEqual(mockSales);
+    expect(called.totals).toEqual({ monto: 800, utilidad: 160 });
     expect(called.total).toBe(2);
     expect(called.page).toBe(1);
     expect(called.limit).toBe(20);
@@ -423,7 +430,10 @@ describe("GET_PROVIDER_CLIENTS", () => {
 
     const db = makeBuilder([]);
     db.countDistinct = jest.fn(() => makeBuilder([{ count: 2 }]));
-    db.select = jest.fn(() => makeBuilder(mockClients));
+    db.select = jest
+      .fn()
+      .mockImplementationOnce(() => makeBuilder(mockClients))
+      .mockImplementationOnce(() => makeBuilder([{ totalVentas: 800, utilidad: 160 }]));
 
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");
@@ -432,6 +442,7 @@ describe("GET_PROVIDER_CLIENTS", () => {
     expect(res.status).toHaveBeenCalledWith(200);
     const called = res.json.mock.calls[0][0];
     expect(called.data).toEqual(mockClients);
+    expect(called.totals).toEqual({ totalVentas: 800, utilidad: 160 });
     expect(called.total).toBe(2);
     expect(called.data[0]).toHaveProperty("cliente");
     expect(called.data[0]).toHaveProperty("numVentas");
@@ -489,7 +500,10 @@ describe("GET_PROVIDER_PRODUCTS", () => {
 
     const db = makeBuilder([]);
     db.countDistinct = jest.fn(() => makeBuilder([{ count: 2 }]));
-    db.select = jest.fn(() => makeBuilder(mockProducts));
+    db.select = jest
+      .fn()
+      .mockImplementationOnce(() => makeBuilder(mockProducts))
+      .mockImplementationOnce(() => makeBuilder([{ totalVentas: 800, utilidad: 160 }]));
 
     jest.doMock("../database", () => db);
     controller = require("../controllers/providers");
@@ -498,6 +512,7 @@ describe("GET_PROVIDER_PRODUCTS", () => {
     expect(res.status).toHaveBeenCalledWith(200);
     const called = res.json.mock.calls[0][0];
     expect(called.data).toEqual(mockProducts);
+    expect(called.totals).toEqual({ totalVentas: 800, utilidad: 160 });
     expect(called.total).toBe(2);
     expect(called.data[0]).toHaveProperty("producto");
     expect(called.data[0]).toHaveProperty("cantidad");
@@ -659,5 +674,40 @@ describe("GET_PURCHASE_DETAIL", () => {
     await controller.GET_PURCHASE_DETAIL(req, res);
 
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+});
+
+describe("GET_SALE_DETAIL", () => {
+  it("returns utility per provider product and the invoice utility total", async () => {
+    jest.resetModules();
+    jest.restoreAllMocks();
+    const master = [{ idFactura: "FAC-001", fecha: "2024-06-15", vendedor: "Vendedor A" }];
+    const products = [
+      { descripcion: "Product A", cantidad: 2, precio: 50, subtotal: 100, utilidad: 25 },
+      { descripcion: "Product B", cantidad: 1, precio: 100, subtotal: 100, utilidad: 40 },
+    ];
+    const db = makeBuilder([]);
+    db.select.mockImplementationOnce(() => makeBuilder(master)).mockImplementationOnce(() => makeBuilder(products));
+    db.raw = jest.fn((sql) => sql);
+    jest.doMock("../database", () => db);
+    const controller = require("../controllers/providers");
+    const req = {
+      params: { providerId: "1", invoiceId: "FAC-001" },
+      query: { showNoe: "false" },
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+
+    await controller.GET_SALE_DETAIL(req, res);
+
+    expect(db.raw).toHaveBeenCalledWith(expect.stringContaining("as utilidad"));
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      idFactura: "FAC-001",
+      fecha: "2024-06-15",
+      vendedor: "Vendedor A",
+      productos: products,
+      total: 200,
+      utilidad: 65,
+    });
   });
 });

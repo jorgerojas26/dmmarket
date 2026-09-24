@@ -4,7 +4,7 @@ import Table from 'components/Table';
 import { ShowNoeContext } from 'context/show_noe';
 import { useClientSales, useClientSummary } from 'hooks/useClients';
 import { DateTime } from 'luxon';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import { Badge, Modal, Spinner } from 'react-bootstrap';
 import { formatCurrency } from 'utils/format';
 import './styles.css';
@@ -360,9 +360,32 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                             accessor: 'fecha',
                             Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }),
                         },
-                        { Header: 'Monto', accessor: 'monto', Cell: ({ value }) => formatCurrency(value) },
+                        {
+                            Header: 'Monto',
+                            accessor: 'monto',
+                            Cell: ({ value }) => formatCurrency(value),
+                            Footer: ({ data, summary }) =>
+                                formatCurrency(
+                                    summary != null
+                                        ? Number(summary)
+                                        : data.reduce((sum, row) => sum + Number(row.monto || 0), 0),
+                                ),
+                        },
+                        {
+                            Header: 'Utilidad',
+                            accessor: 'utilidad',
+                            Cell: ({ value }) => formatCurrency(value),
+                            Footer: ({ data, summary }) =>
+                                formatCurrency(
+                                    summary != null
+                                        ? Number(summary)
+                                        : data.reduce((sum, row) => sum + Number(row.utilidad || 0), 0),
+                                ),
+                        },
                     ]}
                     loading={salesLoading}
+                    showFooter={!!salesData?.totals}
+                    summaries={salesData?.totals}
                     className="table"
                     maxHeight={420}
                     emptyMessage="Sin ventas en este período"

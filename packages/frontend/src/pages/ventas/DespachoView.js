@@ -184,6 +184,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
         <InvoicesTable
             data={invoices}
             loading={isLoading || selectAllLoading}
+            summaries={invoiceRes?.totals}
             onRowSelect={setSelectedRows}
             selectedRows={selectedRows}
             onSelectAll={handleSelectAll}

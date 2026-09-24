@@ -656,6 +656,7 @@ const DesgloseView = ({ isActive }) => {
                     String(Number(p.cantidad || p.quantity || 0)),
                     formatCurrency(p.precio || p.price || 0),
                     formatCurrency(p.subtotal || (p.precio || p.price || 0) * (p.cantidad || p.quantity || 0)),
+                    formatCurrency(p.utilidad || 0),
                 ]);
 
                 pdfMake
@@ -676,15 +677,16 @@ const DesgloseView = ({ isActive }) => {
                             {
                                 style: 'table',
                                 table: {
-                                    widths: ['*', 'auto', 'auto', 'auto'],
+                                    widths: ['*', 'auto', 'auto', 'auto', 'auto'],
                                     body: [
-                                        ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
+                                        ['Descripción', 'Cantidad', 'Precio', 'Subtotal', 'Utilidad'],
                                         ...rows,
                                         [
                                             '',
                                             '',
                                             { text: 'Total', bold: true },
                                             { text: formatCurrency(detail.total || factura.monto || 0), bold: true },
+                                            { text: formatCurrency(detail.utilidad || 0), bold: true },
                                         ],
                                     ],
                                 },

@@ -91,6 +91,12 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                         render: (p) => formatMoney(p.total_ventas ?? 0, currency, rate),
                     },
                     {
+                        accessor: 'utilidad',
+                        Header: 'Utilidad',
+                        width: 'auto',
+                        render: (p) => formatMoney(p.utilidad ?? 0, currency, rate),
+                    },
+                    {
                         accessor: 'num_ventas',
                         Header: '# Ventas',
                         width: 'auto',
@@ -168,6 +174,7 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                       total_compras: formatCurrency(result.totals.total_compras),
                       num_compras: formatNumber(result.totals.num_compras || 0),
                       total_ventas: formatCurrency(result.totals.total_ventas),
+                      utilidad: formatCurrency(result.totals.utilidad),
                       num_ventas: formatNumber(result.totals.num_ventas || 0),
                   }
                 : null,
@@ -187,6 +194,11 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
             {
                 Header: 'Total Ventas',
                 accessor: 'total_ventas',
+                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
+            },
+            {
+                Header: 'Utilidad',
+                accessor: 'utilidad',
                 Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
             },
             { Header: '# Ventas', accessor: 'num_ventas' },

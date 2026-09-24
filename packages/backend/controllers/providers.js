@@ -26,6 +26,8 @@ const GET_PROVIDERS_LIST = async (req, res) => {
         return "num_compras";
       case "num_ventas":
         return "num_ventas";
+      case "utilidad":
+        return "utilidad";
       default:
         return "total_ventas";
     }
@@ -46,7 +48,13 @@ const GET_PROVIDERS_LIST = async (req, res) => {
     const providers = await providersQuery;
 
     if (providers.length === 0) {
-      return res.status(200).json({ data: [], total: 0, page: pageNum, limit: limitNum });
+      return res.status(200).json({
+        data: [],
+        total: 0,
+        page: pageNum,
+        limit: limitNum,
+        totals: { total_compras: 0, num_compras: 0, total_ventas: 0, num_ventas: 0, utilidad: 0 },
+      });
     }
 
     const providerIds = providers.map((p) => p.IdProveedor);
@@ -95,6 +103,7 @@ const GET_PROVIDERS_LIST = async (req, res) => {
         })
         .select("pr.Proveedor")
         .select(knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_ventas"))
+        .select(knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad"))
         .whereIn("pr.Proveedor", providerIds),
       "mf.Fecha",
     ).groupBy("pr.Proveedor");
@@ -117,6 +126,7 @@ const GET_PROVIDERS_LIST = async (req, res) => {
         total_compras: Number(pt ? pt.total_compras : 0) || 0,
         num_compras: Number(pc ? pc.num_compras : 0) || 0,
         total_ventas: Number(st ? st.total_ventas : 0) || 0,
+        utilidad: Number(st ? st.utilidad : 0) || 0,
         num_ventas: Number(sc ? sc.num_ventas : 0) || 0,
       };
     });
@@ -139,11 +149,13 @@ const GET_PROVIDERS_LIST = async (req, res) => {
         num_compras: acc.num_compras + r.num_compras,
         total_ventas: acc.total_ventas + r.total_ventas,
         num_ventas: acc.num_ventas + r.num_ventas,
+        utilidad: acc.utilidad + r.utilidad,
       }),
-      { total_compras: 0, num_compras: 0, total_ventas: 0, num_ventas: 0 },
+      { total_compras: 0, num_compras: 0, total_ventas: 0, num_ventas: 0, utilidad: 0 },
     );
     totals.total_compras = Math.round(totals.total_compras * 100) / 100;
     totals.total_ventas = Math.round(totals.total_ventas * 100) / 100;
+    totals.utilidad = Math.round(totals.utilidad * 100) / 100;
 
     res.status(200).json({
       data: rows.slice(offset, offset + limitNum),
@@ -294,6 +306,8 @@ const GET_PROVIDER_SALES = async (req, res) => {
         return "vendedores.Empresa";
       case "monto":
         return knex.raw(`SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad)`);
+      case "utilidad":
+        return knex.raw(`SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad)`);
       default:
         return `${masterTable}.Fecha`;
     }
@@ -319,6 +333,7 @@ const GET_PROVIDER_SALES = async (req, res) => {
         "vendedores.Empresa as vendedor",
         `${masterTable}.Fecha as fecha`,
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
       )
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
@@ -348,11 +363,37 @@ const GET_PROVIDER_SALES = async (req, res) => {
       });
     }
 
+    const totalsQuery = knex
+      .select(
+        knex.raw(`ROUND(COALESCE(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 0), 2) as monto`),
+        knex.raw(
+          `ROUND(COALESCE(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 0), 2) as utilidad`,
+        ),
+      )
+      .from(`${slaveTable}`)
+      .innerJoin(`${masterTable}`, function () {
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
+      .where("productos.Proveedor", providerId)
+      .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
+    if (search) {
+      totalsQuery.where(function () {
+        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`)
+          .orWhere("clientes.Empresa", "like", `%${search}%`)
+          .orWhere("vendedores.Empresa", "like", `%${search}%`);
+      });
+    }
+
     const [{ count }] = await countQuery;
     const data = await dataQuery;
+    const [totals] = await totalsQuery;
 
     res.status(200).json({
       data,
+      totals,
       total: Number(count),
       page: Number(page),
       limit: Number(limit),
@@ -425,11 +466,30 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       dataQuery.where("clientes.Empresa", "like", `%${search}%`);
     }
 
+    const totalsQuery = knex
+      .select(
+        knex.raw(`ROUND(COALESCE(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 0), 2) as totalVentas`),
+        knex.raw(
+          `ROUND(COALESCE(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 0), 2) as utilidad`,
+        ),
+      )
+      .from(`${slaveTable}`)
+      .innerJoin(`${masterTable}`, function () {
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
+      .where("productos.Proveedor", providerId)
+      .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
+    if (search) totalsQuery.where("clientes.Empresa", "like", `%${search}%`);
+
     const [{ count }] = await countQuery;
     const data = await dataQuery;
+    const [totals] = await totalsQuery;
 
     res.status(200).json({
       data,
+      totals,
       total: Number(count),
       page: Number(page),
       limit: Number(limit),
@@ -500,11 +560,29 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
       dataQuery.where("productos.Descripcion", "like", `%${search}%`);
     }
 
+    const totalsQuery = knex
+      .select(
+        knex.raw(`ROUND(COALESCE(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 0), 2) as totalVentas`),
+        knex.raw(
+          `ROUND(COALESCE(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 0), 2) as utilidad`,
+        ),
+      )
+      .from(`${slaveTable}`)
+      .innerJoin(`${masterTable}`, function () {
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .where("productos.Proveedor", providerId)
+      .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
+    if (search) totalsQuery.where("productos.Descripcion", "like", `%${search}%`);
+
     const [{ count }] = await countQuery;
     const data = await dataQuery;
+    const [totals] = await totalsQuery;
 
     res.status(200).json({
       data,
+      totals,
       total: Number(count),
       page: Number(page),
       limit: Number(limit),
@@ -640,6 +718,7 @@ const GET_SALE_DETAIL = async (req, res) => {
         `${slaveTable}.Cantidad as cantidad`,
         `${slaveTable}.Precio as precio`,
         knex.raw(`ROUND(${slaveTable}.Cantidad * ${slaveTable}.Precio, 2) as subtotal`),
+        knex.raw(`ROUND((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad, 2) as utilidad`),
       )
       .from(slaveTable)
       .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
@@ -647,6 +726,7 @@ const GET_SALE_DETAIL = async (req, res) => {
       .andWhere("productos.Proveedor", providerId);
 
     const total = productos.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
+    const utilidad = productos.reduce((sum, p) => sum + Number(p.utilidad || 0), 0);
 
     res.status(200).json({
       idFactura: master.idFactura,
@@ -654,6 +734,7 @@ const GET_SALE_DETAIL = async (req, res) => {
       vendedor: master.vendedor,
       productos,
       total: Math.round(total * 100) / 100,
+      utilidad: Math.round(utilidad * 100) / 100,
     });
   } catch (error) {
     console.error(error);

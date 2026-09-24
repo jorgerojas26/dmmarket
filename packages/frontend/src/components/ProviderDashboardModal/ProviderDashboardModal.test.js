@@ -64,9 +64,24 @@ const mockPurchases = {
 
 const mockSales = {
     data: [
-        { idFactura: 'FAC-101', cliente: 'Client A', vendedor: 'Vendor A', fecha: '2024-06-15', monto: 500 },
-        { idFactura: 'FAC-102', cliente: 'Client B', vendedor: 'Vendor B', fecha: '2024-05-10', monto: 300 },
+        {
+            idFactura: 'FAC-101',
+            cliente: 'Client A',
+            vendedor: 'Vendor A',
+            fecha: '2024-06-15',
+            monto: 500,
+            utilidad: 100,
+        },
+        {
+            idFactura: 'FAC-102',
+            cliente: 'Client B',
+            vendedor: 'Vendor B',
+            fecha: '2024-05-10',
+            monto: 300,
+            utilidad: 60,
+        },
     ],
+    totals: { monto: 800, utilidad: 160 },
     total: 2,
 };
 
@@ -75,6 +90,7 @@ const mockClients = {
         { cliente: 'Client A', numVentas: 5, totalVentas: 500, utilidad: 100 },
         { cliente: 'Client B', numVentas: 3, totalVentas: 300, utilidad: 60 },
     ],
+    totals: { totalVentas: 800, utilidad: 160 },
     total: 2,
 };
 const mockProducts = {
@@ -82,6 +98,7 @@ const mockProducts = {
         { producto: 'Product A', cantidad: 10, totalVentas: 500, utilidad: 100 },
         { producto: 'Product B', cantidad: 4, totalVentas: 300, utilidad: 60 },
     ],
+    totals: { totalVentas: 800, utilidad: 160 },
     total: 2,
 };
 
@@ -129,7 +146,7 @@ describe('ProviderDashboardModal', () => {
             expect(screen.getByText('Total Compras')).toBeInTheDocument();
             expect(screen.getByText('# Compras')).toBeInTheDocument();
             expect(screen.getByText('Total Ventas')).toBeInTheDocument();
-            expect(screen.getByText('Utilidad')).toBeInTheDocument();
+            expect(screen.getAllByText('Utilidad').length).toBeGreaterThan(0);
             expect(screen.getByText('# Ventas')).toBeInTheDocument();
             expect(screen.getByText('Mejor Vendedor')).toBeInTheDocument();
         });
@@ -189,6 +206,8 @@ describe('ProviderDashboardModal', () => {
             expect(screen.getByText('Vendor A')).toBeInTheDocument();
             expect(screen.getByText('Vendor B')).toBeInTheDocument();
         });
+        expect(screen.getAllByText('Utilidad').length).toBeGreaterThan(0);
+        expect(screen.getByText('$160,00')).toBeInTheDocument();
     });
 
     it('shows empty state when purchases data is empty', async () => {

@@ -14,6 +14,7 @@ const InvoicesTable = ({
     pagination,
     search,
     print,
+    summaries,
     clearSelectionSignal,
     deselectSignal,
 }) => {
@@ -29,6 +30,8 @@ const InvoicesTable = ({
                     data={data}
                     columns={memoizedColumns}
                     loading={loading}
+                    showFooter={!!summaries}
+                    summaries={summaries}
                     onRowSelect={onRowSelect}
                     selectedRows={selectedRows}
                     onSelectAll={onSelectAll}

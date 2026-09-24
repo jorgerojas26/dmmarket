@@ -37,6 +37,7 @@ const mockProvidersData = {
             total_compras: 1000.5,
             num_compras: 5,
             total_ventas: 2000.75,
+            utilidad: 300.25,
             num_ventas: 10,
         },
         {
@@ -45,6 +46,7 @@ const mockProvidersData = {
             total_compras: 500.0,
             num_compras: 2,
             total_ventas: 1500.25,
+            utilidad: 250.5,
             num_ventas: 8,
         },
     ],
@@ -59,7 +61,7 @@ describe('ProvidersTable', () => {
         providersApi.fetchProvidersList.mockResolvedValue(mockProvidersData);
     });
 
-    it('renders the table with 6 columns', async () => {
+    it('renders the table with 7 columns', async () => {
         await act(async () => {
             render(<ProvidersTable />, { wrapper: swrWrapper });
         });
@@ -72,6 +74,7 @@ describe('ProvidersTable', () => {
         expect(screen.getByText('Total Compras')).toBeInTheDocument();
         expect(screen.getByText('# Compras')).toBeInTheDocument();
         expect(screen.getByText('Total Ventas')).toBeInTheDocument();
+        expect(screen.getByText('Utilidad')).toBeInTheDocument();
         expect(screen.getByText('# Ventas')).toBeInTheDocument();
     });
 
@@ -171,13 +174,15 @@ describe('ProvidersTable', () => {
             expect(screen.getByText('$2.000,75')).toBeInTheDocument();
             expect(screen.getByText('$500,00')).toBeInTheDocument();
             expect(screen.getByText('$1.500,25')).toBeInTheDocument();
+            expect(screen.getByText('$300,25')).toBeInTheDocument();
+            expect(screen.getByText('$250,50')).toBeInTheDocument();
         });
     });
 
     it('shows global totals (all pages) in the footer', async () => {
         providersApi.fetchProvidersList.mockResolvedValue({
             ...mockProvidersData,
-            totals: { total_compras: 1500.5, num_compras: 7, total_ventas: 3501, num_ventas: 18 },
+            totals: { total_compras: 1500.5, num_compras: 7, total_ventas: 3501, num_ventas: 18, utilidad: 550.75 },
         });
 
         const { container } = render(<ProvidersTable />, { wrapper: swrWrapper });
@@ -191,6 +196,7 @@ describe('ProvidersTable', () => {
         // Totales globales (suma de ambas filas del mock), formato es-VE.
         expect(within(footer).getByText('$1.500,50')).toBeInTheDocument();
         expect(within(footer).getByText('$3.501,00')).toBeInTheDocument();
+        expect(within(footer).getByText('$550,75')).toBeInTheDocument();
         expect(within(footer).getByText('7')).toBeInTheDocument();
         expect(within(footer).getByText('18')).toBeInTheDocument();
     });

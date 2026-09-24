@@ -86,6 +86,7 @@ const GET_SALES = async (req, res) => {
         `${masterTable}.Rif as rif`,
         `${masterTable}.Fecha as createdAt`,
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as invoiceTotal`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
         knex.raw(
           `ROUND(SUM(CASE WHEN ISNULL(fact_vendedor_comisiones.comision) 
                 THEN 0 

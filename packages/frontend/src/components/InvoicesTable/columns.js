@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import { formatCurrency } from 'utils/format';
 
 const columns = [
     {
@@ -17,12 +18,22 @@ const columns = [
         Header: 'TOTAL',
         accessor: 'total',
         disableSortBy: true,
-        Cell: ({ value }) => `$${value ? value.toFixed(2) : ''}`,
+        Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
+        Footer: ({ data, summary }) => {
+            const total =
+                summary != null ? Number(summary) : data.reduce((sum, row) => sum + Number(row.total || 0), 0);
+            return formatCurrency(total);
+        },
     },
     {
         Header: 'UTILIDAD',
         accessor: 'utilidad',
-        Cell: ({ value }) => `$${value ? value.toFixed(2) : ''}`,
+        Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
+        Footer: ({ data, summary }) => {
+            const total =
+                summary != null ? Number(summary) : data.reduce((sum, row) => sum + Number(row.utilidad || 0), 0);
+            return formatCurrency(total);
+        },
     },
     {
         Header: 'Fecha',

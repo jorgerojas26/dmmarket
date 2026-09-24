@@ -160,6 +160,7 @@ const GET_CLIENT_SALES = async (req, res) => {
         "vendedores.Empresa as vendedor",
         `${masterTable}.Fecha as fecha`,
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
       )
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
@@ -173,8 +174,23 @@ const GET_CLIENT_SALES = async (req, res) => {
       .limit(Number(limit))
       .offset(Number(offset));
 
+    const [totals] = await knex
+      .select(
+        knex.raw(`ROUND(COALESCE(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 0), 2) as monto`),
+        knex.raw(
+          `ROUND(COALESCE(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 0), 2) as utilidad`,
+        ),
+      )
+      .from(`${slaveTable}`)
+      .innerJoin(`${masterTable}`, function () {
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .whereBetween(`${masterTable}.Fecha`, [from, to])
+      .andWhere(`${masterTable}.IdCliente`, clientId);
+
     res.status(200).json({
       data,
+      totals,
       total: Number(count),
       page: Number(page),
       limit: Number(limit),
@@ -308,7 +324,7 @@ const GET_CLIENTS_LIST = async (req, res) => {
     const clients = await clientsQuery;
 
     if (clients.length === 0) {
-      return res.status(200).json({ data: [], total: 0, page: pageNum, limit: limitNum });
+      return res.status(200).json({ data: [], total: 0, page: pageNum, limit: limitNum, totals: { utilidad: 0 } });
     }
 
     const clientIds = clients.map((c) => c.IdCliente);
@@ -362,11 +378,16 @@ const GET_CLIENTS_LIST = async (req, res) => {
       return cmp * sortDirection;
     });
 
+    const totals = {
+      utilidad: Math.round(rows.reduce((sum, row) => sum + Number(row.utilidad || 0), 0) * 100) / 100,
+    };
+
     res.status(200).json({
       data: rows.slice(offset, offset + limitNum),
       total: rows.length,
       page: pageNum,
       limit: limitNum,
+      totals,
     });
   } catch (error) {
     console.error(error);
