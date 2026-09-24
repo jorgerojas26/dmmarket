@@ -50,9 +50,9 @@ const CumulativePercentHelp = ({ valueLabel }) => {
             <Popover.Body>
                 <div className="kpi-help-line">
                     <span className="kpi-help-k">Qué muestra: </span>
-                    Qué parte de la {valueLabel.toLowerCase()} del periodo ya está contada al llegar a esta fila: es el
-                    porcentaje de este producto más el de todos los que están arriba de él. Es el mismo dato que dibuja
-                    la línea azul del gráfico.
+                    Qué parte de la {valueLabel.toLowerCase()} del periodo ya está contada al llegar a esta fila: suma
+                    el valor de esta fila y todas las filas que están arriba. Es el mismo dato que dibuja la línea azul
+                    del gráfico.
                 </div>
                 <div className="kpi-help-line">
                     <span className="kpi-help-k">Cómo leerlo: </span>
@@ -62,9 +62,8 @@ const CumulativePercentHelp = ({ valueLabel }) => {
                 </div>
                 <div className="kpi-help-line">
                     <span className="kpi-help-k">Para qué sirve: </span>
-                    Ver en cuántos productos está concentrado el valor: al llegar a 80% termina la clase A (pocos
-                    productos, casi toda la {valueLabel.toLowerCase()}) y al 95% la clase B. El resto es la cola (clase
-                    C).
+                    Ver cuántas filas concentran el valor: al llegar a 80% termina la clase A y al 95% la clase B. El
+                    resto es la cola (clase C).
                 </div>
             </Popover.Body>
         </Popover>
@@ -348,7 +347,7 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
             });
         }
         return rows;
-    }, [products]);
+    }, [products, cfg.nameKey, cfg.valueKey]);
 
     /* ---- filtered + paginated table data ---- */
     const filteredProducts = useMemo(() => {
