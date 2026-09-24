@@ -733,6 +733,7 @@ const DesgloseView = ({ isActive }) => {
         () => ({
             monto: facturasRes?.totals?.monto,
             utilidad: facturasRes?.totals?.utilidad,
+            promedio: facturasRes?.totals?.promedio,
         }),
         [facturasRes],
     );
@@ -743,6 +744,7 @@ const DesgloseView = ({ isActive }) => {
             peso: productosRes?.totals?.peso,
             rawProfit: productosRes?.totals?.rawProfit,
             netProfit: productosRes?.totals?.netProfit,
+            averageProfitPercent: productosRes?.totals?.averageProfitPercent,
         }),
         [productosRes],
     );

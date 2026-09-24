@@ -106,12 +106,14 @@ const GET_FACTURAS = async (req, res) => {
       .limit(Number(limit))
       .offset(Number(offset));
 
-    // Totals: sumas de TODA la data filtrada (independientes de la página), para
-    // que el pie de la tabla no dependa de la página visible.
+    // Totals across all filtered detail rows (independent of pagination). The
+    // average is calculated before grouping; with matching filters, both tables
+    // therefore average the same underlying rows instead of group averages.
     const [totals] = await knex
       .select(
         knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as monto"),
         knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad"),
+        knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as promedio"),
       )
       .modify(withSalesBase, { masterTable, slaveTable, idInvoice, from, to })
       .modify(applySalesFilters, { ...filters, searchExpr });
@@ -206,13 +208,17 @@ const GET_PRODUCTOS = async (req, res) => {
       .limit(Number(limit))
       .offset(Number(offset));
 
-    // Totals: sumas de TODA la data filtrada (independientes de la página).
+    // Totals across all filtered detail rows (independent of pagination). Keep
+    // the average at detail-row level, matching the invoice table's formula.
     const [totals] = await knex
       .select(
         knex.raw("ROUND(SUM(sf.Cantidad), 3) as quantity"),
         knex.raw("ROUND(SUM(sf.Cantidad * productos.Peso), 3) as peso"),
         knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as rawProfit"),
         knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as netProfit"),
+        knex.raw(
+          "ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent",
+        ),
       )
       .modify(withSalesBase, { masterTable, slaveTable, idInvoice, from, to })
       .modify(applySalesFilters, { ...filters, searchExpr });

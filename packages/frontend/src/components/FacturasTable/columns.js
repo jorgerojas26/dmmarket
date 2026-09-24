@@ -50,6 +50,14 @@ const columns = [
         Header: 'Promedio',
         accessor: 'promedio',
         Cell: ({ value }) => (value != null ? `${value}%` : ''),
+        Footer: ({ data, summary }) => {
+            const validRows = data.filter((row) => row.promedio != null);
+            const average =
+                summary != null
+                    ? Number(summary)
+                    : validRows.reduce((sum, row) => sum + Number(row.promedio), 0) / (validRows.length || 1);
+            return `${average.toFixed(2)}%`;
+        },
     },
 ];
 

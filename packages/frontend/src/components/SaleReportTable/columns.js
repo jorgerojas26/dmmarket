@@ -39,6 +39,14 @@ const columns = [
         Cell: ({ value }) => {
             return `${value}%`;
         },
+        Footer: ({ data, summary }) => {
+            const validRows = data.filter((row) => row.averageProfitPercent != null);
+            const average =
+                summary != null
+                    ? Number(summary)
+                    : validRows.reduce((sum, row) => sum + Number(row.averageProfitPercent), 0) / (validRows.length || 1);
+            return `${average.toFixed(2)}%`;
+        },
     },
 ];
 
