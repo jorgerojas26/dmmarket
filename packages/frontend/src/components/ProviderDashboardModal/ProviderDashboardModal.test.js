@@ -49,6 +49,7 @@ const mockSummary = {
     totalCompras: 5000,
     numCompras: 10,
     totalVentas: 8000,
+    utilidad: 2500,
     numVentas: 15,
     bestSeller: 'Vendedor Top',
 };
@@ -121,21 +122,26 @@ describe('ProviderDashboardModal', () => {
         expect(screen.getByText('Proveedor #1')).toBeInTheDocument();
     });
 
-    it('renders 4 stat cards after loading summary', async () => {
+    it('renders 6 stat cards after loading summary', async () => {
         renderModal(true);
 
         await waitFor(() => {
             expect(screen.getByText('Total Compras')).toBeInTheDocument();
             expect(screen.getByText('# Compras')).toBeInTheDocument();
             expect(screen.getByText('Total Ventas')).toBeInTheDocument();
+            expect(screen.getByText('Utilidad')).toBeInTheDocument();
+            expect(screen.getByText('# Ventas')).toBeInTheDocument();
             expect(screen.getByText('Mejor Vendedor')).toBeInTheDocument();
         });
+
+        expect(document.querySelectorAll('.provider-stat-card')).toHaveLength(6);
 
         // Check formatted values (es-VE locale: 5000 → $5.000,00)
         await waitFor(() => {
             expect(screen.getByText('$5.000,00')).toBeInTheDocument();
             expect(screen.getByText('10')).toBeInTheDocument();
             expect(screen.getByText('$8.000,00')).toBeInTheDocument();
+            expect(screen.getByText('$2.500,00')).toBeInTheDocument();
             expect(screen.getByText('Vendedor Top')).toBeInTheDocument();
         });
     });

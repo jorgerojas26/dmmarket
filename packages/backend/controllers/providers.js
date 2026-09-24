@@ -231,6 +231,9 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
     const [ventasResult] = await knex
       .select(
         knex.raw(`COALESCE(ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2), 0) as totalVentas`),
+        knex.raw(
+          `COALESCE(ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2), 0) as utilidad`,
+        ),
         knex.raw(`COALESCE(COUNT(DISTINCT ${masterTable}.${idInvoice}), 0) as numVentas`),
       )
       .from(`${slaveTable}`)
@@ -262,6 +265,7 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
       totalCompras: Number(comprasResult.totalCompras) || 0,
       numCompras: Number(comprasResult.numCompras) || 0,
       totalVentas: Number(ventasResult.totalVentas) || 0,
+      utilidad: Number(ventasResult.utilidad) || 0,
       numVentas: Number(ventasResult.numVentas) || 0,
       bestSeller: bestSellerResult ? bestSellerResult.Empresa : null,
     });

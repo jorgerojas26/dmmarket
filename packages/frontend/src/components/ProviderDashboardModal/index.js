@@ -104,6 +104,23 @@ const IconTicket = () => (
     </svg>
 );
 
+const IconProfit = () => (
+    <svg
+        aria-hidden="true"
+        width="38"
+        height="38"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <path d="m3 17 6-6 4 4 8-8" />
+        <path d="M15 7h6v6" />
+    </svg>
+);
+
 const IconUserStar = () => (
     <svg
         width="38"
@@ -715,13 +732,19 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 variant: 'primary',
                 icon: IconTicket,
             },
-            { label: '# Compras', value: String(summary?.numCompras ?? '0'), variant: 'success', icon: IconHash },
             {
                 label: 'Total Ventas',
                 value: formatCurrency(summary?.totalVentas ?? 0),
                 variant: 'info',
                 icon: IconSales,
             },
+            {
+                label: 'Utilidad',
+                value: formatCurrency(summary?.utilidad ?? 0),
+                variant: 'success',
+                icon: IconProfit,
+            },
+            { label: '# Compras', value: String(summary?.numCompras ?? '0'), variant: 'success', icon: IconHash },
             { label: '# Ventas', value: String(summary?.numVentas ?? '0'), variant: 'warning', icon: IconHash },
             { label: 'Mejor Vendedor', value: summary?.bestSeller ?? '\u2014', variant: 'primary', icon: IconUserStar },
         ],

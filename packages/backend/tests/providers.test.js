@@ -247,7 +247,7 @@ describe("GET_PROVIDER_SUMMARY", () => {
     const db = makeBuilder([]);
     db.select
       .mockImplementationOnce(() => makeBuilder([{ totalCompras: 5000, numCompras: 10 }]))
-      .mockImplementationOnce(() => makeBuilder([{ totalVentas: 8000, numVentas: 15 }]))
+      .mockImplementationOnce(() => makeBuilder([{ totalVentas: 8000, utilidad: 2500, numVentas: 15 }]))
       .mockImplementationOnce(() => makeBuilder([{ Empresa: "Vendedor Top", total: 3000 }]));
 
     jest.doMock("../database", () => db);
@@ -259,6 +259,7 @@ describe("GET_PROVIDER_SUMMARY", () => {
       totalCompras: 5000,
       numCompras: 10,
       totalVentas: 8000,
+      utilidad: 2500,
       numVentas: 15,
       bestSeller: "Vendedor Top",
     });
@@ -268,7 +269,7 @@ describe("GET_PROVIDER_SUMMARY", () => {
     const db = makeBuilder([]);
     db.select
       .mockImplementationOnce(() => makeBuilder([{ totalCompras: 0, numCompras: 0 }]))
-      .mockImplementationOnce(() => makeBuilder([{ totalVentas: 0, numVentas: 0 }]))
+      .mockImplementationOnce(() => makeBuilder([{ totalVentas: 0, utilidad: 0, numVentas: 0 }]))
       .mockImplementationOnce(() => makeBuilder([null]));
 
     jest.doMock("../database", () => db);
@@ -279,6 +280,7 @@ describe("GET_PROVIDER_SUMMARY", () => {
       totalCompras: 0,
       numCompras: 0,
       totalVentas: 0,
+      utilidad: 0,
       numVentas: 0,
       bestSeller: null,
     });
@@ -289,7 +291,7 @@ describe("GET_PROVIDER_SUMMARY", () => {
     const db = makeBuilder([]);
     db.select
       .mockImplementationOnce(() => makeBuilder([{ totalCompras: 100, numCompras: 2 }]))
-      .mockImplementationOnce(() => makeBuilder([{ totalVentas: 200, numVentas: 3 }]))
+      .mockImplementationOnce(() => makeBuilder([{ totalVentas: 200, utilidad: 50, numVentas: 3 }]))
       .mockImplementationOnce(() => makeBuilder([{ Empresa: "V NOE", total: 200 }]));
 
     jest.doMock("../database", () => db);
