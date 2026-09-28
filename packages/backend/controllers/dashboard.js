@@ -1,4 +1,5 @@
 const knex = require("../database");
+const { splitParetoByAge } = require("./pareto-age");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashboard de ventas en 2 escaneos pesados + 3 lookups triviales (antes 6
@@ -319,6 +320,21 @@ const fetchUnsoldPurchasesRows = async ({ from, to, masterTable, slaveTable, idI
   return (purchases[0] || []).filter((r) => !sold.has(r.productId));
 };
 
+// Primera compra histórica de los SKUs del resultado, hasta el fin del rango.
+// Una recompra no vuelve a convertir un producto antiguo en "nuevo".
+const fetchFirstPurchases = async (rows, to) => {
+  if (!rows.length) return new Map();
+  const firstDates = await knex("slavecomp as sc")
+    .select("sc.IdProducto as productId", knex.raw("DATE_FORMAT(MIN(mc.Fecha), '%Y-%m-%d') as firstPurchaseDate"))
+    .innerJoin("mastercomp as mc", function () {
+      this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
+    })
+    .whereIn("sc.IdProducto", rows.map((r) => r.productId))
+    .where("mc.Fecha", "<=", to)
+    .groupBy("sc.IdProducto");
+  return new Map(firstDates.map((r) => [r.productId, r.firstPurchaseDate]));
+};
+
 // Columnas ordenables por modo (whitelist — solo las que el UI expone como
 // sortables: valor, unidades, valor de inventario y % acumulado). El ABC/cumulativo SIEMPRE se
 // calcula sobre el orden canónico por valor; el sort pedido reordena SOLO la
@@ -333,8 +349,10 @@ const sortProducts = (products, sortBy, sortDir) => {
   return [...products].sort((a, b) => {
     const av = a[sortBy];
     const bv = b[sortBy];
-    if (typeof av === "string") return dir * String(av).localeCompare(String(bv));
-    return dir * (Number(av || 0) - Number(bv || 0));
+    const result = typeof av === "string"
+      ? dir * String(av).localeCompare(String(bv))
+      : dir * (Number(av || 0) - Number(bv || 0));
+    return result || String(a.productId).localeCompare(String(b.productId));
   });
 };
 
@@ -396,11 +414,35 @@ const GET_DASHBOARD_PARETO = async (req, res) => {
       ? await fetchUnsoldPurchasesRows({ from, to, masterTable, slaveTable, idInvoice })
       : await fetchSalesParetoRows({ from, to, masterTable, slaveTable, idInvoice });
 
-    // El modo ventas conserva EXACTAMENTE el shape anterior (netProfit/profitPercent).
+    const firstPurchases = await fetchFirstPurchases(rows, to);
+    const { products, newProducts } = splitParetoByAge(rows, firstPurchases, to);
+
+    // Los nuevos se muestran aparte; no participan en el total ni en el ABC.
     const valueKey = isPurchasesMode ? "totalPurchased" : "netProfit";
     const response = isPurchasesMode
-      ? buildParetoResponse(rows, "totalPurchased", "cumulativePurchased", "purchasedPercent")
-      : buildParetoResponse(rows, "netProfit", "cumulativeProfit", "profitPercent");
+      ? buildParetoResponse(products, "totalPurchased", "cumulativePurchased", "purchasedPercent")
+      : buildParetoResponse(products, "netProfit", "cumulativeProfit", "profitPercent");
+    // Búsqueda, orden y página de nuevos se aplican SOLO a esa tabla; no cambian
+    // la población ni los porcentajes del Pareto. Sin newLimit devuelve todos
+    // los resultados filtrados para imprimir todas las páginas.
+    const search = String(req.query.newSearch || "").trim().toLocaleLowerCase("es");
+    const filteredNew = search
+      ? newProducts.filter((p) => String(p.product || "").toLocaleLowerCase("es").includes(search))
+      : newProducts;
+    const newSortColumns = ["product", "quantity", valueKey, "inventoryValue", "firstPurchaseDate"];
+    const newSortBy = newSortColumns.includes(req.query.newSortBy) ? req.query.newSortBy : "firstPurchaseDate";
+    const newSortDir = req.query.newSortDir === "asc" ? "asc" : "desc";
+    const sortedNew = sortProducts(filteredNew, newSortBy, newSortDir);
+    const newLimit = Math.min(100, Math.max(0, Math.floor(Number(req.query.newLimit) || 0)));
+    const newPage = Math.max(1, Math.floor(Number(req.query.newPage) || 1));
+    response.newProductsCount = newProducts.length;
+    response.newProductsTotal = filteredNew.length;
+    response.newProductsInventoryTotal = Math.round(
+      filteredNew.reduce((sum, p) => sum + Number(p.inventoryValue || 0), 0) * 100,
+    ) / 100;
+    response.newProducts = newLimit > 0
+      ? sortedNew.slice((newPage - 1) * newLimit, newPage * newLimit)
+      : sortedNew;
 
     // Server-side sorting: whitelist por modo, default = orden canónico por valor.
     const allowed = PARETO_SORT_COLUMNS[isPurchasesMode ? "compras-sin-vender" : "ventas"];

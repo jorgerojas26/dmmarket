@@ -140,6 +140,10 @@ describe("GET /api/dashboard/pareto", () => {
     expect(res.body.summary.classA).toHaveProperty("profitPercent");
     expect(res.body.summary).toHaveProperty("totalProducts");
     expect(res.body.products[0]).toHaveProperty("inventoryValue");
+    expect(res.body).toHaveProperty("newProducts");
+    expect(res.body.summary.totalProducts).toBe(res.body.products.length);
+    const matureIds = new Set(res.body.products.map((p) => p.productId));
+    expect(res.body.newProducts.every((p) => !matureIds.has(p.productId) && p.firstPurchaseDate)).toBe(true);
   });
 
   // 2. Modo compras-sin-vender: solo comprados sin ventas en el rango
@@ -211,6 +215,7 @@ describe("GET /api/dashboard/pareto", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.products).toEqual([]);
+    expect(res.body.newProducts).toEqual([]);
     expect(res.body.summary.totalProducts).toBe(0);
     expect(res.body.products.reduce((sum, p) => sum + Number(p.inventoryValue), 0)).toBe(0);
   });
@@ -270,6 +275,57 @@ describe("GET /api/dashboard/pareto", () => {
       .where("IdProducto", res.body.products[0].productId);
     expect(values[0]).toBeCloseTo(Number(PrecioA || 0) * Number(Existencia || 0), 2);
     expect(res.body.products[0]).toHaveProperty("abcClass");
+  });
+
+  it("busca, ordena y pagina nuevos sin alterar el ABC; sin límite devuelve todos para imprimir", async () => {
+    const range = { from: "2026-07-01", to: "2026-08-05", showNoe: "false", modo: "compras-sin-vender" };
+    const paged = await request(app).get("/api/dashboard/pareto").query({
+      ...range, newLimit: 2, newPage: 1, newSortBy: "inventoryValue", newSortDir: "asc",
+    });
+    expect(paged.status).toBe(200);
+    expect(paged.body.newProductsCount).toBeGreaterThan(2);
+    expect(paged.body.newProductsTotal).toBe(paged.body.newProductsCount);
+    expect(paged.body.newProducts).toHaveLength(2);
+
+    const all = await request(app).get("/api/dashboard/pareto").query({
+      ...range, newSortBy: "inventoryValue", newSortDir: "asc",
+    });
+    expect(all.status).toBe(200);
+    expect(all.body.newProducts).toHaveLength(all.body.newProductsTotal);
+    expect(paged.body.newProducts).toEqual(all.body.newProducts.slice(0, 2));
+    const secondPage = await request(app).get("/api/dashboard/pareto").query({
+      ...range, newLimit: 2, newPage: 2, newSortBy: "inventoryValue", newSortDir: "asc",
+    });
+    expect(secondPage.body.newProducts).toEqual(all.body.newProducts.slice(2, 4));
+    expect(all.body.newProducts.map((p) => Number(p.inventoryValue))).toEqual(
+      all.body.newProducts.map((p) => Number(p.inventoryValue)).sort((a, b) => a - b),
+    );
+    expect(paged.body.products.map((p) => p.productId).sort()).toEqual(
+      all.body.products.map((p) => p.productId).sort(),
+    );
+    expect(paged.body.summary.totalProducts).toBe(all.body.summary.totalProducts);
+    expect(all.body.newProductsInventoryTotal).toBeCloseTo(
+      all.body.newProducts.reduce((sum, p) => sum + Number(p.inventoryValue), 0), 2,
+    );
+
+    const search = all.body.newProducts[0].product;
+    const filtered = await request(app).get("/api/dashboard/pareto").query({
+      ...range, newSearch: search, newLimit: 1, newPage: 1,
+    });
+    expect(filtered.status).toBe(200);
+    expect(filtered.body.newProductsTotal).toBeGreaterThan(0);
+    expect(filtered.body.newProductsTotal).toBeLessThanOrEqual(all.body.newProductsTotal);
+    expect(filtered.body.newProducts[0].product.toLowerCase()).toContain(search.toLowerCase());
+    expect(filtered.body.products.map((p) => p.productId).sort()).toEqual(
+      all.body.products.map((p) => p.productId).sort(),
+    );
+
+    const empty = await request(app).get("/api/dashboard/pareto").query({
+      ...range, newSearch: "__producto_inexistente__", newLimit: 20,
+    });
+    expect(empty.body.newProductsCount).toBe(all.body.newProductsCount);
+    expect(empty.body.newProductsTotal).toBe(0);
+    expect(empty.body.newProducts).toEqual([]);
   });
 
   // 9. sortBy inválido cae al default del modo (netProfit desc)

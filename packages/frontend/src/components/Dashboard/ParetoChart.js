@@ -1,6 +1,7 @@
 import { ResponsiveBar } from '@nivo/bar';
 import ChartTooltip from 'components/ChartTooltip';
 import Table from 'components/Table';
+import PanelHelpTitle from './PanelHelpTitle';
 import { CurrencyRateContext } from 'context/currency_rate';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
@@ -161,6 +162,156 @@ const buildColumns = (cfg) => {
         },
     );
     return columns;
+};
+
+// Los productos recientes se muestran aparte: no reciben clase ni afectan el ABC.
+const buildNewProductsPdf = (products, cfg, config, rate, rangeLabel) => {
+    const currency = config?.currency;
+    const columns = [
+        { accessor: cfg.nameKey, label: 'Producto', width: '*', render: (p) => p[cfg.nameKey] },
+        {
+            accessor: cfg.valueKey,
+            label: cfg.valueLabel,
+            width: 'auto',
+            render: (p) => formatMoney(p[cfg.valueKey], currency, rate),
+        },
+        ...(cfg.quantityKey
+            ? [
+                  {
+                      accessor: cfg.quantityKey,
+                      label: 'Unidades',
+                      width: 'auto',
+                      render: (p) => formatNumber(p[cfg.quantityKey]),
+                  },
+              ]
+            : []),
+        ...(cfg.inventoryValueKey
+            ? [
+                  {
+                      accessor: cfg.inventoryValueKey,
+                      label: 'Valor inventario',
+                      width: 'auto',
+                      render: (p) => formatMoney(p[cfg.inventoryValueKey], currency, rate),
+                  },
+              ]
+            : []),
+        { accessor: 'firstPurchaseDate', label: 'Primera compra', width: 'auto', render: (p) => p.firstPurchaseDate },
+    ];
+    const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
+    const selected = selectedAccessors.size ? columns.filter((col) => selectedAccessors.has(col.accessor)) : columns;
+    const totals = {
+        [cfg.valueKey]: products.reduce((sum, p) => sum + Number(p[cfg.valueKey] || 0), 0),
+        ...(cfg.inventoryValueKey
+            ? { [cfg.inventoryValueKey]: products.reduce((sum, p) => sum + Number(p[cfg.inventoryValueKey] || 0), 0) }
+            : {}),
+    };
+    return {
+        content: [
+            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+            { text: `Productos nuevos — ${cfg.pdfTitle}`, style: 'header' },
+            { text: rangeLabel, style: 'header' },
+            {
+                table: {
+                    widths: selected.map((col) => col.width),
+                    body: [
+                        selected.map((col) => ({ text: col.label, style: 'th' })),
+                        ...products.map((p) => selected.map((col) => col.render(p))),
+                        selected.map((col, i) => ({
+                            text: i === 0
+                                ? `Total${col.accessor in totals ? `: ${formatMoney(totals[col.accessor], currency, rate)}` : ''}`
+                                : col.accessor in totals ? formatMoney(totals[col.accessor], currency, rate) : '',
+                            style: 'total',
+                        })),
+                    ],
+                },
+            },
+        ],
+        styles: {
+            header: { alignment: 'center', fontSize: 10, bold: true, margin: [0, 0, 0, 8] },
+            th: { bold: true, fontSize: 8, fillColor: '#f3f4f6' },
+            total: { bold: true, fontSize: 8 },
+        },
+        defaultStyle: { fontSize: 8 },
+        pageMargins: 30,
+        pageSize: 'LETTER',
+        pageOrientation: config?.orientation || 'landscape',
+    };
+};
+
+const NewProductsTable = ({ products, cfg, table, loading }) => {
+    const { currencyRate } = useContext(CurrencyRateContext);
+    const handlePrint = useCallback(async (config) => {
+        try {
+            const allProducts = await table.fetchAll();
+            const sorted = sortRows(allProducts, config?.sortBy);
+            pdfMake.createPdf(buildNewProductsPdf(sorted, cfg, config, currencyRate?.Cambio, table.rangeLabel)).open();
+        } catch (error) {
+            console.error('No se pudo imprimir productos nuevos:', error);
+        }
+    }, [table.fetchAll, table.rangeLabel, cfg, currencyRate?.Cambio]);
+    if (!table?.count) return null;
+    const columns = [
+        { Header: 'Producto', accessor: cfg.nameKey },
+        { Header: cfg.valueLabel, accessor: cfg.valueKey, Cell: ({ value }) => formatCurrency(value) },
+        ...(cfg.quantityKey
+            ? [{ Header: 'Unidades', accessor: cfg.quantityKey, Cell: ({ value }) => formatNumber(value) }]
+            : []),
+        ...(cfg.inventoryValueKey
+            ? [
+                  {
+                      Header: 'Valor inventario',
+                      accessor: cfg.inventoryValueKey,
+                      Cell: ({ value }) => formatCurrency(value),
+                  },
+              ]
+            : []),
+        { Header: 'Primera compra', accessor: 'firstPurchaseDate' },
+    ];
+    return (
+        <section style={{ marginTop: 24 }}>
+            <PanelHelpTitle
+                title={`Productos nuevos (${table.count})`}
+                help={{
+                    que: 'Productos de este modo cuya primera compra registrada ocurrió menos de 30 días antes del fin del período seleccionado. Es una aproximación a su fecha de ingreso, no la fecha de creación del producto.',
+                    leer: 'En Ganancia (Ventas) ya tuvieron ventas en el período; en Compras sin vender no tuvieron ventas en ese período, aunque pudieron venderse antes. Por eso cada modo muestra productos nuevos distintos.',
+                    servir: 'Darles tiempo para venderse antes de asignarles una clase A, B o C. No cuentan en los porcentajes ni en los totales del Pareto ABC.',
+                }}
+            />
+            <p className="text-muted small">
+                Menos de 30 días desde la primera compra al cierre del período. No participan en el cálculo ABC.
+            </p>
+            <Table
+                key={cfg.valueKey}
+                data={products}
+                columns={columns}
+                maxHeight="calc(100vh - 224px)"
+                loading={loading}
+                emptyMessage="Sin productos nuevos que coincidan con la búsqueda"
+                sorting={{ enabled: true, sortBy: [table.sort], onSort: table.onSort, resetOnDataChange: false }}
+                search={{ enabled: true, placeholder: 'Buscar producto nuevo...', onSearch: table.onSearch }}
+                pagination={{
+                    enabled: true,
+                    page: table.page,
+                    totalPages: Math.ceil(table.total / table.pageSize),
+                    totalRows: table.total,
+                    pageSize: table.pageSize,
+                    onPageChange: table.onPageChange,
+                }}
+                showFooter={Boolean(cfg.inventoryValueKey)}
+                summaries={
+                    cfg.inventoryValueKey
+                        ? { [cfg.nameKey]: 'Total', [cfg.inventoryValueKey]: formatCurrency(table.inventoryTotal) }
+                        : undefined
+                }
+                print={{
+                    enabled: true,
+                    onGlobalPrint: handlePrint,
+                    storageKey: `pareto-new-${cfg.valueKey}`,
+                    defaultOrientation: 'landscape',
+                }}
+            />
+        </section>
+    );
 };
 
 // ── pdfmake document ──
@@ -339,7 +490,7 @@ const CumulativeLine = ({ bars, xScale, innerHeight, innerWidth, data }) => {
 
 // ── component ──
 
-const ParetoChart = ({ products = [], summary = null, loading = false, config = {}, sorting }) => {
+const ParetoChart = ({ products = [], newProducts = [], newProductsTable, summary = null, loading = false, config = {}, sorting }) => {
     const cfg = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [abcFilter, setAbcFilter] = useState('all');
@@ -423,7 +574,7 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
     // Solo carga inicial (sin datos previos) reemplaza el panel; durante un
     // refetch (sort/rango/modo) se conserva el contenido previo y el Table
     // muestra su spinner encima.
-    if (loading && !products.length) {
+    if (loading && !products.length && !newProductsTable?.count) {
         return (
             <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
                 <div className="text-muted small">Cargando análisis Pareto…</div>
@@ -434,8 +585,15 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
     if (!products.length) {
         return (
             <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                <div className="dashboard-inline-title">Análisis Pareto (ABC)</div>
-                <div className="ranked-empty">Sin datos para el periodo seleccionado</div>
+                <div className="dashboard-inline-title">{cfg.title}</div>
+                <div className="ranked-empty">
+                    {newProductsTable?.count
+                        ? 'No hay productos con al menos 30 días para el análisis ABC.'
+                        : 'Sin datos para el periodo seleccionado'}
+                </div>
+                {newProductsTable && (
+                    <NewProductsTable products={newProducts} cfg={cfg} table={newProductsTable} loading={loading} />
+                )}
             </div>
         );
     }
@@ -704,6 +862,9 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
                     storageKey: `pareto-${cfg.valueKey}`,
                 }}
             />
+            {newProductsTable && (
+                <NewProductsTable products={newProducts} cfg={cfg} table={newProductsTable} loading={loading} />
+            )}
         </div>
     );
 };

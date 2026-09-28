@@ -65,14 +65,21 @@ export function useDashboardSalesRaw(dateRange, showNoe) {
     );
 }
 
-export function useDashboardParetoRaw(dateRange, showNoe, modo = 'ventas', sortBy = null, sortDir = 'desc') {
+export function useDashboardParetoRaw(dateRange, showNoe, modo = 'ventas', sortBy = null, sortDir = 'desc', newTable = {}) {
+    const { search = '', sortBy: newSortBy = 'firstPurchaseDate', sortDir: newSortDir = 'desc', page = 1, limit } = newTable;
     const key =
         dateRange?.from && dateRange?.to
-            ? ['dashboard-pareto', dateRange.from, dateRange.to, showNoe, modo, sortBy || 'default', sortDir]
+            ? [
+                  'dashboard-pareto', dateRange.from, dateRange.to, showNoe, modo, sortBy || 'default', sortDir,
+                  search, newSortBy, newSortDir, page, limit,
+              ]
             : null;
     return useSWR(
         key,
-        () => fetchDashboardPareto({ from: dateRange.from, to: dateRange.to, showNoe, modo, sortBy, sortDir }),
+        () => fetchDashboardPareto({
+            from: dateRange.from, to: dateRange.to, showNoe, modo, sortBy, sortDir,
+            newSearch: search, newSortBy, newSortDir, newPage: page, newLimit: limit,
+        }),
         {
             keepPreviousData: true,
         },

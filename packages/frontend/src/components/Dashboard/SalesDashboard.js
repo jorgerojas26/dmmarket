@@ -1,7 +1,8 @@
+import { fetchDashboardPareto } from 'api/dashboard';
 import GroupSales from 'components/Cards/GroupSales';
 import { useDashboardParetoRaw, useDashboardSalesRaw } from 'hooks/useDashboard';
 import { DateTime } from 'luxon';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { computeComparison, formatCurrency, formatNumber, formatPercent } from 'utils/format';
 import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
@@ -33,6 +34,8 @@ const PURCHASES_PARETO_CONFIG = {
     emptyTableMessage: 'Sin productos en esta clase',
 };
 
+const NEW_PAGE_SIZE = 20;
+
 const PARETO_MODES = [
     { key: 'ventas', label: 'Ganancia (Ventas)', color: '#3b82f6' },
     { key: 'compras-sin-vender', label: 'Compras sin vender', color: '#f59e0b' },
@@ -51,6 +54,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     const { data, error, isLoading } = useDashboardSalesRaw(dateRange, showNoe);
     const [paretoMode, setParetoMode] = useState('ventas');
     const [paretoSort, setParetoSort] = useState(null); // { id, desc } | null = default del modo
+    const [newSearch, setNewSearch] = useState('');
+    const [newPage, setNewPage] = useState(1);
+    const [newSort, setNewSort] = useState({ id: 'firstPurchaseDate', desc: true });
     const paretoConfig = paretoMode === 'compras-sin-vender' ? PURCHASES_PARETO_CONFIG : SALES_PARETO_CONFIG;
     const paretoDefaultSortId = paretoMode === 'compras-sin-vender' ? 'totalPurchased' : 'netProfit';
     const paretoSortBy = paretoSort || { id: paretoDefaultSortId, desc: true };
@@ -60,11 +66,46 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
         paretoMode,
         paretoSortBy.id,
         paretoSortBy.desc ? 'desc' : 'asc',
+        {
+            search: newSearch,
+            page: newPage,
+            limit: NEW_PAGE_SIZE,
+            sortBy: newSort.id,
+            sortDir: newSort.desc ? 'desc' : 'asc',
+        },
     );
+
+    const handleNewSearch = useCallback((term) => {
+        setNewSearch(term);
+        setNewPage(1);
+    }, []);
+    const handleNewSort = useCallback((sortByList) => {
+        const sort = sortByList?.[0];
+        if (sort) {
+            setNewSort(sort);
+            setNewPage(1);
+        }
+    }, []);
+    useEffect(() => setNewPage(1), [dateRange?.from, dateRange?.to, showNoe]);
+
+    const fetchAllNewProducts = useCallback(async () => {
+        const result = await fetchDashboardPareto({
+            ...dateRange,
+            showNoe,
+            modo: paretoMode,
+            newSearch,
+            newSortBy: newSort.id,
+            newSortDir: newSort.desc ? 'desc' : 'asc',
+        });
+        return result.newProducts;
+    }, [dateRange?.from, dateRange?.to, showNoe, paretoMode, newSearch, newSort]);
 
     const handleParetoModeChange = (key) => {
         setParetoMode(key);
         setParetoSort(null); // volver al orden canónico del modo
+        setNewSearch('');
+        setNewPage(1);
+        setNewSort({ id: 'firstPurchaseDate', desc: true });
     };
 
     // Compare range for KPI delta badges — computed locally, not fetched
@@ -258,30 +299,54 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             {/* Pareto Analysis */}
             <div className="row g-3 mb-4">
                 <div className="col-12">
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
-                        {PARETO_MODES.map(({ key, label, color }) => (
-                            <button
-                                key={key}
-                                onClick={() => handleParetoModeChange(key)}
-                                style={{
-                                    padding: '6px 16px',
-                                    borderRadius: 6,
-                                    border:
-                                        paretoMode === key ? `1.5px solid ${color}` : '1px solid rgba(255,255,255,0.1)',
-                                    background: paretoMode === key ? `${color}18` : 'transparent',
-                                    color: paretoMode === key ? color : '#9ca3af',
-                                    fontSize: 12,
-                                    fontWeight: paretoMode === key ? 600 : 400,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s',
-                                }}
-                            >
-                                {label}
-                            </button>
-                        ))}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', marginBottom: 12 }}>
+                        <PanelHelpTitle
+                            title="Modos del Pareto"
+                            help={{
+                                que: 'Ambos modos parten de productos comprados en el período. Ganancia (Ventas) incluye los que también se vendieron; Compras sin vender incluye los que no tuvieron ventas en ese período.',
+                                leer: 'Son grupos distintos: un producto no puede aparecer en ambos modos para el mismo rango. «Sin vender» no significa que nunca se haya vendido; pudo tener ventas antes del período.',
+                                servir: 'Separar la ganancia de los productos vendidos de la inversión en los que aún no se vendieron.',
+                            }}
+                        />
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {PARETO_MODES.map(({ key, label, color }) => (
+                                <button
+                                    key={key}
+                                    onClick={() => handleParetoModeChange(key)}
+                                    style={{
+                                        padding: '6px 16px',
+                                        borderRadius: 6,
+                                        border:
+                                            paretoMode === key ? `1.5px solid ${color}` : '1px solid rgba(255,255,255,0.1)',
+                                        background: paretoMode === key ? `${color}18` : 'transparent',
+                                        color: paretoMode === key ? color : '#9ca3af',
+                                        fontSize: 12,
+                                        fontWeight: paretoMode === key ? 600 : 400,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <ParetoChart
                         products={paretoData?.products || []}
+                        newProducts={paretoData?.newProducts || []}
+                        newProductsTable={{
+                            count: paretoData?.newProductsCount || 0,
+                            total: paretoData?.newProductsTotal || 0,
+                            inventoryTotal: paretoData?.newProductsInventoryTotal || 0,
+                            page: newPage,
+                            pageSize: NEW_PAGE_SIZE,
+                            sort: newSort,
+                            onSearch: handleNewSearch,
+                            onSort: handleNewSort,
+                            onPageChange: setNewPage,
+                            fetchAll: fetchAllNewProducts,
+                            rangeLabel: `${dateRange?.from} — ${dateRange?.to}`,
+                        }}
                         summary={paretoData?.summary || null}
                         loading={paretoLoading}
                         config={paretoConfig}
