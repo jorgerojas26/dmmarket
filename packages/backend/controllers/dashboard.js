@@ -259,6 +259,7 @@ const fetchSalesParetoRows = async ({ from, to, masterTable, slaveTable, idInvoi
       .select(
         "productos.IdProducto as productId",
         "productos.Descripcion as product",
+        knex.raw("ROUND(COALESCE(productos.PrecioA, 0) * COALESCE(productos.Existencia, 0), 2) as inventoryValue"),
         knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
@@ -293,6 +294,7 @@ const fetchUnsoldPurchasesRows = async ({ from, to, masterTable, slaveTable, idI
       `SELECT
         productos.IdProducto AS productId,
         productos.Descripcion AS product,
+        ROUND(COALESCE(productos.PrecioA, 0) * COALESCE(productos.Existencia, 0), 2) AS inventoryValue,
         ROUND(SUM(slavecomp.Cantidad), 3) AS quantity,
         ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) AS totalPurchased
       FROM slavecomp
@@ -318,12 +320,12 @@ const fetchUnsoldPurchasesRows = async ({ from, to, masterTable, slaveTable, idI
 };
 
 // Columnas ordenables por modo (whitelist — solo las que el UI expone como
-// sortables: valor, unidades y % acumulado). El ABC/cumulativo SIEMPRE se
+// sortables: valor, unidades, valor de inventario y % acumulado). El ABC/cumulativo SIEMPRE se
 // calcula sobre el orden canónico por valor; el sort pedido reordena SOLO la
 // respuesta.
 const PARETO_SORT_COLUMNS = {
-  ventas: ["quantity", "netProfit", "cumulativePercent"],
-  "compras-sin-vender": ["quantity", "totalPurchased", "cumulativePercent"],
+  ventas: ["quantity", "netProfit", "inventoryValue", "cumulativePercent"],
+  "compras-sin-vender": ["quantity", "totalPurchased", "inventoryValue", "cumulativePercent"],
 };
 
 const sortProducts = (products, sortBy, sortDir) => {

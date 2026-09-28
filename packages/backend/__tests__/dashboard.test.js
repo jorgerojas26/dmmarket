@@ -139,6 +139,7 @@ describe("GET /api/dashboard/pareto", () => {
     expect(res.body.products[0]).toHaveProperty("abcClass");
     expect(res.body.summary.classA).toHaveProperty("profitPercent");
     expect(res.body.summary).toHaveProperty("totalProducts");
+    expect(res.body.products[0]).toHaveProperty("inventoryValue");
   });
 
   // 2. Modo compras-sin-vender: solo comprados sin ventas en el rango
@@ -157,6 +158,7 @@ describe("GET /api/dashboard/pareto", () => {
       expect(p.quantity).toBeGreaterThan(0);
       expect(p).toHaveProperty("abcClass");
       expect(p).toHaveProperty("cumulativePurchased");
+      expect(p).toHaveProperty("inventoryValue");
     }
   });
 
@@ -210,6 +212,7 @@ describe("GET /api/dashboard/pareto", () => {
     expect(res.status).toBe(200);
     expect(res.body.products).toEqual([]);
     expect(res.body.summary.totalProducts).toBe(0);
+    expect(res.body.products.reduce((sum, p) => sum + Number(p.inventoryValue), 0)).toBe(0);
   });
 
   // 6. Modo ventas solo incluye productos con compras en el rango (SKUs legacy fuera)
@@ -250,6 +253,23 @@ describe("GET /api/dashboard/pareto", () => {
 
     const qs = res.body.products.map((p) => Number(p.quantity));
     expect([...qs].sort((a, b) => a - b)).toEqual(qs);
+  });
+
+  // Valor de inventario actual = precio de venta A × existencia; orden aplicado en el servidor.
+  it.each(["ventas", "compras-sin-vender"])("valora y ordena inventario en modo %s", async (modo) => {
+    const res = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({ ...WIDE_RANGE, showNoe: "false", modo, sortBy: "inventoryValue", sortDir: "asc" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.products.length).toBeGreaterThan(0);
+    const values = res.body.products.map((p) => Number(p.inventoryValue));
+    expect(values).toEqual([...values].sort((a, b) => a - b));
+    const [{ PrecioA, Existencia }] = await require("../database")("productos")
+      .select("PrecioA", "Existencia")
+      .where("IdProducto", res.body.products[0].productId);
+    expect(values[0]).toBeCloseTo(Number(PrecioA || 0) * Number(Existencia || 0), 2);
+    expect(res.body.products[0]).toHaveProperty("abcClass");
   });
 
   // 9. sortBy inválido cae al default del modo (netProfit desc)

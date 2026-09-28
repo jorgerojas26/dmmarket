@@ -23,6 +23,7 @@ const DEFAULT_CONFIG = {
     nameKey: 'product', // field with the entity name
     valueKey: 'netProfit', // field with the monetary value
     quantityKey: 'quantity', // field with units (null hides the column)
+    inventoryValueKey: null, // only the sales dashboard includes current stock valuation
     entityLabel: 'Producto', // singular entity label (column header)
     valueLabel: 'Ganancia',
     valueAxisLabel: 'Ganancia Neta',
@@ -113,6 +114,14 @@ const buildColumns = (cfg) => {
         });
     }
 
+    if (cfg.inventoryValueKey) {
+        columns.push({
+            Header: 'Valor inventario',
+            accessor: cfg.inventoryValueKey,
+            Cell: ({ value }) => formatCurrency(value),
+        });
+    }
+
     columns.push(
         {
             Header: '% Acum.',
@@ -159,6 +168,7 @@ const buildColumns = (cfg) => {
 const buildParetoPdf = (products, filterLabel, cfg, config = {}, rate) => {
     const hasQuantity = Boolean(cfg.quantityKey);
     const total = products.reduce((s, p) => s + Number(p[cfg.valueKey] || 0), 0);
+    const inventoryTotal = products.reduce((s, p) => s + Number(p[cfg.inventoryValueKey] || 0), 0);
     const currency = config?.currency;
     // Column metadata for the PDF, keyed by accessor (order defines layout).
     const pdfColumns = [
@@ -180,6 +190,16 @@ const buildParetoPdf = (products, filterLabel, cfg, config = {}, rate) => {
                   },
               ]
             : []),
+        ...(cfg.inventoryValueKey
+            ? [
+                  {
+                      accessor: cfg.inventoryValueKey,
+                      Header: 'Valor inventario',
+                      width: 'auto',
+                      render: (p) => formatMoney(p[cfg.inventoryValueKey], currency, rate),
+                  },
+              ]
+            : []),
         {
             accessor: 'cumulativePercent',
             Header: '% Acum.',
@@ -197,15 +217,19 @@ const buildParetoPdf = (products, filterLabel, cfg, config = {}, rate) => {
         ...products.map((p) => selected.map((col) => col.render(p))),
     ];
     if (allColumnsSelected) {
-        body.push([
-            { text: '', colSpan: hasQuantity ? 4 : 3, border: [false, true, false, false] },
-            ...(hasQuantity ? [{}, {}, {}] : [{}, {}]),
-            {
-                text: `Total: ${formatMoney(total, currency, rate)}`,
+        body.push(
+            selected.map((col, i) => ({
+                text:
+                    i === 0
+                        ? 'Total'
+                        : col.accessor === cfg.valueKey
+                          ? formatMoney(total, currency, rate)
+                          : col.accessor === cfg.inventoryValueKey
+                            ? formatMoney(inventoryTotal, currency, rate)
+                            : '',
                 style: 'total',
-            },
-            {},
-        ]);
+            })),
+        );
     }
 
     return {
@@ -355,6 +379,9 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
         return products.filter((p) => p.abcClass === abcFilter);
     }, [products, abcFilter]);
 
+    const inventoryTotal = cfg.inventoryValueKey
+        ? filteredProducts.reduce((sum, p) => sum + Number(p[cfg.inventoryValueKey] || 0), 0)
+        : 0;
     const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
     const tableData = useMemo(
         () => filteredProducts.slice((tablePage - 1) * PAGE_SIZE, tablePage * PAGE_SIZE),
@@ -650,6 +677,12 @@ const ParetoChart = ({ products = [], summary = null, loading = false, config = 
                 data={tableData}
                 columns={buildColumns(cfg)}
                 emptyMessage={cfg.emptyTableMessage}
+                showFooter={Boolean(cfg.inventoryValueKey)}
+                summaries={
+                    cfg.inventoryValueKey
+                        ? { rank: 'Total', [cfg.inventoryValueKey]: formatCurrency(inventoryTotal) }
+                        : undefined
+                }
                 // La tabla nunca debe exceder el alto del viewport: se le reserva
                 // el espacio del navbar + heading + toolbar (mismo offset que
                 // DespachoView). En pantallas altas crece hasta el offset, en

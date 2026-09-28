@@ -8,9 +8,12 @@ import PanelHelpTitle from './PanelHelpTitle';
 import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
 
+const SALES_PARETO_CONFIG = { inventoryValueKey: 'inventoryValue' };
+
 // Config del Pareto para el modo "compras sin vender": productos comprados en el
 // rango sin ninguna venta en el mismo rango, rankeados por inversión.
 const PURCHASES_PARETO_CONFIG = {
+    inventoryValueKey: 'inventoryValue',
     nameKey: 'product',
     valueKey: 'totalPurchased',
     quantityKey: 'quantity',
@@ -48,7 +51,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     const { data, error, isLoading } = useDashboardSalesRaw(dateRange, showNoe);
     const [paretoMode, setParetoMode] = useState('ventas');
     const [paretoSort, setParetoSort] = useState(null); // { id, desc } | null = default del modo
-    const paretoConfig = paretoMode === 'compras-sin-vender' ? PURCHASES_PARETO_CONFIG : {};
+    const paretoConfig = paretoMode === 'compras-sin-vender' ? PURCHASES_PARETO_CONFIG : SALES_PARETO_CONFIG;
     const paretoDefaultSortId = paretoMode === 'compras-sin-vender' ? 'totalPurchased' : 'netProfit';
     const paretoSortBy = paretoSort || { id: paretoDefaultSortId, desc: true };
     const { data: paretoData, isLoading: paretoLoading } = useDashboardParetoRaw(

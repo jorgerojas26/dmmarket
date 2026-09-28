@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as dashboardApi from 'api/dashboard';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { SWRConfig } from 'hooks/swr-wrapper';
@@ -56,6 +56,28 @@ describe('SalesDashboard', () => {
         expect(screen.getByText('Venta Bruta')).toBeInTheDocument();
         expect(screen.getByText('Producto A')).toBeInTheDocument();
         expect(screen.getByText('Empresa X')).toBeInTheDocument();
+    });
+
+    it('muestra el valor total del inventario filtrado y solicita ordenamiento al servidor', async () => {
+        dashboardApi.fetchDashboardPareto.mockResolvedValue({
+            products: [
+                { product: 'Pareto A', rank: 1, netProfit: 200, quantity: 2, inventoryValue: 125, cumulativePercent: 70, abcClass: 'A' },
+                { product: 'Pareto B', rank: 2, netProfit: 100, quantity: 1, inventoryValue: 75, cumulativePercent: 100, abcClass: 'C' },
+            ],
+            summary: { classA: { count: 1, profitPercent: 70 }, classB: { count: 0, profitPercent: 0 }, classC: { count: 1, profitPercent: 30 }, totalProducts: 2 },
+        });
+        render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />, {
+            wrapper: swrWrapper,
+        });
+        await waitFor(() => expect(screen.getByText('Pareto A')).toBeInTheDocument());
+        const table = screen.getByText('Valor inventario').closest('table');
+        expect(within(table.querySelector('tfoot')).getByText('$200,00')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Clase A' }));
+        expect(within(table.querySelector('tfoot')).getByText('$125,00')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Valor inventario'));
+        await waitFor(() => expect(dashboardApi.fetchDashboardPareto).toHaveBeenCalledWith(
+            expect.objectContaining({ sortBy: 'inventoryValue', sortDir: 'asc' }),
+        ));
     });
 
     it('muestra error si el endpoint falla', async () => {
