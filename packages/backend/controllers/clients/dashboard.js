@@ -83,7 +83,9 @@ const computeSegments = (revenues, grandTotal) => {
   ];
 
   const map = new Map();
-  SEGMENT_THRESHOLDS.forEach((s) => map.set(s.key, { segment: s.key, num_clients: 0, revenue: 0, total_invoices: 0 }));
+  SEGMENT_THRESHOLDS.forEach((s) => {
+    map.set(s.key, { segment: s.key, num_clients: 0, revenue: 0, total_invoices: 0 });
+  });
 
   revenues.forEach((r) => {
     const totalUsd = Number(r.total_usd);
@@ -104,6 +106,58 @@ const computeSegments = (revenues, grandTotal) => {
       avg_invoices: s.num_clients > 0 ? Math.round((s.total_invoices / s.num_clients) * 10) / 10 : 0,
     }))
     .filter((s) => s.num_clients > 0);
+};
+
+// Keep the original two dates: the latest header anchors the 12-month
+// window, while the latest invoice WITH lines determines inactivity. Empty
+// headers must neither make a client active nor remove zero-revenue buckets.
+const buildInactiveBucketsQuery = ({ masterTable, slaveTable, idInvoice, to, routeClients }) => {
+  const lastByClient = knex(`${masterTable} as h`)
+    .select("h.IdCliente", knex.raw("MAX(h.Fecha) as last"))
+    .select(
+      knex.raw(
+        `MAX(CASE WHEN EXISTS (SELECT 1 FROM ?? as detail WHERE detail.?? = h.??)
+       THEN h.Fecha END) as last_with_lines`,
+        [slaveTable, idInvoice, idInvoice],
+      ),
+    )
+    .where("h.Fecha", "<=", to)
+    .andWhere("h.Anulada", 0)
+    .groupBy("h.IdCliente");
+  if (routeClients) lastByClient.whereIn("h.IdCliente", routeClients);
+
+  const inner = knex
+    .from(lastByClient.as("l"))
+    .select("l.IdCliente")
+    .select(knex.raw("COALESCE(SUM(sf.Precio * sf.Cantidad), 0) as win_usd"))
+    .select(knex.raw("DATEDIFF(?, l.last_with_lines) as days_since", [to]))
+    .innerJoin(`${masterTable} as mf`, function () {
+      this.on("mf.IdCliente", "l.IdCliente")
+        .andOn("mf.Anulada", knex.raw("0"))
+        .andOn("mf.Fecha", "<=", "l.last")
+        .andOn("mf.Fecha", ">=", knex.raw("DATE_SUB(l.last, INTERVAL 12 MONTH)"));
+    })
+    .leftJoin(`${slaveTable} as sf`, `sf.${idInvoice}`, `mf.${idInvoice}`)
+    .whereNotNull("l.last_with_lines")
+    .groupBy("l.IdCliente", "l.last_with_lines");
+
+  return knex
+    .from(inner.as("inactive_data"))
+    .select(
+      knex.raw(`CASE
+      WHEN days_since <= 7 THEN '0-7d'
+      WHEN days_since <= 15 THEN '8-15d'
+      WHEN days_since <= 30 THEN '16-30d'
+      WHEN days_since <= 60 THEN '31-60d'
+      WHEN days_since <= 90 THEN '61-90d'
+      ELSE '>90d' END as bucket`),
+    )
+    .select(knex.raw("COUNT(*) as count"))
+    .select(knex.raw("ROUND(SUM(win_usd), 2) as revenue"))
+    .select(knex.raw("SUM(CASE WHEN days_since > 60 THEN win_usd ELSE 0 END) as risk_amount"))
+    .select(knex.raw("SUM(CASE WHEN days_since > 60 THEN 1 ELSE 0 END) as risk_clients"))
+    .groupBy("bucket")
+    .orderBy(knex.raw("MIN(days_since)"), "asc");
 };
 
 // ── Controller ──
@@ -293,62 +347,8 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         };
       })(),
 
-      // 7. Inactive buckets + revenue at risk: una sola pasada sobre el historial
-      //    (toda la facturación hasta `to`), agrupada por bucket. El revenue en
-      //    riesgo (>60 días) se agrega con SUM condicional en la misma consulta
-      //    y se suma en JS — antes eran dos escaneos idénticos de la historia.
-      //    El "revenue" de cada bucket y el revenue en riesgo usan la ventana de
-      //    los últimos 12 meses de actividad previos a la última compra del
-      //    cliente (no todo su histórico), vía un JOIN contra una tabla derivada
-      //    con el MAX(Fecha) por cliente (MySQL no permite MAX anidado en un CASE
-      //    dentro del mismo GROUP BY).
-      (async () => {
-        const lastByClient = knex(`${masterTable}`)
-          .select(`${masterTable}.IdCliente`, knex.raw("MAX(Fecha) as last"))
-          .where("Fecha", "<=", to)
-          .andWhere("Anulada", 0)
-          .groupBy("IdCliente");
-
-        let inner = knex
-          .select(
-            "mf.IdCliente",
-            knex.raw(
-              `SUM(CASE WHEN mf.Fecha >= DATE_SUB(l.last, INTERVAL 12 MONTH) THEN sf.Precio * sf.Cantidad ELSE 0 END) as win_usd`,
-            ),
-            knex.raw(`DATEDIFF(?, MAX(mf.Fecha)) as days_since`, [to]),
-          )
-          .from(`${masterTable} as mf`)
-          .innerJoin(`${slaveTable} as sf`, function () {
-            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-          })
-          .innerJoin(lastByClient.as("l"), function () {
-            this.on("l.IdCliente", "mf.IdCliente").andOn("mf.Fecha", "<=", "l.last");
-          })
-          .where("mf.Fecha", "<=", to)
-          .groupBy("mf.IdCliente");
-        if (routeClients) inner = inner.whereIn("mf.IdCliente", routeClients);
-
-        return knex
-          .select(
-            knex.raw(`
-            CASE 
-              WHEN days_since <= 7 THEN '0-7d'
-              WHEN days_since <= 15 THEN '8-15d'
-              WHEN days_since <= 30 THEN '16-30d'
-              WHEN days_since <= 60 THEN '31-60d'
-              WHEN days_since <= 90 THEN '61-90d'
-              ELSE '>90d'
-            END as bucket
-          `),
-            knex.raw("COUNT(*) as count"),
-            knex.raw("ROUND(SUM(win_usd), 2) as revenue"),
-            knex.raw("SUM(CASE WHEN days_since > 60 THEN win_usd ELSE 0 END) as risk_amount"),
-            knex.raw("SUM(CASE WHEN days_since > 60 THEN 1 ELSE 0 END) as risk_clients"),
-          )
-          .from(inner.as("inactive_data"))
-          .groupBy("bucket")
-          .orderBy(knex.raw("MIN(days_since)"), "asc");
-      })(),
+      // 7. Only join invoice lines inside each client's activity window.
+      buildInactiveBucketsQuery({ masterTable, slaveTable, idInvoice, to, routeClients }),
 
       // 8. Route coverage: clients assigned per route (global breakdown)
       knex("clientes")
@@ -412,9 +412,9 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
     // ── Route coverage (global cartera breakdown, merged) ──
     const totalGlobal = Number(totalGlobalRow?.total) || 0;
     const routeMap = new Map();
-    routeCoverage.forEach((r) =>
-      routeMap.set(r.Id_Ruta, { Id_Ruta: r.Id_Ruta, Nombre: r.Nombre, asignados: Number(r.asignados), activos: 0 }),
-    );
+    routeCoverage.forEach((r) => {
+      routeMap.set(r.Id_Ruta, { Id_Ruta: r.Id_Ruta, Nombre: r.Nombre, asignados: Number(r.asignados), activos: 0 });
+    });
     routeActivos.forEach((r) => {
       const entry = routeMap.get(r.Id_Ruta);
       if (entry) entry.activos = Number(r.activos);
@@ -473,4 +473,4 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
   }
 };
 
-module.exports = { GET_CLIENTS_DASHBOARD, computeAbc };
+module.exports = { GET_CLIENTS_DASHBOARD, computeAbc, buildInactiveBucketsQuery };
