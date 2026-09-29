@@ -423,6 +423,8 @@ describe("GET /api/purchases/invoices y /products — exclusión de facturas anu
 
       // Al des-anular la misma factura, sí aparece y suma — la semilla es visible y el filtro es real
       await knex("mastercomp").where("IdFactura", anuladaId).update({ Anulada: 0 });
+      // Simulate the explicit refresh after an external accounting import.
+      await request(app).post("/api/cache/clear").expect(200);
 
       const unAnulledInvoices = await request(app).get("/api/purchases/invoices").query(RANGE);
       expect(unAnulledInvoices.body.pagination.total).toBe(beforeInvoices.body.pagination.total + 1);

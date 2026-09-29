@@ -46,6 +46,15 @@ const update_routes = require("./routes/update");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+const { reportCache } = require("./middlewares/report-cache");
+app.use("/api", reportCache.middleware);
+// External accounting imports do not pass through this server. Operators can
+// invalidate every report immediately instead of waiting for the one-hour TTL.
+app.post("/api/cache/clear", (_req, res) => {
+  reportCache.clear();
+  res.json({ cleared: true });
+});
+
 app.use("/api/clients", clients_routes);
 app.use("/api/groups", groups_routes);
 app.use("/api/invoices", invoices_routes);

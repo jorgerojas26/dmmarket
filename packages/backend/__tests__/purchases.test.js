@@ -232,6 +232,8 @@ describe("GET /api/purchases — exclusión de facturas anuladas", () => {
 
       // Al des-anular la misma factura, sí suma — la semilla es visible y el filtro es real
       await knex("mastercomp").where("IdFactura", anuladaId).update({ Anulada: 0 });
+      // Direct accounting/database writes require explicit report invalidation.
+      await request(app).post("/api/cache/clear").expect(200);
       const unAnulled = await request(app).get("/api/purchases/dashboard").query(range);
       expect(unAnulled.body.kpis.totalPurchased).toBe(before.body.kpis.totalPurchased + 500000);
       expect(unAnulled.body.kpis.totalInvoices).toBe(before.body.kpis.totalInvoices + 1);
