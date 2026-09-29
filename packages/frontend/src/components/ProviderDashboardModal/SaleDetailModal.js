@@ -1,6 +1,7 @@
 import Table from 'components/Table';
 import { DateTime } from 'luxon';
 import { Modal, Spinner } from 'react-bootstrap';
+import './styles.css';
 
 const formatCurrency = (value) => {
     const num = Number(value);

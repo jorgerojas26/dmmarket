@@ -1,12 +1,14 @@
 import { ResponsiveLine } from '@nivo/line';
 import DateRangePicker from 'components/DateRangePicker';
 import Table from 'components/Table';
+import { fetchInvoiceDetail } from 'api/invoice';
 import { ShowNoeContext } from 'context/show_noe';
 import { useClientSales, useClientSummary } from 'hooks/useClients';
 import { DateTime } from 'luxon';
-import { useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { Badge, Modal, Spinner } from 'react-bootstrap';
 import { formatCurrency } from 'utils/format';
+import SaleDetailModal from '../ProviderDashboardModal/SaleDetailModal';
 import './styles.css';
 
 const LIMIT = 50;
@@ -123,6 +125,8 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
     const [dateRange, setDateRange] = useState(initialRange);
     const [salesPage, setSalesPage] = useState(1);
     const [chartTooltip, setChartTooltip] = useState({ visible: false, x: 0, y: 0, point: null });
+    const [saleDetailModalShow, setSaleDetailModalShow] = useState(false);
+    const [selectedSale, setSelectedSale] = useState(null);
 
     // ── SWR hooks ──
     const clientEnabled = show && !!client?.IdCliente;
@@ -170,6 +174,19 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
         setDateRange({ from, to });
         setSalesPage(1);
     };
+
+    const handleSaleRowClick = useCallback(
+        async (sale) => {
+            try {
+                const detail = await fetchInvoiceDetail(sale.idFactura, showNoe);
+                setSelectedSale(detail);
+                setSaleDetailModalShow(true);
+            } catch (err) {
+                console.error('Failed to fetch invoice detail:', err);
+            }
+        },
+        [showNoe],
+    );
 
     const totalPages = Math.ceil((salesData?.total || 0) / LIMIT);
 
@@ -389,6 +406,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                     className="table"
                     maxHeight={420}
                     emptyMessage="Sin ventas en este período"
+                    onRowClick={handleSaleRowClick}
                     pagination={{
                         enabled: true,
                         page: salesPage,
@@ -407,39 +425,55 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
     }
 
     return (
-        <Modal show={show} size="xl" onHide={onClose} backdrop="static" scrollable className="client-dashboard-modal">
-            <Modal.Header closeButton>
-                <div className="d-flex align-items-center gap-3">
-                    <div className="client-avatar">{avatarLetter}</div>
-                    <div>
-                        <Modal.Title>{client?.Empresa}</Modal.Title>
-                        <div className="modal-subtitle">Cliente #{client?.IdCliente}</div>
+        <>
+            <Modal
+                show={show}
+                size="xl"
+                onHide={onClose}
+                backdrop="static"
+                scrollable
+                className="client-dashboard-modal"
+            >
+                <Modal.Header closeButton>
+                    <div className="d-flex align-items-center gap-3">
+                        <div className="client-avatar">{avatarLetter}</div>
+                        <div>
+                            <Modal.Title>{client?.Empresa}</Modal.Title>
+                            <div className="modal-subtitle">Cliente #{client?.IdCliente}</div>
+                        </div>
                     </div>
-                </div>
-            </Modal.Header>
-            <Modal.Body>
-                <div className="date-picker-card">
-                    <div className="date-picker-label">Rango de fechas</div>
-                    <DateRangePicker
-                        key={client?.IdCliente || 'picker'}
-                        initialFrom={initialRange.from}
-                        initialTo={initialRange.to}
-                        onChange={handleDateRangeChange}
-                    />
-                </div>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="date-picker-card">
+                        <div className="date-picker-label">Rango de fechas</div>
+                        <DateRangePicker
+                            key={client?.IdCliente || 'picker'}
+                            initialFrom={initialRange.from}
+                            initialTo={initialRange.to}
+                            onChange={handleDateRangeChange}
+                        />
+                    </div>
 
-                <div className="stats-row">
-                    {stats.map((stat) => (
-                        <StatCard key={stat.label} {...stat} loading={summaryLoading} />
-                    ))}
-                </div>
+                    <div className="stats-row">
+                        {stats.map((stat) => (
+                            <StatCard key={stat.label} {...stat} loading={summaryLoading} />
+                        ))}
+                    </div>
 
-                <div className="dashboard-grid">
-                    {chartBlock}
-                    {salesBlock}
-                </div>
-            </Modal.Body>
-        </Modal>
+                    <div className="dashboard-grid">
+                        {chartBlock}
+                        {salesBlock}
+                    </div>
+                </Modal.Body>
+            </Modal>
+            {saleDetailModalShow && (
+                <SaleDetailModal
+                    show={saleDetailModalShow}
+                    onClose={() => setSaleDetailModalShow(false)}
+                    sale={selectedSale}
+                />
+            )}
+        </>
     );
 };
 

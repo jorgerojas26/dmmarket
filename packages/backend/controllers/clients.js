@@ -157,6 +157,7 @@ const GET_CLIENT_SALES = async (req, res) => {
 
     const data = await knex
       .select(
+        knex.raw("?? as idFactura", [`${masterTable}.${idInvoice}`]),
         "vendedores.Empresa as vendedor",
         `${masterTable}.Fecha as fecha`,
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`),

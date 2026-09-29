@@ -384,8 +384,8 @@ describe("GET_CLIENT_SALES", () => {
     jest.resetModules();
     jest.restoreAllMocks();
     const data = [
-      { vendedor: "Vendedor A", fecha: "2026-05-10", monto: 500, utilidad: 125 },
-      { vendedor: "Vendedor B", fecha: "2026-05-01", monto: 300, utilidad: 80 },
+      { idFactura: 101, vendedor: "Vendedor A", fecha: "2026-05-10", monto: 500, utilidad: 125 },
+      { idFactura: 102, vendedor: "Vendedor B", fecha: "2026-05-01", monto: 300, utilidad: 80 },
     ];
     const mockDb = jest.fn();
     mockDb.raw = jest.fn((sql) => sql);
@@ -409,5 +409,6 @@ describe("GET_CLIENT_SALES", () => {
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ data, total: 2, totals: { monto: 800, utilidad: 205 } }),
     );
+    expect(mockDb.raw).toHaveBeenCalledWith("?? as idFactura", ["masterfact.IdFactura"]);
   });
 });

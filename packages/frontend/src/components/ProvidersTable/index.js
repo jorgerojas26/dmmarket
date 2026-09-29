@@ -20,7 +20,7 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [sort, setSort] = useState({ sortBy: 'total_ventas', sortDir: 'desc' });
+    const [sort, setSort] = useState({ sortBy: 'utilidad', sortDir: 'desc' });
 
     const { data: result, isLoading } = useProvidersList({
         search,

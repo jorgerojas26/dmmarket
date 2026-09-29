@@ -78,6 +78,18 @@ describe('ProvidersTable', () => {
         expect(screen.getByText('# Ventas')).toBeInTheDocument();
     });
 
+    it('sorts by utility descending initially', async () => {
+        await act(async () => {
+            render(<ProvidersTable />, { wrapper: swrWrapper });
+        });
+
+        await waitFor(() => {
+            expect(providersApi.fetchProvidersList).toHaveBeenCalledWith(
+                expect.objectContaining({ sortBy: 'utilidad', sortDir: 'desc' }),
+            );
+        });
+    });
+
     it('renders provider data rows', async () => {
         await act(async () => {
             render(<ProvidersTable />, { wrapper: swrWrapper });
