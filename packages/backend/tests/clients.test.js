@@ -1,3 +1,4 @@
+// biome-ignore-all lint/suspicious/noThenProperty: Mock Knex builders must be awaitable.
 /**
  * Helper: chainable knex query builder that resolves (when awaited) values
  * from a queue, in call order. The controller awaits 3 queries:
@@ -221,7 +222,7 @@ describe("GET_CLIENTS_SIN_FACTURAR", () => {
   let req, res, controller, mockDb;
 
   // knex() call order: invoiced-in-period subquery (never awaited) -> clients
-  // -> history aggregates -> revenue aggregates.
+  // -> combined historical aggregates (one pass).
   const setup = (queue) => {
     jest.resetModules();
     jest.restoreAllMocks();
@@ -251,11 +252,10 @@ describe("GET_CLIENTS_SIN_FACTURAR", () => {
     { IdCliente: "C1", Empresa: "Cliente Uno", ruta_nombre: "Ruta 1" },
     { IdCliente: "C2", Empresa: "Cliente Dos", ruta_nombre: "Ruta 2" },
   ];
-  const historyAgg = [{ IdCliente: "C1", last_factura: "2025-12-01", dias_inactivo: 251 }];
-  const revenueAgg = [{ IdCliente: "C1", revenue_historico: 5000 }];
+  const historyAgg = [{ IdCliente: "C1", last_factura: "2025-12-01", dias_inactivo: 251, revenue_historico: 5000 }];
 
   it("should return rows with historical fields, defaulting never-billed clients", async () => {
-    setup([clients, historyAgg, revenueAgg]);
+    setup([clients, historyAgg]);
     await controller.GET_CLIENTS_SIN_FACTURAR(req, res);
 
     expect(res.status).toHaveBeenCalledWith(200);
@@ -296,7 +296,7 @@ describe("GET_CLIENTS_SIN_FACTURAR", () => {
   });
 
   it("should filter by search and route", async () => {
-    setup([clients, historyAgg, revenueAgg]);
+    setup([clients, historyAgg]);
     req.query.search = "Uno";
     req.query.ruta = "R1";
     await controller.GET_CLIENTS_SIN_FACTURAR(req, res);
@@ -307,27 +307,27 @@ describe("GET_CLIENTS_SIN_FACTURAR", () => {
   });
 
   it("should restrict aggregates to the sin-facturar client ids", async () => {
-    setup([clients, historyAgg, revenueAgg]);
+    setup([clients, historyAgg]);
     await controller.GET_CLIENTS_SIN_FACTURAR(req, res);
 
     const historyBuilder = mockDb.mock.results[2].value;
-    const revenueBuilder = mockDb.mock.results[3].value;
     expect(historyBuilder.whereIn).toHaveBeenCalledWith("mh.IdCliente", ["C1", "C2"]);
-    expect(revenueBuilder.whereIn).toHaveBeenCalledWith("mh.IdCliente", ["C1", "C2"]);
+    expect(mockDb).toHaveBeenCalledTimes(3);
+    expect(historyBuilder.leftJoin).toHaveBeenCalledWith("slavefact as sh", "sh.IdFactura", "mh.IdFactura");
   });
 
   it("should handle showNoe=true with masternoe/slavenoe and IdNoe", async () => {
-    setup([clients, historyAgg, revenueAgg]);
+    setup([clients, historyAgg]);
     req.locals.showNoe = { masterTable: "masternoe", slaveTable: "slavenoe", idInvoice: "IdNoe" };
     await controller.GET_CLIENTS_SIN_FACTURAR(req, res);
 
     expect(mockDb.mock.calls[0][0]).toBe("masternoe");
     expect(mockDb.mock.calls[2][0]).toBe("masternoe as mh");
-    expect(mockDb.mock.calls[3][0]).toBe("slavenoe as sh");
+    expect(mockDb.mock.results[2].value.leftJoin).toHaveBeenCalledWith("slavenoe as sh", "sh.IdNoe", "mh.IdNoe");
   });
 
   it("should paginate with offset/limit", async () => {
-    setup([clients, historyAgg, revenueAgg]);
+    setup([clients, historyAgg]);
     req.query.page = "2";
     req.query.limit = "1";
     await controller.GET_CLIENTS_SIN_FACTURAR(req, res);
@@ -344,7 +344,7 @@ describe("GET_CLIENTS_SIN_FACTURAR", () => {
       { IdCliente: "C1", last_factura: "2025-12-01", dias_inactivo: 251 },
       { IdCliente: "C2", last_factura: "2026-07-01", dias_inactivo: 39 },
     ];
-    setup([clients, history, revenueAgg]);
+    setup([clients, history]);
     req.query.sortBy = "dias_inactivo";
     req.query.sortDir = "asc";
     await controller.GET_CLIENTS_SIN_FACTURAR(req, res);

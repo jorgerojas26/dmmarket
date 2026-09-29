@@ -1,4 +1,5 @@
 const knex = require("../database");
+const { buildClientHistoryQuery } = require("../utils/client-history");
 const MONTHS = require("../utils/months");
 
 const GET_CLIENTS = async (req, res) => {
@@ -407,9 +408,7 @@ const GET_CLIENTS_SIN_FACTURAR = async (req, res) => {
     return res.status(400).json({ error: "from and to are required" });
   }
 
-  // Same 2-pass + JS merge pattern as GET_CLIENTS_LIST: the historical
-  // aggregates (all-time data) ran as one big LEFT JOIN over every invoice,
-  // multiplied by slavefact lines, with a filesort over all clients.
+  // All candidates must be ranked before paging by historical sales.
   const sortCol = (() => {
     switch (sortBy) {
       case "IdCliente":
@@ -452,39 +451,18 @@ const GET_CLIENTS_SIN_FACTURAR = async (req, res) => {
 
     const clientIds = clients.map((c) => c.IdCliente);
 
-    // 2. Historical last invoice and days inactive per client (all history).
-    const historyAgg = await knex(`${masterTable} as mh`)
-      .select("mh.IdCliente")
-      .select(knex.raw("MAX(mh.Fecha) as last_factura"))
-      .select(knex.raw("DATEDIFF(?, MAX(mh.Fecha)) as dias_inactivo", [to]))
-      .whereIn("mh.IdCliente", clientIds)
-      .andWhere("mh.Anulada", 0)
-      .groupBy("mh.IdCliente");
-
-    // 3. Historical revenue per client (all history; index-only scan thanks to
-    //    idx_slavefact_ventas_cover).
-    const revenueAgg = await knex(`${slaveTable} as sh`)
-      .innerJoin(`${masterTable} as mh`, function () {
-        this.on(`mh.${idInvoice}`, `sh.${idInvoice}`).andOn("mh.Anulada", 0);
-      })
-      .select("mh.IdCliente")
-      .select(knex.raw("COALESCE(ROUND(SUM(sh.Precio * sh.Cantidad), 2), 0) as revenue_historico"))
-      .whereIn("mh.IdCliente", clientIds)
-      .groupBy("mh.IdCliente");
-
+    const historyAgg = await buildClientHistoryQuery({ masterTable, slaveTable, idInvoice, clientIds, to });
     const historyMap = new Map(historyAgg.map((r) => [r.IdCliente, r]));
-    const revenueMap = new Map(revenueAgg.map((r) => [r.IdCliente, r]));
 
     const rows = clients.map((c) => {
       const h = historyMap.get(c.IdCliente);
-      const rv = revenueMap.get(c.IdCliente);
       return {
         IdCliente: c.IdCliente,
         Empresa: c.Empresa,
         ruta_nombre: c.ruta_nombre,
         last_factura: h ? h.last_factura : null,
         dias_inactivo: h ? h.dias_inactivo : null,
-        revenue_historico: Number(rv ? rv.revenue_historico : 0) || 0,
+        revenue_historico: Number(h ? h.revenue_historico : 0) || 0,
       };
     });
 

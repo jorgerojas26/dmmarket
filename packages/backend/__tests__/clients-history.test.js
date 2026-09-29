@@ -3,7 +3,7 @@
 const describeDatabase = process.env.RUN_DB_TESTS === "1" ? describe : describe.skip;
 
 describeDatabase("client historical aggregations (MySQL)", () => {
-  let db, buildInactiveBucketsQuery;
+  let db, buildInactiveBucketsQuery, buildClientHistoryQuery;
   const masterTable = `test_client_headers_${process.pid}`;
   const slaveTable = `test_client_lines_${process.pid}`;
   const idInvoice = "IdFactura";
@@ -13,6 +13,7 @@ describeDatabase("client historical aggregations (MySQL)", () => {
     db = knex({ ...require("../knexfile"), pool: { min: 1, max: 1 } });
     jest.doMock("../database", () => db);
     ({ buildInactiveBucketsQuery } = require("../controllers/clients/dashboard"));
+    ({ buildClientHistoryQuery } = require("../utils/client-history"));
     await db.raw(
       `CREATE TABLE ?? (
       IdFactura INT PRIMARY KEY, IdCliente VARCHAR(20), Fecha DATE, Anulada INT,
@@ -84,5 +85,20 @@ describeDatabase("client historical aggregations (MySQL)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual(expect.objectContaining({ bucket: ">90d", count: 1 }));
     expect(Number(rows[0].revenue)).toBe(0);
+  });
+  it("combines history and money without losing empty headers or multiplying revenue", async () => {
+    const rows = await buildClientHistoryQuery({
+      masterTable,
+      slaveTable,
+      idInvoice,
+      to: "2026-09-29",
+      clientIds: ["recent", "old", "empty"],
+    });
+    const byClient = new Map(rows.map((r) => [r.IdCliente, r]));
+    expect(Number(byClient.get("recent").revenue_historico)).toBe(1125);
+    expect(Number(byClient.get("old").dias_inactivo)).toBe(9);
+    expect(Number(byClient.get("old").revenue_historico)).toBe(900);
+    expect(Number(byClient.get("empty").dias_inactivo)).toBe(4);
+    expect(Number(byClient.get("empty").revenue_historico)).toBe(0);
   });
 });
