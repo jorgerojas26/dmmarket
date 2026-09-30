@@ -80,9 +80,9 @@ const PurchasesDashboard = ({ dateRange }) => {
                     />
                 </div>
             )}
-            <div className="row g-3 mb-4">
-                <div className="col-12 col-lg-8">
-                    <div className="dashboard-kpi-grid h-100">
+            <div className="purchases-dashboard-overview mb-4">
+                <div className="purchases-dashboard-summary">
+                    <div className="dashboard-kpi-grid dashboard-kpi-grid-compact purchases-dashboard-kpi-grid">
                         <div>
                             <KpiCard
                                 label="Total Comprado"
@@ -153,49 +153,41 @@ const PurchasesDashboard = ({ dateRange }) => {
                                 }}
                             />
                         </div>
-                        <div style={{ gridColumn: '1 / -1' }}>
-                            <div className="dashboard-best-employee">
-                                <div className="dashboard-best-employee-icon">
-                                    <svg
-                                        width="20"
-                                        height="20"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                        <circle cx="12" cy="7" r="4" />
-                                    </svg>
-                                </div>
-                                <div className="dashboard-best-employee-body">
-                                    <div className="dashboard-kpi-label">Mejor Proveedor</div>
-                                    <div className="dashboard-best-employee-name">{bestProvider?.name || '\u2014'}</div>
-                                    <div className="dashboard-best-employee-sales">
-                                        {bestProvider ? formatCurrency(bestProvider.totalPurchased) : ''}
-                                    </div>
+                    </div>
+                    <div className="purchases-dashboard-insights">
+                        <div className="purchases-dashboard-categories">
+                            <PanelHelpTitle
+                                title="Categorías"
+                                help={{
+                                    que: 'Reparte el total comprado del periodo según la categoría de producto.',
+                                    leer: 'Cada porción es una categoría; mientras más grande, más dinero invertido en ella.',
+                                    servir: 'Ver dónde se concentra la inversión en mercancía.',
+                                }}
+                            />
+                            <GroupPurchases chartData={chartData} compact />
+                        </div>
+                        <div className="purchases-dashboard-best-provider">
+                            <div className="purchases-dashboard-provider-label">
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                    <circle cx="12" cy="7" r="4" />
+                                </svg>
+                                Mejor Proveedor
+                            </div>
+                            <div className="dashboard-best-employee-body">
+                                <div className="dashboard-best-employee-name">{bestProvider?.name || '—'}</div>
+                                <div className="dashboard-best-employee-sales">
+                                    {bestProvider ? formatCurrency(bestProvider.totalPurchased) : ''}
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="col-12 col-lg-4">
-                    <div
-                        className="dashboard-panel d-flex flex-column"
-                        style={{ padding: '16px 20px', height: '100%' }}
-                    >
-                        <PanelHelpTitle
-                            title="Categorías"
-                            help={{
-                                que: 'Reparte el total comprado del periodo según la categoría de producto.',
-                                leer: 'Cada porción es una categoría; mientras más grande, más dinero invertido en ella.',
-                                servir: 'Ver dónde se concentra la inversión en mercancía.',
-                            }}
-                        />
-                        <div style={{ flex: 1, minHeight: 0 }}>
-                            <GroupPurchases chartData={chartData} />
                         </div>
                     </div>
                 </div>
