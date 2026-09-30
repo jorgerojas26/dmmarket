@@ -61,6 +61,35 @@ describe('SalesDashboard', () => {
         expect(screen.getByText('Empresa X')).toBeInTheDocument();
     });
 
+    it('usa una cuadrícula compacta y separa al mejor vendedor sin perder comparativas ni ayudas', async () => {
+        const { container } = render(
+            <SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />,
+            { wrapper: swrWrapper },
+        );
+        await waitFor(() => expect(screen.getByText('Juan Pérez')).toBeInTheDocument());
+
+        const grid = container.querySelector('.sales-dashboard-kpi-grid');
+        expect(grid).toHaveClass('dashboard-kpi-grid-compact');
+        expect(grid).not.toHaveClass('h-100');
+        expect(grid.children).toHaveLength(6);
+        expect(grid.querySelectorAll('.dashboard-kpi-card')).toHaveLength(6);
+        const bestEmployee = screen.getByText('Juan Pérez').closest('.sales-dashboard-best-employee');
+        const summary = grid.closest('.sales-dashboard-summary');
+        const insights = summary.querySelector('.sales-dashboard-insights');
+        expect(insights).toContainElement(bestEmployee);
+        expect(grid).not.toContainElement(bestEmployee);
+        expect(grid.nextElementSibling).toBe(insights);
+        expect(insights).toContainElement(screen.getByText('Categorías'));
+        expect(insights.querySelector('.group-sales-overview-chart')).toBeInTheDocument();
+        expect(summary.querySelector('.sales-dashboard-categories')).not.toHaveClass('dashboard-panel');
+        expect(within(summary).getByRole('list', { name: 'Categorías de ventas' })).toBeInTheDocument();
+        expect(grid.querySelectorAll('.dashboard-kpi-trend')).toHaveLength(4);
+        expect(within(grid).getAllByRole('button', { name: /Ayuda sobre/ })).toHaveLength(6);
+
+        fireEvent.click(within(grid).getByRole('button', { name: 'Ayuda sobre Venta Bruta' }));
+        expect(screen.getByText(/El total facturado en el periodo/)).toBeInTheDocument();
+    });
+
     it('muestra el valor total del inventario filtrado y solicita ordenamiento al servidor', async () => {
         dashboardApi.fetchDashboardPareto.mockResolvedValue({
             products: [

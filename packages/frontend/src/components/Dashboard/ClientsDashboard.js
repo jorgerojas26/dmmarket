@@ -292,7 +292,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
             {/* KPIs */}
             <div className="row g-3 mb-4">
                 <div className="col-12">
-                    <div className="dashboard-kpi-grid clients-dashboard-kpi-grid h-100">
+                    <div className="dashboard-kpi-grid dashboard-kpi-grid-compact clients-dashboard-kpi-grid h-100">
                         <div>
                             <KpiCard
                                 label="Total Clientes"
