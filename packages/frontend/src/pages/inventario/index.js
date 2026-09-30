@@ -45,15 +45,13 @@ const InventarioPage = () => {
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4" style={{ display: 'flex', flexDirection: 'column' }}>
-                    <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
+                    <div className="clients-content-wrapper report-page-header mb-3">
                         <h4 className="m-0 text-light">Inventario</h4>
-                        <div className="d-flex flex-column flex-md-row gap-3" style={{ minWidth: 320 }}>
-                            <div className="d-flex align-items-center gap-2">
-                                <span className="text-light">Categoría</span>
+                        <div className="report-page-filters">
+                            <div className="inventory-page-filter" role="group" aria-label="Categoría">
                                 <GroupSearch onSelect={setSelectedGroup} />
                             </div>
-                            <div className="d-flex align-items-center gap-2">
-                                <span className="text-light">Proveedor</span>
+                            <div className="inventory-page-filter" role="group" aria-label="Proveedor">
                                 <ProveedorSearch onSelect={setSelectedProvider} />
                             </div>
                         </div>

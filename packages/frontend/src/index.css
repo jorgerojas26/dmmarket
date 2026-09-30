@@ -195,6 +195,30 @@ table tfoot td {
     color: #e4e6ea;
     line-height: 1.2;
 }
+/* Clientes: las columnas dependen del espacio real, incluida la barra lateral. */
+.dashboard-kpi-grid.clients-dashboard-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 0.75rem;
+}
+.clients-dashboard-kpi-grid > div {
+    min-width: 0;
+}
+.clients-dashboard-kpi-grid .dashboard-kpi-card {
+    padding: 16px;
+}
+.clients-dashboard-kpi-grid .dashboard-kpi-card-inner {
+    gap: 10px;
+}
+.clients-dashboard-kpi-grid .dashboard-kpi-icon {
+    width: 36px;
+    height: 36px;
+}
+.clients-dashboard-kpi-grid .dashboard-kpi-label {
+    padding-right: 22px;
+}
+.clients-dashboard-kpi-grid .dashboard-kpi-value {
+    overflow-wrap: anywhere;
+}
 .dashboard-kpi-trend {
     display: inline-flex;
     align-items: center;
@@ -631,6 +655,101 @@ div.card-body {
     margin: 0 auto;
 }
 
+/* Cabeceras de reportes: envolver según el ancho útil, no el del viewport. */
+.report-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+}
+.report-page-header h4 {
+    flex: 1 1 260px;
+    min-width: 0;
+    font-size: clamp(1.15rem, 2vw, 1.5rem);
+    overflow-wrap: anywhere;
+}
+.report-page-filters {
+    display: flex;
+    flex: 1 1 560px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+    width: 100%;
+}
+.clients-page-route-filter {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+.inventory-page-filter {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+.report-page-filters .date-range-picker-wrapper {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+.report-page-filters .date-range-trigger {
+    width: 100%;
+}
+.report-page-filters .date-range-trigger svg {
+    flex-shrink: 0;
+}
+.report-page-filters .date-range-label {
+    flex: 1;
+    min-width: 0;
+    white-space: normal;
+}
+@media (min-width: 1200px) {
+    .report-page-filters {
+        flex: 0 1 auto;
+        width: auto;
+    }
+    .clients-page-route-filter,
+    .inventory-page-filter {
+        flex: 0 1 220px;
+        width: 220px;
+        max-width: 220px;
+    }
+    .report-page-filters .date-range-picker-wrapper {
+        flex: 0 1 auto;
+    }
+    .report-page-filters .date-range-trigger {
+        width: auto;
+    }
+    .report-page-filters .date-range-label {
+        flex: initial;
+        white-space: nowrap;
+    }
+}
+/* El calendario y los rangos rápidos caben también en un filtro estrecho. */
+.report-page-filters .date-range-dropdown {
+    width: 100%;
+    min-width: 0;
+    max-height: 70vh;
+    overflow: auto;
+}
+.report-page-filters .rdrDateRangePickerWrapper {
+    display: flex;
+    flex-direction: column;
+}
+.report-page-filters .rdrDefinedRangesWrapper,
+.report-page-filters .rdrCalendarWrapper,
+.report-page-filters .rdrMonth {
+    width: 100%;
+    min-width: 0;
+}
+.report-page-filters .rdrDefinedRangesWrapper {
+    border-right: 0;
+}
+.report-page-filters .rdrStaticRanges {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.report-page-filters .rdrStaticRangeLabel {
+    padding: 8px;
+    white-space: normal;
+}
 .clients-content-wrapper .card {
     width: 100%;
 }

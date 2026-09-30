@@ -139,17 +139,18 @@ const ClientesPage = () => {
                 <div className="clientes-content p-4">
                     {activeView === 'clients' && (
                         <div className="report-page">
-                            <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
+                            <div className="clients-content-wrapper report-page-header mb-3">
                                 <h4 className="m-0 text-light">Desglose de Clientes</h4>
                             </div>
                             <div className="clients-content-wrapper">
-                                <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-                                    <div style={{ minWidth: '220px' }}>
+                                <div className="report-page-filters mb-3">
+                                    <div className="clients-page-route-filter">
                                         <Select
                                             options={routeOptions}
                                             value={selectedRuta}
                                             onChange={handleRutaChange}
                                             placeholder="Todas las rutas"
+                                            aria-label="Ruta"
                                             isClearable
                                             isLoading={routesLoading}
                                             styles={darkSelectStyles}
@@ -183,15 +184,16 @@ const ClientesPage = () => {
                     )}
                     {activeView === 'dashboard' && (
                         <section className="d-flex flex-column gap-3">
-                            <div className="clients-content-wrapper d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
+                            <div className="clients-content-wrapper report-page-header">
                                 <h4 className="m-0 text-light">Dashboard de Clientes</h4>
-                                <div className="d-flex flex-wrap gap-3">
-                                    <div style={{ minWidth: '220px' }}>
+                                <div className="report-page-filters">
+                                    <div className="clients-page-route-filter">
                                         <Select
                                             options={routeOptions}
                                             value={selectedRuta}
                                             onChange={handleRutaChange}
                                             placeholder="Todas las rutas"
+                                            aria-label="Ruta"
                                             isClearable
                                             isLoading={routesLoading}
                                             styles={darkSelectStyles}

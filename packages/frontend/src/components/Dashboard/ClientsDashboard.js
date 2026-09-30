@@ -292,7 +292,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
             {/* KPIs */}
             <div className="row g-3 mb-4">
                 <div className="col-12">
-                    <div className="dashboard-kpi-grid h-100">
+                    <div className="dashboard-kpi-grid clients-dashboard-kpi-grid h-100">
                         <div>
                             <KpiCard
                                 label="Total Clientes"
@@ -420,6 +420,46 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                 </div>
             </div>
 
+            {/* ABC Pareto */}
+            {paretoDataset?.summary && (
+                <div className="row g-3 mb-4">
+                    <div className="col-12">
+                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
+                            {CLIENT_PARETO_MODES.map(({ key, label, color }) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    aria-pressed={paretoMode === key}
+                                    onClick={() => setParetoMode(key)}
+                                    style={{
+                                        padding: '6px 16px',
+                                        borderRadius: 6,
+                                        border:
+                                            paretoMode === key
+                                                ? `1.5px solid ${color}`
+                                                : '1px solid rgba(255,255,255,0.1)',
+                                        background: paretoMode === key ? `${color}18` : 'transparent',
+                                        color: paretoMode === key ? color : '#9ca3af',
+                                        fontSize: 12,
+                                        fontWeight: paretoMode === key ? 600 : 400,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        <ParetoChart
+                            key={paretoMode}
+                            products={paretoDataset.clients}
+                            summary={paretoDataset.summary}
+                            config={paretoConfig}
+                        />
+                    </div>
+                </div>
+            )}
+
             {/* Charts Row 1: Monthly Active + Segments */}
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-8">
@@ -543,46 +583,6 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                     </div>
                 </div>
             </div>
-
-            {/* ABC Pareto */}
-            {paretoDataset?.summary && (
-                <div className="row g-3 mb-4">
-                    <div className="col-12">
-                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
-                            {CLIENT_PARETO_MODES.map(({ key, label, color }) => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    aria-pressed={paretoMode === key}
-                                    onClick={() => setParetoMode(key)}
-                                    style={{
-                                        padding: '6px 16px',
-                                        borderRadius: 6,
-                                        border:
-                                            paretoMode === key
-                                                ? `1.5px solid ${color}`
-                                                : '1px solid rgba(255,255,255,0.1)',
-                                        background: paretoMode === key ? `${color}18` : 'transparent',
-                                        color: paretoMode === key ? color : '#9ca3af',
-                                        fontSize: 12,
-                                        fontWeight: paretoMode === key ? 600 : 400,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s',
-                                    }}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                        <ParetoChart
-                            key={paretoMode}
-                            products={paretoDataset.clients}
-                            summary={paretoDataset.summary}
-                            config={paretoConfig}
-                        />
-                    </div>
-                </div>
-            )}
 
             {/* Route coverage: cartera by route */}
             {coverageRoutes.length > 0 && (
