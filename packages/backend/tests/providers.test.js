@@ -33,6 +33,52 @@ const makeBuilder = (value) => {
   return b;
 };
 
+describe("GET_PROVIDER_OPTIONS", () => {
+  let controller, mockDb, builder, res;
+  const providers = [{ IdProveedor: 1, Empresa: "Proveedor A" }];
+
+  beforeEach(() => {
+    jest.resetModules();
+    builder = makeBuilder(providers);
+    mockDb = jest.fn(() => builder);
+    jest.doMock("../database", () => mockDb);
+    controller = require("../controllers/providers");
+    res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() };
+  });
+
+  it("loads only provider ids and names, with no report aggregates", async () => {
+    await controller.GET_PROVIDER_OPTIONS({ query: {} }, res);
+
+    expect(mockDb).toHaveBeenCalledTimes(1);
+    expect(mockDb).toHaveBeenCalledWith("proveedores");
+    expect(builder.select).toHaveBeenCalledWith("IdProveedor", "Empresa");
+    expect(builder.orderBy).toHaveBeenCalledWith("Empresa", "asc");
+    expect(builder.limit).toHaveBeenCalledWith(20);
+    expect(builder.innerJoin).not.toHaveBeenCalled();
+    expect(builder.groupBy).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(providers);
+  });
+
+  it("filters names using a bound search term", async () => {
+    await controller.GET_PROVIDER_OPTIONS({ query: { search: "O'Reilly" } }, res);
+    expect(builder.where).toHaveBeenCalledWith("Empresa", "like", "%O'Reilly%");
+  });
+
+  it("returns an empty array when no providers match", async () => {
+    mockDb.mockReturnValue(makeBuilder([]));
+    await controller.GET_PROVIDER_OPTIONS({ query: { search: "unknown" } }, res);
+    expect(res.json).toHaveBeenCalledWith([]);
+  });
+
+  it("returns 500 on a database error", async () => {
+    mockDb.mockImplementation(() => { throw new Error("DB error"); });
+    const log = jest.spyOn(console, "error").mockImplementation(() => {});
+    await controller.GET_PROVIDER_OPTIONS({ query: {} }, res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    log.mockRestore();
+  });
+});
+
 describe("GET_PROVIDERS_LIST", () => {
   let req, res, controller, mockDb;
 

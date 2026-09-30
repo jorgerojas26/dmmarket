@@ -1,5 +1,6 @@
 import { useDarkSelectStyles } from 'components/selectStyles';
 import debounce from 'debounce-promise';
+import { useMemo } from 'react';
 import AsyncSelect from 'react-select/async';
 
 const SearchInput = ({
@@ -9,12 +10,17 @@ const SearchInput = ({
     cacheOptions = true,
     onSelect,
     defaultValue,
+    debounceMs = 700,
 }) => {
     const customStyles = useDarkSelectStyles();
+    const debouncedLoadOptions = useMemo(
+        () => debounce((inputValue, callback) => loadOptions(inputValue, callback), debounceMs),
+        [loadOptions, debounceMs],
+    );
 
     return (
         <AsyncSelect
-            loadOptions={debounce((inputValue, callback) => loadOptions(inputValue, callback), 700)}
+            loadOptions={debouncedLoadOptions}
             cacheOptions={cacheOptions}
             defaultOptions={defaultOptions}
             placeholder={placeholder}

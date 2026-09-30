@@ -1,5 +1,22 @@
 const knex = require("../database");
 
+// Los selectores solo necesitan nombres: no calcular todo el historial del reporte.
+const GET_PROVIDER_OPTIONS = async (req, res) => {
+  try {
+    const query = knex("proveedores")
+      .select("IdProveedor", "Empresa")
+      .orderBy("Empresa", "asc")
+      .orderBy("IdProveedor", "asc")
+      .limit(20);
+    if (req.query.search) query.where("Empresa", "like", `%${req.query.search}%`);
+    const providers = await query;
+    res.status(200).json(providers);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 const GET_PROVIDERS_LIST = async (req, res) => {
   const { search, from, to, page = 1, limit = 20, sortBy = "total_ventas", sortDir = "desc" } = req.query;
   const showNoe = req.query.showNoe === "true";
@@ -743,6 +760,7 @@ const GET_SALE_DETAIL = async (req, res) => {
 };
 
 module.exports = {
+  GET_PROVIDER_OPTIONS,
   GET_PROVIDERS_LIST,
   GET_BEST_PROVIDERS,
   GET_PROVIDER_SUMMARY,

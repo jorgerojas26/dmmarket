@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const controller = require("../controllers/providers");
 
+router.route("/options").get(controller.GET_PROVIDER_OPTIONS);
 router.route("/list").get(controller.GET_PROVIDERS_LIST);
 router.route("/best").get(controller.GET_BEST_PROVIDERS);
 

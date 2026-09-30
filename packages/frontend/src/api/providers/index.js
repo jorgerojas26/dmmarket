@@ -1,5 +1,13 @@
 const BASE_URL = '/api/providers';
 
+export const fetchProviderOptions = async (search) => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    const response = await fetch(`${BASE_URL}/options?${params.toString()}`);
+    if (!response.ok) throw new Error('Error al buscar proveedores');
+    return response.json();
+};
+
 export const fetchProvidersList = async ({
     search,
     from,
