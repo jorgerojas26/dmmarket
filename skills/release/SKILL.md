@@ -13,8 +13,9 @@ Se activa cuando el usuario pide publicar una release o nueva versión, actualiz
 
 ## Hard Rules
 
-- El changelog (`CHANGELOG.md`) es la **única fuente** de las notas de la release: `scripts/release.mjs` las lee de ahí. Nunca uses commits crudos como notas.
-- Las notas son para un **usuario no técnico** del sistema de distribución. Escríbelas en español, en lenguaje de producto.
+- El changelog (`CHANGELOG.md`) es la **única fuente** del resumen de producto de cada release; `scripts/release.mjs` lo coloca al principio.
+- Después del resumen, la release muestra una sección separada con la lista de commits incluidos. Esa lista nunca reemplaza ni precede al resumen para usuarios.
+- El resumen es para un **usuario no técnico** del sistema de distribución. Escríbelo en español, en lenguaje de producto.
 - **Prohibido** en el changelog: nombres de archivos, hashes de commits, librerías, frameworks, "API", "backend", "frontend", "refactor", "migración", siglas internas.
 - Cada ítem del changelog debe describir el **efecto visible** para el usuario (qué puede hacer ahora o qué cambió), nunca el cómo se implementó.
 - Todo ítem traza a un commit real (`git log <prevTag>..HEAD`). Un commit sin efecto visible para el usuario (chore, bump, docs internas) se **omite**.

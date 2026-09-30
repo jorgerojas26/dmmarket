@@ -5,8 +5,8 @@
 //   1. Pre-checks: gh instalado, tag v<version> no existe (local ni remoto)
 //   2. Build Windows (frontend + binario) — si falla, no se toca GitHub
 //   3. sha256 del exe → packages/backend/dmmarket-app.exe.sha256 (64 chars hex, sin salto de línea)
-//   4. Notas de la release: se leen de CHANGELOG.md (sección "## [v<version>]"), la fuente
-//      curada y legible para no técnicos. Fallback al log de commits si no existe la entrada.
+//   4. Notas de la release: resumen de CHANGELOG.md (sección "## [v<version>]"), seguido
+//      por la lista de commits incluidos.
 //   5. gh release create v<version> con los 4 assets (crea el tag remoto)
 //   6. Tag local + push
 import { execSync, spawnSync } from "node:child_process";
@@ -49,7 +49,7 @@ const runQuiet = (command) => {
 
 // ── 1. Pre-checks ──────────────────────────────────────────────────────────
 if (!runQuiet("command -v gh")) fail("gh CLI no está instalado o no está en el PATH");
-if (runQuiet("git tag -l " + tag)) fail(`El tag ${tag} ya existe localmente.`);
+if (runQuiet(`git tag -l ${tag}`)) fail(`El tag ${tag} ya existe localmente.`);
 if (runQuiet(`git ls-remote --exit-code origin refs/tags/${tag}`)) {
   fail(`El tag ${tag} ya existe en el remoto. Versioná de nuevo en packages/backend/package.json.`);
 }
@@ -83,9 +83,8 @@ const macHash = sha256Of(macBinPath);
 writeFileSync(path.join(backendDir, MAC_SHA_FILE), macHash);
 console.log(`sha256 (${MAC_BIN}): ${macHash}`);
 
-// ── 4. Notas de la release: desde CHANGELOG.md (fuente curada y legible) ────
+// ── 4. Notas de la release: resumen de CHANGELOG.md + commits ──────────────
 // Se extrae el bloque "## [v<version>]" hasta la siguiente sección "## ".
-// Si el changelog no tiene la entrada, se cae al log de commits (fallback).
 function changelogNotes(version) {
   const filePath = path.join(root, "CHANGELOG.md");
   if (!existsSync(filePath)) return null;
@@ -97,12 +96,19 @@ function changelogNotes(version) {
   return (nextSection === -1 ? block : block.slice(0, nextSection)).trim();
 }
 
-const previousTag = runQuiet("git describe --tags --abbrev=0");
-const notes = changelogNotes(version) || (previousTag ? runQuiet(`git log --oneline ${previousTag}..HEAD`) || "" : "");
+const changelog = changelogNotes(version);
+if (!changelog) fail(`Falta la sección "## [v${version}]" en CHANGELOG.md.`);
 
-if (notes && !notes.includes("## [")) {
-  console.log(`\n⚠ Notas tomadas del log de commits (no hay entrada "## [v${version}]" en CHANGELOG.md).`);
-}
+const previousTag = runQuiet("git describe --tags --abbrev=0");
+const commitRange = previousTag ? `${previousTag}..HEAD` : "HEAD";
+const commits = runQuiet(`git log --reverse --oneline ${commitRange}`);
+const commitList = commits
+  ? commits
+      .split("\n")
+      .map((commit) => `- ${commit}`)
+      .join("\n")
+  : "- No se encontraron commits para esta versión.";
+const notes = `${changelog}\n\n## Commits incluidos\n\n${commitList}`;
 
 // ── 5. Release en GitHub (crea tag remoto + release + sube assets) ─────────
 run("gh", [

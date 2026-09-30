@@ -4,8 +4,24 @@ Todos los cambios visibles para el usuario de DMMarket, ordenados de más recien
 
 El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 `### Nuevas funciones`, `### Mejoras` y `### Correcciones` (se omiten las vacías).
-Este archivo es la fuente única de las notas de cada release en GitHub: el script
-`scripts/release.mjs` lo lee para construir las notas de la versión.
+Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
+release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
+
+## [v1.0.4] - 2026-09-29
+
+### Nuevas funciones
+
+- **Más claridad sobre la rentabilidad**: los reportes de ventas, clientes y proveedores ahora muestran las ganancias y los totales para ayudar a comparar resultados.
+- **Seguimiento de productos recientes e inventario**: consulta en una tabla aparte los productos incorporados hace menos de 30 días, sin que alteren la clasificación de los demás, y revisa el valor actual del inventario.
+- **Historial de versiones en Configuración**: revisa las versiones publicadas, sus fechas y sus notas desde la sección Acerca de.
+
+### Mejoras
+
+- **Impresiones más predecibles**: al imprimir una tabla, se conserva el orden de filas que elegiste.
+
+### Correcciones
+
+- **Promedios de ganancia coherentes**: el porcentaje promedio de ganancia ahora se calcula de la misma manera en los reportes por producto y por factura.
 
 ## [v1.0.3] - 2026-08-19
 
