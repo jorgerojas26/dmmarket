@@ -7,6 +7,24 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.0.5] - 2026-09-29
+
+### Nuevas funciones
+
+- **Detalle de ventas desde la ficha del cliente**: abre una factura para consultar sus artículos y montos sin salir del resumen del cliente.
+
+### Mejoras
+
+- **Tableros de ventas y compras más claros**: compara los indicadores del período junto a la distribución por categorías y al mejor vendedor o proveedor, en una vista que se adapta al tamaño de pantalla.
+- **Búsqueda de proveedores más ágil**: encuentra y selecciona proveedores sin esperar a que cargue el informe completo.
+- **Proveedores ordenados por utilidad**: el listado destaca primero a quienes más contribuyen a las ganancias.
+- **Informes más rápidos al volver a consultarlos**: las consultas recientes responden antes y los cambios registrados en el sistema renuevan la información.
+- **Vistas de clientes e inventario más cómodas**: la información se reorganiza para aprovechar mejor tanto las pantallas pequeñas como las grandes.
+
+### Correcciones
+
+- **Actividad de clientes más precisa**: las facturas vacías ya no detienen el contador de inactividad.
+
 ## [v1.0.4] - 2026-09-29
 
 ### Nuevas funciones
