@@ -1,6 +1,6 @@
 import { fetchUpdateHistory } from 'api/update';
 import Sidebar from 'components/Sidebar';
-import useUpdateFlow from 'hooks/useUpdateFlow';
+import { useUpdate } from 'context/update';
 import { DateTime } from 'luxon';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
@@ -41,7 +41,7 @@ const sidebarItems = [
 
 const ConfiguracionPage = () => {
     const [activeView, setActiveView] = useState('about');
-    const update = useUpdateFlow();
+    const update = useUpdate();
     const {
         status,
         checking,
@@ -102,7 +102,11 @@ const ConfiguracionPage = () => {
                                     {checking ? (
                                         <span className="text-secondary">Buscando…</span>
                                     ) : (
-                                        <Button variant="primary" onClick={handleCheck} disabled={!status}>
+                                        <Button
+                                            variant="primary"
+                                            onClick={handleCheck}
+                                            disabled={!status || downloading || applying || applied}
+                                        >
                                             Buscar actualizaciones
                                         </Button>
                                     )}

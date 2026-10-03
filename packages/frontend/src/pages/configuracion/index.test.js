@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { UpdateProvider } from 'context/update';
 import ConfiguracionPage from './index';
 
 // react-markdown y sus dependencias son ESM-only; no se transforman en Jest
@@ -9,6 +10,13 @@ jest.mock('react-markdown', () => {
     const Markdown = ({ children }) => <div className="configuracion-about__notes-markdown">{children}</div>;
     return Markdown;
 });
+
+const renderPage = () =>
+    render(
+        <UpdateProvider>
+            <ConfiguracionPage />
+        </UpdateProvider>,
+    );
 
 const jsonResponse = (body, status = 200) => ({
     ok: status >= 200 && status < 300,
@@ -61,7 +69,7 @@ const baseRoutes = (extra = {}) => ({
 
 it('muestra sidebar con "Acerca de", texto estándar, versión e historial', async () => {
     mockRoutes(baseRoutes());
-    render(<ConfiguracionPage />);
+    renderPage();
     expect(screen.getAllByText('Acerca de').length).toBeGreaterThan(0); // item sidebar + título panel
     expect(screen.getByText('Versión instalada')).toBeInTheDocument();
     expect(screen.getByText('Buscar actualizaciones')).toBeInTheDocument();
@@ -75,7 +83,7 @@ it('muestra sidebar con "Acerca de", texto estándar, versión e historial', asy
 
 it('flujo al día: check → "Estás al día"', async () => {
     mockRoutes(baseRoutes({ '/check': jsonResponse(UPTODATE) }));
-    render(<ConfiguracionPage />);
+    renderPage();
     userEvent.click(await screen.findByText('Buscar actualizaciones'));
     expect(await screen.findByText('Estás al día (v1.0.0)')).toBeInTheDocument();
 });
@@ -89,7 +97,7 @@ it('flujo con update disponible: notas + descargar + reiniciar', async () => {
             '/apply': jsonResponse({ success: true }),
         }),
     );
-    render(<ConfiguracionPage />);
+    renderPage();
     userEvent.click(await screen.findByText('Buscar actualizaciones'));
     expect(await screen.findByText('Versión 1.1.0 disponible')).toBeInTheDocument();
     // Las notas aparecen en el check y en el historial (misma release)
@@ -111,7 +119,7 @@ it('error de red del check se muestra sin romper y permite reintentar', async ()
             ),
         }),
     );
-    render(<ConfiguracionPage />);
+    renderPage();
     userEvent.click(await screen.findByText('Buscar actualizaciones'));
     expect(await screen.findByText(/rate limit/)).toBeInTheDocument();
     expect(screen.getByText('Buscar actualizaciones')).toBeInTheDocument(); // reintentar
@@ -124,7 +132,7 @@ it('error de descarga se muestra y permite reintentar', async () => {
             '/download': jsonResponse({ error: { message: 'La verificación sha256 falló' } }, 500),
         }),
     );
-    render(<ConfiguracionPage />);
+    renderPage();
     userEvent.click(await screen.findByText('Buscar actualizaciones'));
     userEvent.click(await screen.findByText('Descargar actualización'));
     expect(await screen.findByText('La verificación sha256 falló')).toBeInTheDocument();

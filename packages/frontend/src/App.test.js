@@ -4,6 +4,10 @@ import { ShowNoesProvider } from 'context/show_noe';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
+jest.mock('api/update', () => ({
+    fetchUpdateStatus: async () => ({ status: 200, data: null }),
+}));
+
 // Mock the currency rates hook — App only uses it to set a default currency.
 jest.mock('hooks/useCurrencyRates', () => ({
     useCurrencyRates: () => ({ data: null }),

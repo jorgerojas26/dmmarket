@@ -1,4 +1,6 @@
+import UpdateToast from 'components/UpdateToast';
 import { ShowNoeContext } from 'context/show_noe';
+import { UpdateProvider } from 'context/update';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import ClientesPage from 'pages/clientes';
 import ComprasPage from 'pages/compras';
@@ -15,7 +17,7 @@ import ProveedoresPage from './pages/proveedores';
 
 const SIDEBAR_ROUTES = ['/ventas', '/compras', '/clientes', '/proveedores', '/inventario', '/configuracion'];
 
-function App() {
+function AppContent() {
     const location = useLocation();
     const { currencyRate, setCurrencyRate } = useContext(CurrencyRateContext);
     const { showNoe, setShowNoe } = useContext(ShowNoeContext);
@@ -30,6 +32,7 @@ function App() {
 
     return (
         <div className="App bg-dark">
+            <UpdateToast />
             <Container fluid id="main" className="m-0 p-0 vh-100 d-flex flex-column">
                 <Navbar
                     variant="dark"
@@ -127,6 +130,14 @@ function App() {
                 </Container>
             </Container>
         </div>
+    );
+}
+
+function App() {
+    return (
+        <UpdateProvider>
+            <AppContent />
+        </UpdateProvider>
     );
 }
 

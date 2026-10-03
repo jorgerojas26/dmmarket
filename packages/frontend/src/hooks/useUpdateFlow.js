@@ -1,8 +1,6 @@
 import { applyUpdate, checkForUpdate, downloadUpdate, fetchUpdateStatus, getDownloadProgress } from 'api/update';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-// Estado y acciones del flujo de auto-update: status → check (GitHub) → descargar → reiniciar.
-// El check corre en dev también (solo lee GitHub); descarga/apply solo operan en el binario compilado.
 const useUpdateFlow = () => {
     const [status, setStatus] = useState(null);
     const [checking, setChecking] = useState(false);
@@ -15,12 +13,13 @@ const useUpdateFlow = () => {
     const [applying, setApplying] = useState(false);
     const [applied, setApplied] = useState(false);
     const [applyError, setApplyError] = useState(null);
+    const busy = useRef(false);
 
     useEffect(() => {
         let cancelled = false;
         fetchUpdateStatus()
-            .then(({ data }) => {
-                if (!cancelled) setStatus(data);
+            .then(({ status: resStatus, data }) => {
+                if (!cancelled && resStatus === 200) setStatus(data);
             })
             .catch(() => {
                 if (!cancelled) setStatus(null);
@@ -30,38 +29,48 @@ const useUpdateFlow = () => {
         };
     }, []);
 
-    // Polling de progreso mientras descarga.
     useEffect(() => {
         if (!downloading) return undefined;
+        let cancelled = false;
         const id = setInterval(async () => {
             try {
                 const { data } = await getDownloadProgress();
-                setProgress({ bytes: data?.bytes || 0, total: data?.total || 0 });
-            } catch {
-                // polling best-effort: el próximo tick reintenta
-            }
+                if (!cancelled) setProgress({ bytes: data?.bytes || 0, total: data?.total || 0 });
+            } catch {}
         }, 400);
-        return () => clearInterval(id);
+        return () => {
+            cancelled = true;
+            clearInterval(id);
+        };
     }, [downloading]);
 
-    const handleCheck = async () => {
+    const handleCheck = useCallback(async () => {
+        if (busy.current) return;
+        busy.current = true;
         setChecking(true);
         setCheckError(null);
-        setCheckResult(null);
         try {
             const { status: resStatus, data } = await checkForUpdate();
-            if (resStatus === 200) setCheckResult(data);
-            else setCheckError(data?.error?.message || 'Error al buscar actualizaciones');
+            if (resStatus === 200 && data) {
+                setCheckResult(data);
+                setDownloaded(false);
+                setDownloadError(null);
+                setApplyError(null);
+            } else setCheckError(data?.error?.message || 'Error al buscar actualizaciones');
         } catch {
             setCheckError('No se pudo contactar al servidor');
         } finally {
+            busy.current = false;
             setChecking(false);
         }
-    };
+    }, []);
 
-    const handleDownload = async () => {
+    const handleDownload = useCallback(async () => {
+        if (busy.current || !checkResult?.updateAvailable) return false;
+        busy.current = true;
         setDownloading(true);
         setDownloadError(null);
+        setApplyError(null);
         setDownloaded(false);
         setProgress({ bytes: 0, total: 0 });
         try {
@@ -69,28 +78,40 @@ const useUpdateFlow = () => {
                 assetUrl: checkResult.assetUrl,
                 sha256AssetUrl: checkResult.sha256AssetUrl,
             });
-            if (resStatus === 200) setDownloaded(true);
-            else setDownloadError(data?.error?.message || 'Error al descargar la actualización');
+            if (resStatus === 200) {
+                setDownloaded(true);
+                return true;
+            }
+            setDownloadError(data?.error?.message || 'Error al descargar la actualización');
         } catch {
             setDownloadError('No se pudo contactar al servidor');
         } finally {
+            busy.current = false;
             setDownloading(false);
         }
-    };
+        return false;
+    }, [checkResult]);
 
-    const handleApply = async () => {
+    const handleApply = useCallback(async () => {
+        if (busy.current) return false;
+        busy.current = true;
         setApplying(true);
         setApplyError(null);
         try {
             const { status: resStatus, data } = await applyUpdate();
-            if (resStatus === 200) setApplied(true);
-            else setApplyError(data?.error?.message || 'Error al aplicar la actualización');
+            if (resStatus === 200) {
+                setApplied(true);
+                return true;
+            }
+            setApplyError(data?.error?.message || 'Error al aplicar la actualización');
         } catch {
             setApplyError('No se pudo contactar al servidor');
         } finally {
+            busy.current = false;
             setApplying(false);
         }
-    };
+        return false;
+    }, []);
 
     const percent = progress.total ? Math.min(100, Math.round((progress.bytes / progress.total) * 100)) : 0;
 
