@@ -2,8 +2,6 @@ const request = require("supertest");
 const app = require("../index");
 const { ASSETS_BY_PLATFORM, buildUpdateSh } = require("../controllers/update");
 
-const platformAssets = ASSETS_BY_PLATFORM[process.platform];
-
 const GITHUB_RELEASE = (tagName) => ({
   tag_name: tagName,
   name: `DMMarket ${tagName}`,
@@ -14,6 +12,8 @@ const GITHUB_RELEASE = (tagName) => ({
     { name: "dmmarket-app.exe.sha256", browser_download_url: "https://github.com/x/dmmarket-app.exe.sha256" },
     { name: "dmmarket-app-mac", browser_download_url: "https://github.com/x/dmmarket-app-mac" },
     { name: "dmmarket-app-mac.sha256", browser_download_url: "https://github.com/x/dmmarket-app-mac.sha256" },
+    { name: "dmmarket-app-linux", browser_download_url: "https://github.com/x/dmmarket-app-linux" },
+    { name: "dmmarket-app-linux.sha256", browser_download_url: "https://github.com/x/dmmarket-app-linux.sha256" },
   ],
 });
 
@@ -27,8 +27,16 @@ describe("GET /api/update/status", () => {
   });
 });
 
-describe("POST /api/update/check", () => {
+describe.each(["win32", "darwin", "linux"])("POST /api/update/check (%s)", (platform) => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  const platformAssets = ASSETS_BY_PLATFORM[platform];
+
+  beforeEach(() => {
+    Object.defineProperty(process, "platform", { value: platform });
+  });
+
   afterEach(() => {
+    Object.defineProperty(process, "platform", originalPlatform);
     jest.restoreAllMocks();
   });
 
@@ -115,5 +123,73 @@ describe("buildUpdateSh (macOS/Linux)", () => {
   it("incluye un sleep para dejar morir el proceso viejo", () => {
     const sh = buildUpdateSh("/app/dm", "/tmp/new");
     expect(sh).toContain("sleep 3");
+  });
+});
+
+describe.each(["darwin", "linux"])("POST_APPLY standalone (%s)", (platform) => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const childProcess = require("node:child_process");
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  let apply;
+  let unref;
+
+  beforeEach(() => {
+    Object.defineProperty(process, "platform", { value: platform });
+    const originalBun = global.Bun;
+    global.Bun = { embeddedFiles: [{}] };
+    try {
+      jest.isolateModules(() => {
+        apply = require("../controllers/update").POST_APPLY;
+      });
+    } finally {
+      if (originalBun === undefined) delete global.Bun;
+      else global.Bun = originalBun;
+    }
+    jest.useFakeTimers();
+    jest.spyOn(fs, "existsSync").mockReturnValue(true);
+    jest.spyOn(fs, "writeFileSync").mockImplementation(() => {});
+    jest.spyOn(fs, "chmodSync").mockImplementation(() => {});
+    unref = jest.fn();
+    jest.spyOn(childProcess, "spawn").mockReturnValue({ unref });
+    jest.spyOn(process, "exit").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+    Object.defineProperty(process, "platform", originalPlatform);
+  });
+
+  it("aplica el binario verificado usando /bin/sh y reinicia después de responder", () => {
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const shPath = path.join(process.cwd(), "update.sh");
+    const newBinary = path.join(process.cwd(), ".dmmarket-update", "new-app");
+
+    apply({}, res);
+
+    expect(fs.existsSync).toHaveBeenCalledWith(newBinary);
+    expect(fs.writeFileSync).toHaveBeenCalledWith(shPath, buildUpdateSh(process.execPath, newBinary));
+    expect(fs.chmodSync).toHaveBeenCalledWith(shPath, 0o755);
+    expect(childProcess.spawn).toHaveBeenCalledWith("/bin/sh", [shPath], { detached: true, stdio: "ignore" });
+    expect(unref).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(process.exit).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(500);
+    expect(process.exit).toHaveBeenCalledWith(0);
+  });
+
+  it("rechaza aplicar cuando no hay un binario descargado", () => {
+    fs.existsSync.mockReturnValue(false);
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+
+    apply({}, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(childProcess.spawn).not.toHaveBeenCalled();
+    expect(process.exit).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@
     "build:frontend": "bun --filter @dmmarket/frontend build",
     "build:backend": "bun --filter @dmmarket/backend build",
     "build:windows": "bun --filter @dmmarket/backend build:windows",
+    "build:linux": "bun --filter @dmmarket/backend build:linux",
     "release": "bun scripts/release.mjs",
     "test:backend": "bun --filter @dmmarket/backend test",
     "test:frontend": "CI=true bun --filter @dmmarket/frontend test",

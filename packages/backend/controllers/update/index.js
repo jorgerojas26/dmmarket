@@ -11,11 +11,10 @@ const IS_STANDALONE = typeof Bun !== "undefined" && Bun.embeddedFiles.length > 0
 const GITHUB_API = "https://api.github.com/repos/jorgerojas26/dmmarket/releases/latest";
 const GITHUB_RELEASES_API = "https://api.github.com/repos/jorgerojas26/dmmarket/releases?per_page=10";
 
-// Par de assets (binario + hash) por plataforma. Cada release sube ambos
-// pares: dmmarket-app.exe (Windows) y dmmarket-app-mac (macOS).
 const ASSETS_BY_PLATFORM = {
   win32: { binary: "dmmarket-app.exe", sha: "dmmarket-app.exe.sha256" },
   darwin: { binary: "dmmarket-app-mac", sha: "dmmarket-app-mac.sha256" },
+  linux: { binary: "dmmarket-app-linux", sha: "dmmarket-app-linux.sha256" },
 };
 
 // Carpeta de descarga al lado del binario (cwd del proceso; el .env también se lee de ahí).
@@ -278,7 +277,7 @@ const POST_APPLY = (_req, res) => {
 
     const child = spawn("cmd", ["/c", batPath], { detached: true, stdio: "ignore", windowsHide: true });
     child.unref();
-  } else if (process.platform === "darwin") {
+  } else if (process.platform === "darwin" || process.platform === "linux") {
     if (!fs.existsSync(NEW_BINARY)) {
       return res.status(400).json({ error: { message: "No hay una actualización descargada. Descárgala primero." } });
     }
@@ -290,7 +289,9 @@ const POST_APPLY = (_req, res) => {
     const child = spawn("/bin/sh", [shPath], { detached: true, stdio: "ignore" });
     child.unref();
   } else {
-    return res.status(400).json({ error: { message: "El auto-update solo está disponible en Windows y macOS" } });
+    return res
+      .status(400)
+      .json({ error: { message: "El auto-update solo está disponible en Windows, macOS y Linux" } });
   }
 
   res.status(200).json({ success: true, message: "Actualización aplicada. La app se reiniciará." });

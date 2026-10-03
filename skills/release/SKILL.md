@@ -40,7 +40,7 @@ Se activa cuando el usuario pide publicar una release o nueva versión, actualiz
 5. Bump de versión solo en `packages/backend/package.json`.
 6. Verifica: `bun run test` y `bunx biome check` sobre los archivos tocados.
 7. Muestra el changelog + versión y pide confirmación. Al confirmar: commit del changelog + bump, luego `bun run release`.
-8. Verifica la release creada y reporta URL + hashes sha256 (win y mac).
+8. Verifica la release creada y reporta URL + hashes sha256 (win, mac y Linux).
 
 ## Output Contract
 
@@ -49,5 +49,5 @@ Devuelve: la sección nueva de `CHANGELOG.md` escrita, la versión nueva, y —t
 ## References
 
 - `../../CHANGELOG.md` — changelog curado (fuente única de notas).
-- `../../scripts/release.mjs` — script de release (lee el changelog, compila binarios, sube 4 assets).
+- `../../scripts/release.mjs` — script de release (lee el changelog, compila binarios, sube 6 assets).
 - `assets/entrada-ejemplo.md` — ejemplo de sección de changelog bien redactada.

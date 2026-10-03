@@ -1,14 +1,3 @@
-// Publica una release nueva para el auto-update.
-// Uso: bun run release  (desde la raíz; requiere gh CLI autenticado y git en main al día)
-//
-// Flujo:
-//   1. Pre-checks: gh instalado, tag v<version> no existe (local ni remoto)
-//   2. Build Windows (frontend + binario) — si falla, no se toca GitHub
-//   3. sha256 del exe → packages/backend/dmmarket-app.exe.sha256 (64 chars hex, sin salto de línea)
-//   4. Notas de la release: resumen de CHANGELOG.md (sección "## [v<version>]"), seguido
-//      por la lista de commits incluidos.
-//   5. gh release create v<version> con los 4 assets (crea el tag remoto)
-//   6. Tag local + push
 import { execSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -20,6 +9,8 @@ const EXE = "dmmarket-app.exe";
 const SHA_FILE = "dmmarket-app.exe.sha256";
 const MAC_BIN = "dmmarket-app-mac";
 const MAC_SHA_FILE = "dmmarket-app-mac.sha256";
+const LINUX_BIN = "dmmarket-app-linux";
+const LINUX_SHA_FILE = "dmmarket-app-linux.sha256";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const backendDir = path.join(root, "packages", "backend");
@@ -57,20 +48,36 @@ if (runQuiet(`git ls-remote --exit-code origin refs/tags/${tag}`)) {
 console.log(`Publicando release ${tag} para ${REPO}`);
 
 // ── 2. Builds ───────────────────────────────────────────────────────────────
-// build:windows ya corre build:prepare (frontend + assets.js + version.js),
-// así que el binario macOS se compila DESPUÉS reutilizando ese output (sin
-// repetir el build del frontend).
 run("bun", ["--filter", "@dmmarket/backend", "build:windows"], { cwd: root });
 
 const sha256Of = (filePath) => createHash("sha256").update(readFileSync(filePath)).digest("hex");
 
-// Binario macOS: se compila para el host (bun compila a la plataforma actual)
-// y se renombra como asset de la release.
 const macBinPath = path.join(backendDir, MAC_BIN);
-run("bun", ["build", "--compile", "index.js", "--minify", "--external", "mysql", "--outfile", MAC_BIN], {
-  cwd: backendDir,
-});
+const macTarget = process.platform === "darwin" ? `bun-darwin-${process.arch}` : "bun-darwin-arm64";
+run(
+  "bun",
+  ["build", "--compile", `--target=${macTarget}`, "index.js", "--minify", "--external", "mysql", "--outfile", MAC_BIN],
+  { cwd: backendDir },
+);
 if (!existsSync(macBinPath)) fail(`No se encontró ${MAC_BIN} después del build.`);
+
+const linuxBinPath = path.join(backendDir, LINUX_BIN);
+run(
+  "bun",
+  [
+    "build",
+    "--compile",
+    "--target=bun-linux-x64-baseline",
+    "index.js",
+    "--minify",
+    "--external",
+    "mysql",
+    "--outfile",
+    LINUX_BIN,
+  ],
+  { cwd: backendDir },
+);
+if (!existsSync(linuxBinPath)) fail(`No se encontró ${LINUX_BIN} después del build.`);
 
 // ── 3. sha256 de los binarios ───────────────────────────────────────────────
 const exePath = path.join(backendDir, EXE);
@@ -82,6 +89,10 @@ console.log(`sha256 (${EXE}): ${exeHash}`);
 const macHash = sha256Of(macBinPath);
 writeFileSync(path.join(backendDir, MAC_SHA_FILE), macHash);
 console.log(`sha256 (${MAC_BIN}): ${macHash}`);
+
+const linuxHash = sha256Of(linuxBinPath);
+writeFileSync(path.join(backendDir, LINUX_SHA_FILE), linuxHash);
+console.log(`sha256 (${LINUX_BIN}): ${linuxHash}`);
 
 // ── 4. Notas de la release: resumen de CHANGELOG.md + commits ──────────────
 // Se extrae el bloque "## [v<version>]" hasta la siguiente sección "## ".
@@ -125,6 +136,8 @@ run("gh", [
   path.join(backendDir, SHA_FILE),
   macBinPath,
   path.join(backendDir, MAC_SHA_FILE),
+  linuxBinPath,
+  path.join(backendDir, LINUX_SHA_FILE),
 ]);
 
 // ── 6. Tag local + push ────────────────────────────────────────────────────
@@ -137,5 +150,8 @@ console.log(`  Binario Windows: https://github.com/${REPO}/releases/download/${t
 console.log(`  Hash Windows:    https://github.com/${REPO}/releases/download/${tag}/${SHA_FILE}`);
 console.log(`  Binario macOS:   https://github.com/${REPO}/releases/download/${tag}/${MAC_BIN}`);
 console.log(`  Hash macOS:      https://github.com/${REPO}/releases/download/${tag}/${MAC_SHA_FILE}`);
+console.log(`  Binario Linux:   https://github.com/${REPO}/releases/download/${tag}/${LINUX_BIN}`);
+console.log(`  Hash Linux:      https://github.com/${REPO}/releases/download/${tag}/${LINUX_SHA_FILE}`);
 console.log(`  sha256 (win):    ${exeHash}`);
 console.log(`  sha256 (mac):    ${macHash}`);
+console.log(`  sha256 (linux):  ${linuxHash}`);
