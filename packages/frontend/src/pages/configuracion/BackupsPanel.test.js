@@ -1,10 +1,11 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { fetchBackups } from 'api/backups';
+import { fetchDriveStatus } from 'api/google_drive';
 import BackupsPanel, { formatSize } from './BackupsPanel';
 
 jest.mock('api/backups', () => ({ fetchBackups: jest.fn() }));
-jest.mock('./DrivePanel', () => () => <div>Google Drive opcional</div>);
+jest.mock('api/google_drive', () => ({ fetchDriveStatus: jest.fn() }));
 
 const STATUS = {
     directory: '/var/lib/dmmarket/backups',
@@ -16,6 +17,10 @@ const STATUS = {
 };
 
 beforeEach(() => {
+    fetchDriveStatus.mockReset().mockResolvedValue({
+        status: 200,
+        data: { configured: false, connected: false, localAccess: true, uploads: [] },
+    });
     fetchBackups.mockReset();
     fetchBackups.mockResolvedValue({ status: 200, data: STATUS });
 });
@@ -35,7 +40,7 @@ it('lists successful backups, their compressed sizes, directory and policy', asy
 it('shows loading and an empty history without pretending a backup succeeded', async () => {
     fetchBackups.mockResolvedValue({ status: 200, data: { ...STATUS, backups: [] } });
     render(<BackupsPanel />);
-    expect(screen.getByRole('status')).toHaveTextContent('Cargando respaldos');
+    expect(screen.getByText('Cargando respaldos…')).toHaveAttribute('role', 'status');
     expect(await screen.findByText('No hay respaldos exitosos todavía.')).toBeInTheDocument();
     expect(screen.queryByText('Exitoso')).not.toBeInTheDocument();
 });
@@ -98,3 +103,51 @@ it('formats bytes with binary units', () => {
     expect(formatSize(1024)).toBe('1 KiB');
     expect(formatSize(1024 ** 3)).toBe('1 GiB');
 });
+
+it('summarizes available copies and refreshes local and Drive information together', async () => {
+    render(<BackupsPanel />);
+    expect(await screen.findByText('dmmarket-2026-08-20.sql.gz')).toBeInTheDocument();
+    expect(screen.getByLabelText('Resumen de respaldos')).toHaveTextContent('1 / 30');
+    expect(fetchDriveStatus).toHaveBeenCalledTimes(1);
+    userEvent.click(screen.getByRole('button', { name: 'Actualizar lista' }));
+    await act(async () => {});
+    expect(fetchBackups).toHaveBeenCalledTimes(2);
+    expect(fetchDriveStatus).toHaveBeenCalledTimes(2);
+});
+
+it('keeps the last known history visible when a refresh fails and recovers on retry', async () => {
+    render(<BackupsPanel />);
+    expect(await screen.findByText('dmmarket-2026-08-20.sql.gz')).toBeInTheDocument();
+    fetchBackups.mockRejectedValueOnce(new Error('Sin conexión.'));
+    userEvent.click(screen.getByRole('button', { name: 'Actualizar lista' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('últimos datos disponibles');
+    expect(screen.getByText('dmmarket-2026-08-20.sql.gz')).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Actualizar lista' }));
+    await act(async () => {});
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it.each([
+    ['uploaded', true, 'Subido', 'bg-backups-success'],
+    ['uploading', true, 'Subiendo', 'bg-backups-info'],
+    ['error', true, 'Error', 'bg-backups-warning'],
+    [undefined, true, 'Pendiente', 'bg-backups-secondary'],
+    ['uploaded', false, 'Desactivado', 'bg-backups-secondary'],
+])(
+    'shows the correct Drive upload state for %s with recovery confirmed: %s',
+    async (uploadStatus, confirmed, label, color) => {
+        fetchDriveStatus.mockResolvedValue({
+            status: 200,
+            data: {
+                configured: true,
+                connected: true,
+                localAccess: true,
+                recoveryConfirmed: confirmed,
+                uploads: [{ name: STATUS.backups[0].name, status: uploadStatus }],
+            },
+        });
+        render(<BackupsPanel />);
+        const table = await screen.findByRole('table');
+        expect(within(table).getByText(label)).toHaveClass(color);
+    },
+);

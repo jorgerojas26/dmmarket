@@ -7,9 +7,11 @@ import {
     testDriveUpload,
 } from 'api/google_drive';
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Form } from 'react-bootstrap';
+import { Alert, Badge, Button, Form, Spinner } from 'react-bootstrap';
+import BackupIcon from './BackupIcon';
+import './backups.css';
 
-const DrivePanel = ({ onStatus }) => {
+const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
     const [status, setStatus] = useState(null);
     const [error, setError] = useState(null);
     const [readError, setReadError] = useState(null);
@@ -43,7 +45,7 @@ const DrivePanel = ({ onStatus }) => {
             cancelled = true;
             clearInterval(timer);
         };
-    }, [refresh, polling, onStatus]);
+    }, [refresh, refreshKey, polling, onStatus]);
 
     const perform = async (operation, success) => {
         setBusy(true);
@@ -106,125 +108,196 @@ const DrivePanel = ({ onStatus }) => {
             setNotice(data.warning || 'Google Drive está desconectado. Los respaldos locales siguen funcionando.');
         }).catch(() => {});
 
-    const disabled = busy || !status?.localAccess || status?.running;
+    const disabled = busy || Boolean(readError) || !status?.localAccess || status?.running;
+
+    const connectionLabel = readError
+        ? 'Sin conexión'
+        : !status
+          ? 'Consultando'
+          : status.connecting
+            ? 'Conectando'
+            : status.connected
+              ? status.recoveryConfirmed
+                  ? 'Activa'
+                  : 'Falta guardar la clave'
+              : status.configured
+                ? 'No conectada'
+                : 'No disponible';
+    const connectionColor =
+        readError || (status?.connected && !status.recoveryConfirmed)
+            ? 'warning'
+            : status?.connected && status.recoveryConfirmed
+              ? 'success'
+              : status?.connecting
+                ? 'info'
+                : 'secondary';
 
     return (
-        <section className="border border-secondary rounded p-3 mb-4" aria-label="Google Drive opcional">
-            <div className="d-flex align-items-center gap-2 mb-2">
-                <h4 className="m-0">Google Drive</h4>
-                <Badge bg="secondary">Opcional</Badge>
+        <section className="backups-card backups-drive" aria-label="Google Drive opcional">
+            <div className="backups-section-heading">
+                <div>
+                    <h4>
+                        <BackupIcon name="cloud" /> Google Drive
+                    </h4>
+                    <p>Una copia adicional fuera del servidor.</p>
+                </div>
+                <Badge bg="backups-secondary">Opcional</Badge>
             </div>
-            <p>
-                Los respaldos locales funcionan sin Google Drive y sin Internet. Al conectarlo, se copian cifrados los
-                archivos terminados; nunca se sincronizan borrados locales.
-            </p>
-            {!status && !readError && <p>Cargando conexión de Google Drive…</p>}
+            <div className="backups-drive-state">
+                <Badge bg={`backups-${connectionColor}`}>{connectionLabel}</Badge>
+                {status && <p>Cuenta: {status.connected ? status.email || 'Conectada' : 'No conectada'}</p>}
+            </div>
+            {!status && !readError && <p role="status">Cargando conexión de Google Drive…</p>}
             {readError && <Alert variant="warning">{readError}</Alert>}
             {error && <Alert variant="danger">{error}</Alert>}
             {notice && <Alert variant="info">{notice}</Alert>}
             {status?.lastError && <Alert variant="warning">{status.lastError}</Alert>}
+            {busy && (
+                <div className="backups-loading" role="status">
+                    <Spinner animation="border" size="sm" aria-hidden="true" /> Procesando solicitud…
+                </div>
+            )}
             {status && (
                 <>
-                    <p>Cuenta: {status.connected ? status.email || 'Conectada' : 'No conectada'}</p>
                     {!status.configured && (
-                        <p className="text-secondary">
-                            Google Drive no está habilitado en esta versión. El mantenedor debe configurar una vez el
-                            cliente OAuth de DMMarket. Esto no afecta los respaldos locales.
-                        </p>
+                        <div className="backups-drive-note">
+                            <strong>Google Drive no está habilitado en esta versión.</strong>
+                            <p>
+                                El mantenedor debe configurar una vez el cliente OAuth de DMMarket. Esto no afecta los
+                                respaldos locales.
+                            </p>
+                        </div>
                     )}
-                    {!status.localAccess && (
-                        <p className="text-warning">
-                            Para conectar o desconectar una cuenta, abre esta pantalla en el servidor:{' '}
-                            <code className="text-break">{status.localSetupUrl}</code>
-                        </p>
+                    {!status.localAccess && (status.configured || status.connected) && (
+                        <div className="backups-drive-note">
+                            <strong>Configura la cuenta desde el servidor</strong>
+                            <p>Para conectar o desconectar una cuenta, abre esta pantalla en el servidor:</p>
+                            <code>{status.localSetupUrl}</code>
+                        </div>
                     )}
                     {!status.connected && !status.connecting && (
-                        <Button disabled={disabled || !status.configured} onClick={connect}>
+                        <Button className="backups-connect" disabled={disabled || !status.configured} onClick={connect}>
                             Conectar con Google
                         </Button>
                     )}
                     {status.connecting && (
-                        <div>
+                        <div className="backups-drive-note">
                             <p>Esperando autorización de Google. Completa el acceso en la nueva pestaña.</p>
-                            {authorizationUrl && (
-                                <a href={authorizationUrl} target="_blank" rel="noreferrer">
-                                    Autorizar en Google
-                                </a>
-                            )}
-                            <Button className="ms-2" variant="outline-light" disabled={disabled} onClick={disconnect}>
-                                Cancelar conexión
-                            </Button>
+                            <div className="backups-actions">
+                                {authorizationUrl && (
+                                    <a href={authorizationUrl} target="_blank" rel="noreferrer">
+                                        Autorizar en Google
+                                    </a>
+                                )}
+                                <Button variant="outline-light" disabled={disabled} onClick={disconnect}>
+                                    Cancelar conexión
+                                </Button>
+                            </div>
                         </div>
                     )}
                     {status.connected && (
                         <>
-                            <p>
-                                Carpeta: {status.folderName}.{' '}
-                                {status.recoveryConfirmed
-                                    ? 'Cargas automáticas habilitadas.'
-                                    : 'Las cargas están desactivadas hasta que guardes la clave de recuperación.'}
-                            </p>
-                            <div className="d-flex flex-wrap gap-2 mb-3">
-                                <Button variant="outline-light" disabled={disabled} onClick={download}>
-                                    Descargar clave de recuperación
-                                </Button>
-                                <Button
-                                    variant="outline-light"
-                                    disabled={disabled || !status.recoveryConfirmed || !status.configured}
-                                    onClick={() =>
-                                        perform(testDriveUpload, () =>
-                                            setNotice('Prueba de subida iniciada con el respaldo más reciente.'),
-                                        ).catch(() => {})
-                                    }
-                                >
-                                    Probar subida
-                                </Button>
-                                <Button
-                                    variant="outline-danger"
-                                    disabled={busy || !status.localAccess}
-                                    onClick={disconnect}
-                                >
-                                    Desconectar
-                                </Button>
+                            <div className="backups-drive-note">
+                                <span>Carpeta de destino</span>
+                                <strong>{status.folderName}</strong>
+                                <p>
+                                    {status.recoveryConfirmed
+                                        ? 'Cargas automáticas habilitadas.'
+                                        : 'Las cargas están desactivadas hasta que guardes la clave de recuperación.'}
+                                </p>
                             </div>
-                            {!status.recoveryConfirmed && (
-                                <div>
-                                    <p className="text-warning">
+                            {!status.recoveryConfirmed ? (
+                                <div className="backups-recovery">
+                                    <h5>
+                                        <BackupIcon name="shield" /> Protege tu clave de recuperación
+                                    </h5>
+                                    <p>
                                         Sin esta clave no podrás recuperar las copias cifradas si se pierde el servidor.
-                                        La clave descargada solo sirve para descifrar respaldos; no contiene tokens ni
-                                        la contraseña de Google.
                                     </p>
-                                    <Form.Check
-                                        id="drive-recovery-confirmed"
-                                        label="Guardé la clave de recuperación fuera del servidor"
-                                        checked={confirmed}
-                                        disabled={!downloaded || disabled}
-                                        onChange={(event) => setConfirmed(event.target.checked)}
-                                    />
+                                    <ol className="backups-recovery-steps">
+                                        <li>
+                                            <strong>Descarga y guarda la clave</strong>
+                                            <p>
+                                                Guárdala en otro dispositivo o en un gestor de contraseñas, fuera del
+                                                servidor.
+                                            </p>
+                                            <Button variant="outline-light" disabled={disabled} onClick={download}>
+                                                Descargar clave de recuperación
+                                            </Button>
+                                        </li>
+                                        <li>
+                                            <strong>Confirma que está a salvo</strong>
+                                            <Form.Check
+                                                id="drive-recovery-confirmed"
+                                                label="Guardé la clave de recuperación fuera del servidor"
+                                                checked={confirmed}
+                                                disabled={!downloaded || disabled}
+                                                onChange={(event) => setConfirmed(event.target.checked)}
+                                            />
+                                            <Button
+                                                disabled={disabled || !status.configured || !downloaded || !confirmed}
+                                                onClick={() =>
+                                                    perform(enableDrive, () =>
+                                                        setNotice('Cargas automáticas habilitadas.'),
+                                                    ).catch(() => {})
+                                                }
+                                            >
+                                                Habilitar cargas automáticas
+                                            </Button>
+                                        </li>
+                                    </ol>
+                                    <p className="backups-fine-print">
+                                        La clave solo sirve para descifrar respaldos; no contiene tokens ni la
+                                        contraseña de Google.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="backups-actions">
+                                    <Button variant="outline-light" disabled={disabled} onClick={download}>
+                                        Descargar clave de recuperación
+                                    </Button>
                                     <Button
-                                        className="mt-2"
-                                        disabled={disabled || !downloaded || !confirmed}
+                                        variant="outline-light"
+                                        disabled={disabled || !status.configured}
                                         onClick={() =>
-                                            perform(enableDrive, () =>
-                                                setNotice('Cargas automáticas habilitadas.'),
+                                            perform(testDriveUpload, () =>
+                                                setNotice('Prueba de subida iniciada con el respaldo más reciente.'),
                                             ).catch(() => {})
                                         }
                                     >
-                                        Habilitar cargas automáticas
+                                        Probar subida
                                     </Button>
                                 </div>
                             )}
                             {status.running && (
-                                <p role="status">
+                                <p role="status" className="backups-loading">
+                                    <Spinner animation="border" size="sm" aria-hidden="true" />
                                     {status.currentBackup
                                         ? `Subiendo ${status.currentBackup}…`
                                         : 'Procesando Google Drive…'}
                                 </p>
                             )}
+                            <div className="backups-disconnect">
+                                <span>Los respaldos locales seguirán funcionando.</span>
+                                <Button
+                                    variant="outline-danger"
+                                    disabled={busy || Boolean(readError) || !status.localAccess}
+                                    onClick={disconnect}
+                                >
+                                    Desconectar
+                                </Button>
+                            </div>
                         </>
                     )}
                 </>
             )}
+            <details className="backups-details">
+                <summary>Qué se guarda en Google Drive</summary>
+                <p>
+                    Los respaldos locales funcionan sin Google Drive y sin Internet. Al conectarlo, se copian cifrados
+                    los archivos terminados; nunca se sincronizan borrados locales.
+                </p>
+            </details>
         </section>
     );
 };

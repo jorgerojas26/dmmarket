@@ -94,7 +94,7 @@ it('requires downloading and confirming the recovery key before enabling automat
         render(<DrivePanel />);
         expect(await screen.findByText('Habilitar cargas automáticas')).toBeDisabled();
         expect(screen.getByLabelText('Guardé la clave de recuperación fuera del servidor')).toBeDisabled();
-        expect(screen.getByText('Probar subida')).toBeDisabled();
+        expect(screen.queryByText('Probar subida')).not.toBeInTheDocument();
         userEvent.click(screen.getByText('Descargar clave de recuperación'));
         await waitFor(() =>
             expect(screen.getByLabelText('Guardé la clave de recuperación fuera del servidor')).not.toBeDisabled(),
@@ -141,4 +141,24 @@ it('polls active consent and stops polling on unmount', async () => {
     view.unmount();
     await act(async () => jest.advanceTimersByTime(60000));
     expect(fetchDriveStatus.mock.calls.length).toBe(previous + 1);
+});
+
+it('shows loading and a read failure without suggesting that Drive is ready', async () => {
+    fetchDriveStatus.mockRejectedValueOnce(new Error('No se pudo consultar Google Drive.'));
+    render(<DrivePanel />);
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando conexión');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo consultar Google Drive.');
+    expect(screen.queryByText('Activa')).not.toBeInTheDocument();
+});
+
+it('refreshes when the parent requests it and blocks operations on stale connection data', async () => {
+    const view = render(<DrivePanel refreshKey={0} />);
+    expect(await screen.findByText('Conectar con Google')).not.toBeDisabled();
+    fetchDriveStatus.mockRejectedValueOnce(new Error('Sin conexión al servidor.'));
+    view.rerender(<DrivePanel refreshKey={1} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sin conexión al servidor.');
+    expect(screen.getByText('Conectar con Google')).toBeDisabled();
+    view.rerender(<DrivePanel refreshKey={2} />);
+    await waitFor(() => expect(screen.getByText('Conectar con Google')).not.toBeDisabled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
