@@ -7,6 +7,18 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.1.0] - 2026-10-03
+
+### Nuevas funciones
+
+- **Avisos de nuevas versiones**: mientras tienes la aplicación abierta en el navegador, DMMarket busca actualizaciones cada 12 horas y te avisa cuando hay una disponible. Puedes actualizar y reiniciar desde el aviso, ver el progreso y reintentar si ocurre un error.
+- **Instalación guiada en Windows, Mac y Ubuntu**: descarga el paquete de tu plataforma y sigue un asistente en el navegador para comprobar la conexión con la base de datos del negocio y configurar el acceso desde la red local, sin editar archivos a mano.
+- **Arranque automático del sistema**: DMMarket puede iniciar al encender el servidor, sin que alguien tenga que abrir el programa o iniciar sesión, y volver a arrancar si se detiene.
+
+### Mejoras
+
+- **Actualizaciones que conservan el arranque automático**: al actualizar una instalación con inicio automático, el sistema vuelve a funcionar desde la misma ubicación y conserva su configuración.
+
 ## [v1.0.6] - 2026-10-03
 
 ### Nuevas funciones
