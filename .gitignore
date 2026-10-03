@@ -8,6 +8,7 @@ dist/
 build/
 packages/backend/client/
 packages/backend/assets.js
+packages/backend/google-client.generated.json
 packages/backend/dmmarket-app
 packages/backend/dmmarket-app.exe
 packages/backend/dmmarket-app.exe.sha256

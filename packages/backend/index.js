@@ -3,6 +3,10 @@ const express = require("express");
 const path = require("node:path");
 const fs = require("node:fs");
 const app = express();
+app.use((_req, res, next) => {
+  res.set("X-Frame-Options", "DENY");
+  next();
+});
 
 // Detección de binario compilado: Bun.isStandaloneExecutable no existe en bun 1.3.14.
 // Los assets embebidos (ver scripts/generate-assets.js) solo existen en el binario compilado.
@@ -40,6 +44,10 @@ const dashboard_routes = require("./routes/dashboard");
 const sales_routes = require("./routes/sales");
 const purchases_routes = require("./routes/purchases");
 const update_routes = require("./routes/update");
+const backups_routes = require("./routes/backups");
+const { backupService } = require("./backups");
+const drive_backups_routes = require("./routes/drive-backups");
+const { driveBackupService } = require("./drive-backups");
 
 //app.use(express.static(path.join(__dirname, "public")));
 
@@ -66,6 +74,8 @@ app.use("/api/dashboard", dashboard_routes);
 app.use("/api/sales", sales_routes);
 app.use("/api/purchases", purchases_routes);
 app.use("/api/update", update_routes);
+app.use("/api/backups/drive", drive_backups_routes);
+app.use("/api/backups", backups_routes);
 
 app.use("/api/*", (req, res) => {
   res.status(404).json({
@@ -142,9 +152,14 @@ async function bootstrap() {
   const options = serverOptions();
   cleanupStartup();
   await runEmbeddedMigrations();
-  return startServer(app, options, () => {
+  const server = await startServer(app, options, () => {
     if (IS_STANDALONE && !options.service) openBrowser(`http://localhost:${options.port}`);
   });
+  backupService.start();
+  driveBackupService.start();
+  server.once("close", backupService.stop);
+  server.once("close", driveBackupService.stop);
+  return server;
 }
 
 // En el binario compilado abre el navegador automáticamente (reemplaza el viejo `run.bat start http://localhost:8000`).

@@ -138,3 +138,54 @@ it('error de descarga se muestra y permite reintentar', async () => {
     expect(await screen.findByText('La verificación sha256 falló')).toBeInTheDocument();
     expect(screen.getByText('Descargar actualización')).toBeInTheDocument(); // reintentar
 });
+
+it('abre la sección de respaldos desde el sidebar de configuración', async () => {
+    mockRoutes(
+        baseRoutes({
+            '/api/backups': jsonResponse({
+                directory: '/var/lib/dmmarket/backups',
+                retention: 30,
+                nextRunAt: '2026-08-21T02:00:00Z',
+                running: false,
+                lastError: null,
+                backups: [],
+            }),
+        }),
+    );
+    renderPage();
+    userEvent.click(screen.getByText('Respaldos', { selector: 'span.nav-label' }));
+    expect(await screen.findByText('No hay respaldos exitosos todavía.')).toBeInTheDocument();
+    expect(screen.getByText('/var/lib/dmmarket/backups')).toBeInTheDocument();
+    expect(screen.queryByText('Versión instalada')).not.toBeInTheDocument();
+});
+
+it('muestra la conexión y el estado de Google Drive sin confundirlos con el respaldo local', async () => {
+    mockRoutes(
+        baseRoutes({
+            '/api/backups/drive': jsonResponse({
+                configured: false,
+                connected: true,
+                localAccess: false,
+                recoveryConfirmed: true,
+                email: 'business@example.com',
+                folderName: 'Respaldos DMMarket',
+                uploads: [
+                    { name: 'dmmarket-2026-08-20.sql.gz', status: 'uploaded', uploadedAt: '2026-08-20T02:02:00Z' },
+                ],
+            }),
+            '/api/backups': jsonResponse({
+                directory: '/var/lib/dmmarket/backups',
+                retention: 30,
+                nextRunAt: '2026-08-21T02:00:00Z',
+                running: false,
+                lastError: null,
+                backups: [{ name: 'dmmarket-2026-08-20.sql.gz', sizeBytes: 1024, completedAt: '2026-08-20T02:01:00Z' }],
+            }),
+        }),
+    );
+    renderPage();
+    userEvent.click(screen.getByText('Respaldos', { selector: 'span.nav-label' }));
+    expect(await screen.findByText('Exitoso')).toBeInTheDocument();
+    expect(await screen.findByText('Subido')).toBeInTheDocument();
+    expect(screen.getByText('Desconectar')).toBeDisabled();
+});

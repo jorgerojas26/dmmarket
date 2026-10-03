@@ -34,6 +34,10 @@ Abre el enlace **completo**, incluido su código después de `#`. No compartas e
 
 Ver [la guía completa de instalación, firewall y mantenimiento](docs/services.md).
 
+## Respaldos
+
+DMMarket genera respaldos diarios de MySQL y muestra sus fechas y tamaños en **Configuración → Respaldos**. Conserva los últimos 30 archivos locales. Requiere `mysqldump` o `mariadb-dump` instalado en el servidor. Consulta [requisitos, rutas y recuperación](docs/backups.md). La [copia cifrada a Google Drive](docs/google-drive.md) es opcional: los respaldos locales funcionan sin cuenta Google, sin configurar OAuth y sin Internet. El mantenedor registra una vez el cliente OAuth de DMMarket para habilitar el botón de conexión en los binarios distribuidos.
+
 ## Desarrollo
 
 ```sh

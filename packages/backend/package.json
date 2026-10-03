@@ -9,7 +9,7 @@
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
-    "build:prepare": "bun --filter @dmmarket/frontend build && mkdir -p client && rm -rf client/build && cp -R ../frontend/build client/build && node scripts/generate-assets.js && node scripts/generate-version.js",
+    "build:prepare": "bun --filter @dmmarket/frontend build && mkdir -p client && rm -rf client/build && cp -R ../frontend/build client/build && node scripts/generate-assets.js && node scripts/generate-version.js && node scripts/generate-google-client.js",
     "build": "bun run build:prepare && bun build --compile main.js --minify --external mysql --outfile dmmarket-app",
     "build:windows": "bun run build:prepare && bun build --compile --target=bun-windows-x64 main.js --minify --external mysql --outfile dmmarket-app.exe",
     "build:linux": "bun run build:prepare && bun build --compile --target=bun-linux-x64-baseline main.js --minify --external mysql --outfile dmmarket-app-linux"

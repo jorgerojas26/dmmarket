@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
 import ReactMarkdown from 'react-markdown';
+import BackupsPanel from './BackupsPanel';
 import './styles.css';
 
 // Renderiza las notas de una release como markdown (seguro: react-markdown
@@ -16,6 +17,26 @@ const MarkdownNotes = ({ children }) => (
 );
 
 const sidebarItems = [
+    {
+        eventKey: 'backups',
+        label: 'Respaldos',
+        icon: (
+            <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            >
+                <title>Respaldos</title>
+                <ellipse cx="12" cy="5" rx="9" ry="3" />
+                <path d="M3 5v14c0 4 18 4 18 0V5M3 12c0 4 18 4 18 0" />
+            </svg>
+        ),
+    },
     {
         eventKey: 'about',
         label: 'Acerca de',
@@ -40,7 +61,7 @@ const sidebarItems = [
 ];
 
 const ConfiguracionPage = () => {
-    const [activeView, setActiveView] = useState('about');
+    const [activeView, setActiveView] = useState(() => (window.location.hash === '#respaldos' ? 'backups' : 'about'));
     const update = useUpdate();
     const {
         status,
@@ -87,6 +108,7 @@ const ConfiguracionPage = () => {
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItemsMemo} />
                 <div className="clientes-content p-4">
+                    {activeView === 'backups' && <BackupsPanel />}
                     {activeView === 'about' && (
                         <div className="dashboard-panel configuracion-about">
                             <div className="dashboard-panel-header">
