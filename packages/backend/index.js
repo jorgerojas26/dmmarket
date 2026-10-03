@@ -101,8 +101,7 @@ app.get("/*", (_request, response) => {
 const { runEmbeddedMigrations } = require("./migrate");
 const { cleanupStartup } = require("./cleanup");
 
-const BASE_PORT = 8000;
-const MAX_PORT_ATTEMPTS = 100;
+const { serverOptions, startServer } = require("./server");
 
 // En Windows el binario se lanza con doble clic: si la app muere al arrancar, la consola
 // se cierra sin mostrar nada. Con esto el error queda visible en pantalla (espera Enter)
@@ -125,7 +124,7 @@ function failStartup(error) {
     );
     console.log(`\nEl detalle se guardó en: ${logPath}`);
   }
-  if (process.platform === "win32") {
+  if (process.platform === "win32" && process.env.DMMARKET_SERVICE !== "1" && process.stdin.isTTY) {
     console.log("\nPresiona Enter para cerrar...");
     process.stdin.once("data", () => process.exit(1));
     return;
@@ -140,29 +139,11 @@ if (require.main === module) {
 // En el binario compilado: limpieza de arranque, migraciones pendientes (si una falla, no se levanta
 // el server con la DB medio migrada), y después el server. En dev estos pasos no hacen nada.
 async function bootstrap() {
+  const options = serverOptions();
   cleanupStartup();
   await runEmbeddedMigrations();
-  startServer(BASE_PORT);
-}
-
-// Si el puerto está ocupado, prueba con el siguiente (estilo Expo dev server).
-function startServer(port, attempt = 0) {
-  if (attempt >= MAX_PORT_ATTEMPTS) {
-    console.error(`no se encontró un puerto libre entre ${BASE_PORT} y ${BASE_PORT + MAX_PORT_ATTEMPTS - 1}`);
-    process.exit(1);
-  }
-  const server = app.listen(port, () => {
-    console.log(`server listening in port ${port}`);
-    if (IS_STANDALONE) openBrowser(`http://localhost:${port}`);
-  });
-  server.on("error", (error) => {
-    if (error.code === "EADDRINUSE") {
-      console.log(`puerto ${port} en uso, probando ${port + 1}...`);
-      startServer(port + 1, attempt + 1);
-    } else {
-      console.error(error);
-      process.exit(1);
-    }
+  return startServer(app, options, () => {
+    if (IS_STANDALONE && !options.service) openBrowser(`http://localhost:${options.port}`);
   });
 }
 
@@ -180,3 +161,5 @@ function openBrowser(url) {
 }
 
 module.exports = app;
+module.exports.bootstrap = bootstrap;
+module.exports.failStartup = failStartup;

@@ -1,0 +1,35 @@
+DMMarket - Instalacion guiada
+
+1. Extrae todos los archivos del ZIP en una carpeta. No ejecutes el instalador dentro del ZIP.
+2. Abre el archivo Instalar de tu plataforma:
+   Windows: doble clic en Instalar.cmd.
+   macOS: doble clic en Instalar.command.
+   Ubuntu con escritorio: clic derecho en Instalar.sh y Ejecutar como programa.
+   Ubuntu sin escritorio: entra a la carpeta y ejecuta bash Instalar.sh.
+3. Acepta los permisos de administrador. Se abre el asistente en el navegador.
+4. Completa los datos de tu base MySQL existente, prueba la conexion y confirma la instalacion.
+5. Espera la comprobacion del servicio y guarda la direccion de acceso.
+
+No necesitas crear .env, instalar Node.js o Bun ni registrar servicios manualmente.
+Necesitas la base MySQL del negocio y un respaldo reciente antes de instalar.
+La comprobacion de conexion no modifica datos; las migraciones pendientes se aplican al iniciar el servicio.
+
+Si no se abre el navegador, copia el enlace COMPLETO de la ventana del instalador, incluido lo que va despues de #.
+En Ubuntu sin escritorio, desde tu computadora ejecuta:
+  ssh -L 8765:127.0.0.1:8765 USUARIO@SERVIDOR
+Mantiene ese tunel abierto y abre el enlace completo en tu navegador.
+El asistente no se publica en la red local ni en Internet. No compartas su enlace; la sesion dura 30 minutos.
+
+El asistente puede crear una regla restringida a tu red privada en UFW o Windows Firewall.
+No activa UFW ni modifica SSH. Otros firewalls y el de macOS pueden necesitar autorizacion manual.
+No expongas DMMarket directamente en Internet. Reserva la IP del servidor y desactiva su suspension.
+
+Los archivos de la aplicacion quedan en una ubicacion permanente:
+  Ubuntu: /var/lib/dmmarket
+  Windows: %ProgramData%\DMMarket
+  macOS: /Library/Application Support/DMMarket
+Puedes volver a abrir el asistente para cambiar configuracion o reinstalar.
+
+Si Windows o macOS bloquean un programa descargado, verifica que lo obtuviste de la release oficial y usa las opciones del sistema para autorizarlo. El instalador no desactiva las protecciones del sistema operativo.
+
+Guia completa: https://github.com/jorgerojas26/dmmarket/blob/main/docs/services.md

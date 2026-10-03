@@ -12,11 +12,15 @@ function cleanupStartup() {
 
   const cwd = process.cwd();
   const exeName = path.basename(process.execPath);
-  const oldExe = path.join(cwd, exeName.replace(/\.exe$/i, "") + ".old.exe");
+  const oldExe = path.join(
+    cwd,
+    process.platform === "win32" ? exeName.replace(/\.exe$/i, "") + ".old.exe" : exeName + ".old",
+  );
   fs.rmSync(oldExe, { force: true });
 
   const updateDir = path.join(cwd, ".dmmarket-update");
-  if (fs.existsSync(updateDir) && !fs.existsSync(path.join(updateDir, "new.exe"))) {
+  const newBinary = process.platform === "win32" ? "new.exe" : "new-app";
+  if (fs.existsSync(updateDir) && !fs.existsSync(path.join(updateDir, newBinary))) {
     fs.rmSync(updateDir, { recursive: true, force: true });
   }
 }

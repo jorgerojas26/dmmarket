@@ -21,6 +21,11 @@ beforeEach(() => {
   fs.mkdirSync(binDir);
   fs.mkdirSync(path.dirname(script));
   fs.copyFileSync(releaseScript, script);
+  fs.copyFileSync(
+    path.join(path.dirname(releaseScript), "package-installers.mjs"),
+    path.join(root, "scripts", "package-installers.mjs"),
+  );
+  fs.cpSync(path.resolve(__dirname, "../../../installers"), path.join(root, "installers"), { recursive: true });
   fs.writeFileSync(path.join(backendDir, "package.json"), JSON.stringify({ version: "9.9.9" }));
   fs.writeFileSync(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## [v9.9.9]\n\n- Soporte para Linux.\n");
 
@@ -71,7 +76,7 @@ function calls() {
     .map((line) => JSON.parse(line));
 }
 
-it("compila las tres plataformas y publica los seis assets con sus hashes", () => {
+it("compila las tres plataformas y publica binarios e instaladores con sus hashes", () => {
   const result = spawnSync(process.execPath, [script], { cwd: root, env, encoding: "utf8" });
   expect(result.status).toBe(0);
 
@@ -89,7 +94,13 @@ it("compila las tres plataformas y publica los seis assets con sus hashes", () =
     path.join(backendDir, binary),
     path.join(backendDir, `${binary}.sha256`),
   ]);
-  expect(upload.args.slice(-6)).toEqual(assets);
+  const installers = ["windows", "macos", "linux"].flatMap((platform) => {
+    const archive = path.join(root, "dist", `DMMarket-9.9.9-${platform}.zip`);
+    const hash = createHash("sha256").update(fs.readFileSync(archive)).digest("hex");
+    expect(fs.readFileSync(`${archive}.sha256`, "utf8")).toBe(hash);
+    return [archive, `${archive}.sha256`];
+  });
+  expect(upload.args.slice(-12)).toEqual([...assets, ...installers]);
   expect(upload.args).toContain("v9.9.9");
   expect(upload.args[upload.args.indexOf("--notes") + 1]).toContain("Soporte para Linux.");
 

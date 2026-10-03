@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { packageInstaller } from "./package-installers.mjs";
 
 const REPO = "jorgerojas26/dmmarket";
 const EXE = "dmmarket-app.exe";
@@ -56,7 +57,7 @@ const macBinPath = path.join(backendDir, MAC_BIN);
 const macTarget = process.platform === "darwin" ? `bun-darwin-${process.arch}` : "bun-darwin-arm64";
 run(
   "bun",
-  ["build", "--compile", `--target=${macTarget}`, "index.js", "--minify", "--external", "mysql", "--outfile", MAC_BIN],
+  ["build", "--compile", `--target=${macTarget}`, "main.js", "--minify", "--external", "mysql", "--outfile", MAC_BIN],
   { cwd: backendDir },
 );
 if (!existsSync(macBinPath)) fail(`No se encontró ${MAC_BIN} después del build.`);
@@ -68,7 +69,7 @@ run(
     "build",
     "--compile",
     "--target=bun-linux-x64-baseline",
-    "index.js",
+    "main.js",
     "--minify",
     "--external",
     "mysql",
@@ -93,6 +94,8 @@ console.log(`sha256 (${MAC_BIN}): ${macHash}`);
 const linuxHash = sha256Of(linuxBinPath);
 writeFileSync(path.join(backendDir, LINUX_SHA_FILE), linuxHash);
 console.log(`sha256 (${LINUX_BIN}): ${linuxHash}`);
+
+const installerAssets = ["windows", "macos", "linux"].flatMap((platform) => packageInstaller(root, platform, version));
 
 // ── 4. Notas de la release: resumen de CHANGELOG.md + commits ──────────────
 // Se extrae el bloque "## [v<version>]" hasta la siguiente sección "## ".
@@ -138,6 +141,7 @@ run("gh", [
   path.join(backendDir, MAC_SHA_FILE),
   linuxBinPath,
   path.join(backendDir, LINUX_SHA_FILE),
+  ...installerAssets,
 ]);
 
 // ── 6. Tag local + push ────────────────────────────────────────────────────
@@ -155,3 +159,6 @@ console.log(`  Hash Linux:      https://github.com/${REPO}/releases/download/${t
 console.log(`  sha256 (win):    ${exeHash}`);
 console.log(`  sha256 (mac):    ${macHash}`);
 console.log(`  sha256 (linux):  ${linuxHash}`);
+for (const asset of installerAssets.filter((file) => file.endsWith(".zip"))) {
+  console.log(`  Instalador:     https://github.com/${REPO}/releases/download/${tag}/${path.basename(asset)}`);
+}

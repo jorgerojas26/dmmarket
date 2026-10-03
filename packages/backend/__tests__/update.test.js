@@ -193,3 +193,69 @@ describe.each(["darwin", "linux"])("POST_APPLY standalone (%s)", (platform) => {
     expect(process.exit).not.toHaveBeenCalled();
   });
 });
+
+describe.each(["linux", "darwin", "win32"])("POST_APPLY supervised service (%s)", (platform) => {
+  const fs = require("node:fs");
+  const childProcess = require("node:child_process");
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+  let originalService;
+  let apply;
+
+  beforeEach(() => {
+    originalService = process.env.DMMARKET_SERVICE;
+    process.env.DMMARKET_SERVICE = "1";
+    Object.defineProperty(process, "platform", { value: platform });
+    const originalBun = global.Bun;
+    global.Bun = { embeddedFiles: [{}] };
+    try {
+      jest.isolateModules(() => {
+        apply = require("../controllers/update").POST_APPLY;
+      });
+    } finally {
+      if (originalBun === undefined) delete global.Bun;
+      else global.Bun = originalBun;
+    }
+    jest.useFakeTimers();
+    jest.spyOn(fs, "existsSync").mockReturnValue(true);
+    for (const method of ["renameSync", "chmodSync", "rmSync"]) {
+      jest.spyOn(fs, method).mockImplementation(() => {});
+    }
+    jest.spyOn(childProcess, "spawn").mockImplementation(() => {
+      throw new Error("Unexpected relaunch");
+    });
+    jest.spyOn(process, "exit").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+    Object.defineProperty(process, "platform", originalPlatform);
+    if (originalService === undefined) delete process.env.DMMARKET_SERVICE;
+    else process.env.DMMARKET_SERVICE = originalService;
+  });
+
+  it("places the replacement before exiting and lets the supervisor restart", () => {
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    apply({}, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(fs.renameSync).toHaveBeenCalledTimes(2);
+    expect(fs.renameSync.mock.calls[1][1]).toBe(process.execPath);
+    expect(childProcess.spawn).not.toHaveBeenCalled();
+    expect(process.exit).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(500);
+    expect(process.exit).toHaveBeenCalledWith(0);
+  });
+
+  it("keeps the process alive when the replacement fails", () => {
+    fs.renameSync.mockImplementation(() => {
+      throw new Error("Access denied");
+    });
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    apply({}, res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(childProcess.spawn).not.toHaveBeenCalled();
+    jest.runAllTimers();
+    expect(process.exit).not.toHaveBeenCalled();
+  });
+});

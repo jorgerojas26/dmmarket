@@ -30,6 +30,7 @@ const GET_STATUS = (_req, res) => {
     currentVersion: version,
     platform: process.platform,
     standalone: IS_STANDALONE,
+    service: process.env.DMMARKET_SERVICE === "1",
   });
 };
 
@@ -257,13 +258,38 @@ function buildUpdateSh(execPath, newBinary) {
   ].join("\n");
 }
 
-// Aplica el update según plataforma:
-// - Windows: update.bat (truco del rename — un exe en ejecución no se puede
-//   sobrescribir ni borrar, pero sí renombrar). El bat espera 3s, renombra el
-//   actual a .old.exe, mueve el nuevo, lo arranca y borra el viejo.
-// - macOS/Linux: update.sh (ver buildUpdateSh).
+function replaceServiceBinary(execPath, newBinary, platform = process.platform) {
+  const oldPath = platform === "win32" ? execPath.replace(/\.exe$/i, "") + ".old.exe" : execPath + ".old";
+  if (platform !== "win32") fs.chmodSync(newBinary, 0o755);
+  fs.rmSync(oldPath, { force: true });
+  fs.renameSync(execPath, oldPath);
+  try {
+    fs.renameSync(newBinary, execPath);
+  } catch (error) {
+    fs.renameSync(oldPath, execPath);
+    throw error;
+  }
+}
+
 const POST_APPLY = (_req, res) => {
   if (!requireStandalone(res)) return;
+
+  if (process.env.DMMARKET_SERVICE === "1") {
+    if (downloadState.active) {
+      return res.status(409).json({ error: { message: "Espera a que termine la descarga." } });
+    }
+    if (!fs.existsSync(NEW_BINARY)) {
+      return res.status(400).json({ error: { message: "No hay una actualización descargada. Descárgala primero." } });
+    }
+    try {
+      replaceServiceBinary(process.execPath, NEW_BINARY);
+    } catch (error) {
+      return res.status(500).json({ error: { message: `No se pudo aplicar la actualización: ${error.message}` } });
+    }
+    res.status(200).json({ success: true, message: "Actualización aplicada. El servicio se reiniciará." });
+    setTimeout(() => process.exit(0), 500);
+    return;
+  }
 
   const { spawn } = require("node:child_process");
   if (process.platform === "win32") {
@@ -308,5 +334,6 @@ module.exports = {
   POST_APPLY,
   buildUpdateBat,
   buildUpdateSh,
+  replaceServiceBinary,
   ASSETS_BY_PLATFORM,
 };
