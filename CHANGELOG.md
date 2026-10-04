@@ -7,6 +7,22 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.2.0] - 2026-10-03
+
+### Nuevas funciones
+
+- **Respaldos diarios del negocio**: con la herramienta de respaldo del servidor configurada, DMMarket guarda una copia de la base de datos a las 02:00, hora del servidor, y conserva los últimos 30 respaldos completados.
+- **Configuración de dominio local (opcional)**: el instalador permite preparar el acceso al sistema mediante una dirección fácil de recordar. Requiere configurar ese nombre en la red del negocio; el acceso directo sigue disponible.
+
+### Mejoras
+
+- **Pantalla de respaldos más clara**: consulta las copias disponibles, sus fechas y tamaños, la próxima ejecución y los avisos de error desde Configuración. La pantalla distingue los respaldos del servidor de la integración opcional con Google Drive.
+- **Instalación básica sin pasos adicionales**: puedes dejar el sistema con arranque automático después de reiniciar el equipo, sin configurar un dominio. Las opciones adicionales se muestran por separado y pueden configurarse más adelante.
+
+### Correcciones
+
+- **Permisos de red bajo tu control**: los ajustes de protección de la red ya no se seleccionan automáticamente durante la instalación; debes autorizarlos de forma expresa.
+
 ## [v1.1.0] - 2026-10-03
 
 ### Nuevas funciones
