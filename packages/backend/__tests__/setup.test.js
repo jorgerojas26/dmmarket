@@ -16,6 +16,8 @@ const fields = {
   DATABASE_NAME: "business",
   HOST: "0.0.0.0",
   PORT: "8000",
+  WEB_MODE: "direct",
+  WEB_HOSTNAME: "",
 };
 let app;
 let install;
@@ -66,6 +68,15 @@ describe("setup session security", () => {
     expect(res.text).not.toContain(token);
     expect(res.headers["cache-control"]).toBe("no-store");
     expect(res.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+  });
+
+  it("serves syntactically valid browser code and fields for both access modes", async () => {
+    const { Script } = require("node:vm");
+    const javascript = await request(app).get("/setup.js").set("Host", "127.0.0.1:8765");
+    expect(() => new Script(javascript.text)).not.toThrow();
+    const page = await request(app).get("/").set("Host", "127.0.0.1:8765");
+    for (const field of ["WEB_MODE", "WEB_HOSTNAME", "HOST", "PORT", "dns-note"])
+      expect(page.text).toContain(`id="${field}"`);
   });
 
   it("does not disclose a saved password in the configuration response", async () => {
@@ -135,6 +146,7 @@ describe("installation journey", () => {
     const res = await api("post", "install", { ...fields, ...confirmation, PORT: "8123" });
     expect(res.status).toBe(200);
     expect(install).toHaveBeenCalledWith({ ...fields, PORT: "8123" });
+    expect(firewall).not.toHaveBeenCalled();
     const status = await api("get", "status");
     expect(status.body.ready).toBe(true);
     expect(status.body.urls).toEqual(["http://192.168.1.50:8123"]);
@@ -144,6 +156,47 @@ describe("installation journey", () => {
     expect(refresh.body.completed).toBe(true);
     expect(refresh.body.fields.PORT).toBe("8123");
     expect(refresh.text).not.toContain(fields.DATABASE_PASSWORD);
+  });
+
+  it("installs the base service without a domain or firewall authorization", async () => {
+    const base = { ...fields };
+    delete base.WEB_MODE;
+    delete base.WEB_HOSTNAME;
+    await api("post", "test", base);
+    expect((await api("post", "install", { ...base, ...confirmation })).status).toBe(200);
+    expect(install).toHaveBeenCalledWith(fields);
+    expect(firewall).not.toHaveBeenCalled();
+    const status = await api("get", "status");
+    expect(status.body.ready).toBe(true);
+    expect(status.body.urls).toEqual(["http://192.168.1.50:8000"]);
+    expect(status.body.dnsRecords).toEqual([]);
+    expect(status.body.warnings).toEqual([]);
+  });
+
+  it("installs named HTTP access while keeping DNS configuration explicitly external", async () => {
+    await api("post", "test", fields);
+    const res = await api("post", "install", {
+      ...fields,
+      ...confirmation,
+      WEB_MODE: "caddy",
+      WEB_HOSTNAME: "reportes.solser.internal",
+      allowFirewall: process.platform !== "darwin",
+      network: "192.168.1.0/24",
+    });
+    expect(res.status).toBe(200);
+    expect(install).toHaveBeenCalledWith({
+      ...fields,
+      HOST: "127.0.0.1",
+      WEB_MODE: "caddy",
+      WEB_HOSTNAME: "reportes.solser.internal",
+    });
+    const status = await api("get", "status");
+    expect(status.body.urls).toEqual(["http://reportes.solser.internal"]);
+    expect(status.body.localOnly).toBe(false);
+    expect(status.body.dnsRecords).toEqual([{ name: "reportes.solser.internal", type: "A", address: "192.168.1.50" }]);
+    expect(status.body.warnings.join(" ")).toContain("no configura ni comprueba el DNS");
+    expect(ready).toHaveBeenCalledWith(expect.objectContaining({ WEB_MODE: "caddy" }));
+    expect((await api("get", "config")).body.fields.WEB_MODE).toBe("caddy");
   });
 
   it("reports a registered service as not ready if the application cannot start", async () => {
@@ -168,14 +221,26 @@ describe("installation journey", () => {
     expect(install).not.toHaveBeenCalled();
   });
 
-  it("keeps an installed service and reports a warning if firewall configuration fails", async () => {
-    await api("post", "test", fields);
-    firewall.mockImplementation(() => {
-      throw new Error("Firewall unavailable");
-    });
-    expect((await api("post", "install", { ...fields, ...confirmation })).status).toBe(200);
-    expect((await api("get", "status")).body.warnings).toHaveLength(1);
-  });
+  it.each(["linux", "win32"])(
+    "keeps an installed service if explicitly requested firewall configuration fails (%s)",
+    async (platform) => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+      Object.defineProperty(process, "platform", { value: platform });
+      try {
+        await api("post", "test", fields);
+        firewall.mockImplementation(() => {
+          throw new Error("Firewall unavailable");
+        });
+        expect(
+          (await api("post", "install", { ...fields, ...confirmation, allowFirewall: true, network: "192.168.1.0/24" }))
+            .status,
+        ).toBe(200);
+        expect((await api("get", "status")).body.warnings).toHaveLength(1);
+      } finally {
+        Object.defineProperty(process, "platform", originalPlatform);
+      }
+    },
+  );
 
   it("closes the setup session without installing when cancelled", async () => {
     expect((await api("post", "finish", {})).status).toBe(200);

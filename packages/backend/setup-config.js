@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const dotenv = require("dotenv");
 const { serverOptions } = require("./server");
+const { normalizeWeb, webEnabled } = require("./web-config");
 
 const DATABASE_KEYS = ["DATABASE_HOST", "DATABASE_PORT", "DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_NAME"];
 
@@ -46,9 +47,16 @@ function normalizeConfiguration(input, existing = {}) {
     throw new Error("El puerto de MySQL debe estar entre 1 y 65535.");
   }
   if (!/^\d+$/.test(configuration.PORT)) throw new Error("El puerto de DMMarket debe ser un número entero.");
-  serverOptions(configuration);
+  configuration.PORT = String(serverOptions(configuration).port);
   if (!["0.0.0.0", "127.0.0.1"].includes(configuration.HOST)) {
     throw new Error("Elige acceso por red local o solo desde este servidor.");
+  }
+  Object.assign(configuration, normalizeWeb(input));
+  if (webEnabled(configuration)) {
+    if (configuration.PORT === "80")
+      throw new Error("El puerto 80 está reservado para Caddy. Elige otro puerto interno.");
+    if (Number(configuration.PORT) < 1024) throw new Error("El puerto interno de DMMarket debe ser 1024 o mayor.");
+    configuration.HOST = "127.0.0.1";
   }
   return configuration;
 }

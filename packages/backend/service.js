@@ -1,39 +1,14 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { run, powershell, psQuote, xml } = require("./service-commands");
+const { prepareWeb, stopWeb, installWeb, uninstallWeb } = require("./web-service");
+const { webEnabled } = require("./web-config");
 
 const LABEL = "com.dmmarket.server";
 const TASK = "DMMarket";
 const PLIST = `/Library/LaunchDaemons/${LABEL}.plist`;
 const UNIT = "/etc/systemd/system/dmmarket.service";
-
-function run(command, args, optional = false) {
-  const result = spawnSync(command, args, { encoding: "utf8" });
-  if (!optional && (result.error || result.status !== 0)) {
-    throw new Error(`${command}: ${result.error?.message || result.stderr || result.stdout}`);
-  }
-  return result.stdout?.trim();
-}
-
-function powershell(script) {
-  return run("powershell.exe", [
-    "-NoProfile",
-    "-NonInteractive",
-    "-Command",
-    `$ErrorActionPreference = 'Stop'; ${script}`,
-  ]);
-}
-
-function psQuote(value) {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function xml(value) {
-  return value.replace(
-    /[&<>"']/g,
-    (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char],
-  );
-}
 
 function serviceDirectory(platform = process.platform) {
   if (platform === "linux") return "/var/lib/dmmarket";
@@ -131,6 +106,12 @@ function installService({ configuration } = {}) {
   if (!configuration && !fs.existsSync(envTarget) && !fs.existsSync(envSource)) {
     throw new Error("Crea el archivo .env con la conexión a MySQL antes de instalar.");
   }
+  if (!configuration) {
+    const { readConfiguration } = require("./setup-config");
+    const saved = readConfiguration(fs.existsSync(envTarget) ? dir : process.cwd());
+    if (webEnabled(saved)) configuration = saved;
+  }
+  const webPlan = prepareWeb(configuration || {});
   let envContent;
   if (configuration) {
     const { readConfiguration, serializeConfiguration } = require("./setup-config");
@@ -146,6 +127,7 @@ function installService({ configuration } = {}) {
     if (exists.status !== 0)
       run("useradd", ["--system", "--user-group", "--home-dir", dir, "--shell", "/usr/sbin/nologin", "dmmarket"]);
   }
+  stopWeb();
   stopService(dir);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   if (process.platform === "win32") {
@@ -174,6 +156,7 @@ function installService({ configuration } = {}) {
     fs.chmodSync(envTarget, 0o600);
     fs.chmodSync(dir, 0o700);
   }
+  installWeb(configuration || {}, webPlan);
   if (process.platform === "linux") {
     run("chown", ["-R", "dmmarket:dmmarket", dir]);
     fs.writeFileSync(UNIT, systemdUnit(dir), { mode: 0o644 });
@@ -194,12 +177,15 @@ function installService({ configuration } = {}) {
   }
   console.log(`Arranque automático registrado. Aplicación y configuración: ${dir}`);
   console.log(
-    `Acceso: http://IP-DEL-SERVIDOR:${configuration?.PORT || 8000}. Comprueba el estado del servicio y el firewall.`,
+    webEnabled(configuration || {})
+      ? `Acceso: http://${configuration.WEB_HOSTNAME}. Configura el DNS local y comprueba el firewall.`
+      : `Acceso: http://IP-DEL-SERVIDOR:${configuration?.PORT || 8000}. Comprueba el estado del servicio y el firewall.`,
   );
 }
 
 function uninstallService() {
   checkAdmin();
+  uninstallWeb();
   const dir = serviceDirectory();
   stopService(dir);
   if (process.platform === "linux") {

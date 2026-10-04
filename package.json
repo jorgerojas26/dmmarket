@@ -17,6 +17,8 @@
     "build:windows": "bun --filter @dmmarket/backend build:windows",
     "build:linux": "bun --filter @dmmarket/backend build:linux",
     "package:installers": "bun scripts/package-installers.mjs",
+    "prepare:caddy": "bun scripts/prepare-caddy.mjs",
+    "test:caddy": "bun scripts/test-caddy.mjs",
     "build:installer:linux": "bun run build:linux && bun run package:installers linux",
     "build:installer:windows": "bun run build:windows && bun run package:installers windows",
     "release": "bun scripts/release.mjs",

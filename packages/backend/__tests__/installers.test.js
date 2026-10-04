@@ -3,12 +3,14 @@ const { createHash } = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { caddyFixture } = require("../tests/caddy-fixture");
 
 const repository = path.resolve(__dirname, "../../..");
 let root;
 
 beforeEach(() => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "DMMarket installer test ")));
+  caddyFixture(root);
 });
 
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -80,6 +82,15 @@ it.each([
   expect(spawnSync("unzip", ["-q", archive, "-d", extracted]).status).toBe(0);
   const directory = path.join(extracted, `DMMarket-${platform}`);
   expect(fs.existsSync(path.join(directory, launcher))).toBe(true);
+  const manifest = JSON.parse(fs.readFileSync(path.join(directory, "web/manifest.json"), "utf8"));
+  const targets =
+    platform === "linux" ? ["linux-x64"] : platform === "windows" ? ["win32-x64"] : ["darwin-x64", "darwin-arm64"];
+  for (const target of targets) {
+    const definition = manifest.targets[target];
+    const caddy = fs.readFileSync(path.join(directory, "web", target, definition.binary));
+    expect(createHash("sha256").update(caddy).digest("hex")).toBe(definition.sha256);
+    expect(fs.existsSync(path.join(directory, "web", target, "LICENSE"))).toBe(true);
+  }
   expect(fs.readFileSync(path.join(directory, "LEEME.txt"), "utf8")).toContain("No necesitas crear .env");
   expect(fs.readFileSync(path.join(directory, `${binary}.sha256`), "utf8")).toBe(
     createHash("sha256").update("test compiled executable").digest("hex"),

@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { packageInstaller } from "./package-installers.mjs";
+import { prepareCaddy } from "./prepare-caddy.mjs";
 
 const REPO = "jorgerojas26/dmmarket";
 const EXE = "dmmarket-app.exe";
@@ -95,6 +96,7 @@ const linuxHash = sha256Of(linuxBinPath);
 writeFileSync(path.join(backendDir, LINUX_SHA_FILE), linuxHash);
 console.log(`sha256 (${LINUX_BIN}): ${linuxHash}`);
 
+await prepareCaddy(root);
 const installerAssets = ["windows", "macos", "linux"].flatMap((platform) => packageInstaller(root, platform, version));
 
 // ── 4. Notas de la release: resumen de CHANGELOG.md + commits ──────────────

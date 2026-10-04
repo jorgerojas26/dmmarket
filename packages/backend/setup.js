@@ -9,10 +9,11 @@ const {
   localAddresses,
   firewallSettings,
   configureFirewall,
-  applicationReady,
+  accessReady,
   checkApplicationPort,
 } = require("./setup-network");
 const page = require("./setup-ui");
+const { webEnabled, accessOptions, accessUrls } = require("./web-config");
 
 function createSetupApp({
   token,
@@ -25,7 +26,7 @@ function createSetupApp({
   checkPort = checkApplicationPort,
   install = (configuration) => installService({ configuration }),
   firewall = configureFirewall,
-  ready = applicationReady,
+  ready = accessReady,
   finish = () => {},
 } = {}) {
   if (!token || token.length < 32) throw new Error("El asistente requiere un token de sesión seguro.");
@@ -83,6 +84,8 @@ function createSetupApp({
         DATABASE_NAME: configuration.DATABASE_NAME || "",
         HOST: configuration.HOST === "127.0.0.1" ? "127.0.0.1" : "0.0.0.0",
         PORT: configuration.PORT || "8000",
+        WEB_MODE: configuration.WEB_MODE || "direct",
+        WEB_HOSTNAME: configuration.WEB_HOSTNAME || "",
       },
     });
   });
@@ -122,10 +125,12 @@ function createSetupApp({
       await checkPort(configuration, existing, installed);
       await install(configuration);
       applied = configuration;
-      try {
-        warnings = await firewall(settings, configuration);
-      } catch {
-        warnings = ["El servicio está registrado, pero debes revisar el firewall manualmente."];
+      if (settings.enabled) {
+        try {
+          warnings = await firewall(settings, configuration);
+        } catch {
+          warnings = ["El servicio está registrado, pero debes revisar el firewall manualmente."];
+        }
       }
       res.json({ ok: true, message: "Servicio registrado. Estamos comprobando el inicio de DMMarket." });
     } catch (error) {
@@ -139,10 +144,10 @@ function createSetupApp({
   app.get("/api/status", async (_req, res) => {
     if (!applied) return res.status(409).json({ error: "La instalación aún no se ha realizado." });
     const isReady = await ready(applied);
-    const urls =
-      applied.HOST === "127.0.0.1" || !addresses.length
-        ? [`http://127.0.0.1:${applied.PORT}`]
-        : addresses.map(({ address }) => `http://${address}:${applied.PORT}`);
+    const urls = accessUrls(applied, addresses);
+    const dnsRecords = webEnabled(applied)
+      ? addresses.map(({ address }) => ({ name: applied.WEB_HOSTNAME, type: "A", address }))
+      : [];
     const diagnostic =
       process.platform === "linux"
         ? "sudo journalctl -u dmmarket.service -n 100 --no-pager"
@@ -152,10 +157,18 @@ function createSetupApp({
     res.json({
       ready: isReady,
       urls,
-      warnings,
+      warnings: webEnabled(applied)
+        ? [
+            ...warnings,
+            "El acceso con Caddy usa HTTP, sin cifrado. El nombre requiere DNS local: el instalador no configura ni comprueba el DNS de las otras máquinas.",
+          ]
+        : warnings,
+      dnsRecords,
       directory,
-      diagnostic,
-      localOnly: applied.HOST === "127.0.0.1" || !addresses.length,
+      diagnostic: webEnabled(applied)
+        ? `${diagnostic}\nLog de Caddy: ${require("./web-service").webDirectory()}/logs/caddy.log`
+        : diagnostic,
+      localOnly: accessOptions(applied).host === "127.0.0.1" || !addresses.length,
     });
   });
   app.post("/api/finish", (_req, res) => {

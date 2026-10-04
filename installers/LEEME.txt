@@ -7,8 +7,22 @@ DMMarket - Instalacion guiada
    Ubuntu con escritorio: clic derecho en Instalar.sh y Ejecutar como programa.
    Ubuntu sin escritorio: entra a la carpeta y ejecuta bash Instalar.sh.
 3. Acepta los permisos de administrador. Se abre el asistente en el navegador.
-4. Completa los datos de tu base MySQL existente, prueba la conexion y confirma la instalacion.
-5. Espera la comprobacion del servicio y guarda la direccion de acceso.
+4. Completa los datos de tu base MySQL existente y prueba la conexion.
+5. Elige desde donde acceder al servicio. El acceso directo es la opcion predeterminada.
+   En Configuracion adicional puedes habilitar Configuracion de dominio local o autorizar cambios de firewall, solo si los necesitas.
+6. Confirma la instalacion, espera la comprobacion del servicio y guarda la direccion de acceso.
+
+La instalacion basica deja DMMarket como servicio con arranque automatico tras reinicios, sin iniciar sesion.
+No requiere proxy, dominio ni DNS. No modifica el firewall salvo que lo autorices explicitamente.
+Las opciones adicionales estan deshabilitadas por defecto en una instalacion nueva y pueden configurarse despues.
+
+El ZIP incluye Caddy y su licencia para la opcion de dominio local; no se instala ni se ejecuta en el modo basico.
+Para acceso por nombre, el instalador registra Caddy en el puerto 80 y deja DMMarket solo en 127.0.0.1.
+Si el puerto 80 esta ocupado, debes resolver el conflicto antes de instalar: no se modifica el otro servicio.
+HTTP no cifra el trafico. Esta opcion no configura certificados ni publica el sistema en Internet.
+El nombre requiere un registro DNS local que apunte a la IP reservada del servidor y que los equipos usen ese DNS.
+El asistente muestra el registro que debes configurar; no instala DNS ni modifica el router.
+La comprobacion de Caddy no garantiza que el nombre resuelva desde otras maquinas.
 
 No necesitas crear .env, instalar Node.js o Bun ni registrar servicios manualmente.
 Necesitas la base MySQL del negocio y un respaldo reciente antes de instalar.
@@ -20,7 +34,7 @@ En Ubuntu sin escritorio, desde tu computadora ejecuta:
 Mantiene ese tunel abierto y abre el enlace completo en tu navegador.
 El asistente no se publica en la red local ni en Internet. No compartas su enlace; la sesion dura 30 minutos.
 
-El asistente puede crear una regla restringida a tu red privada en UFW o Windows Firewall.
+Si marcas la opcion correspondiente, el asistente puede crear una regla restringida a tu red privada en UFW o Windows Firewall. La opcion no se marca automaticamente.
 No activa UFW ni modifica SSH. Otros firewalls y el de macOS pueden necesitar autorizacion manual.
 No expongas DMMarket directamente en Internet. Reserva la IP del servidor y desactiva su suspension.
 
@@ -28,7 +42,10 @@ Los archivos de la aplicacion quedan en una ubicacion permanente:
   Ubuntu: /var/lib/dmmarket
   Windows: %ProgramData%\DMMarket
   macOS: /Library/Application Support/DMMarket
+Si habilitas Configuracion de dominio local, Caddy queda separado de la aplicacion, en una carpeta DMMarket-web del mismo directorio padre.
 Puedes volver a abrir el asistente para cambiar configuracion o reinstalar.
+Si vuelves al acceso directo, se deshabilita el arranque de nuestro Caddy; sus archivos se conservan.
+Las actualizaciones desde la interfaz actualizan DMMarket, no Caddy. Para actualizar Caddy usa un nuevo ZIP oficial.
 
 Si Windows o macOS bloquean un programa descargado, verifica que lo obtuviste de la release oficial y usa las opciones del sistema para autorizarlo. El instalador no desactiva las protecciones del sistema operativo.
 

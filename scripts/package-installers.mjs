@@ -4,6 +4,7 @@ import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, 
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { caddyTargets, prepareCaddy, verifyCaddy } from "./prepare-caddy.mjs";
 
 const platforms = {
   linux: { binary: "dmmarket-app-linux", folder: "linux", files: ["Instalar.sh"] },
@@ -30,6 +31,18 @@ export function packageInstaller(root, platform, version) {
       copyFileSync(path.join(root, "installers", definition.folder, name), target);
       if (name.endsWith(".sh") || name.endsWith(".command")) chmodSync(target, 0o755);
     }
+    const manifest = JSON.parse(readFileSync(path.join(root, "packages/backend/caddy-manifest.json"), "utf8"));
+    for (const target of caddyTargets(platform)) {
+      const caddy = manifest.targets[target];
+      const source = path.join(root, ".cache/caddy", target);
+      verifyCaddy(path.join(source, caddy.binary), caddy.sha256);
+      const destination = path.join(directory, "web", target);
+      mkdirSync(destination, { recursive: true });
+      copyFileSync(path.join(source, caddy.binary), path.join(destination, caddy.binary));
+      chmodSync(path.join(destination, caddy.binary), 0o755);
+      copyFileSync(path.join(source, "LICENSE"), path.join(destination, "LICENSE"));
+    }
+    copyFileSync(path.join(root, "packages/backend/caddy-manifest.json"), path.join(directory, "web", "manifest.json"));
     copyFileSync(path.join(root, "installers", "LEEME.txt"), path.join(directory, "LEEME.txt"));
     rmSync(output, { force: true });
     const result = spawnSync("zip", ["-q", "-r", "-X", output, folder], { cwd: temporary, encoding: "utf8" });
@@ -49,6 +62,7 @@ if (import.meta.main) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const { version } = JSON.parse(readFileSync(path.join(root, "packages", "backend", "package.json"), "utf8"));
   const requested = process.argv[2] ? [process.argv[2]] : Object.keys(platforms);
+  await prepareCaddy(root, requested.flatMap(caddyTargets));
   for (const platform of requested) {
     console.log(packageInstaller(root, platform, version).join("\n"));
   }

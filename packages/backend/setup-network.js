@@ -2,6 +2,8 @@ const os = require("node:os");
 const net = require("node:net");
 const { spawnSync } = require("node:child_process");
 const { serverOptions } = require("./server");
+const { accessOptions, webEnabled, proxyIdentity } = require("./web-config");
+const { managedWeb } = require("./web-service");
 
 function ipv4Number(address) {
   return address.split(".").reduce((value, octet) => (value * 256 + Number(octet)) >>> 0, 0);
@@ -32,7 +34,7 @@ function firewallSettings(input, configuration, platform = process.platform) {
   const enabled = input.allowFirewall === true;
   if (!enabled) return { enabled: false };
   if (platform === "darwin") throw new Error("En macOS, el permiso del firewall se revisa en Ajustes del Sistema.");
-  if (configuration.HOST !== "0.0.0.0")
+  if (accessOptions(configuration).host !== "0.0.0.0")
     throw new Error("No necesitas abrir el firewall para acceso solo en este servidor.");
   if (!privateNetwork(input.network))
     throw new Error(
@@ -43,7 +45,7 @@ function firewallSettings(input, configuration, platform = process.platform) {
 
 function configureFirewall(settings, configuration, platform = process.platform) {
   if (!settings.enabled) return [];
-  const port = configuration.PORT;
+  const port = String(accessOptions(configuration).port);
   let result;
   if (platform === "linux") {
     result = spawnSync("ufw", ["allow", "from", settings.network, "to", "any", "port", port, "proto", "tcp"], {
@@ -75,16 +77,64 @@ async function applicationReady(configuration) {
   }
 }
 
-async function checkApplicationPort(configuration, existing = {}, installed = false) {
-  const options = serverOptions(configuration);
-  const available = await new Promise((resolve, reject) => {
+function proxyResponse(configuration) {
+  return fetch("http://127.0.0.1:80/api/update/status", {
+    headers: { Host: configuration.WEB_HOSTNAME },
+    signal: AbortSignal.timeout(1500),
+  });
+}
+
+async function proxyResponding(configuration) {
+  try {
+    const response = await proxyResponse(configuration);
+    const owned = response.headers.get("X-DMMarket-Web") === proxyIdentity(configuration);
+    await response.body?.cancel();
+    return owned;
+  } catch {
+    return false;
+  }
+}
+
+async function proxyReady(configuration) {
+  try {
+    const response = await proxyResponse(configuration);
+    const status = await response.json();
+    return (
+      response.ok && status.service === true && response.headers.get("X-DMMarket-Web") === proxyIdentity(configuration)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function accessReady(configuration) {
+  return webEnabled(configuration) ? proxyReady(configuration) : applicationReady(configuration);
+}
+
+async function portAvailable(options) {
+  return new Promise((resolve, reject) => {
     const probe = net.createServer();
     probe.once("error", (error) => (error.code === "EADDRINUSE" ? resolve(false) : reject(error)));
     probe.listen(options.port, options.host, () => probe.close(() => resolve(true)));
   });
-  if (available) return;
-  if (installed && (existing.PORT || "8000") === configuration.PORT && (await applicationReady(configuration))) return;
-  throw new Error(`El puerto ${configuration.PORT} está ocupado. Elige otro puerto antes de instalar.`);
+}
+
+async function checkApplicationPort(configuration, existing = {}, installed = false) {
+  if (
+    !(await portAvailable(serverOptions(configuration))) &&
+    !(installed && (existing.PORT || "8000") === configuration.PORT && (await applicationReady(configuration)))
+  ) {
+    throw new Error(`El puerto ${configuration.PORT} está ocupado. Elige otro puerto antes de instalar.`);
+  }
+  if (
+    webEnabled(configuration) &&
+    !(await portAvailable(accessOptions(configuration))) &&
+    !(installed && webEnabled(existing) && managedWeb() && (await proxyResponding(existing)))
+  ) {
+    throw new Error(
+      "El puerto 80 está ocupado por otro servicio. Libéralo antes de habilitar Caddy; no se modificó ese servicio.",
+    );
+  }
 }
 
 module.exports = {
@@ -93,5 +143,7 @@ module.exports = {
   firewallSettings,
   configureFirewall,
   applicationReady,
+  proxyReady,
+  accessReady,
   checkApplicationPort,
 };

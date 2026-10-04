@@ -3,6 +3,7 @@ const { createHash } = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { caddyFixture } = require("../tests/caddy-fixture");
 
 const releaseScript = path.resolve(__dirname, "../../../scripts/release.mjs");
 const binaries = ["dmmarket-app.exe", "dmmarket-app-mac", "dmmarket-app-linux"];
@@ -25,6 +26,11 @@ beforeEach(() => {
     path.join(path.dirname(releaseScript), "package-installers.mjs"),
     path.join(root, "scripts", "package-installers.mjs"),
   );
+  fs.copyFileSync(
+    path.join(path.dirname(releaseScript), "prepare-caddy.mjs"),
+    path.join(root, "scripts/prepare-caddy.mjs"),
+  );
+  caddyFixture(root);
   fs.cpSync(path.resolve(__dirname, "../../../installers"), path.join(root, "installers"), { recursive: true });
   fs.writeFileSync(path.join(backendDir, "package.json"), JSON.stringify({ version: "9.9.9" }));
   fs.writeFileSync(path.join(root, "CHANGELOG.md"), "# Changelog\n\n## [v9.9.9]\n\n- Soporte para Linux.\n");

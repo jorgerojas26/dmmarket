@@ -16,7 +16,7 @@ const html = `<!doctype html>
   <form id="wizard" autocomplete="off" novalidate>
     <section data-step="1">
       <h1>Tu servidor, listo en unos pasos</h1>
-      <p>Vamos a conectar la base de datos del negocio y dejar DMMarket encendido automáticamente, incluso antes de iniciar sesión.</p>
+      <p>Vamos a conectar la base de datos del negocio e instalar DMMarket como servicio: se iniciará automáticamente al encender el equipo, incluso antes de iniciar sesión, y se recuperará si el proceso termina.</p>
       <ol class="journey"><li>Conecta tu base MySQL existente.</li><li>Elige cómo acceder al sistema.</li><li>Confirma y deja que instalemos el servicio.</li></ol>
       <div id="existing-note" class="notice" hidden>Encontramos una configuración anterior. Puedes conservarla o corregir los datos. La contraseña guardada no se mostrará.</div>
       <p class="muted">No instalamos MySQL ni importamos o reemplazamos tu base de datos. La configuración solo se guarda cuando confirmas la instalación.</p>
@@ -41,14 +41,24 @@ const html = `<!doctype html>
       <p class="muted">Si hay un error, vuelve al paso anterior para corregir los datos.</p>
     </section>
     <section data-step="4" hidden>
-      <h1>¿Desde dónde vas a acceder?</h1>
-      <label>Acceso<select id="HOST"><option value="0.0.0.0">Desde las máquinas de mi red local</option><option value="127.0.0.1">Solo desde este servidor</option></select></label>
-      <label>Puerto de DMMarket<input id="PORT" type="number" required min="1" max="65535" value="8000"><small>Recomendado: 8000. El sistema conservará siempre este puerto.</small></label>
-      <div id="firewall-options">
-        <label class="check"><input id="allow-firewall" type="checkbox">Crear una regla de firewall solo para mi red local</label>
-        <label id="network-label" hidden>Red autorizada<input id="network" placeholder="192.168.1.0/24"><small>Ejemplo: 192.168.1.0/24. Comprueba que incluye las máquinas del negocio. No se aceptan redes públicas.</small></label>
-      </div>
-      <div id="network-note" class="notice"></div>
+      <h1>Acceso al servicio</h1>
+      <p>La instalación básica permite acceder directamente al sistema y mantiene el servicio activo después de reiniciar el equipo. No requiere un dominio local ni cambios automáticos en el firewall.</p>
+      <label id="host-options">Acceso<select id="HOST"><option value="0.0.0.0">Desde las máquinas de mi red local</option><option value="127.0.0.1">Solo desde este servidor</option></select></label>
+      <label><span id="port-label">Puerto de DMMarket</span><input id="PORT" type="number" required min="1" max="65535" value="8000"><small id="port-help">Recomendado: 8000. El sistema conservará siempre este puerto.</small></label>
+      <details id="optional-settings">
+        <summary>Configuración adicional (opcional)</summary>
+        <p class="muted">Estas opciones no son necesarias para instalar el servicio. Puedes configurarlas más adelante volviendo a abrir el asistente.</p>
+        <label>Forma de acceso<select id="WEB_MODE"><option value="direct">Acceso directo</option><option value="caddy">Configuración de dominio local</option></select></label>
+        <div id="web-options" hidden>
+          <label>Dominio local<input id="WEB_HOSTNAME" maxlength="253" placeholder="reportes.solser.internal"><small>Sin http://, puerto ni ruta. Usa .internal o un subdominio de un dominio que controles; no uses .local.</small></label>
+          <div class="notice">El acceso mediante dominio usa HTTP, sin cifrado ni certificados. Debes configurar el nombre en el DNS de tu red; no instalamos DNS ni modificamos el router. Si el puerto web 80 está ocupado, la instalación se detendrá antes de cambiar el servicio.</div>
+        </div>
+        <div id="firewall-options">
+          <label class="check"><input id="allow-firewall" type="checkbox">Autorizar acceso desde mi red local en el firewall</label>
+          <label id="network-label" hidden>Red autorizada<input id="network" placeholder="192.168.1.0/24"><small>Ejemplo: 192.168.1.0/24. Comprueba que incluye las máquinas del negocio. No se aceptan redes públicas.</small></label>
+        </div>
+        <div id="network-note" class="notice"></div>
+      </details>
       <p class="muted">El acceso es para una red local de confianza: no publiques este puerto en Internet. No cambiaremos la IP del servidor ni las reglas de SSH. Reserva una IP fija en tu router y evita que el servidor se suspenda.</p>
     </section>
     <section data-step="5" hidden>
@@ -63,6 +73,7 @@ const html = `<!doctype html>
       <h1 id="result-title">Comprobando tu servidor…</h1>
       <div id="installation-result" class="notice" role="status">El servicio está registrado. Esperando a que DMMarket responda…</div>
       <ul id="access-links" class="links"></ul>
+      <div id="dns-note" class="notice" hidden></div>
       <div id="warnings" class="notice" hidden></div>
       <p id="directory" class="muted"></p>
       <div id="diagnostic" hidden><p>Si no inicia, revisa la conexión MySQL o los logs. Puedes volver a comprobar sin instalar de nuevo.</p><code id="diagnostic-command"></code></div>
@@ -98,6 +109,8 @@ input:not([type=checkbox]), select { display: block; width: 100%; margin-top: 8p
 input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 3px solid #8ad0bc; outline-offset: 2px; }
 input:disabled { background: #edf1f5; }
 small { display: block; font-weight: 400; color: #65788b; margin-top: 7px; line-height: 1.5; }
+details { border: 1px solid #d7e5ef; border-radius: 10px; padding: 16px; margin: 20px 0; }
+summary { cursor: pointer; font-weight: 600; color: #34526d; }
 .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
 .check { display: flex; gap: 10px; align-items: flex-start; line-height: 1.55; }
 .check input { width: 18px; height: 18px; margin: 2px 0 0; flex-shrink: 0; accent-color: #127d64; }
@@ -131,7 +144,7 @@ let busy = false;
 let verified = false;
 let metadata;
 const names = ['Bienvenida', 'Base de datos', 'Comprobación', 'Acceso', 'Confirmación', 'Resultado'];
-const keys = ['DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_NAME', 'HOST', 'PORT'];
+const keys = ['DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_NAME', 'HOST', 'PORT', 'WEB_MODE', 'WEB_HOSTNAME'];
 
 async function api(path, body) {
   const response = await fetch('/api/' + path, {
@@ -147,7 +160,8 @@ async function api(path, body) {
 function payload() {
   const result = Object.fromEntries(keys.map((key) => [key, byId(key).value]));
   result.useSavedPassword = byId('use-saved-password').checked;
-  result.allowFirewall = byId('allow-firewall').checked && result.HOST === '0.0.0.0' && metadata.platform !== 'darwin';
+  if (result.WEB_MODE === 'caddy') result.HOST = '127.0.0.1';
+  result.allowFirewall = byId('allow-firewall').checked && (result.WEB_MODE === 'caddy' || result.HOST === '0.0.0.0') && metadata.platform !== 'darwin';
   result.network = byId('network').value.trim();
   return result;
 }
@@ -179,14 +193,23 @@ function show(number) {
 }
 
 function networkOptions() {
-  const lan = byId('HOST').value === '0.0.0.0';
+  const proxy = byId('WEB_MODE').value === 'caddy';
+  const lan = proxy || byId('HOST').value === '0.0.0.0';
+  byId('host-options').hidden = proxy;
+  byId('HOST').disabled = proxy;
+  byId('web-options').hidden = !proxy;
+  byId('WEB_HOSTNAME').disabled = !proxy;
+  byId('WEB_HOSTNAME').required = proxy;
+  byId('PORT').min = proxy ? '1024' : '1';
+  byId('port-label').textContent = proxy ? 'Puerto interno de DMMarket' : 'Puerto de DMMarket';
+  byId('port-help').textContent = proxy ? 'Recomendado: 8000. Este puerto será interno; los usuarios accederán mediante el dominio configurado.' : 'Recomendado: 8000. El sistema conservará siempre este puerto.';
   byId('firewall-options').hidden = !lan || metadata.platform === 'darwin';
   byId('network-label').hidden = !lan || !byId('allow-firewall').checked;
   byId('network').required = lan && byId('allow-firewall').checked && metadata.platform !== 'darwin';
   byId('network-note').textContent = !lan
     ? 'Solo se podrá acceder desde esta máquina. No se abrirá el firewall.'
     : metadata.platform === 'darwin'
-      ? 'Si el firewall de macOS bloquea el acceso, autoriza DMMarket en Ajustes del Sistema → Red → Firewall → Opciones. El asistente no desactiva tu firewall.'
+      ? 'Si el firewall de macOS bloquea el acceso, autoriza DMMarket y, si habilitaste el dominio local, Caddy en Ajustes del Sistema → Red → Firewall → Opciones. El asistente no desactiva tu firewall.'
       : 'La regla es opcional y solo permite TCP desde la red indicada. En Ubuntu usa UFW, sin activarlo ni cambiar las reglas de SSH. Si usas otro firewall, deberás autorizar el puerto allí.';
 }
 
@@ -225,11 +248,13 @@ function summary() {
     ['Base de datos', values.DATABASE_NAME],
     ['MySQL', values.DATABASE_HOST + ':' + values.DATABASE_PORT],
     ['Usuario', values.DATABASE_USER],
-    ['Acceso', values.HOST === '0.0.0.0' ? 'Red local · puerto ' + values.PORT : 'Solo este servidor · puerto ' + values.PORT],
+    ['Acceso', values.WEB_MODE === 'caddy' ? 'http://' + values.WEB_HOSTNAME + ' · sin cifrado' : values.HOST === '0.0.0.0' ? 'Red local · puerto ' + values.PORT : 'Solo este servidor · puerto ' + values.PORT],
+    ['Dominio local', values.WEB_MODE === 'caddy' ? 'Habilitado' : 'No habilitado'],
     ['Firewall', values.allowFirewall ? 'Permitir solo ' + values.network : 'Sin cambios automáticos'],
     ['Archivos', metadata.directory],
     ['Arranque', 'Automático, sin iniciar sesión'],
   ];
+  if (values.WEB_MODE === 'caddy') rows.push(['DNS local', 'Configurar fuera del instalador: ' + values.WEB_HOSTNAME + ' → IP reservada del servidor']);
   byId('summary').replaceChildren();
   for (const [label, value] of rows) {
     const term = document.createElement('dt');
@@ -255,10 +280,11 @@ async function checkStartup() {
       if (result.ready) break;
       await new Promise((resolve) => setTimeout(resolve, 1500));
     } while (Date.now() < deadline);
-    byId('result-title').textContent = result.ready ? '¡DMMarket está listo!' : 'Registrado, pero aún no responde';
+    const proxy = payload().WEB_MODE === 'caddy';
+    byId('result-title').textContent = result.ready ? proxy ? 'Servidor listo; revisa el DNS local' : '¡DMMarket está listo!' : 'Registrado, pero aún no responde';
     byId('installation-result').className = result.ready ? 'notice success' : 'notice error';
     byId('installation-result').textContent = result.ready
-      ? 'El sistema está funcionando y arrancará automáticamente al encender el servidor.'
+      ? proxy ? 'El acceso mediante dominio está configurado en este servidor y los servicios tienen arranque automático. Configura o comprueba el DNS desde las otras máquinas antes de dar por terminado el acceso por dominio.' : 'El sistema está funcionando y arrancará automáticamente al encender el servidor.'
       : 'No pudimos confirmar el inicio. No des la instalación por terminada: el supervisor seguirá reintentando, pero puede haber un error de MySQL, del puerto o de las migraciones.';
     byId('access-links').replaceChildren();
     for (const url of result.urls) {
@@ -271,6 +297,11 @@ async function checkStartup() {
       item.append(link);
       byId('access-links').append(item);
     }
+    const records = result.dnsRecords || [];
+    byId('dns-note').hidden = !proxy;
+    byId('dns-note').textContent = proxy
+      ? 'En el DNS del router o de tu red, crea un registro A para el nombre con la IP reservada de la interfaz LAN correcta. Estas son las IP privadas detectadas; elige la que corresponde, no agregues todas automáticamente:\n\n' + (records.length ? records.map((record) => record.name + ' → ' + record.address).join('\n') : 'No se detectó una IP privada. Revisa la conexión de red del servidor.') + '\n\nDistribuye ese DNS mediante DHCP. Desde otra máquina, comprueba el nombre con nslookup y abre la dirección HTTP indicada. No necesitas redirigir puertos hacia Internet.'
+      : '';
     const notices = [...result.warnings];
     if (result.localOnly) notices.push('Esta dirección es local al servidor. Si estás usando SSH desde otra máquina, también necesitas un túnel para el puerto de DMMarket.');
     byId('warnings').textContent = notices.join('\n\n');
@@ -336,6 +367,7 @@ byId('cancel').addEventListener('click', () => { if (!busy && confirm('¿Cerrar 
 byId('test-button').addEventListener('click', checkConnection);
 byId('retry-button').addEventListener('click', checkStartup);
 byId('HOST').addEventListener('change', networkOptions);
+byId('WEB_MODE').addEventListener('change', networkOptions);
 byId('allow-firewall').addEventListener('change', networkOptions);
 byId('backup-confirmed').addEventListener('change', updateButtons);
 byId('install-confirmed').addEventListener('change', updateButtons);
@@ -351,7 +383,8 @@ for (const key of keys.filter((key) => key.startsWith('DATABASE_'))) byId(key).a
     byId('use-saved-password').checked = metadata.hasSavedPassword;
     byId('DATABASE_PASSWORD').disabled = metadata.hasSavedPassword;
     byId('network').value = metadata.addresses[0]?.network || '';
-    byId('allow-firewall').checked = metadata.platform !== 'darwin' && !!metadata.addresses.length;
+    byId('allow-firewall').checked = false;
+    byId('optional-settings').open = metadata.fields.WEB_MODE === 'caddy';
     networkOptions();
     updateButtons();
     if (metadata.completed) { show(6); await checkStartup(); }

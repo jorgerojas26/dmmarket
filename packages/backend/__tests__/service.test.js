@@ -113,6 +113,11 @@ describe.each(["linux", "darwin", "win32"])("service installation (%s)", (platfo
       if ([".env", "dmmarket.service", "com.dmmarket.server.plist"].includes(name)) return true;
       return exists(filename);
     });
+    const readFile = fs.readFileSync;
+    jest.spyOn(fs, "readFileSync").mockImplementation((filename, ...args) => {
+      if (path.basename(String(filename)) === ".env") return Buffer.from("DATABASE_PASSWORD=old-password\n");
+      return readFile(filename, ...args);
+    });
     jest.spyOn(console, "log").mockImplementation(() => {});
     jest.isolateModules(() => {
       const service = require("../service");
@@ -133,6 +138,9 @@ describe.each(["linux", "darwin", "win32"])("service installation (%s)", (platfo
     expect(fs.copyFileSync).toHaveBeenCalledTimes(1);
     expect(fs.copyFileSync.mock.calls[0][0]).toBe(process.execPath);
     const calls = childProcess.spawnSync.mock.calls;
+    expect(
+      calls.some(([, args]) => args.some((arg) => /dmmarket-web|com\.dmmarket\.web|DMMarket-Web|caddy/.test(arg))),
+    ).toBe(false);
     if (platform === "linux") {
       expect(calls).toContainEqual(["systemctl", ["enable", "--now", "dmmarket.service"], { encoding: "utf8" }]);
       expect(calls).toContainEqual(["chown", ["-R", "dmmarket:dmmarket", "/var/lib/dmmarket"], { encoding: "utf8" }]);
@@ -178,6 +186,22 @@ describe.each(["linux", "darwin", "win32"])("service installation (%s)", (platfo
     expect(require("dotenv").parse(write[1])).toEqual({ ...configuration, EXTRA_SETTING: "keep-me" });
     expect(fs.renameSync).toHaveBeenCalledWith(write[0], expect.stringMatching(/\.env$/));
     expect(fs.copyFileSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not stop the current application when proxy preflight fails", () => {
+    expect(() =>
+      install({
+        configuration: { HOST: "127.0.0.1", PORT: "8000", WEB_MODE: "caddy", WEB_HOSTNAME: "reportes.solser.internal" },
+      }),
+    ).toThrow();
+    expect(fs.copyFileSync).not.toHaveBeenCalled();
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(
+      childProcess.spawnSync.mock.calls.some(([command, args]) => command === "systemctl" && args[0] === "stop"),
+    ).toBe(false);
+    expect(
+      childProcess.spawnSync.mock.calls.some(([, args]) => args.some((arg) => arg.includes("Stop-ScheduledTask"))),
+    ).toBe(false);
   });
 
   it("rejects missing configuration before copying or starting the application", () => {
