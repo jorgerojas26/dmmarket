@@ -1,7 +1,7 @@
-import { fetchBackups } from 'api/backups';
+import { createBackup, fetchBackups } from 'api/backups';
 import { DateTime } from 'luxon';
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Spinner, Table } from 'react-bootstrap';
+import { Alert, Badge, Button, Modal, Spinner, Table } from 'react-bootstrap';
 import BackupIcon from './BackupIcon';
 import DrivePanel from './DrivePanel';
 import './backups.css';
@@ -21,6 +21,10 @@ const BackupsPanel = () => {
     const [error, setError] = useState(null);
     const [refresh, setRefresh] = useState(0);
     const [drive, setDrive] = useState(null);
+    const [confirming, setConfirming] = useState(false);
+    const [creating, setCreating] = useState(false);
+    const [createError, setCreateError] = useState(null);
+    const polling = status?.running ? 3000 : 60000;
     const uploads = Object.fromEntries((drive?.uploads || []).map((entry) => [entry.name, entry]));
     const latest = status?.backups[0];
     const needsAttention = status?.lastError || status?.retentionError;
@@ -63,12 +67,32 @@ const BackupsPanel = () => {
         };
         setLoading(true);
         void load();
-        const timer = setInterval(load, 60000);
+        const timer = setInterval(load, polling);
         return () => {
             cancelled = true;
             clearInterval(timer);
         };
-    }, [refresh]);
+    }, [refresh, polling]);
+
+    const create = async () => {
+        setCreating(true);
+        setCreateError(null);
+        try {
+            const response = await createBackup(status.controlToken);
+            if (response.status !== 202) {
+                throw new Error(response.data?.error?.message || 'No se pudo iniciar el respaldo.');
+            }
+            setStatus((current) => ({ ...current, running: true }));
+        } catch (failure) {
+            setCreateError(failure.message || 'No se pudo iniciar el respaldo.');
+        } finally {
+            setCreating(false);
+            setConfirming(false);
+            setRefresh((value) => value + 1);
+        }
+    };
+
+    const createDisabled = loading || creating || status?.running || !status?.controlToken || Boolean(error);
 
     return (
         <div className="backups-panel">
@@ -104,6 +128,25 @@ const BackupsPanel = () => {
                     {status && <div className="small">Se muestran los últimos datos disponibles.</div>}
                 </Alert>
             )}
+
+            <Modal show={confirming} onHide={() => !creating && setConfirming(false)} centered>
+                <Modal.Header closeButton={!creating}>
+                    <Modal.Title>Crear respaldo ahora</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <p>Se creará una copia nueva sin reemplazar las anteriores ni cambiar el horario diario.</p>
+                    <p>MySQL puede bloquear temporalmente las escrituras mientras se genera el respaldo.</p>
+                    <p>Las copias manuales también cuentan dentro del límite de 30 respaldos.</p>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" disabled={creating} onClick={() => setConfirming(false)}>
+                        Cancelar
+                    </Button>
+                    <Button disabled={createDisabled} onClick={create}>
+                        {creating ? 'Iniciando…' : 'Confirmar respaldo'}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
 
             {status && (
                 <section className="backups-summary" aria-label="Resumen de respaldos">
@@ -161,6 +204,18 @@ const BackupsPanel = () => {
                         </div>
                         {status && <Badge bg={`backups-${localVariant}`}>{localLabel}</Badge>}
                     </div>
+                    <div className="backups-actions backups-manual-actions">
+                        <Button disabled={createDisabled} onClick={() => setConfirming(true)}>
+                            {creating || status?.running ? (
+                                <>
+                                    <Spinner animation="border" size="sm" aria-hidden="true" /> Creando respaldo…
+                                </>
+                            ) : (
+                                'Crear respaldo ahora'
+                            )}
+                        </Button>
+                    </div>
+                    {createError && <Alert variant="danger">{createError}</Alert>}
                     {status && (
                         <>
                             {status.running && (
@@ -174,7 +229,8 @@ const BackupsPanel = () => {
                                     <strong>Último intento fallido: {formatDate(status.lastError.occurredAt)}</strong>
                                     <div>{status.lastError.message}</div>
                                     <div className="backups-alert-note">
-                                        Los intentos fallidos se reintentan automáticamente cada hora.
+                                        Puedes crear un respaldo ahora para reintentar. Los intentos programados
+                                        fallidos se reintentan automáticamente cada hora.
                                     </div>
                                 </Alert>
                             )}

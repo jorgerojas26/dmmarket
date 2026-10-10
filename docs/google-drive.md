@@ -30,7 +30,7 @@ El permiso solicitado es únicamente [`drive.file`](https://developers.google.co
 
 ## Cargas y recuperación de errores
 
-Un trabajador independiente revisa los respaldos cada minuto, al arrancar y al habilitar la cuenta. Solo considera `dmmarket-AAAA-MM-DD.sql.gz` regulares y no vacíos; no sube `.env`, archivos `.partial` ni credenciales temporales.
+Un trabajador independiente revisa los respaldos cada minuto, al arrancar y al habilitar la cuenta. Solo considera los respaldos diarios `dmmarket-AAAA-MM-DD.sql.gz` y manuales `dmmarket-AAAA-MM-DD-manual-HHMMSSmmm-UUID.sql.gz`, regulares y no vacíos; no sube `.env`, archivos `.partial` ni credenciales temporales.
 
 - Cifrado en streaming **AES-256-GCM**, clave aleatoria de 256 bits y un IV por contenido. Los reintentos de un mismo archivo inmutable reconstruyen el mismo ciphertext; un cambio de contenido genera otro identificador e IV. El hash de los bytes realmente cifrados se comprueba antes de enviarlos.
 - Nombres opacos `dm-IDENTIFICADOR.dmbak`. El nombre original y el contenido están cifrados. Google sigue viendo tamaño, carpeta y fecha de carga.

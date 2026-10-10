@@ -466,6 +466,14 @@
     flex: 1 1 auto;
 }
 
+.backups-manual-actions {
+    margin: 0 0 20px;
+}
+
+.backups-manual-actions .btn {
+    flex: 0 1 auto;
+}
+
 .backups-card a {
     color: #93c5fd;
 }

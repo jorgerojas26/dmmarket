@@ -326,3 +326,26 @@ it("requires confirmation to enable and serves recovery keys only through an aut
   expect(key.headers["content-disposition"]).toContain("attachment");
   expect(key.headers["cache-control"]).toBe("no-store");
 });
+
+it("uploads and decrypts manual backups with their original names", async () => {
+  const backups = createBackupService({
+    directory,
+    dump: (file) => fs.writeFile(file, "manual database bytes"),
+    logger,
+  });
+  backups.createManual();
+  while ((await backups.status()).running) await new Promise((resolve) => setImmediate(resolve));
+  const [backup] = await backups.list();
+  expect(backup.name).toContain("-manual-");
+  const drive = service();
+  await connectAndEnable(drive);
+  api.upload.mockImplementation(async ({ file }) => {
+    const destination = path.join(directory, "restored.sql.gz");
+    expect((await decryptBackup(file, destination, await store.key())).name).toBe(backup.name);
+    expect(await fs.readFile(destination, "utf8")).toBe("manual database bytes");
+    return { id: "manual-upload-id" };
+  });
+  await drive.check();
+  expect(api.upload).toHaveBeenCalledTimes(1);
+  expect((await drive.status()).uploads).toEqual([expect.objectContaining({ name: backup.name, status: "uploaded" })]);
+});

@@ -1,13 +1,14 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { fetchBackups } from 'api/backups';
+import { createBackup, fetchBackups } from 'api/backups';
 import { fetchDriveStatus } from 'api/google_drive';
 import BackupsPanel, { formatSize } from './BackupsPanel';
 
-jest.mock('api/backups', () => ({ fetchBackups: jest.fn() }));
+jest.mock('api/backups', () => ({ createBackup: jest.fn(), fetchBackups: jest.fn() }));
 jest.mock('api/google_drive', () => ({ fetchDriveStatus: jest.fn() }));
 
 const STATUS = {
+    controlToken: 'backup-control-token',
     directory: '/var/lib/dmmarket/backups',
     retention: 30,
     nextRunAt: '2026-08-21T02:00:00Z',
@@ -17,6 +18,7 @@ const STATUS = {
 };
 
 beforeEach(() => {
+    createBackup.mockReset().mockResolvedValue({ status: 202, data: { ok: true } });
     fetchDriveStatus.mockReset().mockResolvedValue({
         status: 200,
         data: { configured: false, connected: false, localAccess: true, uploads: [] },
@@ -151,3 +153,74 @@ it.each([
         expect(within(table).getByText(label)).toHaveClass(color);
     },
 );
+
+it('requires confirmation and allows cancellation without starting a backup', async () => {
+    render(<BackupsPanel />);
+    await screen.findByText('dmmarket-2026-08-20.sql.gz');
+    userEvent.click(screen.getByRole('button', { name: 'Crear respaldo ahora' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('MySQL puede bloquear temporalmente las escrituras');
+    expect(dialog).toHaveTextContent('límite de 30 respaldos');
+    expect(createBackup).not.toHaveBeenCalled();
+    userEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    expect(createBackup).not.toHaveBeenCalled();
+});
+
+it('starts a confirmed backup, prevents duplicate clicks and does not claim completion', async () => {
+    let resolve;
+    createBackup.mockImplementationOnce(
+        () =>
+            new Promise((done) => {
+                resolve = done;
+            }),
+    );
+    render(<BackupsPanel />);
+    await screen.findByText('dmmarket-2026-08-20.sql.gz');
+    userEvent.click(screen.getByRole('button', { name: 'Crear respaldo ahora' }));
+    userEvent.click(await screen.findByRole('button', { name: 'Confirmar respaldo' }));
+    expect(createBackup).toHaveBeenCalledWith(STATUS.controlToken);
+    expect(screen.getByRole('button', { name: 'Iniciando…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+    fetchBackups.mockResolvedValue({ status: 200, data: { ...STATUS, running: true } });
+    await act(async () => resolve({ status: 202, data: { ok: true } }));
+    expect(await screen.findByText(/Respaldo en curso/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Creando respaldo…' })).toBeDisabled();
+    expect(createBackup).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('dmmarket-2026-08-20.sql.gz')).toBeInTheDocument();
+});
+
+it.each([
+    () => Promise.resolve({ status: 409, data: { error: { message: 'Ya hay un respaldo en curso.' } } }),
+    () => Promise.reject(new Error('Sin conexión.')),
+])('shows a manual request failure without losing the history', async (failure) => {
+    createBackup.mockImplementationOnce(failure);
+    render(<BackupsPanel />);
+    await screen.findByText('dmmarket-2026-08-20.sql.gz');
+    userEvent.click(screen.getByRole('button', { name: 'Crear respaldo ahora' }));
+    userEvent.click(await screen.findByRole('button', { name: 'Confirmar respaldo' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText('dmmarket-2026-08-20.sql.gz')).toBeInTheDocument();
+});
+
+it('polls a running backup every three seconds and displays the completed manual copy', async () => {
+    jest.useFakeTimers();
+    fetchBackups.mockResolvedValue({ status: 200, data: { ...STATUS, running: true } });
+    render(<BackupsPanel />);
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Creando respaldo…' })).toBeDisabled();
+    const completed = {
+        ...STATUS,
+        backups: [
+            {
+                name: 'dmmarket-2026-08-20-manual-120000000-example.sql.gz',
+                completedAt: '2026-08-20T12:00:01Z',
+                sizeBytes: 100,
+            },
+        ],
+    };
+    fetchBackups.mockResolvedValue({ status: 200, data: completed });
+    await act(async () => jest.advanceTimersByTime(3000));
+    expect(screen.getByText(completed.backups[0].name)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Crear respaldo ahora' })).toBeEnabled();
+    expect(screen.queryByText(/Respaldo en curso/)).not.toBeInTheDocument();
+});

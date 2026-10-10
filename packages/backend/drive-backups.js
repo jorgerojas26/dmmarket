@@ -1,7 +1,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { backupDirectory, backupService } = require("./backups");
+const { BACKUP_NAME, backupDirectory, backupService } = require("./backups");
 const { createDriveStore } = require("./drive-store");
 const { createDriveClient } = require("./drive-client");
 const { startDriveOAuth } = require("./drive-oauth");
@@ -170,8 +170,7 @@ function createDriveBackupService({
   async function upload(state, backup) {
     currentBackup = backup.name;
     const source = path.join(directory, backup.name);
-    if (!/^dmmarket-\d{4}-\d{2}-\d{2}\.sql\.gz$/.test(backup.name))
-      throw new Error("El archivo no es un respaldo final de DMMarket.");
+    if (!BACKUP_NAME.test(backup.name)) throw new Error("El archivo no es un respaldo final de DMMarket.");
     const stat = await fs.lstat(source);
     if (!stat.isFile() || !stat.size) throw new Error("El respaldo local ya no está disponible.");
     const key = await store.key();

@@ -1,6 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UpdateProvider } from 'context/update';
+import { createMemoryHistory } from 'history';
+import { Router } from 'react-router-dom';
 import ConfiguracionPage from './index';
 
 // react-markdown y sus dependencias son ESM-only; no se transforman en Jest
@@ -11,12 +13,16 @@ jest.mock('react-markdown', () => {
     return Markdown;
 });
 
-const renderPage = () =>
-    render(
-        <UpdateProvider>
-            <ConfiguracionPage />
-        </UpdateProvider>,
-    );
+const renderPage = (history = createMemoryHistory({ initialEntries: ['/configuracion'] })) => ({
+    ...render(
+        <Router history={history}>
+            <UpdateProvider>
+                <ConfiguracionPage />
+            </UpdateProvider>
+        </Router>,
+    ),
+    history,
+});
 
 const jsonResponse = (body, status = 200) => ({
     ok: status >= 200 && status < 300,
@@ -188,4 +194,46 @@ it('muestra la conexión y el estado de Google Drive sin confundirlos con el res
     expect(await screen.findByText('Exitoso')).toBeInTheDocument();
     expect(await screen.findByText('Subido')).toBeInTheDocument();
     expect(screen.getByText('Desconectar')).toBeDisabled();
+});
+
+it('puts Acerca de first and records the default section in the URL', async () => {
+    mockRoutes(baseRoutes());
+    const { container, history } = renderPage();
+    expect(container.querySelector('.nav-label')).toHaveTextContent('Acerca de');
+    expect(history.location.hash).toBe('#acercade');
+    expect(await screen.findByText('v1.0.0')).toBeInTheDocument();
+});
+
+it.each(['#acercade', '#respaldos'])('restores %s after remounting and preserves query parameters', async (hash) => {
+    mockRoutes(
+        baseRoutes({ '/api/backups': jsonResponse({ backups: [], retention: 30, nextRunAt: '2026-08-21T02:00:00Z' }) }),
+    );
+    const history = createMemoryHistory({ initialEntries: [`/configuracion?source=test${hash}`] });
+    const view = renderPage(history);
+    expect(history.location.hash).toBe(hash);
+    view.unmount();
+    renderPage(history);
+    expect(history.location.search).toBe('?source=test');
+    if (hash === '#respaldos') {
+        expect(await screen.findByText('No hay respaldos exitosos todavía.')).toBeInTheDocument();
+    } else {
+        expect(await screen.findByText('Versión instalada')).toBeInTheDocument();
+    }
+});
+
+it('updates the URL when selecting a section and supports back and forward', async () => {
+    mockRoutes(
+        baseRoutes({ '/api/backups': jsonResponse({ backups: [], retention: 30, nextRunAt: '2026-08-21T02:00:00Z' }) }),
+    );
+    const { history } = renderPage();
+    userEvent.click(screen.getByText('Respaldos', { selector: 'span.nav-label' }));
+    expect(history.location.hash).toBe('#respaldos');
+    expect(await screen.findByText('No hay respaldos exitosos todavía.')).toBeInTheDocument();
+    act(() => history.goBack());
+    expect(history.location.hash).toBe('#acercade');
+    expect(screen.getByText('Versión instalada')).toBeInTheDocument();
+    act(() => history.goForward());
+    expect(history.location.hash).toBe('#respaldos');
+    userEvent.click(screen.getByText('Acerca de', { selector: 'span.nav-label' }));
+    expect(history.location.hash).toBe('#acercade');
 });

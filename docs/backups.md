@@ -42,20 +42,31 @@ BACKUP_DUMP_COMMAND=/ruta/al/mysqldump
 
 `BACKUP_DUMP_COMMAND` es un ejecutable, no una línea de comandos ni un script de shell con argumentos. Por ejemplo, en Windows: `BACKUP_DUMP_COMMAND="C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin\\mysqldump.exe"`. Reinicia DMMarket después de cambiar estas variables. Usa una carpeta privada, fuera del directorio público del frontend, en un disco con espacio suficiente. Ejecuta una sola instancia de DMMarket por carpeta de respaldos y base de datos.
 
+## Crear un respaldo manual
+
+En **Configuración → Respaldos**, pulsa **Crear respaldo ahora** y confirma la operación. Se genera una copia nueva incluso si ya existe un respaldo del día, sin reemplazar archivos anteriores ni modificar la programación diaria. El aviso recuerda que MySQL puede bloquear temporalmente las escrituras durante el dump.
+
+El botón se desactiva mientras hay un respaldo en curso; no se ejecutan respaldos manuales y programados simultáneamente. La solicitud inicia el trabajo en segundo plano, no indica que haya terminado. La pantalla consulta el estado cada tres segundos mientras se ejecuta y muestra el archivo únicamente después de completarlo correctamente. Si falla, conserva las copias anteriores y permite reintentar con el botón sin esperar una hora. Los respaldos manuales fallidos no se reintentan automáticamente.
+
+Las copias manuales también cuentan dentro del límite de **30 respaldos exitosos** y pueden enviarse a Google Drive si está habilitado. Crear muchas copias manuales reduce la cantidad de días disponibles localmente.
+
+La sección seleccionada se conserva en la URL: `/configuracion#acercade` o `/configuracion#respaldos`. Recargar o navegar atrás/adelante mantiene la sección correspondiente; **Acerca de** es la primera opción y la predeterminada.
+
 ## Archivos y retención
 
-- Formato: `dmmarket-AAAA-MM-DD.sql.gz`.
+- Formato diario: `dmmarket-AAAA-MM-DD.sql.gz`.
+- Formato manual: `dmmarket-AAAA-MM-DD-manual-HHMMSSmmm-UUID.sql.gz`, con fecha/hora local del servidor y un identificador único para evitar colisiones.
 - Incluye estructura, datos, vistas, triggers, rutinas y eventos de la base configurada. No incluye otras bases, usuarios/permisos de MySQL ni el archivo `.env`.
 - El SQL se comprime en streaming, sin cargar toda la base en memoria.
 - La contraseña se pasa mediante un archivo temporal privado, no en los argumentos del proceso. Se elimina al terminar. En Unix la carpeta temporal tiene permisos `0700` y los archivos `0600`.
 - Solo se publica el archivo final si el dump termina con código cero, produce datos y la compresión termina correctamente. Los `.partial` no aparecen en la lista.
 - Se conservan **los últimos 30 respaldos exitosos disponibles**. Los más antiguos se eliminan únicamente después de publicar un nuevo respaldo exitoso; los archivos ajenos al patrón no se borran.
-- La lista se reconstruye desde los archivos y sobrevive a reinicios. No es un registro histórico de los archivos ya eliminados.
+- La lista se reconstruye desde los archivos y sobrevive a reinicios. Se ordena por fecha del respaldo y, dentro de la misma fecha, por finalización más reciente. No es un registro histórico de los archivos ya eliminados.
 - Los respaldos locales están comprimidos, **no cifrados**. Proteger el disco y sus permisos. Una interrupción brusca del proceso puede dejar archivos temporales privados; revisarlos con la aplicación detenida antes de eliminarlos.
 
 En **Configuración → Respaldos** se muestran la carpeta, próxima ejecución, respaldo en curso, último error del proceso actual, nombre, fecha de finalización, tamaño comprimido y estado exitoso. Si no se pudieron eliminar los archivos antiguos, se muestra una advertencia separada: el respaldo nuevo sigue siendo exitoso. La lista se actualiza cada minuto o con **Actualizar lista**. La fecha de ejecución usa el huso horario del servidor; las fechas mostradas usan el del navegador.
 
-`GET /api/backups` devuelve esos metadatos con `Cache-Control: no-store`. No permite descargar SQL ni crear/restaurar/borrar respaldos desde HTTP. Como el resto de esta aplicación, debe mantenerse en una red de confianza; no exponer el servidor directamente a Internet.
+`GET /api/backups` devuelve esos metadatos y un token de control con `Cache-Control: no-store`. `POST /api/backups`, con la cabecera `x-backup-token` y el cuerpo JSON `{ "confirmed": true }`, inicia un respaldo manual y responde `202`; rechaza solicitudes sin token (`403`), sin confirmación (`400`) o si ya hay uno en curso (`409`). No permite descargar SQL, restaurar ni borrar respaldos desde HTTP. El token protege frente a solicitudes entre sitios, no sustituye un sistema de usuarios/permisos: como el resto de esta aplicación, debe mantenerse en una red de confianza; no exponer el servidor directamente a Internet.
 
 ## Comprobar recuperación
 

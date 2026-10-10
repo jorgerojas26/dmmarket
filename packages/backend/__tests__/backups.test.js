@@ -6,6 +6,7 @@ const { gunzipSync } = require("node:zlib");
 const express = require("express");
 const request = require("supertest");
 const {
+  BACKUP_NAME,
   backupDirectory,
   scheduledDate,
   nextRunAt,
@@ -281,10 +282,153 @@ it("serves live backup metadata without caching or exposing a download endpoint"
   const app = express();
   app.use("/api/backups", require("../routes/backups"));
   const response = await request(app).get("/api/backups").expect(200);
-  expect(response.body).toEqual(status);
+  expect(response.body).toMatchObject(status);
+  expect(response.body.controlToken).toMatch(/^[a-f0-9]{64}$/);
   expect(response.headers["cache-control"]).toBe("no-store");
   await request(app).get("/api/backups/dump.sql.gz").expect(404);
   jest.spyOn(console, "error").mockImplementation(() => {});
   backupService.status.mockRejectedValue(new Error("EACCES"));
   expect((await request(app).get("/api/backups").expect(500)).body.error.message).toMatch(/permisos/);
+});
+
+async function waitForBackup(backups) {
+  while ((await backups.status()).running) await new Promise((resolve) => setImmediate(resolve));
+}
+
+it("creates unique manual copies even with the same clock without replacing the daily backup", async () => {
+  const dump = jest.fn((file) => fs.writeFile(file, "backup"));
+  const backups = service({ dump });
+  await backups.check();
+  backups.createManual();
+  await waitForBackup(backups);
+  backups.createManual();
+  await waitForBackup(backups);
+  await backups.check();
+  const files = await backups.list();
+  expect(files).toHaveLength(3);
+  expect(new Set(files.map((file) => file.name)).size).toBe(3);
+  const manual = files.filter((file) => file.name.includes("-manual-"));
+  expect(manual).toHaveLength(2);
+  for (const file of manual) {
+    expect(file.name).toMatch(BACKUP_NAME);
+    expect(file.name).toContain("dmmarket-2026-08-20-manual-020000000-");
+    expect(file.scheduledDate).toBe("2026-08-20");
+  }
+  expect(await fs.readFile(path.join(directory, "dmmarket-2026-08-20.sql.gz"), "utf8")).toBe("backup");
+  expect(dump).toHaveBeenCalledTimes(3);
+});
+
+it("keeps the daily slot pending after a manual backup before or after 02:00", async () => {
+  let clock = new Date(2026, 7, 20, 1, 30);
+  const dump = jest.fn((file) => fs.writeFile(file, "backup"));
+  const backups = service({ dump, now: () => clock });
+  backups.createManual();
+  await waitForBackup(backups);
+  await backups.check();
+  expect((await backups.list()).map((file) => file.name)).toContain("dmmarket-2026-08-19.sql.gz");
+  clock = date;
+  backups.createManual();
+  await waitForBackup(backups);
+  await backups.check();
+  expect((await backups.list()).map((file) => file.name)).toContain("dmmarket-2026-08-20.sql.gz");
+  expect(dump).toHaveBeenCalledTimes(4);
+});
+
+it("allows immediate manual retries after a failure and preserves previous copies", async () => {
+  const dump = jest.fn((file) => fs.writeFile(file, "backup"));
+  const backups = service({ dump });
+  await backups.check();
+  dump.mockImplementationOnce(async (file) => {
+    await fs.writeFile(file, "partial");
+    throw new Error("manual failed");
+  });
+  backups.createManual();
+  await waitForBackup(backups);
+  expect((await backups.status()).lastError.message).toBe("manual failed");
+  expect(await fs.readdir(directory)).toEqual(["dmmarket-2026-08-20.sql.gz"]);
+  backups.createManual();
+  await waitForBackup(backups);
+  expect(await backups.list()).toHaveLength(2);
+  expect((await backups.status()).lastError).toBeNull();
+});
+
+it("does not throttle the daily attempt after a failed manual backup", async () => {
+  const dump = jest
+    .fn()
+    .mockRejectedValueOnce(new Error("manual failed"))
+    .mockImplementation((file) => fs.writeFile(file, "backup"));
+  const backups = service({ dump });
+  backups.createManual();
+  await waitForBackup(backups);
+  await backups.check();
+  expect(dump).toHaveBeenCalledTimes(2);
+  expect((await backups.list())[0].name).toBe("dmmarket-2026-08-20.sql.gz");
+});
+
+it("rejects manual requests during a scheduled or manual backup and skips concurrent scheduled checks", async () => {
+  let finish;
+  const dump = jest.fn(async (file) => {
+    await fs.writeFile(file, "backup");
+    await new Promise((resolve) => {
+      finish = resolve;
+    });
+  });
+  const backups = service({ dump });
+  const daily = backups.check();
+  while (!finish) await new Promise((resolve) => setImmediate(resolve));
+  expect(() => backups.createManual()).toThrow("Ya hay un respaldo en curso");
+  finish();
+  await daily;
+  finish = null;
+  backups.createManual();
+  while (!finish) await new Promise((resolve) => setImmediate(resolve));
+  expect(() => backups.createManual()).toThrow("Ya hay un respaldo en curso");
+  await backups.check();
+  expect(await backups.list()).toHaveLength(1);
+  finish();
+  await waitForBackup(backups);
+  expect(dump).toHaveBeenCalledTimes(2);
+});
+
+it("counts manual backups in the retention limit and lists the latest copies of a date first", async () => {
+  const backups = service();
+  await backups.check();
+  await fs.utimes(path.join(directory, "dmmarket-2026-08-20.sql.gz"), date, date);
+  for (let i = 0; i < 30; i++) {
+    backups.createManual();
+    await waitForBackup(backups);
+  }
+  const files = await backups.list();
+  expect(files).toHaveLength(30);
+  expect(files.every((file) => file.name.includes("-manual-"))).toBe(true);
+  expect((await service().list()).map((file) => file.name)).toEqual(files.map((file) => file.name));
+});
+
+it("starts a manual backup asynchronously only with a valid control token and confirmation", async () => {
+  jest.spyOn(backupService, "status").mockResolvedValue({ backups: [], running: false });
+  const create = jest.spyOn(backupService, "createManual").mockImplementation(() => {});
+  const app = express();
+  app.use(express.json());
+  app.use("/api/backups", require("../routes/backups"));
+  const { body } = await request(app).get("/api/backups").expect(200);
+  await request(app).post("/api/backups").send({ confirmed: true }).expect(403);
+  await request(app).post("/api/backups").set("x-backup-token", "x".repeat(64)).send({ confirmed: true }).expect(403);
+  await request(app).post("/api/backups").set("x-backup-token", body.controlToken).send({}).expect(400);
+  expect(create).not.toHaveBeenCalled();
+  const response = await request(app)
+    .post("/api/backups")
+    .set("x-backup-token", body.controlToken)
+    .send({ confirmed: true })
+    .expect(202);
+  expect(response.body).toEqual({ ok: true });
+  expect(response.headers["cache-control"]).toBe("no-store");
+  expect(create).toHaveBeenCalledTimes(1);
+  create.mockImplementation(() => {
+    throw Object.assign(new Error("Ya hay un respaldo en curso."), { code: "BACKUP_RUNNING" });
+  });
+  await request(app)
+    .post("/api/backups")
+    .set("x-backup-token", body.controlToken)
+    .send({ confirmed: true })
+    .expect(409);
 });

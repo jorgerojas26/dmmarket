@@ -6,11 +6,13 @@ const { spawn } = require("node:child_process");
 const { pipeline } = require("node:stream/promises");
 const { Transform } = require("node:stream");
 const { createGzip } = require("node:zlib");
+const { randomUUID } = require("node:crypto");
 const { serviceDirectory } = require("./service");
 
 const RETENTION = 30;
 const RETRY_MS = 60 * 60 * 1000;
-const BACKUP_NAME = /^dmmarket-(\d{4}-\d{2}-\d{2})\.sql\.gz$/;
+const BACKUP_NAME =
+  /^dmmarket-(\d{4}-\d{2}-\d{2})(?:-manual-\d{9}-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})?\.sql\.gz$/;
 
 function backupDirectory(env = process.env, platform = process.platform, home = os.homedir()) {
   if (env.BACKUP_DIRECTORY) return path.resolve(env.BACKUP_DIRECTORY);
@@ -171,21 +173,35 @@ function createBackupService({
         if (error.code !== "ENOENT") throw error;
       }
     }
-    return backups.sort((a, b) => b.scheduledDate.localeCompare(a.scheduledDate));
+    return backups.sort(
+      (a, b) =>
+        b.scheduledDate.localeCompare(a.scheduledDate) ||
+        b.completedAt.localeCompare(a.completedAt) ||
+        b.name.localeCompare(a.name),
+    );
   }
 
-  async function check() {
+  async function run(manual = false) {
     const date = now();
     const slot = scheduledDate(date);
-    if (running || (lastAttempt?.slot === slot && date.getTime() - lastAttempt.time < RETRY_MS)) return;
+    if (running || (!manual && lastAttempt?.slot === slot && date.getTime() - lastAttempt.time < RETRY_MS)) return;
     running = true;
     let temporary;
     try {
-      const backups = await list();
-      if (backups.some((backup) => backup.scheduledDate >= slot)) return;
-      lastAttempt = { slot, time: date.getTime() };
+      if (!manual) {
+        const backups = await list();
+        if (backups.some((backup) => !backup.name.includes("-manual-") && backup.scheduledDate >= slot)) return;
+        lastAttempt = { slot, time: date.getTime() };
+      }
       await fsp.mkdir(directory, { recursive: true, mode: 0o700 });
-      const target = path.join(directory, `dmmarket-${slot}.sql.gz`);
+      const time =
+        [date.getHours(), date.getMinutes(), date.getSeconds()]
+          .map((value) => String(value).padStart(2, "0"))
+          .join("") + String(date.getMilliseconds()).padStart(3, "0");
+      const name = manual
+        ? `dmmarket-${localDate(date)}-manual-${time}-${randomUUID()}.sql.gz`
+        : `dmmarket-${slot}.sql.gz`;
+      const target = path.join(directory, name);
       temporary = `${target}.${process.pid}.partial`;
       await fsp.rm(temporary, { force: true });
       await dump(temporary);
@@ -208,9 +224,9 @@ function createBackupService({
         logger.error("No se pudo aplicar la retención de respaldos:", error.message);
       }
     } catch (error) {
-      lastAttempt = { slot, time: now().getTime() };
+      if (!manual) lastAttempt = { slot, time: now().getTime() };
       lastError = { message: error.message, occurredAt: now().toISOString() };
-      logger.error("No se pudo completar el respaldo diario:", error.message);
+      logger.error("No se pudo completar el respaldo:", error.message);
     } finally {
       if (temporary) {
         try {
@@ -221,6 +237,17 @@ function createBackupService({
       }
       running = false;
     }
+  }
+
+  function check() {
+    return run();
+  }
+
+  function createManual() {
+    if (running) {
+      throw Object.assign(new Error("Ya hay un respaldo en curso. Espera a que termine."), { code: "BACKUP_RUNNING" });
+    }
+    void run(true);
   }
 
   async function status() {
@@ -247,8 +274,16 @@ function createBackupService({
     timer = undefined;
   }
 
-  return { check, status, list, start, stop };
+  return { check, createManual, status, list, start, stop };
 }
 
 const backupService = createBackupService();
-module.exports = { backupDirectory, scheduledDate, nextRunAt, dumpDatabase, createBackupService, backupService };
+module.exports = {
+  BACKUP_NAME,
+  backupDirectory,
+  scheduledDate,
+  nextRunAt,
+  dumpDatabase,
+  createBackupService,
+  backupService,
+};
