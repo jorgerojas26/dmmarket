@@ -7,6 +7,20 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.3.0] - 2026-10-10
+
+### Nuevas funciones
+
+- **Respaldos cuando los necesites**: desde Configuración puedes crear una copia del negocio en cualquier momento, sin reemplazar las anteriores ni cambiar el horario diario. Antes de empezar se pide confirmación y se avisa del posible bloqueo temporal de las escrituras. Las copias manuales también cuentan dentro del límite de 30 respaldos conservados.
+
+### Mejoras
+
+- **Acerca de más accesible**: aparece como primera opción del menú lateral de Configuración.
+
+### Correcciones
+
+- **Configuración conserva la sección elegida**: al recargar la página o navegar atrás y adelante, sigues en Acerca de o Respaldos según la dirección que tienes abierta.
+
 ## [v1.2.0] - 2026-10-03
 
 ### Nuevas funciones
