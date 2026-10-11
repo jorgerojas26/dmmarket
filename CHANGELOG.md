@@ -7,6 +7,13 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.4.0] - 2026-10-11
+
+### Correcciones
+
+- **Tablero de ventas sin esperas interminables**: si una consulta anterior queda detenida, las nuevas consultas pueden continuar sin quedarse esperando indefinidamente. Al renovar los reportes también se liberan las consultas que estaban esperando.
+- **Reportes más ágiles en Linux**: las consultas recientes se reutilizan correctamente al volver a abrirlas, evitando repetir cálculos innecesarios.
+
 ## [v1.3.0] - 2026-10-10
 
 ### Nuevas funciones
