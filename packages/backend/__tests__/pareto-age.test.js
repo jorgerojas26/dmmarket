@@ -20,13 +20,34 @@ describe("Pareto: maduración de productos", () => {
   });
 
   it("usa la fecha del reporte y no la fecha actual", () => {
-    const { products, newProducts } = splitParetoByAge(
-      [rows[0]],
-      new Map([[1, "2021-03-20"]]),
-      "2021-04-01",
-    );
+    const { products, newProducts } = splitParetoByAge([rows[0]], new Map([[1, "2021-03-20"]]), "2021-04-01");
     expect(products).toEqual([]);
     expect(newProducts).toHaveLength(1);
+  });
+
+  it("clasifica y ordena fechas de compra devueltas como Buffer", () => {
+    const firstPurchases = new Map([
+      [1, Buffer.from("2026-10-09")],
+      [2, Buffer.from("2026-10-10")],
+      [3, Buffer.from("2025-01-01")],
+    ]);
+    const { products, newProducts } = splitParetoByAge(rows, firstPurchases, "2026-10-11");
+    expect(products.map((p) => p.productId)).toEqual([3]);
+    expect(products[0].firstPurchaseDate).toBe("2025-01-01");
+    expect(newProducts.map((p) => p.productId)).toEqual([2, 1]);
+    expect(newProducts.map((p) => p.firstPurchaseDate)).toEqual(["2026-10-10", "2026-10-09"]);
+  });
+
+  it("mantiene el límite de 30 días y las fechas nulas al combinar texto y Buffer", () => {
+    const firstPurchases = new Map([
+      [1, Buffer.from("2026-06-01")],
+      [2, "2026-06-30"],
+      [3, null],
+    ]);
+    const { products, newProducts } = splitParetoByAge(rows, firstPurchases, "2026-07-01");
+    expect(products.map((p) => p.productId)).toEqual([1, 3]);
+    expect(products.map((p) => p.firstPurchaseDate)).toEqual(["2026-06-01", null]);
+    expect(newProducts.map((p) => p.productId)).toEqual([2]);
   });
 
   it("conserva en el ABC productos sin primera compra conocida", () => {

@@ -10,7 +10,8 @@ const splitParetoByAge = (rows, firstPurchases, to) => {
   const newProducts = [];
 
   for (const row of rows) {
-    const firstPurchaseDate = firstPurchases.get(row.productId);
+    const value = firstPurchases.get(row.productId);
+    const firstPurchaseDate = Buffer.isBuffer(value) ? value.toString("utf8") : value;
     const product = { ...row, firstPurchaseDate };
     if (firstPurchaseDate && firstPurchaseDate > cutoffDate) newProducts.push(product);
     else products.push(product);
