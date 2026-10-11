@@ -7,6 +7,12 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.4.1] - 2026-10-11
+
+### Correcciones
+
+- **Pareto de ventas con productos recientes**: el análisis vuelve a cargar sin errores al ordenar las fechas de primera compra de los productos nuevos, manteniendo la clasificación según el límite de 30 días.
+
 ## [v1.4.0] - 2026-10-11
 
 ### Correcciones
