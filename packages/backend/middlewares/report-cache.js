@@ -1,6 +1,7 @@
 const TTL_MS = 60 * 60 * 1000;
 const MAX_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRIES = 500;
+const PENDING_TTL_MS = 30_000;
 
 // The app is a single-business, read-mostly report server. Exchange rates and
 // auto-update progress must stay live; dashboards, modals and drill-downs share
@@ -8,7 +9,13 @@ const MAX_ENTRIES = 500;
 const isReportPath = (path) =>
   /^\/(dashboard|clients|providers|purchases|sales|groups|products|invoices|employees)(\/|$)/.test(path);
 
-function createReportCache({ ttlMs = TTL_MS, maxBytes = MAX_BYTES, maxEntries = MAX_ENTRIES, now = Date.now } = {}) {
+function createReportCache({
+  ttlMs = TTL_MS,
+  maxBytes = MAX_BYTES,
+  maxEntries = MAX_ENTRIES,
+  pendingTtlMs = PENDING_TTL_MS,
+  now = Date.now,
+} = {}) {
   const entries = new Map();
   const pending = new Map();
   let bytes = 0;
@@ -23,6 +30,7 @@ function createReportCache({ ttlMs = TTL_MS, maxBytes = MAX_BYTES, maxEntries = 
   const clear = () => {
     generation++;
     entries.clear();
+    for (const flight of pending.values()) flight.cancel();
     pending.clear();
     bytes = 0;
   };
@@ -73,12 +81,13 @@ function createReportCache({ ttlMs = TTL_MS, maxBytes = MAX_BYTES, maxEntries = 
     }
 
     const running = pending.get(key);
-    if (running) {
+    if (running && refresh) running.cancel();
+    else if (running) {
       const entry = await running.promise;
       if (res.destroyed) return;
       if (entry && running.generation === generation) return send(res, entry, "SHARED");
-      // Failed/aborted/invalidated leader: retry through the cache, not stale data.
-      return middleware(req, res, next);
+      res.set("X-Report-Cache", "BYPASS");
+      return next();
     }
     if (pending.size >= maxEntries) return next();
 
@@ -89,25 +98,26 @@ function createReportCache({ ttlMs = TTL_MS, maxBytes = MAX_BYTES, maxEntries = 
         resolve = done;
       }),
     };
-    pending.set(key, flight);
     res.set("X-Report-Cache", "MISS");
     let body;
     let finished = false;
+    let timer;
     const originalJson = res.json;
     res.json = function (data) {
-      if (this.statusCode === 200) body = JSON.stringify(data);
+      if (!finished && this.statusCode === 200) body = JSON.stringify(data);
       return originalJson.call(this, data);
     };
     const complete = (success) => {
       if (finished) return;
       finished = true;
+      clearTimeout(timer);
       if (pending.get(key) === flight) pending.delete(key);
       let entry;
       if (
         success &&
         body !== undefined &&
         res.statusCode === 200 &&
-        !res.getHeader("Set-Cookie") &&
+        !res.hasHeader("Set-Cookie") &&
         flight.generation === generation
       ) {
         const created = now();
@@ -116,8 +126,12 @@ function createReportCache({ ttlMs = TTL_MS, maxBytes = MAX_BYTES, maxEntries = 
       }
       resolve(entry);
     };
+    flight.cancel = () => complete(false);
+    pending.set(key, flight);
+    timer = setTimeout(flight.cancel, pendingTtlMs);
+    timer.unref?.();
     res.once("finish", () => complete(true));
-    res.once("close", () => complete(false));
+    res.once("close", () => complete(res.writableFinished));
     return next();
   };
 

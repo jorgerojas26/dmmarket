@@ -1,3 +1,5 @@
+const { spawnSync } = require("node:child_process");
+const path = require("node:path");
 const express = require("express");
 const request = require("supertest");
 const { createReportCache, isReportPath } = require("../middlewares/report-cache");
@@ -218,4 +220,130 @@ it("evicts stored entries when their combined bytes exceed the budget", async ()
   await request(env.app).get("/api/clients/dashboard?page=2");
   expect((await request(env.app).get("/api/clients/dashboard?page=2")).headers["x-report-cache"]).toBe("HIT");
   expect((await request(env.app).get("/api/clients/dashboard?page=1")).headers["x-report-cache"]).toBe("MISS");
+});
+
+it("releases followers when a leader never completes and ignores its late response", async () => {
+  const started = deferred();
+  const release = deferred();
+  const env = setup({ pendingTtlMs: 50 }, async (_req, res, calls) => {
+    if (calls === 1) {
+      started.resolve();
+      await release.promise;
+    }
+    res.json({ calls });
+  });
+  const first = request(env.app)
+    .get("/api/clients/dashboard")
+    .then((res) => res);
+  await started.promise;
+  try {
+    const recovered = await request(env.app).get("/api/clients/dashboard").timeout({ deadline: 500 });
+    expect(recovered.body.calls).toBe(2);
+    expect(recovered.headers["x-report-cache"]).toBe("BYPASS");
+    const fresh = await request(env.app).get("/api/clients/dashboard");
+    expect(fresh.body.calls).toBe(3);
+    release.resolve();
+    await first;
+    const cached = await request(env.app).get("/api/clients/dashboard");
+    expect(cached.headers["x-report-cache"]).toBe("HIT");
+    expect(cached.body.calls).toBe(3);
+  } finally {
+    release.resolve();
+    await first;
+    env.cache.clear();
+  }
+});
+
+it("manual clear releases existing followers without waiting for the leader", async () => {
+  const started = deferred();
+  const release = deferred();
+  const env = setup({}, async (_req, res, calls) => {
+    if (calls === 1) {
+      started.resolve();
+      await release.promise;
+    }
+    res.json({ calls });
+  });
+  const first = request(env.app)
+    .get("/api/clients/dashboard")
+    .then((res) => res);
+  await started.promise;
+  const follower = request(env.app)
+    .get("/api/clients/dashboard")
+    .timeout({ deadline: 500 })
+    .then((res) => res);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  env.cache.clear();
+  try {
+    expect((await follower).body.calls).toBe(2);
+  } finally {
+    release.resolve();
+    await first;
+    env.cache.clear();
+  }
+});
+
+it("explicit refresh replaces a pending leader and cannot be overwritten by it", async () => {
+  const started = deferred();
+  const release = deferred();
+  const env = setup({}, async (_req, res, calls) => {
+    if (calls === 1) {
+      started.resolve();
+      await release.promise;
+    }
+    res.json({ calls });
+  });
+  const first = request(env.app)
+    .get("/api/clients/dashboard")
+    .then((res) => res);
+  await started.promise;
+  try {
+    const fresh = await request(env.app)
+      .get("/api/clients/dashboard")
+      .set("Cache-Control", "no-cache")
+      .timeout({ deadline: 500 });
+    expect(fresh.body.calls).toBe(2);
+    release.resolve();
+    await first;
+    expect((await request(env.app).get("/api/clients/dashboard")).body.calls).toBe(2);
+  } finally {
+    release.resolve();
+    await first;
+    env.cache.clear();
+  }
+});
+
+it("caches responses when the runtime returns an empty array for a missing Set-Cookie header", async () => {
+  const env = setup({}, (_req, res, calls) => {
+    const getHeader = res.getHeader.bind(res);
+    res.getHeader = (name) => (name.toLowerCase() === "set-cookie" && !res.hasHeader(name) ? [] : getHeader(name));
+    res.json({ calls });
+  });
+  const first = await request(env.app).get("/api/clients/dashboard");
+  const second = await request(env.app).get("/api/clients/dashboard");
+  expect(second.headers["x-report-cache"]).toBe("HIT");
+  expect(second.body).toEqual(first.body);
+  expect(env.calls).toBe(1);
+});
+
+it("retains a completed response when only the close listener observes completion", async () => {
+  const env = setup({}, (_req, res, calls) => {
+    res.removeListener("finish", res.listeners("finish").at(-1));
+    res.json({ calls });
+  });
+  const first = await request(env.app).get("/api/clients/dashboard");
+  const second = await request(env.app).get("/api/clients/dashboard");
+  expect(second.headers["x-report-cache"]).toBe("HIT");
+  expect(second.body).toEqual(first.body);
+  expect(env.calls).toBe(1);
+});
+
+it.each([process.execPath, "bun"])("shares, caches and recovers stalled reports under %s", (runtime) => {
+  const result = spawnSync(runtime, [path.join(__dirname, "fixtures/report-cache-runtime.cjs")], {
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(result.stderr || result.stdout);
+  expect(result.stdout).toContain("report-cache runtime passed");
 });
