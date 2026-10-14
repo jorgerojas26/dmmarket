@@ -46,6 +46,16 @@
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
 }
+.cxc-stat-loading {
+    display: inline-flex;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+.cxc-stat-loading .spinner-border {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-width: 0.12em;
+}
 .cxc-stat-primary dd {
     color: #0d6efd;
 }
@@ -93,37 +103,6 @@
 .cxc-page .cxc-reset-filters:hover,
 .cxc-page .cxc-reset-filters:focus {
     color: #0dcaf0;
-}
-.cxc-page .cxc-portfolio-table {
-    table-layout: fixed;
-    font-size: 0.8rem;
-}
-.cxc-page .cxc-portfolio-table :where(th, td) {
-    padding: 0.4rem 0.65rem;
-    line-height: 1.4;
-}
-.cxc-page .cxc-portfolio-table :where(th) {
-    font-size: 0.73rem;
-    text-transform: none;
-    letter-spacing: 0;
-    white-space: normal;
-}
-.cxc-page .cxc-portfolio-table :where(th:first-child) {
-    width: 40%;
-    text-align: left;
-}
-.cxc-page .cxc-portfolio-table :where(th:nth-child(2), th:nth-child(3)) {
-    width: 16%;
-    text-align: right;
-}
-.cxc-page .cxc-portfolio-table :where(th:nth-child(4)) {
-    width: 13%;
-}
-.cxc-page .cxc-portfolio-table :where(th:nth-child(5)) {
-    width: 15%;
-}
-.cxc-page .cxc-portfolio-table :where(td:first-child) {
-    text-align: left;
 }
 .cxc-client-header {
     margin-right: 1rem;
@@ -186,28 +165,6 @@
 }
 .cxc-client-link + small {
     display: block;
-}
-.cxc-page .cxc-portfolio-table .cxc-client-link {
-    display: block;
-    color: #e9ecef;
-    max-width: 100%;
-    padding: 0;
-    font-size: inherit;
-    line-height: inherit;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.cxc-page .cxc-portfolio-table .cxc-client-link:hover,
-.cxc-page .cxc-portfolio-table .cxc-client-link:focus {
-    color: #0dcaf0;
-}
-.cxc-money {
-    display: block;
-    text-align: right;
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
 }
 .cxc-modal .modal-dialog {
     max-width: 1280px;
@@ -562,20 +519,6 @@
     }
     .cxc-form-grid {
         grid-template-columns: 1fr;
-    }
-    .cxc-page .cxc-portfolio-table :where(th:nth-child(n + 4), td:nth-child(n + 4)) {
-        display: none;
-    }
-    .cxc-page .cxc-portfolio-table :where(th:first-child) {
-        width: 34%;
-    }
-    .cxc-page .cxc-portfolio-table :where(th:nth-child(2), th:nth-child(3)) {
-        width: 33%;
-    }
-    .cxc-page .cxc-portfolio-table :where(td) {
-        height: 44px;
-        padding: 0.4rem 0.35rem;
-        font-size: 0.75rem;
     }
     .cxc-panel-heading {
         align-items: flex-start;

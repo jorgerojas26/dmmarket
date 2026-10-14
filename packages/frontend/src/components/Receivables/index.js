@@ -7,11 +7,9 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import Select from 'react-select';
-import 'components/ProvidersTable/styles.css';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
-import Spinner from 'react-bootstrap/Spinner';
 import ClientModal from './ClientModal';
 import { dateLabel, money } from './format';
 import { formatMoney } from 'utils/format';
@@ -44,6 +42,7 @@ export default function Receivables() {
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState({ sortBy: 'overdue', sortDir: 'desc' });
     const [selected, setSelected] = useState(null);
+    const [lastSummary, setLastSummary] = useState(null);
     const pageElement = useRef(null);
     const paymentTrigger = useRef(null);
     const currencyRate = useContext(CurrencyRateContext)?.currencyRate;
@@ -51,6 +50,11 @@ export default function Receivables() {
     useEffect(() => {
         if (data?.routes) setRoutes(data.routes);
     }, [data?.routes]);
+    useEffect(() => {
+        if (data?.summary && !error) setLastSummary(data.summary);
+    }, [data?.summary, error]);
+    const summary = error ? null : data?.summary || lastSummary;
+    const summaryLoading = !error && (!data || isValidating);
     const handleSearch = useCallback((term) => {
         setSearch(term);
         setPage(1);
@@ -82,13 +86,13 @@ export default function Receivables() {
             {
                 Header: 'Saldo pendiente',
                 accessor: 'balance',
-                Cell: ({ value }) => <span className="cxc-money">{money(value)}</span>,
+                Cell: ({ value }) => money(value),
             },
             {
                 Header: 'Vencido',
                 accessor: 'overdue',
                 Cell: ({ value }) => (
-                    <span className={`cxc-money ${Number(value) > 0 ? 'cxc-overdue' : ''}`}>{money(value)}</span>
+                    <span className={Number(value) > 0 ? 'cxc-overdue' : ''}>{money(value)}</span>
                 ),
             },
             { Header: 'Facturas pendientes', accessor: 'pendingCount' },
@@ -202,17 +206,9 @@ export default function Receivables() {
                     abonos ni modificar deudas. Antes de habilitar cobros, valida y concilia la cartera operativa.
                 </Alert>
             )}
-            {data && !error ? (
-                <div>
-                    <Summary summary={data.summary} portfolio />
-                </div>
-            ) : (
-                !error && (
-                    <div className="cxc-loading" role="status">
-                        <Spinner animation="border" size="sm" /> Cargando cartera…
-                    </div>
-                )
-            )}
+            <div>
+                <Summary summary={summary} portfolio loading={summaryLoading} />
+            </div>
             <div className="cxc-filters clients-content-wrapper">
                 <Form.Group className="cxc-filter">
                     <Form.Label htmlFor="cxc-route">Ruta</Form.Label>
@@ -276,12 +272,10 @@ export default function Receivables() {
                     </Button>
                 )}
             </div>
-            <div className="providers-table-panel clients-content-wrapper">
-                <div className="providers-table__body">
-                    <Table
-                        data={error ? [] : data?.data || []}
-                        columns={columns}
-                        className="providers-table cxc-portfolio-table"
+            <div className="clients-content-wrapper">
+                <Table
+                    data={error ? [] : data?.data || []}
+                    columns={columns}
                         loading={!error && (!data || isValidating)}
                         onRowClick={openAccount}
                         maxHeight={520}
@@ -320,16 +314,15 @@ export default function Receivables() {
                             storageKey: 'cuentas-por-cobrar',
                             defaultOrientation: 'landscape',
                         }}
-                        pagination={{
-                            enabled: true,
-                            page,
-                            totalPages: Math.ceil((data?.total || 0) / 20),
-                            totalRows: data?.total || 0,
-                            pageSize: 20,
-                            onPageChange: setPage,
-                        }}
-                    />
-                </div>
+                    pagination={{
+                        enabled: true,
+                        page,
+                        totalPages: Math.ceil((data?.total || 0) / 20),
+                        totalRows: data?.total || 0,
+                        pageSize: 20,
+                        onPageChange: setPage,
+                    }}
+                />
             </div>
             {paymentPicker && (
                 <PaymentClientPicker

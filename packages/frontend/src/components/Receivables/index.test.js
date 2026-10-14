@@ -192,6 +192,19 @@ it('includes every payment movement in the client account PDF', async () => {
     expect(historyTable.table.body[22][3].text).toBe('$525,00');
 });
 
+it('keeps KPI cards and values visible while filters reload the portfolio', async () => {
+    const { container } = render(<Receivables />);
+    const stats = container.querySelector('.cxc-stats');
+    await waitFor(() => expect(within(stats).getByText('$100,00')).toBeInTheDocument());
+    useReceivables.mockReturnValue({ data: undefined, isValidating: true, mutate: refresh });
+    await userEvent.click(screen.getByLabelText('Cartera'));
+    await userEvent.click(screen.getByText('Sin deuda'));
+    expect(within(stats).getByText('$100,00')).toBeInTheDocument();
+    expect(stats).toHaveAttribute('aria-busy', 'true');
+    expect(container.querySelectorAll('.cxc-stat-loading')).toHaveLength(4);
+    expect(screen.queryByText('Cargando cartera…')).not.toBeInTheDocument();
+});
+
 it('keeps financial errors distinct from an empty debt portfolio', () => {
     useReceivables.mockReturnValue({ error: new Error('No se pudo conectar'), mutate: refresh });
     render(<Receivables />);
