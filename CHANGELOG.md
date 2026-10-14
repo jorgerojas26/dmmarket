@@ -7,6 +7,14 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.5.0] - 2026-10-14
+
+### Nuevas funciones
+
+- **Cuentas por cobrar en Clientes**: nueva sección para consultar la cartera de clientes con deuda, sus saldos pendientes y vencidos, las facturas y el historial de cobranza. Incluye búsqueda y filtros por ruta y vencimiento.
+- **Abonos y gestión de deuda**: con la cobranza habilitada, registra pagos en bolívares o dólares, revisa su distribución entre las facturas antes de confirmar y consulta el saldo actualizado. También puedes anular abonos, cerrar deudas y reabrir cierres, indicando el motivo y conservando el historial. Los cierres manuales se distinguen del dinero recibido.
+- **Estados de cuenta para imprimir**: genera el listado de cuentas por cobrar y el estado de cuenta de cada cliente, con sus facturas, abonos y movimientos de cobranza.
+
 ## [v1.4.1] - 2026-10-11
 
 ### Correcciones
