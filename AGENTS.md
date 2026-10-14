@@ -1,4 +1,5 @@
 ## Rules
+- DO NOT WRITE UNIT TESTS
 - Always use bun as the package manager and task runner (never pnpm). Workspace globs live in the `workspaces` field of the root `package.json`.
 - `bun run` executes Node-shebang package binaries with the system Node runtime (not Bun's runtime). That is expected — do not add `--bun` for react-scripts/jest.
 - The project uses an older `react-scripts` (CRA 4) that fails under Node ≥17 OpenSSL and trips its preflight check because bun hoists `jest` (from `@dmmarket/backend`) into the root `node_modules`. Both workarounds — `NODE_OPTIONS=--openssl-legacy-provider` and `SKIP_PREFLIGHT_CHECK=true` — are already embedded in the `start`/`build` scripts of `packages/frontend/package.json`. Do not remove them.
