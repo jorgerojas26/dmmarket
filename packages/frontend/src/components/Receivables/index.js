@@ -1,5 +1,6 @@
 import { darkSelectStyles } from 'components/selectStyles';
 import Table from 'components/Table';
+import RouteFilter from 'components/RouteFilter';
 import { useReceivables } from 'hooks/useReceivables';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { fetchReceivables } from 'api/receivables';
@@ -29,7 +30,6 @@ const dueOptions = [
 export default function Receivables() {
     const [search, setSearch] = useState('');
     const [payment, setPayment] = useState(null);
-    const [routes, setRoutes] = useState([]);
     const [ruta, setRuta] = useState('');
     const [due, setDue] = useState('all');
     const [page, setPage] = useState(1);
@@ -41,9 +41,6 @@ export default function Receivables() {
     const paymentOrigin = useRef(null);
     const currencyRate = useContext(CurrencyRateContext)?.currencyRate;
     const { data, error, isValidating, mutate } = useReceivables({ search, ruta, state: 'debt', due, page, ...sort });
-    useEffect(() => {
-        if (data?.routes) setRoutes(data.routes);
-    }, [data?.routes]);
     useEffect(() => {
         if (data?.summary && !error) setLastSummary(data.summary);
     }, [data?.summary, error]);
@@ -232,22 +229,12 @@ export default function Receivables() {
                 <Summary summary={summary} portfolio loading={summaryLoading} />
             </div>
             <div className="cxc-filters clients-content-wrapper">
-                <Form.Group className="cxc-filter">
+                <Form.Group className="cxc-filter cxc-route-filter">
                     <Form.Label htmlFor="cxc-route">Ruta</Form.Label>
-                    <Select
+                    <RouteFilter
                         inputId="cxc-route"
-                        options={routes
-                            .filter((route) => route.id)
-                            .map((route) => ({ value: route.id, label: route.id }))}
                         value={ruta ? { value: ruta, label: ruta } : null}
-                        placeholder="Todas las rutas"
-                        isClearable
                         onChange={changeFilter(setRuta, '')}
-                        styles={darkSelectStyles}
-                        classNamePrefix="search-select"
-                        menuPortalTarget={document.body}
-                        menuPlacement="auto"
-                        noOptionsMessage={() => 'Sin rutas'}
                     />
                 </Form.Group>
                 <Form.Group className="cxc-filter">

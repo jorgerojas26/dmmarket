@@ -1,15 +1,13 @@
 import InvoicesTable from 'components/InvoicesTable';
 import SelectedInvoicesModal from 'components/Modals/SelectedInvoicesModal';
 import ProductsTable from 'components/ProductsTable';
-import { darkSelectStyles } from 'components/selectStyles';
+import RouteFilter from 'components/RouteFilter';
 import { fetchInvoiceList } from 'api/invoice';
-import { useClientRoutes } from 'hooks/useClients';
 import { useInvoiceList } from 'hooks/useInvoice';
 import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
 import useMediaQuery from 'hooks/useMediaQuery';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from 'react-bootstrap';
-import Select from 'react-select';
 
 const LIMIT = 50;
 const EMPTY_INVOICES = [];
@@ -57,20 +55,6 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     useEffect(() => {
         setPage(1);
     }, [dateRange.from, dateRange.to, selectedRuta]);
-
-    const { data: routes = [], isLoading: routesLoading } = useClientRoutes(showNoe, isActive);
-
-    const routeOptions = useMemo(
-        () =>
-            routes.map((route) => ({
-                value: route.Id_Ruta,
-                label:
-                    route.Nombre && route.Nombre !== route.Id_Ruta
-                        ? `${route.Nombre} (${route.Id_Ruta})`
-                        : route.Id_Ruta,
-            })),
-        [routes],
-    );
 
     // ── SWR hook ──
     const { data: invoiceRes, isLoading } = useInvoiceList(
@@ -228,19 +212,12 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
             <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <div className="d-flex flex-wrap gap-3 mb-3">
                     <div style={{ minWidth: '220px' }}>
-                        <Select
-                            options={routeOptions}
+                        <RouteFilter
                             value={selectedRuta}
                             onChange={setSelectedRuta}
                             placeholder="Todas las rutas"
-                            isClearable
-                            isLoading={routesLoading}
-                            styles={darkSelectStyles}
-                            classNamePrefix="search-select"
-                            menuPortalTarget={document.body}
-                            menuPlacement="auto"
-                            loadingMessage={() => 'Cargando...'}
-                            noOptionsMessage={() => 'Sin resultados'}
+                            showNoe={showNoe}
+                            enabled={isActive}
                         />
                     </div>
                     {selectedRows.length > 0 && (

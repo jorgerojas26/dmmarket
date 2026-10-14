@@ -54,6 +54,8 @@ export default function OperationForm({
     const id = useRef(requestId());
     const title = useRef(null);
     const reviewTitle = useRef(null);
+    const confirmButton = useRef(null);
+    const amountInput = useRef(null);
     const errorElement = useRef(null);
     const payment = action.type === 'payment';
     const rateAvailable = Number.isFinite(Number(rate)) && Number(rate) > 0;
@@ -70,14 +72,15 @@ export default function OperationForm({
         };
     }, []);
     useEffect(() => {
-        if (!busy) {
-            if (compact && !preview) document.getElementById('cxc-amount')?.focus();
+        if (!busy && !disabled) {
+            if (preview && payment) confirmButton.current?.focus();
+            else if (compact && !preview) amountInput.current?.focus();
             else (preview ? reviewTitle : title).current?.focus();
         }
-    }, [preview, busy]);
+    }, [preview, busy, compact, payment, disabled]);
     useEffect(() => {
-        if (error && !busy) errorElement.current?.focus();
-    }, [error, busy]);
+        if (error && !busy && !disabled) errorElement.current?.focus();
+    }, [error, busy, disabled]);
     const change = (key, value) => {
         onDirtyChange(true);
         setFields((current) => ({
@@ -128,9 +131,66 @@ export default function OperationForm({
             onBusyChange(false);
         }
     };
+    const rateInfo = (
+        <div className={`cxc-rate${!rateAvailable ? ' cxc-rate-unavailable' : ''}`} role="status">
+            <span>Tasa REF: {rateAvailable ? `${rateLabel(rate)} Bs/USD` : 'No disponible'}</span>
+            {!rateAvailable && <p>Actualiza la tasa o registra el abono en USD.</p>}
+        </div>
+    );
+    const dateField = (
+        <Form.Group controlId="cxc-payment-date">
+            <Form.Label>Fecha del pago</Form.Label>
+            <Form.Control
+                type="date"
+                required
+                max={today()}
+                value={fields.date}
+                onChange={(event) => change('date', event.target.value)}
+            />
+        </Form.Group>
+    );
+    const methodField = (
+        <Form.Group controlId="cxc-method">
+            <Form.Label>Método</Form.Label>
+            <Form.Select value={fields.method} onChange={(event) => change('method', event.target.value)}>
+                {Object.entries(methods).map(([value, label]) => (
+                    <option key={value} value={value}>
+                        {label}
+                    </option>
+                ))}
+            </Form.Select>
+        </Form.Group>
+    );
+    const referenceField = (
+        <Form.Group controlId="cxc-reference">
+            <Form.Label>
+                Referencia{' '}
+                <span className="cxc-optional" aria-hidden="true">
+                    opcional
+                </span>
+            </Form.Label>
+            <Form.Control
+                maxLength={50}
+                value={fields.reference}
+                placeholder="N.º de operación"
+                onChange={(event) => change('reference', event.target.value)}
+            />
+        </Form.Group>
+    );
+    const bankField = (
+        <Form.Group controlId="cxc-bank">
+            <Form.Label>
+                Banco{' '}
+                <span className="cxc-optional" aria-hidden="true">
+                    opcional
+                </span>
+            </Form.Label>
+            <BankSelect value={fields.bank} onChange={(value) => change('bank', value)} />
+        </Form.Group>
+    );
     return (
         <section className="cxc-panel cxc-operation" aria-labelledby="cxc-operation-title">
-            <div className="cxc-operation-heading">
+            <div className={`cxc-operation-heading${compact ? ' visually-hidden' : ''}`}>
                 <h3 id="cxc-operation-title" ref={title} tabIndex={-1}>
                     {compact ? 'Datos del pago' : titles[action.type]}
                 </h3>
@@ -150,143 +210,135 @@ export default function OperationForm({
                     {!preview &&
                         (payment ? (
                             <>
-                                <div className="cxc-form-grid">
-                                    <Form.Group controlId="cxc-amount">
-                                        <div className="cxc-field-heading">
-                                            <Form.Label>Importe recibido</Form.Label>
-                                            {(compact || fields.currency === 'USD') && Number(balance) > 0 && (
-                                                <Button
-                                                    variant="link"
-                                                    className={`cxc-fill-balance${fields.currency !== 'USD' ? ' cxc-payment-inactive' : ''}`}
-                                                    disabled={fields.currency !== 'USD'}
-                                                    aria-hidden={fields.currency !== 'USD'}
-                                                    onClick={() => change('amount', String(balance))}
+                                <div className="cxc-payment-amount">
+                                    <div className="cxc-form-grid">
+                                        <Form.Group controlId="cxc-amount">
+                                            <div className="cxc-field-heading">
+                                                <Form.Label>Importe recibido</Form.Label>
+                                                {!compact && fields.currency === 'USD' && Number(balance) > 0 && (
+                                                    <Button
+                                                        variant="link"
+                                                        className="cxc-fill-balance"
+                                                        onClick={() => change('amount', String(balance))}
+                                                    >
+                                                        Usar saldo completo
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            <InputGroup>
+                                                <InputGroup.Text aria-hidden="true">
+                                                    {fields.currency === 'USD' ? '$' : 'Bs'}
+                                                </InputGroup.Text>
+                                                <Form.Control
+                                                    ref={amountInput}
+                                                    autoFocus={compact && !disabled}
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    min="0.0001"
+                                                    step="0.0001"
+                                                    placeholder="0,00"
+                                                    required
+                                                    value={fields.amount}
+                                                    onChange={(event) => change('amount', event.target.value)}
+                                                />
+                                            </InputGroup>
+                                        </Form.Group>
+                                        <Form.Group controlId={compact ? undefined : 'cxc-currency'}>
+                                            <Form.Label as={compact ? 'span' : 'label'} id="cxc-currency-label">
+                                                Moneda
+                                            </Form.Label>
+                                            {compact ? (
+                                                <fieldset
+                                                    className="cxc-payment-currencies"
+                                                    aria-labelledby="cxc-currency-label"
                                                 >
-                                                    Usar saldo completo
-                                                </Button>
+                                                    <Button
+                                                        variant={
+                                                            fields.currency === 'BsS' ? 'primary' : 'outline-secondary'
+                                                        }
+                                                        aria-pressed={fields.currency === 'BsS'}
+                                                        onClick={() => change('currency', 'BsS')}
+                                                    >
+                                                        Bolívares
+                                                    </Button>
+                                                    <Button
+                                                        variant={
+                                                            fields.currency === 'USD' ? 'primary' : 'outline-secondary'
+                                                        }
+                                                        aria-pressed={fields.currency === 'USD'}
+                                                        onClick={() => change('currency', 'USD')}
+                                                    >
+                                                        USD
+                                                    </Button>
+                                                </fieldset>
+                                            ) : (
+                                                <Form.Select
+                                                    value={fields.currency}
+                                                    onChange={(event) => change('currency', event.target.value)}
+                                                >
+                                                    <option value="BsS">Bolívares · Bs</option>
+                                                    <option value="USD">Dólares · USD</option>
+                                                </Form.Select>
+                                            )}
+                                        </Form.Group>
+                                    </div>
+                                    {compact && (
+                                        <div className="cxc-payment-helper">
+                                            <div
+                                                className={fields.currency !== 'BsS' ? 'cxc-payment-helper-inactive' : ''}
+                                                aria-hidden={fields.currency !== 'BsS'}
+                                            >
+                                                {rateInfo}
+                                            </div>
+                                            {Number(balance) > 0 && (
+                                                <div
+                                                    className={
+                                                        fields.currency !== 'USD' ? 'cxc-payment-helper-inactive' : ''
+                                                    }
+                                                    aria-hidden={fields.currency !== 'USD'}
+                                                >
+                                                    <Button
+                                                        variant="link"
+                                                        className="cxc-fill-balance"
+                                                        disabled={fields.currency !== 'USD'}
+                                                        onClick={() => change('amount', String(balance))}
+                                                    >
+                                                        Usar saldo completo
+                                                    </Button>
+                                                </div>
                                             )}
                                         </div>
-                                        <InputGroup>
-                                            <InputGroup.Text aria-hidden="true">
-                                                {fields.currency === 'USD' ? '$' : 'Bs'}
-                                            </InputGroup.Text>
-                                            <Form.Control
-                                                type="number"
-                                                inputMode="decimal"
-                                                min="0.0001"
-                                                step="0.0001"
-                                                placeholder="0,00"
-                                                required
-                                                value={fields.amount}
-                                                onChange={(event) => change('amount', event.target.value)}
-                                            />
-                                        </InputGroup>
-                                    </Form.Group>
-                                    <Form.Group controlId={compact ? undefined : 'cxc-currency'}>
-                                        <Form.Label as={compact ? 'span' : 'label'} id="cxc-currency-label">
-                                            Moneda
-                                        </Form.Label>
-                                        {compact ? (
-                                            <fieldset
-                                                className="cxc-payment-currencies"
-                                                aria-labelledby="cxc-currency-label"
-                                            >
-                                                <Button
-                                                    variant={
-                                                        fields.currency === 'BsS' ? 'primary' : 'outline-secondary'
-                                                    }
-                                                    aria-pressed={fields.currency === 'BsS'}
-                                                    onClick={() => change('currency', 'BsS')}
-                                                >
-                                                    Bolívares
-                                                </Button>
-                                                <Button
-                                                    variant={
-                                                        fields.currency === 'USD' ? 'primary' : 'outline-secondary'
-                                                    }
-                                                    aria-pressed={fields.currency === 'USD'}
-                                                    onClick={() => change('currency', 'USD')}
-                                                >
-                                                    USD
-                                                </Button>
-                                            </fieldset>
-                                        ) : (
-                                            <Form.Select
-                                                value={fields.currency}
-                                                onChange={(event) => change('currency', event.target.value)}
-                                            >
-                                                <option value="BsS">Bolívares · Bs</option>
-                                                <option value="USD">Dólares · USD</option>
-                                            </Form.Select>
-                                        )}
-                                    </Form.Group>
+                                    )}
                                 </div>
-                                {(compact || fields.currency === 'BsS') && (
+                                {!compact && fields.currency === 'BsS' && rateInfo}
+                                {compact ? (
                                     <div
-                                        className={`cxc-rate${!rateAvailable ? ' cxc-rate-unavailable' : ''}${fields.currency !== 'BsS' ? ' cxc-payment-inactive' : ''}`}
-                                        role="status"
-                                        aria-hidden={fields.currency !== 'BsS'}
+                                        className="cxc-form-grid cxc-payment-fields"
+                                        role="group"
+                                        aria-label="Datos del pago"
                                     >
-                                        <strong>
-                                            Tasa REF: {rateAvailable ? `${rateLabel(rate)} Bs/USD` : 'No disponible'}
-                                        </strong>
-                                        {!rateAvailable && <p>Actualiza la tasa o registra el abono en USD.</p>}
+                                        {methodField}
+                                        {fields.method !== 'EFECTIVO' && (
+                                            <>
+                                                {bankField}
+                                                {referenceField}
+                                            </>
+                                        )}
+                                        {dateField}
                                     </div>
-                                )}
-                                <div className="cxc-form-grid">
-                                    <Form.Group controlId="cxc-payment-date">
-                                        <Form.Label>Fecha del pago</Form.Label>
-                                        <Form.Control
-                                            type="date"
-                                            required
-                                            max={today()}
-                                            value={fields.date}
-                                            onChange={(event) => change('date', event.target.value)}
-                                        />
-                                    </Form.Group>
-                                    <Form.Group controlId="cxc-method">
-                                        <Form.Label>Método</Form.Label>
-                                        <Form.Select
-                                            value={fields.method}
-                                            onChange={(event) => change('method', event.target.value)}
-                                        >
-                                            {Object.entries(methods).map(([value, label]) => (
-                                                <option key={value} value={value}>
-                                                    {label}
-                                                </option>
-                                            ))}
-                                        </Form.Select>
-                                    </Form.Group>
-                                </div>
-                                {fields.method !== 'EFECTIVO' && (
-                                    <div className="cxc-form-grid">
-                                        <Form.Group controlId="cxc-reference">
-                                            <Form.Label>
-                                                Referencia{' '}
-                                                <span className="cxc-optional" aria-hidden="true">
-                                                    opcional
-                                                </span>
-                                            </Form.Label>
-                                            <Form.Control
-                                                maxLength={50}
-                                                value={fields.reference}
-                                                placeholder="N.º de operación"
-                                                onChange={(event) => change('reference', event.target.value)}
-                                            />
-                                        </Form.Group>
-                                        <Form.Group controlId="cxc-bank">
-                                            <Form.Label>
-                                                Banco{' '}
-                                                <span className="cxc-optional" aria-hidden="true">
-                                                    opcional
-                                                </span>
-                                            </Form.Label>
-                                            <BankSelect
-                                                value={fields.bank}
-                                                onChange={(value) => change('bank', value)}
-                                            />
-                                        </Form.Group>
-                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="cxc-form-grid">
+                                            {dateField}
+                                            {methodField}
+                                        </div>
+                                        {fields.method !== 'EFECTIVO' && (
+                                            <div className="cxc-form-grid">
+                                                {referenceField}
+                                                {bankField}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                                 {compact && (
                                     <Button
@@ -317,37 +369,19 @@ export default function OperationForm({
                                         />
                                     </Form.Group>
                                 </div>
-                                {compact && (
+                                {compact && hasEstimate && (
                                     <section className="cxc-payment-estimate" aria-label="Estimación del abono">
-                                        <h4>Así quedaría la cuenta</h4>
-                                        <dl>
-                                            <div>
-                                                <dt>Equivalente estimado · USD</dt>
-                                                <dd>{hasEstimate ? money(estimate.toFixed(4)) : '—'}</dd>
-                                            </div>
-                                            <div>
-                                                <dt>Abono estimado · USD</dt>
-                                                <dd>
-                                                    {hasEstimate
-                                                        ? money(
-                                                              Math.min(
-                                                                  Number(balance),
-                                                                  Number(estimate.toFixed(4)),
-                                                              ).toFixed(4),
-                                                          )
-                                                        : '—'}
-                                                </dd>
-                                            </div>
-                                            <div>
-                                                <dt>Saldo después · USD</dt>
-                                                <dd>
-                                                    {Number.isFinite(estimatedBalance)
-                                                        ? money(estimatedBalance.toFixed(4))
-                                                        : '—'}
-                                                </dd>
-                                            </div>
-                                        </dl>
-                                        {hasEstimate && Number(estimate.toFixed(4)) > Number(balance) && (
+                                        <p role="status">
+                                            {fields.currency === 'BsS' ? 'Equivale a' : 'Abono de'}{' '}
+                                            <strong>{money(estimate.toFixed(4))} USD</strong> · Quedarían{' '}
+                                            <strong>
+                                                {Number.isFinite(estimatedBalance)
+                                                    ? money(estimatedBalance.toFixed(4))
+                                                    : '—'}{' '}
+                                                USD
+                                            </strong>
+                                        </p>
+                                        {Number(estimate.toFixed(4)) > Number(balance) && (
                                             <Alert variant="warning">
                                                 El importe supera la deuda. El excedente no genera saldo a favor ni
                                                 devolución.
@@ -492,6 +526,7 @@ export default function OperationForm({
                             Cancelar
                         </Button>
                         <Button
+                            ref={confirmButton}
                             type="submit"
                             variant={payment ? 'primary' : 'warning'}
                             disabled={busy || disabled || (payment && fields.currency === 'BsS' && !rateAvailable)}

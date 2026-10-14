@@ -2,9 +2,14 @@ import { DateTime } from 'luxon';
 
 export const money = (value, currency = 'USD') => {
     const [integer, decimals = ''] = String(value || '0').split('.');
-    const fraction = decimals.slice(0, 4).replace(/0+$/, '').padEnd(2, '0');
+    const cents =
+        BigInt(`${integer.replace('-', '')}${decimals.padEnd(2, '0').slice(0, 2)}`) +
+        BigInt(Number(decimals[2] || 0) >= 5 ? 1 : 0);
+    const rounded = cents.toString().padStart(3, '0');
+    const whole = rounded.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const sign = integer.startsWith('-') && cents !== BigInt(0) ? '-' : '';
     const symbol = currency === 'USD' ? '$' : currency === 'BsS' ? 'Bs ' : `${currency} `;
-    return `${symbol}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${fraction}`;
+    return `${symbol}${sign}${whole},${rounded.slice(-2)}`;
 };
 const rateFormatter = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const rateLabel = (value) =>

@@ -38,9 +38,6 @@
     flex-wrap: wrap;
     justify-content: flex-start;
 }
-.cxc-payment-inactive {
-    visibility: hidden;
-}
 .cxc-payment-drawer .offcanvas-header {
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid #3a4756;
@@ -60,9 +57,9 @@
     flex-wrap: wrap;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 0.6rem;
-    padding-bottom: 1rem;
-    margin-bottom: 1rem;
+    gap: 0.4rem 0.75rem;
+    padding-bottom: 0.8rem;
+    margin-bottom: 1.25rem;
     border-bottom: 1px solid #3a4756;
 }
 .cxc-payment-identity > div:first-child {
@@ -76,11 +73,10 @@
     margin: 0 0 0.4rem;
 }
 .cxc-payment-identity p,
-.cxc-payment-picker p,
-.cxc-payment-estimate p {
+.cxc-payment-picker p {
     font-size: 0.8rem;
     color: #adb5bd;
-    margin: 0.6rem 0;
+    margin: 0.25rem 0 0;
 }
 .cxc-payment-identity .btn-link {
     padding: 0;
@@ -92,16 +88,14 @@
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
-    padding: 0.8rem;
-    background: #202a36;
-    border-radius: 8px;
+    padding-top: 0.35rem;
 }
 .cxc-payment-balance span {
     color: #ced4da;
     font-size: 0.85rem;
 }
 .cxc-payment-balance strong {
-    font-size: 1.2rem;
+    font-size: 1rem;
     font-variant-numeric: tabular-nums;
 }
 .cxc-payment-drawer .form-label {
@@ -132,10 +126,6 @@
     border: 0;
     padding: 0;
 }
-.cxc-payment-drawer .cxc-operation-heading h3 {
-    font-size: 0.85rem;
-    color: #adb5bd;
-}
 .cxc-payment-drawer .cxc-form-grid {
     grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
 }
@@ -162,25 +152,64 @@
     border-color: #6c757d;
     color: #ced4da;
 }
+.cxc-payment-drawer .input-group-text {
+    min-width: 3rem;
+    justify-content: center;
+}
+.cxc-payment-helper {
+    display: grid;
+    align-items: start;
+    min-height: 1.5rem;
+    margin-top: 0.35rem;
+}
+.cxc-payment-helper > div {
+    grid-area: 1 / 1;
+    min-width: 0;
+}
+.cxc-payment-helper-inactive {
+    visibility: hidden;
+}
+.cxc-payment-drawer .cxc-rate {
+    margin: 0;
+    font-size: 0.75rem;
+}
+.cxc-payment-drawer .cxc-rate p {
+    margin: 0.25rem 0 0;
+}
+.cxc-payment-drawer .cxc-rate-unavailable {
+    color: #ffc107;
+}
+.cxc-payment-drawer .cxc-payment-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+}
+.cxc-payment-fields > div {
+    min-width: 0;
+}
 .cxc-payment-drawer .cxc-payment-details-toggle {
     padding: 0;
-    margin-bottom: 0.8rem;
     font-size: 0.85rem;
+    margin-bottom: 0.8rem;
 }
 .cxc-payment-estimate {
-    padding: 1rem;
-    border: 1px solid #3a4756;
-    border-radius: 8px;
-    background: #202a36;
-    margin-top: 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #adb5bd;
+}
+.cxc-payment-estimate p {
+    margin: 0;
+}
+.cxc-payment-estimate strong {
+    color: #e9ecef;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+.cxc-payment-estimate .alert {
+    margin: 0.75rem 0 0;
 }
 .cxc-bank-error {
     color: #ffc107;
     font-size: 0.8rem;
-}
-.cxc-payment-estimate h4 {
-    font-size: 0.9rem;
-    margin-bottom: 0.8rem;
 }
 .cxc-payment-drawer dl {
     margin-bottom: 0;
@@ -269,7 +298,18 @@
     .cxc-payment-drawer .offcanvas-body {
         padding: 1rem 1rem 0;
     }
-    .cxc-payment-drawer .cxc-form-grid {
+    .cxc-payment-drawer .cxc-form-grid,
+    .cxc-payment-drawer .cxc-payment-fields {
         grid-template-columns: 1fr;
+    }
+    .cxc-payment-drawer .cxc-form-grid:first-child {
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    }
+    .cxc-payment-currencies {
+        gap: 0.2rem;
+    }
+    .cxc-payment-currencies .btn {
+        padding-inline: 0.4rem;
+        font-size: 0.85rem;
     }
 }

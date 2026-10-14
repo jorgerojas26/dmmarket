@@ -20,6 +20,7 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
     const safeChoice = useRef(null);
     const discardChoice = useRef(null);
     const successTitle = useRef(null);
+    const doneButton = useRef(null);
     const account = useReceivableClient(selected?.id, { page: 1, timelinePage: 1, documents: 'pending' });
     const data = selected ? account.data : null;
     const error = selected ? account.error : null;
@@ -29,8 +30,8 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
         if (discard) safeChoice.current?.focus();
     }, [discard]);
     useEffect(() => {
-        if (result) successTitle.current?.focus();
-    }, [result]);
+        if (result) (busy || refreshing ? successTitle : doneButton).current?.focus();
+    }, [result, busy, refreshing]);
     const leave = (destination) => {
         setDiscard(null);
         setDirty(false);
@@ -147,7 +148,7 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
                                     </Button>
                                 </Alert>
                             )}
-                            <Button disabled={busy || refreshing} onClick={onClose}>
+                            <Button ref={doneButton} disabled={busy || refreshing} onClick={onClose}>
                                 Listo
                             </Button>
                         </section>

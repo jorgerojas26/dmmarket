@@ -9,8 +9,9 @@ import {
 } from 'api/receivables';
 import pdfMake from 'pdfmake/build/pdfmake';
 import { useReceivableBanks, useReceivableClient, useReceivables } from 'hooks/useReceivables';
+import { useClientRoutes } from 'hooks/useClients';
 import ClientModal from './ClientModal';
-import { money } from './format';
+import { dateLabel, money, today } from './format';
 import Receivables from './index';
 import OperationForm from './OperationForm';
 import PaymentDrawer from './PaymentDrawer';
@@ -20,6 +21,7 @@ jest.mock('hooks/useReceivables', () => ({
     useReceivableClient: jest.fn(),
     useReceivableBanks: jest.fn(),
 }));
+jest.mock('hooks/useClients', () => ({ useClientRoutes: jest.fn() }));
 jest.mock('api/invoice', () => ({ fetchInvoiceDetail: jest.fn() }));
 jest.mock('api/receivables', () => ({
     executeReceivableOperation: jest.fn(),
@@ -79,6 +81,7 @@ const refresh = jest.fn().mockResolvedValue(undefined);
 
 beforeEach(() => {
     jest.clearAllMocks();
+    useClientRoutes.mockReturnValue({ data: [{ Id_Ruta: 'R1', Nombre: 'R1' }], isLoading: false });
     useReceivableBanks.mockReturnValue({ data: [{ id: 'BA', name: 'Banco Uno' }], mutate: refresh });
     pdfMake.createPdf.mockReturnValue({ open: jest.fn() });
     useReceivables.mockReturnValue({ data: portfolio, mutate: refresh, isValidating: false });
@@ -106,9 +109,16 @@ const renderForm = (overrides = {}) => {
     return callbacks;
 };
 
-it('formats ledger decimals without losing precision or hiding a small difference', () => {
-    expect(money('12345678901234.1234')).toBe('$12.345.678.901.234,1234');
-    expect(money('0.0001')).toBe('$0,0001');
+it('rounds displayed ledger amounts to exactly two decimals without losing large integer digits', () => {
+    expect(money('12345678901234.1234')).toBe('$12.345.678.901.234,12');
+    expect(money('0.0001')).toBe('$0,00');
+    expect(money('29.9999')).toBe('$30,00');
+    expect(money('1.0050')).toBe('$1,01');
+    expect(money('9999999999999999.9999')).toBe('$10.000.000.000.000.000,00');
+    expect(money('-12.3456')).toBe('$-12,35');
+    expect(money('-0.0001')).toBe('$0,00');
+    expect(money(0)).toBe('$0,00');
+    expect(money('1.5')).toBe('$1,50');
     expect(money('99.7000', 'BsS')).toBe('Bs 99,70');
 });
 
@@ -664,15 +674,15 @@ it('uses the precise USD balance as a shortcut without calculating a bolivar amo
     expect(screen.getByRole('status')).toHaveTextContent('Tasa REF: 100,00 Bs/USD');
 });
 
-it('focuses review, summarizes payment metadata and restores all fields on edit', async () => {
+it('focuses payment confirmation, summarizes metadata and restores all fields on edit', async () => {
     renderForm();
     fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '120' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Referencia' }), { target: { value: 'REF-345' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Banco' }), { target: { value: 'Banco Uno' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Observaciones' }), { target: { value: 'Cobro de ruta' } });
     userEvent.click(screen.getByRole('button', { name: 'Revisar operación' }));
-    const reviewTitle = await screen.findByRole('heading', { name: 'Revisa antes de confirmar' });
-    await waitFor(() => expect(reviewTitle).toHaveFocus());
+    const confirmation = await screen.findByRole('button', { name: 'Confirmar abono' });
+    await waitFor(() => expect(confirmation).toHaveFocus());
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
     expect(screen.getByText('REF-345')).toBeInTheDocument();
     expect(screen.getByText('Banco Uno')).toBeInTheDocument();
@@ -704,7 +714,7 @@ it('shows the server conversion and informational excess before confirming a bol
     await screen.findByRole('heading', { name: 'Revisa antes de confirmar' });
     expect(screen.getByText('Equivalente en USD')).toBeInTheDocument();
     expect(screen.getByText('Tasa aplicada · Bs/USD')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Excedente no aplicado: $0,0001');
+    expect(screen.getByRole('alert')).toHaveTextContent('Excedente no aplicado: $0,00');
     expect(executeReceivableOperation).not.toHaveBeenCalled();
 });
 
@@ -980,16 +990,40 @@ it('defaults drawer payments to bolivars on the left with reference and bank vis
     );
 });
 
-it('retains the rate slot when switching to dollars instead of inserting another row', () => {
-    const { container } = render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
-    const rate = container.ownerDocument.querySelector('.cxc-rate');
-    expect(rate).toHaveAttribute('aria-hidden', 'false');
+it('shares a stable helper row between the bolivar rate and USD balance shortcut', () => {
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    const rateSlot = screen.getByText('Tasa REF: 100,00 Bs/USD').parentElement.parentElement;
+    const helper = rateSlot.parentElement;
+    const balanceSlot = helper.children[1];
+    expect(helper).toHaveClass('cxc-payment-helper');
+    expect(rateSlot).toHaveAttribute('aria-hidden', 'false');
+    expect(balanceSlot).toHaveAttribute('aria-hidden', 'true');
+    expect(balanceSlot).toHaveClass('cxc-payment-helper-inactive');
+    expect(screen.getByText('Tasa REF: 100,00 Bs/USD')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Usar saldo completo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Estimación del abono' })).not.toBeInTheDocument();
     userEvent.click(screen.getByRole('button', { name: 'USD' }));
-    expect(container.ownerDocument.querySelector('.cxc-rate')).toBe(rate);
-    expect(rate).toHaveAttribute('aria-hidden', 'true');
-    expect(rate).toHaveClass('cxc-payment-inactive');
+    expect(rateSlot).toHaveAttribute('aria-hidden', 'true');
+    expect(rateSlot).toHaveClass('cxc-payment-helper-inactive');
+    expect(balanceSlot).toHaveAttribute('aria-hidden', 'false');
+    expect(balanceSlot).not.toHaveClass('cxc-payment-helper-inactive');
+    expect(helper.children[0]).toBe(rateSlot);
+    expect(helper.children[1]).toBe(balanceSlot);
+    userEvent.click(screen.getByRole('button', { name: 'Usar saldo completo' }));
+    expect(screen.getByLabelText('Importe recibido')).toHaveValue(100);
+    expect(screen.getByRole('region', { name: 'Estimación del abono' })).toHaveTextContent(
+        'Abono de $100,00 USD · Quedarían $0,00 USD',
+    );
     userEvent.click(screen.getByRole('button', { name: 'Bolívares' }));
-    expect(rate).toHaveAttribute('aria-hidden', 'false');
+    expect(screen.getByText('Tasa REF: 100,00 Bs/USD')).toBeVisible();
+    expect(rateSlot).toHaveAttribute('aria-hidden', 'false');
+    expect(rateSlot).not.toHaveClass('cxc-payment-helper-inactive');
+    expect(balanceSlot).toHaveAttribute('aria-hidden', 'true');
+    expect(balanceSlot).toHaveClass('cxc-payment-helper-inactive');
+    expect(helper.children[0]).toBe(rateSlot);
+    expect(helper.children[1]).toBe(balanceSlot);
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '' } });
+    expect(screen.queryByRole('region', { name: 'Estimación del abono' })).not.toBeInTheDocument();
 });
 
 it('confirms discard in an overlay while keeping the draft in place and inert', () => {
@@ -1025,5 +1059,245 @@ it('reports a missing bank catalog and retries its query without clearing the pa
     rerender(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
     expect(screen.getByRole('combobox', { name: 'Banco' })).not.toBeDisabled();
     expect(screen.getByRole('option', { name: 'BANCO DE VENEZUELA' })).toHaveValue('BANCO DE VENEZUELA');
+    expect(screen.getByLabelText('Importe recibido')).toHaveValue(3500);
+});
+
+it('shows a date input defaulting to today and preserves changes through review and edit', async () => {
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    const date = screen.getByLabelText('Fecha del pago');
+    expect(date).toBeVisible();
+    expect(date).toHaveValue(today());
+    expect(date).toHaveAttribute('max', today());
+    expect(screen.queryByText('Hoy')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cambiar fecha' })).not.toBeInTheDocument();
+    fireEvent.change(date, { target: { value: '2020-01-15' } });
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '1000' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    await screen.findByRole('button', { name: 'Confirmar abono' });
+    expect(previewReceivableOperation).toHaveBeenLastCalledWith('C1', expect.objectContaining({ date: '2020-01-15' }));
+    expect(screen.getByText(dateLabel('2020-01-15'))).toBeVisible();
+    userEvent.click(screen.getByRole('button', { name: 'Editar datos' }));
+    expect(screen.getByLabelText('Fecha del pago')).toBeVisible();
+    expect(screen.getByLabelText('Fecha del pago')).toHaveValue('2020-01-15');
+});
+
+it('keeps empty or future dates invalid and lets the operator correct them directly', () => {
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    const date = screen.getByLabelText('Fecha del pago');
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '1000' } });
+    fireEvent.change(date, { target: { value: '' } });
+    expect(date).toBeVisible();
+    expect(date).toBeInvalid();
+    expect(date.form).toBeInvalid();
+    fireEvent.change(date, { target: { value: '2999-01-01' } });
+    expect(date).toBeInvalid();
+    expect(date.form).toBeInvalid();
+    fireEvent.change(date, { target: { value: today() } });
+    expect(date).toBeValid();
+    expect(date).toHaveValue(today());
+});
+
+it('keeps the compact estimate concise and warns about excess before review', () => {
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '12000' } });
+    const estimate = screen.getByRole('region', { name: 'Estimación del abono' });
+    expect(estimate).toHaveTextContent('Equivale a $120,00 USD · Quedarían $0,00 USD');
+    expect(within(estimate).queryByRole('definition')).not.toBeInTheDocument();
+    expect(within(estimate).getByRole('alert')).toHaveTextContent('El excedente no genera saldo a favor ni devolución.');
+    expect(screen.getByRole('textbox', { name: 'Referencia' })).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'Banco' })).toBeVisible();
+    userEvent.selectOptions(screen.getByLabelText('Método'), 'EFECTIVO');
+    expect(screen.queryByRole('textbox', { name: 'Referencia' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Banco' })).not.toBeInTheDocument();
+    expect(previewReceivableOperation).not.toHaveBeenCalled();
+});
+
+it('groups method, bank, reference and a visible date input in four aligned cells', () => {
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    const group = screen.getByRole('group', { name: 'Datos del pago' });
+    const cells = Array.from(group.children);
+    expect(cells).toHaveLength(4);
+    expect(within(cells[0]).getByLabelText('Método')).toBeVisible();
+    expect(within(cells[1]).getByRole('combobox', { name: 'Banco' })).toBeVisible();
+    expect(within(cells[2]).getByRole('textbox', { name: 'Referencia' })).toBeVisible();
+    expect(within(cells[3]).getByLabelText('Fecha del pago')).toBeVisible();
+    expect(within(cells[3]).getByLabelText('Fecha del pago')).toHaveValue(today());
+    fireEvent.change(screen.getByLabelText('Fecha del pago'), { target: { value: '2020-01-15' } });
+    userEvent.selectOptions(screen.getByLabelText('Método'), 'EFECTIVO');
+    expect(group.children).toHaveLength(2);
+    expect(group.children[0]).toBe(cells[0]);
+    expect(within(group.children[1]).getByLabelText('Fecha del pago')).toBeVisible();
+    expect(within(group.children[1]).getByLabelText('Fecha del pago')).toHaveValue('2020-01-15');
+});
+
+it('shows two decimals in review and success while preserving the server snapshot and amounts', async () => {
+    const precise = {
+        ...preview,
+        amount: '4012.3400',
+        currency: 'BsS',
+        base: '40.1234',
+        applied: '40.1234',
+        balanceAfter: '59.8766',
+        excess: '0.0000',
+        applications: [{ id: 1, sale: 'A', amount: '40.1234' }],
+    };
+    previewReceivableOperation.mockResolvedValue(precise);
+    executeReceivableOperation.mockResolvedValue(precise);
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '4012.34' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    await screen.findByRole('button', { name: 'Confirmar abono' });
+    expect(screen.getAllByText('$40,12')).toHaveLength(3);
+    expect(screen.getByText('$59,88')).toBeVisible();
+    expect(screen.queryByText(/40,1234|59,8766/)).not.toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Confirmar abono' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Listo' })).not.toBeDisabled());
+    const result = screen.getByRole('region', { name: 'Abono registrado' });
+    expect(result).toHaveTextContent('Bs 4.012,34');
+    expect(result).toHaveTextContent('$40,12');
+    expect(result).toHaveTextContent('$59,88');
+    expect(executeReceivableOperation).toHaveBeenCalledWith(
+        'C1',
+        expect.objectContaining({ amount: '4012.34', snapshot: precise.snapshot }),
+    );
+    expect(precise.applied).toBe('40.1234');
+    expect(precise.balanceAfter).toBe('59.8766');
+});
+
+it('keeps the unavailable-rate helper mounted across currency changes and hides it from USD accessibility', () => {
+    useReceivableClient.mockReturnValue({ data: { ...detail, rate: null }, mutate: refresh });
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    const rate = screen.getByRole('status');
+    const slot = rate.parentElement;
+    const helper = slot.parentElement;
+    expect(rate).toHaveTextContent('Tasa REF: No disponible');
+    expect(rate).toHaveTextContent('Actualiza la tasa o registra el abono en USD.');
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
+    expect(helper.children[0]).toBe(slot);
+    expect(slot).toContainElement(rate);
+    expect(slot).toHaveClass('cxc-payment-helper-inactive');
+    expect(slot).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Usar saldo completo' })).not.toBeDisabled();
+    userEvent.click(screen.getByRole('button', { name: 'Bolívares' }));
+    expect(screen.getByRole('status')).toBe(rate);
+    expect(slot).not.toHaveClass('cxc-payment-helper-inactive');
+    expect(slot).toHaveAttribute('aria-hidden', 'false');
+    expect(screen.queryByRole('button', { name: 'Usar saldo completo' })).not.toBeInTheDocument();
+});
+
+it('reviews, confirms and closes a drawer payment with three consecutive Enter presses', async () => {
+    const close = jest.fn();
+    render(<PaymentDrawer client={client} onClose={close} onChanged={refresh} />);
+    expect(screen.getByLabelText('Importe recibido')).toHaveFocus();
+    userEvent.type(document.activeElement, '3500{enter}', { skipClick: true });
+    const confirm = await screen.findByRole('button', { name: 'Confirmar abono' });
+    await waitFor(() => expect(confirm).toHaveFocus());
+    expect(previewReceivableOperation).toHaveBeenCalledTimes(1);
+    expect(executeReceivableOperation).not.toHaveBeenCalled();
+    userEvent.type(document.activeElement, '{enter}', { skipClick: true });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Listo' })).not.toBeDisabled());
+    expect(executeReceivableOperation).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Listo' })).toHaveFocus());
+    userEvent.type(document.activeElement, '{enter}', { skipClick: true });
+    expect(close).toHaveBeenCalledTimes(1);
+});
+
+it('focuses a failed confirmation error instead of leaving focus on the financial action', async () => {
+    executeReceivableOperation.mockRejectedValueOnce(new Error('Conexión interrumpida'));
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '3500' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    const confirm = await screen.findByRole('button', { name: 'Confirmar abono' });
+    await waitFor(() => expect(confirm).toHaveFocus());
+    userEvent.type(document.activeElement, '{enter}', { skipClick: true });
+    const error = await screen.findByText('Conexión interrumpida');
+    await waitFor(() => expect(error).toHaveFocus());
+    expect(error).toHaveTextContent('Conexión interrumpida');
+    expect(executeReceivableOperation).toHaveBeenCalledTimes(1);
+    expect(confirm).not.toBeDisabled();
+});
+
+it('focuses Done only after pending account refreshes settle, including failed refreshes', async () => {
+    let rejectRefresh;
+    const reload = jest.fn(
+        () => new Promise((_resolve, reject) => {
+            rejectRefresh = reject;
+        }),
+    );
+    useReceivableClient.mockReturnValue({ data: detail, mutate: reload });
+    const close = jest.fn();
+    render(<PaymentDrawer client={client} onClose={close} onChanged={refresh} />);
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '3500' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    userEvent.click(await screen.findByRole('button', { name: 'Confirmar abono' }));
+    const done = await screen.findByRole('button', { name: 'Listo' });
+    expect(done).toBeDisabled();
+    expect(done).not.toHaveFocus();
+    expect(close).not.toHaveBeenCalled();
+    await act(async () => rejectRefresh(new Error('Consulta interrumpida')));
+    await waitFor(() => expect(done).toHaveFocus());
+    expect(done).not.toBeDisabled();
+    expect(screen.getByText(/El abono está guardado/)).toBeVisible();
+    userEvent.type(document.activeElement, '{enter}', { skipClick: true });
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(executeReceivableOperation).toHaveBeenCalledTimes(1);
+});
+
+it('uses official route names instead of orphan route values from the receivables database response', () => {
+    useReceivables.mockReturnValue({
+        data: { ...portfolio, routes: [{ id: 'R1' }, { id: '-1' }, { id: 'G' }, { id: 'val' }, { id: '' }] },
+        mutate: refresh,
+        isValidating: false,
+    });
+    useClientRoutes.mockReturnValue({
+        data: [{ Id_Ruta: 'R1', Nombre: 'Ruta Norte' }, { Id_Ruta: 'R2', Nombre: 'Ruta Sur' }],
+        isLoading: false,
+    });
+    render(<Receivables />);
+    expect(useClientRoutes).toHaveBeenCalledWith(false, true);
+    userEvent.click(screen.getByLabelText('Ruta'));
+    expect(screen.getByLabelText('Ruta').closest('.cxc-filter')).toHaveClass('cxc-route-filter');
+    expect(screen.getByText('Ruta Norte (R1)')).toBeVisible();
+    expect(screen.getByText('Ruta Sur (R2)')).toBeVisible();
+    expect(screen.queryByText('-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('G')).not.toBeInTheDocument();
+    expect(screen.queryByText('val')).not.toBeInTheDocument();
+    userEvent.click(screen.getByText('Ruta Norte (R1)'));
+    expect(useReceivables).toHaveBeenLastCalledWith(expect.objectContaining({ ruta: 'R1', page: 1 }));
+    expect(screen.getByText('Ruta Norte (R1)')).toBeVisible();
+    userEvent.click(screen.getByRole('button', { name: 'Restablecer filtros' }));
+    expect(useReceivables).toHaveBeenLastCalledWith(expect.objectContaining({ ruta: '', page: 1 }));
+    expect(screen.getByLabelText('Ruta')).toHaveFocus();
+});
+
+it('autofocuses the amount once an asynchronously loaded account becomes editable without stealing focus on unrelated renders', () => {
+    useReceivableClient.mockReturnValue({ isValidating: true, mutate: refresh });
+    const close = jest.fn();
+    const { rerender } = render(<PaymentDrawer client={client} onClose={close} onChanged={refresh} />);
+    expect(screen.queryByLabelText('Importe recibido')).not.toBeInTheDocument();
+    useReceivableClient.mockReturnValue({ data: detail, isValidating: true, mutate: refresh });
+    rerender(<PaymentDrawer client={client} onClose={close} onChanged={refresh} />);
+    const amount = screen.getByLabelText('Importe recibido');
+    expect(amount).toBeDisabled();
+    expect(amount).not.toHaveFocus();
+    useReceivableClient.mockReturnValue({ data: detail, isValidating: false, mutate: refresh });
+    rerender(<PaymentDrawer client={client} onClose={close} onChanged={refresh} />);
+    expect(amount).not.toBeDisabled();
+    expect(amount).toHaveFocus();
+    const reference = screen.getByRole('textbox', { name: 'Referencia' });
+    userEvent.click(reference);
+    rerender(<PaymentDrawer client={client} onClose={close} onChanged={refresh} />);
+    expect(reference).toHaveFocus();
+});
+
+it('returns focus to the amount when editing a reviewed drawer payment', async () => {
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    expect(screen.getByLabelText('Importe recibido')).toHaveFocus();
+    userEvent.type(document.activeElement, '3500{enter}', { skipClick: true });
+    const confirm = await screen.findByRole('button', { name: 'Confirmar abono' });
+    await waitFor(() => expect(confirm).toHaveFocus());
+    userEvent.click(screen.getByRole('button', { name: 'Editar datos' }));
+    expect(screen.getByLabelText('Importe recibido')).toHaveFocus();
     expect(screen.getByLabelText('Importe recibido')).toHaveValue(3500);
 });

@@ -15,10 +15,10 @@ const document = {
 };
 const callbacks = () => ({ onInvoice: jest.fn(), onAction: jest.fn() });
 
-it('shows only the invoice, due date and precise balance until expanded', () => {
+it('shows only the invoice, due date and two-decimal balance until expanded', () => {
     render(<DocumentList documents={[document]} allowed {...callbacks()} />);
     expect(screen.getByRole('button', { name: 'Ver factura FAC-001' })).toBeInTheDocument();
-    expect(screen.getByText('$70,0001')).toBeInTheDocument();
+    expect(screen.getByText('$70,00')).toBeInTheDocument();
     expect(screen.getByText(/Vence/)).toBeInTheDocument();
     expect(screen.queryByText('Original')).not.toBeInTheDocument();
     expect(screen.queryByText('Abonado')).not.toBeInTheDocument();
@@ -38,7 +38,7 @@ it('reveals the financial breakdown and explicit closure action on demand', () =
     render(<DocumentList documents={[document]} allowed {...handlers} />);
     fireEvent.click(screen.getByRole('button', { name: 'Ver desglose de factura FAC-001' }));
     expect(screen.getByText('$100,00')).toBeInTheDocument();
-    expect(screen.getByText('$29,9999')).toBeInTheDocument();
+    expect(screen.getByText('$30,00')).toBeInTheDocument();
     expect(screen.getByText('Abonado')).toBeInTheDocument();
     expect(screen.queryByText(/CxC/)).not.toBeInTheDocument();
     expect(screen.queryByText('Cierre manual')).not.toBeInTheDocument();
@@ -58,7 +58,7 @@ it('distinguishes a manual closure and exposes reopening without inventing a pay
     expect(screen.getByText('Cerrada manualmente')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ver desglose de factura FAC-001' }));
     expect(screen.getByText('Cierre manual')).toBeInTheDocument();
-    expect(screen.getByText('$70,0001')).toBeInTheDocument();
+    expect(screen.getByText('$70,00')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reabrir cierre de factura FAC-001' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cerrar deuda de factura FAC-001' })).not.toBeInTheDocument();
 });

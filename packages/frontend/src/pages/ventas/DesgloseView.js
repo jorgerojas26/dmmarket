@@ -9,11 +9,10 @@ import GroupSearch from 'components/GroupSearch';
 import ProveedorSearch from 'components/ProveedorSearch';
 import SaleReportTable from 'components/SaleReportTable';
 import productosColumns from 'components/SaleReportTable/productosColumns';
-import { darkSelectStyles } from 'components/selectStyles';
+import RouteFilter from 'components/RouteFilter';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
-import { useClientRoutes } from 'hooks/useClients';
 import useMediaQuery from 'hooks/useMediaQuery';
 import { useFacturas, useProductos } from 'hooks/useSales';
 import { DateTime } from 'luxon';
@@ -21,7 +20,6 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
-import Select from 'react-select';
 import { formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
@@ -233,21 +231,6 @@ const DesgloseView = ({ isActive }) => {
                   }
                 : null,
         [selectedProveedor],
-    );
-
-    // --- Routes (for the route filter) ---
-    const { data: routes = [], isLoading: routesLoading } = useClientRoutes(showNoe);
-
-    const routeOptions = useMemo(
-        () =>
-            routes.map((route) => ({
-                value: route.Id_Ruta,
-                label:
-                    route.Nombre && route.Nombre !== route.Id_Ruta
-                        ? `${route.Nombre} (${route.Id_Ruta})`
-                        : route.Id_Ruta,
-            })),
-        [routes],
     );
 
     // ---- Handlers ----
@@ -836,19 +819,11 @@ const DesgloseView = ({ isActive }) => {
             value: selectedRuta,
             valueLabel: selectedRuta?.label,
             render: () => (
-                <Select
-                    options={routeOptions}
+                <RouteFilter
                     value={selectedRuta}
                     onChange={handleRutaSelect}
                     placeholder="Seleccionar ruta"
-                    isClearable
-                    isLoading={routesLoading}
-                    styles={darkSelectStyles}
-                    classNamePrefix="search-select"
-                    menuPortalTarget={document.body}
-                    menuPlacement="auto"
-                    loadingMessage={() => 'Cargando...'}
-                    noOptionsMessage={() => 'Sin resultados'}
+                    showNoe={showNoe}
                 />
             ),
         },

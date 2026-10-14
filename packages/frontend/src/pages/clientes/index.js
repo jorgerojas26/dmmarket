@@ -4,14 +4,12 @@ import ClientsDashboard from 'components/Dashboard/ClientsDashboard';
 import DateRangePicker from 'components/DateRangePicker';
 import Receivables from 'components/Receivables';
 import Sidebar from 'components/Sidebar';
-import { darkSelectStyles } from 'components/selectStyles';
+import RouteFilter from 'components/RouteFilter';
 import { ShowNoeContext } from 'context/show_noe';
-import { useClientRoutes } from 'hooks/useClients';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import { useHistory, useLocation } from 'react-router-dom';
-import Select from 'react-select';
 
 const VALID_VIEWS = ['dashboard', 'clients', 'receivables'];
 
@@ -47,20 +45,6 @@ const ClientesPage = () => {
         params.set('view', activeView);
         history.replace({ search: params.toString() });
     }, [activeView, history]);
-
-    const { data: routes = [], isLoading: routesLoading } = useClientRoutes(showNoe);
-
-    const routeOptions = useMemo(
-        () =>
-            routes.map((route) => ({
-                value: route.Id_Ruta,
-                label:
-                    route.Nombre && route.Nombre !== route.Id_Ruta
-                        ? `${route.Nombre} (${route.Id_Ruta})`
-                        : route.Id_Ruta,
-            })),
-        [routes],
-    );
 
     const handleRutaChange = useCallback((option) => {
         setSelectedRuta(option);
@@ -152,20 +136,11 @@ const ClientesPage = () => {
                             <div className="clients-content-wrapper">
                                 <div className="report-page-filters mb-3">
                                     <div className="clients-page-route-filter">
-                                        <Select
-                                            options={routeOptions}
+                                        <RouteFilter
                                             value={selectedRuta}
                                             onChange={handleRutaChange}
                                             placeholder="Todas las rutas"
-                                            aria-label="Ruta"
-                                            isClearable
-                                            isLoading={routesLoading}
-                                            styles={darkSelectStyles}
-                                            classNamePrefix="search-select"
-                                            menuPortalTarget={document.body}
-                                            menuPlacement="auto"
-                                            loadingMessage={() => 'Cargando...'}
-                                            noOptionsMessage={() => 'Sin resultados'}
+                                            showNoe={showNoe}
                                         />
                                     </div>
                                     <DateRangePicker
@@ -195,20 +170,11 @@ const ClientesPage = () => {
                                 <h4 className="m-0 text-light">Dashboard de Clientes</h4>
                                 <div className="report-page-filters">
                                     <div className="clients-page-route-filter">
-                                        <Select
-                                            options={routeOptions}
+                                        <RouteFilter
                                             value={selectedRuta}
                                             onChange={handleRutaChange}
                                             placeholder="Todas las rutas"
-                                            aria-label="Ruta"
-                                            isClearable
-                                            isLoading={routesLoading}
-                                            styles={darkSelectStyles}
-                                            classNamePrefix="search-select"
-                                            menuPortalTarget={document.body}
-                                            menuPlacement="auto"
-                                            loadingMessage={() => 'Cargando...'}
-                                            noOptionsMessage={() => 'Sin resultados'}
+                                            showNoe={showNoe}
                                         />
                                     </div>
                                     <DateRangePicker

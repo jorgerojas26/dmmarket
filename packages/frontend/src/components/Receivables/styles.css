@@ -91,6 +91,13 @@
     min-width: 0;
     font-size: 0.85rem;
 }
+.cxc-filter.cxc-route-filter {
+    width: 280px;
+}
+.cxc-route-filter > div,
+.cxc-route-filter .search-select__control {
+    width: 100%;
+}
 .cxc-page .cxc-reset-filters {
     min-height: 0;
     margin-bottom: 0.45rem;

@@ -118,7 +118,7 @@ it('keeps inspection available in read-only mode but blocks voiding', () => {
     expect(screen.getByRole('button', { name: 'Anular abono' })).toBeDisabled();
 });
 
-it('preserves void reasons and exact excess without offering another void', () => {
+it('preserves void reasons and two-decimal excess without offering another void', () => {
     const { container } = render(
         <Timeline
             events={[{ ...payment, voidReason: 'Error de referencia', excess: '0.0001' }]}
@@ -130,7 +130,7 @@ it('preserves void reasons and exact excess without offering another void', () =
     expand();
     expect(screen.getByText('Error de referencia')).toBeInTheDocument();
     expect(screen.getByText('Excedente no aplicado')).toBeInTheDocument();
-    expect(screen.getByText('$0,0001')).toBeInTheDocument();
+    expect(screen.getByText('$0,00')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Anular abono' })).not.toBeInTheDocument();
     expect(container.querySelector('.cxc-event-void')).toBeInTheDocument();
 });
