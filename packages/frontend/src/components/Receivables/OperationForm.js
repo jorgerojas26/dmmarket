@@ -56,8 +56,10 @@ export default function OperationForm({
     const reviewTitle = useRef(null);
     const confirmButton = useRef(null);
     const amountInput = useRef(null);
+    const reasonInput = useRef(null);
     const errorElement = useRef(null);
     const payment = action.type === 'payment';
+    const clientClosure = action.type === 'close' && !action.id;
     const rateAvailable = Number.isFinite(Number(rate)) && Number(rate) > 0;
     const estimate =
         fields.currency === 'USD' || rateAvailable
@@ -73,11 +75,12 @@ export default function OperationForm({
     }, []);
     useEffect(() => {
         if (!busy && !disabled) {
-            if (preview && payment) confirmButton.current?.focus();
+            if (preview && (payment || clientClosure)) confirmButton.current?.focus();
+            else if (clientClosure) reasonInput.current?.focus();
             else if (compact && !preview) amountInput.current?.focus();
             else (preview ? reviewTitle : title).current?.focus();
         }
-    }, [preview, busy, compact, payment, disabled]);
+    }, [preview, busy, compact, payment, clientClosure, disabled]);
     useEffect(() => {
         if (error && !busy && !disabled) errorElement.current?.focus();
     }, [error, busy, disabled]);
@@ -99,10 +102,10 @@ export default function OperationForm({
     };
     const payload = payment
         ? { type: action.type, ...fields }
-        : { type: action.type, id: action.id, reason: fields.reason };
+        : { type: action.type, id: action.id, reason: clientClosure ? fields.reason.trim() : fields.reason };
     const submit = async (event) => {
         event.preventDefault();
-        if (inFlight.current || disabled) return;
+        if (inFlight.current || disabled || (clientClosure && !fields.reason.trim())) return;
         inFlight.current = true;
         setBusy(true);
         onBusyChange(true);
@@ -190,13 +193,14 @@ export default function OperationForm({
     );
     return (
         <section className="cxc-panel cxc-operation" aria-labelledby="cxc-operation-title">
-            <div className={`cxc-operation-heading${compact ? ' visually-hidden' : ''}`}>
+            <div className={`cxc-operation-heading${compact || clientClosure ? ' visually-hidden' : ''}`}>
                 <h3 id="cxc-operation-title" ref={title} tabIndex={-1}>
                     {compact ? 'Datos del pago' : titles[action.type]}
                 </h3>
-                {action.scope && <p className="cxc-muted">{action.scope}</p>}
+                {action.scope && <p className={clientClosure ? 'visually-hidden' : 'cxc-muted'}>{action.scope}</p>}
             </div>
-            {!payment && (
+            {clientClosure && <p className="cxc-closure-warning">Cancela el saldo sin registrar dinero recibido.</p>}
+            {!payment && !clientClosure && (
                 <Alert variant="warning" className="cxc-operation-warning">
                     {action.type === 'close'
                         ? 'El cierre cancela el saldo elegido sin registrar dinero recibido.'
@@ -207,7 +211,7 @@ export default function OperationForm({
             )}
             <Form onSubmit={submit} aria-label={titles[action.type]}>
                 <fieldset disabled={busy || disabled}>
-                    {!preview &&
+                    {(!preview || clientClosure) &&
                         (payment ? (
                             <>
                                 <div className="cxc-payment-amount">
@@ -285,7 +289,9 @@ export default function OperationForm({
                                     {compact && (
                                         <div className="cxc-payment-helper">
                                             <div
-                                                className={fields.currency !== 'BsS' ? 'cxc-payment-helper-inactive' : ''}
+                                                className={
+                                                    fields.currency !== 'BsS' ? 'cxc-payment-helper-inactive' : ''
+                                                }
                                                 aria-hidden={fields.currency !== 'BsS'}
                                             >
                                                 {rateInfo}
@@ -395,16 +401,50 @@ export default function OperationForm({
                                 <Form.Label>Motivo</Form.Label>
                                 <Form.Control
                                     as="textarea"
-                                    rows={3}
+                                    ref={reasonInput}
+                                    rows={clientClosure ? 2 : 3}
                                     maxLength={250}
                                     required
-                                    placeholder="Explica por qué realizas esta operación"
+                                    placeholder={
+                                        clientClosure
+                                            ? '¿Por qué se cierra esta deuda?'
+                                            : 'Explica por qué realizas esta operación'
+                                    }
                                     value={fields.reason}
                                     onChange={(event) => change('reason', event.target.value)}
                                 />
                             </Form.Group>
                         ))}
-                    {preview && (
+                    {clientClosure && (
+                        <div className="cxc-closure-impact" role="status" aria-label="Impacto del cierre">
+                            <div className="cxc-closure-amount">
+                                <span>{preview ? 'Importe a cerrar' : 'Saldo a cerrar'}</span>
+                                <strong>
+                                    {money(preview ? preview.base : balance)} <small>USD</small>
+                                </strong>
+                            </div>
+                            {preview && (
+                                <>
+                                    <p>
+                                        Saldo cliente USD: {money(preview.balanceBefore)} →{' '}
+                                        {money(preview.balanceAfter)}
+                                    </p>
+                                    <details className="cxc-closure-documents">
+                                        <summary>Facturas afectadas ({preview.applications.length})</summary>
+                                        <ul className="cxc-review-applications" aria-label="Importes por factura">
+                                            {preview.applications.map((application) => (
+                                                <li key={application.id}>
+                                                    <span>Factura {application.sale}</span>
+                                                    <strong>{money(application.amount)} USD</strong>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </details>
+                                </>
+                            )}
+                        </div>
+                    )}
+                    {preview && !clientClosure && (
                         <div className="cxc-preview">
                             <h4 ref={reviewTitle} tabIndex={-1}>
                                 Revisa antes de confirmar
@@ -516,7 +556,7 @@ export default function OperationForm({
                     </Alert>
                 )}
                 <div className="cxc-operation-footer">
-                    {preview && (
+                    {preview && !clientClosure && (
                         <Button variant="link" className="cxc-edit-operation" disabled={busy} onClick={edit}>
                             Editar datos
                         </Button>
@@ -529,7 +569,12 @@ export default function OperationForm({
                             ref={confirmButton}
                             type="submit"
                             variant={payment ? 'primary' : 'warning'}
-                            disabled={busy || disabled || (payment && fields.currency === 'BsS' && !rateAvailable)}
+                            disabled={
+                                busy ||
+                                disabled ||
+                                (clientClosure && !fields.reason.trim()) ||
+                                (payment && fields.currency === 'BsS' && !rateAvailable)
+                            }
                         >
                             {busy ? (
                                 <>

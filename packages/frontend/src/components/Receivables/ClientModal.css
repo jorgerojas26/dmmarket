@@ -761,3 +761,101 @@
     outline: 2px solid #8cbcff;
     outline-offset: 3px;
 }
+
+.modal.cxc-closure-modal {
+    z-index: 1070;
+}
+.modal-backdrop.cxc-closure-backdrop {
+    z-index: 1065;
+}
+.cxc-account.cxc-closure-modal .modal-dialog {
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0 0.5rem;
+}
+.cxc-account.cxc-closure-modal .modal-content {
+    border-radius: 12px;
+}
+.cxc-account.cxc-closure-modal .modal-header {
+    background: transparent;
+    padding: 1rem;
+}
+.cxc-account.cxc-closure-modal .modal-title {
+    font-size: 1rem;
+}
+.cxc-account.cxc-closure-modal .modal-subtitle {
+    overflow-wrap: anywhere;
+}
+.cxc-account.cxc-closure-modal .modal-body {
+    padding: 1rem;
+    gap: 0.75rem;
+}
+.cxc-account .cxc-client-closure {
+    max-width: none;
+    margin: 0;
+}
+.cxc-account .cxc-client-closure .cxc-operation {
+    background: transparent;
+    border: 0;
+    padding: 0;
+}
+.cxc-closure-warning {
+    color: #e0b970;
+    font-size: 0.8rem;
+    margin: 0 0 0.85rem;
+}
+.cxc-closure-impact {
+    border-top: 1px solid #35404d;
+    padding-top: 0.75rem;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+.cxc-closure-amount {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+}
+.cxc-closure-amount > span,
+.cxc-closure-impact > p {
+    color: #adb5bd;
+}
+.cxc-closure-amount > strong {
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+.cxc-closure-amount small {
+    color: #adb5bd;
+    font-size: 0.7rem;
+    font-weight: 400;
+}
+.cxc-closure-impact > p {
+    margin: 0.35rem 0 0;
+}
+.cxc-closure-documents {
+    margin-top: 0.75rem;
+}
+.cxc-closure-documents > summary {
+    width: fit-content;
+    cursor: pointer;
+    color: #ced4da;
+}
+.cxc-closure-documents > summary:focus-visible {
+    outline: 2px solid #e9ecef;
+    outline-offset: 3px;
+}
+.cxc-closure-documents .cxc-review-applications {
+    max-height: 140px;
+    margin: 0.5rem 0 0;
+}
+.cxc-account .cxc-client-closure .cxc-operation-footer {
+    padding: 0;
+    margin-top: 0.85rem;
+    border: 0;
+}
+.cxc-client-closure .cxc-actions {
+    margin-top: 0;
+    flex-wrap: wrap;
+}

@@ -54,6 +54,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
     const canPay = allowed && hasDebt;
     const navigationLocked = busy || isValidating || !!action;
     const rowClosure = action?.type === 'close' && !!action.id;
+    const clientClosure = action?.type === 'close' && !action.id;
     const operationOpen = !!action && action.type !== 'void' && !rowClosure;
     const openInvoice = useCallback((id, triggerId) => {
         initialFocusSet.current = true;
@@ -337,6 +338,69 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
             setPrinting(false);
         }
     };
+    const discardNotice = discard ? (
+        <Alert variant="warning" role="alert" className="cxc-discard">
+            <strong>¿Descartar cambios sin guardar?</strong>
+            <div className="cxc-actions">
+                <Button
+                    ref={continueEditing}
+                    variant="outline-light"
+                    onClick={() => {
+                        const operationTitle = document.getElementById(
+                            clientClosure ? 'cxc-reason' : !operationOpen ? 'cxc-inline-reason' : 'cxc-operation-title',
+                        );
+                        setDiscard(null);
+                        setTimeout(() => operationTitle?.focus(), 0);
+                    }}
+                >
+                    Seguir editando
+                </Button>
+                <Button variant="warning" onClick={confirmDiscard}>
+                    Descartar cambios
+                </Button>
+            </div>
+        </Alert>
+    ) : null;
+    const accountError = error ? (
+        <Alert variant="danger" role="alert">
+            <strong>{error.message}</strong>
+            {data && <p>Saldos sin actualizar.</p>}
+            <Button variant="outline-light" size="sm" disabled={busy || isValidating} onClick={() => mutate()}>
+                Reintentar
+            </Button>
+        </Alert>
+    ) : null;
+    const operationForm =
+        operationOpen && data ? (
+            <div className={`cxc-operation-container${clientClosure ? ' cxc-client-closure' : ''}`}>
+                <fieldset
+                    disabled={!data.writesEnabled || !!error || isValidating || !!discard}
+                    onSubmitCapture={(event) => {
+                        if (!allowed || discard) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }
+                    }}
+                >
+                    <OperationForm
+                        key={`${action.type}-${action.id || 'all'}`}
+                        action={action}
+                        client={data.client}
+                        rate={data.rate}
+                        balance={data.summary.balance}
+                        onCancel={() => cancel()}
+                        onSuccess={success}
+                        onBusyChange={setBusy}
+                        onDirtyChange={setDirty}
+                    />
+                </fieldset>
+                {(!data.writesEnabled || error || isValidating) && (
+                    <Button variant="outline-secondary" className="mt-2" disabled={busy} onClick={() => cancel()}>
+                        {clientClosure ? 'Cancelar cierre' : 'Volver al historial'}
+                    </Button>
+                )}
+            </div>
+        ) : null;
     if (invoice) return <InvoiceDetailModal invoiceId={invoice.id} onClose={closeInvoice} />;
     if (action?.type === 'payment') {
         return (
@@ -355,346 +419,213 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
         );
     }
     return (
-        <Modal
-            show
-            onHide={() => cancel('modal')}
-            onEntered={() => {
-                if (!initialFocusSet.current && !action) title.current?.focus();
-                initialFocusSet.current = true;
-            }}
-            size="xl"
-            fullscreen="md-down"
-            scrollable
-            backdrop="static"
-            className="cxc-modal cxc-account client-dashboard-modal"
-            aria-labelledby="cxc-client-title"
-        >
-            <Modal.Header closeButton={!busy} closeLabel="Cerrar cuenta">
-                <div className="cxc-account-header">
-                    <div className="cxc-account-identity">
-                        <div className="cxc-account-name">
-                            <Modal.Title id="cxc-client-title" ref={title} tabIndex={-1}>
-                                {clientName}
-                            </Modal.Title>
-                            <p className="modal-subtitle">
-                                <span>Cliente {client.id}</span>
-                                <span>{data?.client.rif || client.rif || 'Sin RIF'}</span>
-                                <span>Ruta {data?.client.ruta || client.ruta || '—'}</span>
-                            </p>
+        <>
+            <Modal
+                show
+                onHide={() => cancel('modal')}
+                onEntered={() => {
+                    if (!initialFocusSet.current && !action) title.current?.focus();
+                    initialFocusSet.current = true;
+                }}
+                size="xl"
+                fullscreen="md-down"
+                scrollable
+                backdrop="static"
+                className="cxc-modal cxc-account client-dashboard-modal"
+                aria-labelledby="cxc-client-title"
+            >
+                <Modal.Header closeButton={!busy} closeLabel="Cerrar cuenta">
+                    <div className="cxc-account-header">
+                        <div className="cxc-account-identity">
+                            <div className="cxc-account-name">
+                                <Modal.Title id="cxc-client-title" ref={title} tabIndex={-1}>
+                                    {clientName}
+                                </Modal.Title>
+                                <p className="modal-subtitle">
+                                    <span>Cliente {client.id}</span>
+                                    <span>{data?.client.rif || client.rif || 'Sin RIF'}</span>
+                                    <span>Ruta {data?.client.ruta || client.ruta || '—'}</span>
+                                </p>
+                            </div>
                         </div>
-                    </div>
-                    <div className="cxc-account-header-actions">
-                        <Button
-                            ref={primary}
-                            className="cxc-payment-cta"
-                            disabled={!canPay || !!action}
-                            onClick={() => start({ type: 'payment' })}
-                        >
-                            <span aria-hidden="true">＋</span> Registrar abono
-                        </Button>
-                        <Dropdown align="end">
-                            <Dropdown.Toggle
-                                ref={moreActions}
-                                id="cxc-account-actions"
-                                variant="outline-secondary"
-                                disabled={!data || busy || isValidating || !!action || printing}
+                        <div className="cxc-account-header-actions">
+                            <Button
+                                ref={primary}
+                                className="cxc-payment-cta"
+                                disabled={!canPay || !!action}
+                                onClick={() => start({ type: 'payment' })}
                             >
-                                <svg
-                                    className="cxc-action-icon"
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="currentColor"
-                                    aria-hidden="true"
-                                >
-                                    <circle cx="5" cy="12" r="1.5" />
-                                    <circle cx="12" cy="12" r="1.5" />
-                                    <circle cx="19" cy="12" r="1.5" />
-                                </svg>
-                                Más acciones
-                            </Dropdown.Toggle>
-                            <Dropdown.Menu variant="dark">
-                                <Dropdown.Item
-                                    as="button"
-                                    disabled={!data || !!error || isValidating || busy || !!action || printing}
-                                    onClick={handlePrint}
+                                <span aria-hidden="true">＋</span> Registrar abono
+                            </Button>
+                            <Dropdown align="end">
+                                <Dropdown.Toggle
+                                    ref={moreActions}
+                                    id="cxc-account-actions"
+                                    variant="outline-secondary"
+                                    disabled={!data || busy || isValidating || !!action || printing}
                                 >
                                     <svg
                                         className="cxc-action-icon"
                                         width="16"
                                         height="16"
                                         viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.75"
+                                        fill="currentColor"
                                         aria-hidden="true"
                                     >
-                                        <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                                        <path d="M6 14h12v7H6z" />
+                                        <circle cx="5" cy="12" r="1.5" />
+                                        <circle cx="12" cy="12" r="1.5" />
+                                        <circle cx="19" cy="12" r="1.5" />
                                     </svg>
-                                    {printing ? 'Generando PDF…' : 'Imprimir PDF'}
-                                </Dropdown.Item>
-                                <Dropdown.Item
-                                    as="button"
-                                    disabled={!canPay || !!action}
-                                    onClick={() =>
-                                        start(
-                                            { type: 'close', scope: 'Todos los documentos pendientes del cliente' },
-                                            moreActions.current,
-                                        )
-                                    }
-                                >
-                                    <svg
-                                        className="cxc-action-icon"
-                                        width="16"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.75"
-                                        aria-hidden="true"
+                                    Más acciones
+                                </Dropdown.Toggle>
+                                <Dropdown.Menu variant="dark">
+                                    <Dropdown.Item
+                                        as="button"
+                                        disabled={!data || !!error || isValidating || busy || !!action || printing}
+                                        onClick={handlePrint}
                                     >
-                                        <rect x="3" y="3" width="18" height="4" rx="1" />
-                                        <path d="M5 7v13h14V7M9 11h6" />
-                                    </svg>
-                                    Cerrar deuda del cliente
-                                </Dropdown.Item>
-                            </Dropdown.Menu>
-                        </Dropdown>
-                    </div>
-                </div>
-            </Modal.Header>
-            <Modal.Body>
-                {notice && (
-                    <Alert
-                        ref={noticeElement}
-                        tabIndex={-1}
-                        variant={notice.variant}
-                        role="status"
-                        className={notice.selection ? 'cxc-inline-notice' : undefined}
-                    >
-                        {notice.message}
-                        {notice.saved && (
-                            <Button
-                                variant="link"
-                                size="sm"
-                                disabled={busy || isValidating}
-                                onClick={async () => {
-                                    setBusy(true);
-                                    try {
-                                        await refreshInlineAccount(notice.saved, notice.selection);
-                                    } finally {
-                                        setBusy(false);
-                                    }
-                                }}
-                            >
-                                Reintentar consulta
-                            </Button>
-                        )}
-                    </Alert>
-                )}
-                {discard && (
-                    <Alert variant="warning" role="alert" className="cxc-discard">
-                        <strong>¿Descartar cambios sin guardar?</strong>
-                        <div className="cxc-actions">
-                            <Button
-                                ref={continueEditing}
-                                variant="outline-light"
-                                onClick={() => {
-                                    const operationTitle = document.getElementById(
-                                        !operationOpen ? 'cxc-inline-reason' : 'cxc-operation-title',
-                                    );
-                                    setDiscard(null);
-                                    setTimeout(() => operationTitle?.focus(), 0);
-                                }}
-                            >
-                                Seguir editando
-                            </Button>
-                            <Button variant="warning" onClick={confirmDiscard}>
-                                Descartar cambios
-                            </Button>
-                        </div>
-                    </Alert>
-                )}
-                {error && (
-                    <Alert variant="danger" role="alert">
-                        <strong>{error.message}</strong>
-                        {data && <p>Saldos sin actualizar.</p>}
-                        <Button
-                            variant="outline-light"
-                            size="sm"
-                            disabled={busy || isValidating}
-                            onClick={() => mutate()}
-                        >
-                            Reintentar
-                        </Button>
-                    </Alert>
-                )}
-                {!data ? (
-                    !error && (
-                        <div className="cxc-loading" role="status">
-                            <Spinner animation="border" size="sm" /> Cargando cuenta…
-                        </div>
-                    )
-                ) : (
-                    <>
-                        {!data.writesEnabled && (
-                            <Alert variant="warning">
-                                Modo consulta: las escrituras de cuentas por cobrar están deshabilitadas.
-                            </Alert>
-                        )}
-                        <section className="cxc-account-overview" aria-label="Resumen de la cuenta">
-                            <Summary summary={data.summary} />
-                        </section>
-                        <div className={`cxc-detail-grid${operationOpen ? ' cxc-detail-grid-operating' : ''}`}>
-                            <section
-                                className="cxc-documents-card"
-                                aria-labelledby="cxc-documents-title"
-                                hidden={operationOpen}
-                                aria-busy={isValidating}
-                            >
-                                <div className="cxc-section-heading">
-                                    <div>
-                                        <h3 id="cxc-documents-title" tabIndex={-1}>
-                                            Facturas
-                                        </h3>
-                                    </div>
-                                    <fieldset className="cxc-document-filter" aria-label="Facturas de la cuenta">
-                                        {[
-                                            ['pending', 'Pendientes'],
-                                            ['all', 'Todas'],
-                                        ].map(([value, label]) => (
-                                            <Button
-                                                key={value}
-                                                variant="link"
-                                                aria-pressed={documents === value}
-                                                disabled={navigationLocked}
-                                                onClick={() => {
-                                                    setDocuments(value);
-                                                    setPage(1);
-                                                }}
-                                            >
-                                                {label}
-                                            </Button>
-                                        ))}
-                                    </fieldset>
-                                </div>
-                                {data.documents.data.length ? (
-                                    <DocumentList
-                                        documents={data.documents.data}
-                                        asOf={data.today}
-                                        allowed={allowed}
-                                        locked={navigationLocked}
-                                        onInvoice={openInvoice}
-                                        closedIds={closedIds}
-                                        closeDocumentId={rowClosure ? action.id : null}
-                                        closeForm={
-                                            rowClosure ? (
-                                                <InlineOperationForm
-                                                    key={`close-${action.id}`}
-                                                    client={data.client}
-                                                    action={action}
-                                                    disabled={!allowed}
-                                                    discarding={!!discard}
-                                                    onCancel={cancelInline}
-                                                    onSuccess={inlineSuccess}
-                                                    onBusyChange={setBusy}
-                                                    onDirtyChange={setDirty}
-                                                />
-                                            ) : null
-                                        }
-                                        onAction={(next, trigger) => {
-                                            if (next.type === 'close' && next.id) {
-                                                start(
-                                                    {
-                                                        ...next,
-                                                        document: data.documents.data.find(
-                                                            (document) => document.id === next.id,
-                                                        ),
-                                                    },
-                                                    document.getElementById(`cxc-document-detail-${next.id}`),
-                                                );
-                                            } else start(next, trigger);
-                                        }}
-                                    />
-                                ) : (
-                                    <p className="cxc-empty">
-                                        {documents === 'pending'
-                                            ? 'No hay facturas pendientes'
-                                            : 'No hay facturas en esta cuenta'}
-                                    </p>
-                                )}
-                                {(data.documents.total > DOCUMENTS_PAGE_SIZE || page > 1) && (
-                                    <Pager
-                                        page={page}
-                                        total={data.documents.total}
-                                        onChange={setPage}
-                                        busy={navigationLocked}
-                                        label="Facturas"
-                                    />
-                                )}
-                            </section>
-                            {operationOpen ? (
-                                <div className="cxc-operation-container">
-                                    <fieldset
-                                        disabled={!data.writesEnabled || !!error || isValidating || !!discard}
-                                        onSubmitCapture={(event) => {
-                                            if (!allowed || discard) {
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                            }
-                                        }}
-                                    >
-                                        <OperationForm
-                                            key={`${action.type}-${action.id || 'all'}`}
-                                            action={action}
-                                            client={data.client}
-                                            rate={data.rate}
-                                            balance={data.summary.balance}
-                                            onCancel={() => cancel()}
-                                            onSuccess={success}
-                                            onBusyChange={setBusy}
-                                            onDirtyChange={setDirty}
-                                        />
-                                    </fieldset>
-                                    {(!data.writesEnabled || error || isValidating) && (
-                                        <Button
-                                            variant="outline-secondary"
-                                            className="mt-2"
-                                            disabled={busy}
-                                            onClick={() => cancel()}
+                                        <svg
+                                            className="cxc-action-icon"
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="1.75"
+                                            aria-hidden="true"
                                         >
-                                            Volver al historial
-                                        </Button>
-                                    )}
-                                </div>
-                            ) : (
-                                <section className="cxc-history-card" aria-labelledby="cxc-history-title">
+                                            <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                                            <path d="M6 14h12v7H6z" />
+                                        </svg>
+                                        {printing ? 'Generando PDF…' : 'Imprimir PDF'}
+                                    </Dropdown.Item>
+                                    <Dropdown.Item
+                                        as="button"
+                                        disabled={!canPay || !!action}
+                                        onClick={() =>
+                                            start(
+                                                { type: 'close', scope: 'Todos los documentos pendientes del cliente' },
+                                                moreActions.current,
+                                            )
+                                        }
+                                    >
+                                        <svg
+                                            className="cxc-action-icon"
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="1.75"
+                                            aria-hidden="true"
+                                        >
+                                            <rect x="3" y="3" width="18" height="4" rx="1" />
+                                            <path d="M5 7v13h14V7M9 11h6" />
+                                        </svg>
+                                        Cerrar deuda del cliente
+                                    </Dropdown.Item>
+                                </Dropdown.Menu>
+                            </Dropdown>
+                        </div>
+                    </div>
+                </Modal.Header>
+                <Modal.Body>
+                    {notice && (
+                        <Alert
+                            ref={noticeElement}
+                            tabIndex={-1}
+                            variant={notice.variant}
+                            role="status"
+                            className={notice.selection ? 'cxc-inline-notice' : undefined}
+                        >
+                            {notice.message}
+                            {notice.saved && (
+                                <Button
+                                    variant="link"
+                                    size="sm"
+                                    disabled={busy || isValidating}
+                                    onClick={async () => {
+                                        setBusy(true);
+                                        try {
+                                            await refreshInlineAccount(notice.saved, notice.selection);
+                                        } finally {
+                                            setBusy(false);
+                                        }
+                                    }}
+                                >
+                                    Reintentar consulta
+                                </Button>
+                            )}
+                        </Alert>
+                    )}
+                    {!clientClosure && discardNotice}
+                    {!clientClosure && accountError}
+                    {!data ? (
+                        !error && (
+                            <div className="cxc-loading" role="status">
+                                <Spinner animation="border" size="sm" /> Cargando cuenta…
+                            </div>
+                        )
+                    ) : (
+                        <>
+                            {!data.writesEnabled && !clientClosure && (
+                                <Alert variant="warning">
+                                    Modo consulta: las escrituras de cuentas por cobrar están deshabilitadas.
+                                </Alert>
+                            )}
+                            <section className="cxc-account-overview" aria-label="Resumen de la cuenta">
+                                <Summary summary={data.summary} />
+                            </section>
+                            <div
+                                className={`cxc-detail-grid${operationOpen && !clientClosure ? ' cxc-detail-grid-operating' : ''}`}
+                            >
+                                <section
+                                    className="cxc-documents-card"
+                                    aria-labelledby="cxc-documents-title"
+                                    hidden={operationOpen && !clientClosure}
+                                    aria-busy={isValidating}
+                                >
                                     <div className="cxc-section-heading">
                                         <div>
-                                            <h3 id="cxc-history-title">Historial de cobranza</h3>
+                                            <h3 id="cxc-documents-title" tabIndex={-1}>
+                                                Facturas
+                                            </h3>
                                         </div>
-                                        <span className="cxc-count">{data.timeline.total}</span>
+                                        <fieldset className="cxc-document-filter" aria-label="Facturas de la cuenta">
+                                            {[
+                                                ['pending', 'Pendientes'],
+                                                ['all', 'Todas'],
+                                            ].map(([value, label]) => (
+                                                <Button
+                                                    key={value}
+                                                    variant="link"
+                                                    aria-pressed={documents === value}
+                                                    disabled={navigationLocked}
+                                                    onClick={() => {
+                                                        setDocuments(value);
+                                                        setPage(1);
+                                                    }}
+                                                >
+                                                    {label}
+                                                </Button>
+                                            ))}
+                                        </fieldset>
                                     </div>
-                                    <div className="cxc-history-body">
-                                        {!data.timeline.data.length && (
-                                            <p className="cxc-empty">Sin movimientos registrados</p>
-                                        )}
-                                        <Timeline
-                                            events={data.timeline.data.map((event) =>
-                                                voidReasons[event.eventId]
-                                                    ? { ...event, voidReason: voidReasons[event.eventId] }
-                                                    : event,
-                                            )}
-                                            expandedId={expandedMovement}
+                                    {data.documents.data.length ? (
+                                        <DocumentList
+                                            documents={data.documents.data}
+                                            asOf={data.today}
+                                            allowed={allowed}
                                             locked={navigationLocked}
-                                            voidEventId={action?.type === 'void' ? action.event.eventId : null}
-                                            voidForm={
-                                                action?.type === 'void' ? (
+                                            onInvoice={openInvoice}
+                                            closedIds={closedIds}
+                                            closeDocumentId={rowClosure ? action.id : null}
+                                            closeForm={
+                                                rowClosure ? (
                                                     <InlineOperationForm
-                                                        key={action.event.eventId}
+                                                        key={`close-${action.id}`}
                                                         client={data.client}
-                                                        action={{ type: 'void', id: action.event.movementId }}
+                                                        action={action}
                                                         disabled={!allowed}
                                                         discarding={!!discard}
                                                         onCancel={cancelInline}
@@ -704,41 +635,144 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                                                     />
                                                 ) : null
                                             }
-                                            onExpandedChange={setExpandedMovement}
-                                            allowed={allowed}
-                                            onInvoice={openInvoice}
-                                            onVoid={(event, trigger) =>
-                                                start(
-                                                    {
-                                                        type: 'void',
-                                                        event,
-                                                        timelineTotal: data.timeline.total,
-                                                        position:
-                                                            (timelinePage - 1) * DOCUMENTS_PAGE_SIZE +
-                                                            data.timeline.data.findIndex(
-                                                                (movement) => movement.eventId === event.eventId,
+                                            onAction={(next, trigger) => {
+                                                if (next.type === 'close' && next.id) {
+                                                    start(
+                                                        {
+                                                            ...next,
+                                                            document: data.documents.data.find(
+                                                                (document) => document.id === next.id,
                                                             ),
-                                                    },
-                                                    trigger,
-                                                )
-                                            }
+                                                        },
+                                                        document.getElementById(`cxc-document-detail-${next.id}`),
+                                                    );
+                                                } else start(next, trigger);
+                                            }}
                                         />
-                                    </div>
-                                    {(data.timeline.total > DOCUMENTS_PAGE_SIZE || timelinePage > 1) && (
+                                    ) : (
+                                        <p className="cxc-empty">
+                                            {documents === 'pending'
+                                                ? 'No hay facturas pendientes'
+                                                : 'No hay facturas en esta cuenta'}
+                                        </p>
+                                    )}
+                                    {(data.documents.total > DOCUMENTS_PAGE_SIZE || page > 1) && (
                                         <Pager
-                                            page={timelinePage}
-                                            total={data.timeline.total}
-                                            onChange={setTimelinePage}
+                                            page={page}
+                                            total={data.documents.total}
+                                            onChange={setPage}
                                             busy={navigationLocked}
-                                            label="Historial"
+                                            label="Facturas"
                                         />
                                     )}
                                 </section>
-                            )}
+                                {operationOpen && !clientClosure ? (
+                                    operationForm
+                                ) : (
+                                    <section className="cxc-history-card" aria-labelledby="cxc-history-title">
+                                        <div className="cxc-section-heading">
+                                            <div>
+                                                <h3 id="cxc-history-title">Historial de cobranza</h3>
+                                            </div>
+                                            <span className="cxc-count">{data.timeline.total}</span>
+                                        </div>
+                                        <div className="cxc-history-body">
+                                            {!data.timeline.data.length && (
+                                                <p className="cxc-empty">Sin movimientos registrados</p>
+                                            )}
+                                            <Timeline
+                                                events={data.timeline.data.map((event) =>
+                                                    voidReasons[event.eventId]
+                                                        ? { ...event, voidReason: voidReasons[event.eventId] }
+                                                        : event,
+                                                )}
+                                                expandedId={expandedMovement}
+                                                locked={navigationLocked}
+                                                voidEventId={action?.type === 'void' ? action.event.eventId : null}
+                                                voidForm={
+                                                    action?.type === 'void' ? (
+                                                        <InlineOperationForm
+                                                            key={action.event.eventId}
+                                                            client={data.client}
+                                                            action={{ type: 'void', id: action.event.movementId }}
+                                                            disabled={!allowed}
+                                                            discarding={!!discard}
+                                                            onCancel={cancelInline}
+                                                            onSuccess={inlineSuccess}
+                                                            onBusyChange={setBusy}
+                                                            onDirtyChange={setDirty}
+                                                        />
+                                                    ) : null
+                                                }
+                                                onExpandedChange={setExpandedMovement}
+                                                allowed={allowed}
+                                                onInvoice={openInvoice}
+                                                onVoid={(event, trigger) =>
+                                                    start(
+                                                        {
+                                                            type: 'void',
+                                                            event,
+                                                            timelineTotal: data.timeline.total,
+                                                            position:
+                                                                (timelinePage - 1) * DOCUMENTS_PAGE_SIZE +
+                                                                data.timeline.data.findIndex(
+                                                                    (movement) => movement.eventId === event.eventId,
+                                                                ),
+                                                        },
+                                                        trigger,
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        {(data.timeline.total > DOCUMENTS_PAGE_SIZE || timelinePage > 1) && (
+                                            <Pager
+                                                page={timelinePage}
+                                                total={data.timeline.total}
+                                                onChange={setTimelinePage}
+                                                busy={navigationLocked}
+                                                label="Historial"
+                                            />
+                                        )}
+                                    </section>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </Modal.Body>
+            </Modal>
+            {clientClosure && (
+                <Modal
+                    show
+                    onHide={() => cancel()}
+                    onEntered={() => document.getElementById('cxc-reason')?.focus()}
+                    centered
+                    scrollable
+                    backdrop="static"
+                    keyboard={!busy}
+                    className="cxc-modal cxc-account client-dashboard-modal cxc-closure-modal"
+                    backdropClassName="cxc-closure-backdrop"
+                    aria-labelledby="cxc-closure-title"
+                >
+                    <Modal.Header closeButton={!busy} closeLabel="Cancelar cierre">
+                        <div>
+                            <Modal.Title id="cxc-closure-title">Cerrar deuda del cliente</Modal.Title>
+                            <p className="modal-subtitle">
+                                {clientName} · {client.id}
+                            </p>
                         </div>
-                    </>
-                )}
-            </Modal.Body>
-        </Modal>
+                    </Modal.Header>
+                    <Modal.Body>
+                        {discardNotice}
+                        {accountError}
+                        {data && !data.writesEnabled && (
+                            <Alert variant="warning">
+                                Modo consulta: las escrituras de cuentas por cobrar están deshabilitadas.
+                            </Alert>
+                        )}
+                        {operationForm}
+                    </Modal.Body>
+                </Modal>
+            )}
+        </>
     );
 }
