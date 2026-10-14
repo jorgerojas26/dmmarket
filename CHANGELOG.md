@@ -14,6 +14,7 @@ release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits in
 - **Cuentas por cobrar en Clientes**: nueva sección para consultar la cartera de clientes con deuda, sus saldos pendientes y vencidos, las facturas y el historial de cobranza. Incluye búsqueda y filtros por ruta y vencimiento.
 - **Abonos y gestión de deuda**: con la cobranza habilitada, registra pagos en bolívares o dólares, revisa su distribución entre las facturas antes de confirmar y consulta el saldo actualizado. También puedes anular abonos, cerrar deudas y reabrir cierres, indicando el motivo y conservando el historial. Los cierres manuales se distinguen del dinero recibido.
 - **Estados de cuenta para imprimir**: genera el listado de cuentas por cobrar y el estado de cuenta de cada cliente, con sus facturas, abonos y movimientos de cobranza.
+- **Nuevo icono de DMMarket**: las pestañas del navegador y los accesos directos en dispositivos Apple muestran las letras DM en blanco sobre fondo azul para identificar fácilmente la aplicación.
 
 ## [v1.4.1] - 2026-10-11
 
