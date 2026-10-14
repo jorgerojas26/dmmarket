@@ -18,7 +18,17 @@ const parseNotes = (value) => {
     };
 };
 
-export default function Timeline({ events, allowed, onInvoice, onVoid, expandedId, onExpandedChange }) {
+export default function Timeline({
+    events,
+    allowed,
+    onInvoice,
+    onVoid,
+    expandedId,
+    onExpandedChange,
+    locked = false,
+    voidEventId,
+    voidForm,
+}) {
     const [localExpanded, setLocalExpanded] = useState(null);
     const expanded = expandedId === undefined ? localExpanded : expandedId;
     const setExpanded = onExpandedChange || setLocalExpanded;
@@ -50,6 +60,7 @@ export default function Timeline({ events, allowed, onInvoice, onVoid, expandedI
                             className="cxc-movement-summary"
                             aria-expanded={open}
                             aria-controls={detailId}
+                            disabled={locked}
                             aria-label={`${open ? 'Ocultar' : 'Ver'} detalles: ${title}, ${payment ? money(event.amount, event.currency) : money(event.data?.base)}${converted ? `, equivalente ${money(event.base)} USD` : ''}, del ${dateLabel(event.date)}${method ? `, ${method}` : ''}${event.reference ? `, referencia ${event.reference}` : ''}`}
                             onClick={() => setExpanded(open ? null : event.eventId)}
                         >
@@ -167,6 +178,7 @@ export default function Timeline({ events, allowed, onInvoice, onVoid, expandedI
                                                                 id={invoiceTrigger}
                                                                 variant="link"
                                                                 className="cxc-invoice-link"
+                                                                disabled={locked}
                                                                 onClick={() =>
                                                                     onInvoice(application.sale, invoiceTrigger)
                                                                 }
@@ -183,17 +195,32 @@ export default function Timeline({ events, allowed, onInvoice, onVoid, expandedI
                                     </div>
                                 )}
                                 {notes && <p className="cxc-movement-notes">{notes}</p>}
-                                {payment && !event.voidReason && (
-                                    <Button
-                                        size="sm"
-                                        variant="link"
-                                        className="cxc-void-link"
-                                        disabled={!allowed}
-                                        onClick={() => onVoid(event, document.getElementById(triggerId))}
-                                    >
-                                        Anular abono
-                                    </Button>
-                                )}
+                                {event.eventId === voidEventId
+                                    ? voidForm
+                                    : payment &&
+                                      !event.voidReason && (
+                                          <Button
+                                              size="sm"
+                                              variant="outline-secondary"
+                                              className="cxc-void-action"
+                                              disabled={!allowed || locked}
+                                              onClick={() => onVoid(event, document.getElementById(triggerId))}
+                                          >
+                                              <svg
+                                                  width="14"
+                                                  height="14"
+                                                  viewBox="0 0 24 24"
+                                                  fill="none"
+                                                  stroke="currentColor"
+                                                  strokeWidth="1.75"
+                                                  aria-hidden="true"
+                                              >
+                                                  <circle cx="12" cy="12" r="9" />
+                                                  <path d="m6 6 12 12" />
+                                              </svg>
+                                              Anular abono
+                                          </Button>
+                                      )}
                             </div>
                         )}
                     </li>

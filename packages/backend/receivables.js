@@ -185,6 +185,7 @@ function createReceivablesService({
         applications: selected.map((d) => ({ id: d.IdDocumento, sale: d.IdFactura, amount: fixed(d.SaldoActual) })),
       };
       result.base = fixed(total(result.applications.map((a) => a.amount)));
+      result.balanceBefore = fixed(balance);
       result.balanceAfter = fixed(balance.minus(result.base));
     } else if (payload.type === "reopen") {
       const document = valid.find((d) => d.IdDocumento === payload.id);
@@ -218,11 +219,14 @@ function createReceivablesService({
         application.sale = document.IdFactura;
         application.amount = fixed(application.amount);
       }
+      const restored = total(applications.map((a) => a.amount));
       result = {
         ...payload,
         applications,
         base: fixed(movement.MontoBase),
-        balanceAfter: fixed(balance.plus(total(applications.map((a) => a.amount)))),
+        balanceBefore: fixed(balance),
+        restored: fixed(restored),
+        balanceAfter: fixed(balance.plus(restored)),
       };
     }
     result.snapshot = hash({

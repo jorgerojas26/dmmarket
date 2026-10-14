@@ -1,5 +1,5 @@
-import { useReceivableClient } from 'hooks/useReceivables';
 import { fetchReceivableClient } from 'api/receivables';
+import { useReceivableClient } from 'hooks/useReceivables';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -10,10 +10,11 @@ import Modal from 'react-bootstrap/Modal';
 import Spinner from 'react-bootstrap/Spinner';
 import DocumentList from './DocumentList';
 import { dateLabel, money } from './format';
+import InlineOperationForm from './InlineOperationForm';
 import InvoiceDetailModal from './InvoiceDetailModal';
 import OperationForm from './OperationForm';
-import PaymentDrawer from './PaymentDrawer';
 import Pager from './Pager';
+import PaymentDrawer from './PaymentDrawer';
 import Summary from './Summary';
 import Timeline from './Timeline';
 import 'components/ClientDashboardModal/styles.css';
@@ -36,10 +37,13 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
     const [notice, setNotice] = useState(null);
     const [invoice, setInvoice] = useState(null);
     const [expandedMovement, setExpandedMovement] = useState(null);
+    const [voidReasons, setVoidReasons] = useState({});
+    const [closedIds, setClosedIds] = useState([]);
     const primary = useRef(null);
     const title = useRef(null);
     const moreActions = useRef(null);
     const actionTrigger = useRef(null);
+    const pendingInlineFocus = useRef(false);
     const continueEditing = useRef(null);
     const noticeElement = useRef(null);
     const initialFocusSet = useRef(false);
@@ -49,6 +53,8 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
     const hasDebt = Number(data?.summary.balance) > 0;
     const canPay = allowed && hasDebt;
     const navigationLocked = busy || isValidating || !!action;
+    const rowClosure = action?.type === 'close' && !!action.id;
+    const operationOpen = !!action && action.type !== 'void' && !rowClosure;
     const openInvoice = useCallback((id, triggerId) => {
         initialFocusSet.current = true;
         setInvoice({ id, triggerId });
@@ -61,10 +67,20 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
     const restoreActionFocus = () => {
         const previous = actionTrigger.current;
         const trigger = previous?.id ? document.getElementById(previous.id) : previous;
-        if (trigger?.isConnected && !trigger.disabled) trigger.focus();
+        if (trigger?.isConnected && !trigger.disabled) {
+            trigger.focus();
+            trigger.scrollIntoView?.({ block: 'nearest' });
+        } else if (previous?.id?.startsWith('cxc-document-detail-'))
+            document.getElementById('cxc-documents-title')?.focus();
         else if (primary.current && !primary.current.disabled) primary.current.focus();
         else title.current?.focus();
     };
+    useEffect(() => {
+        if (pendingInlineFocus.current && !action && data && !isValidating && !busy) {
+            pendingInlineFocus.current = false;
+            setTimeout(restoreActionFocus, 0);
+        }
+    }, [action, data, isValidating, busy]);
     const start = useCallback(
         (next, trigger) => {
             if (!allowed) return;
@@ -108,6 +124,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
         else setTimeout(restoreActionFocus, 0);
     };
     const success = async () => {
+        if (action?.type === 'reopen') setClosedIds((current) => current.filter((id) => id !== action.id));
         setAction(null);
         setDirty(false);
         setNotice({ variant: 'success', message: 'Operación registrada.' });
@@ -121,6 +138,46 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                 ? 'Operación registrada. No se pudo actualizar la vista; reintenta la consulta, no el registro.'
                 : 'Operación registrada.',
         });
+    };
+    const refreshInlineAccount = async (saved, selection) => {
+        const refreshed = await Promise.allSettled([mutate(), onChanged()]);
+        const updated = refreshed[0].status === 'fulfilled' ? refreshed[0].value : null;
+        const closing = selection.type === 'close';
+        if (updated && closing) {
+            setClosedIds((current) => current.filter((id) => id !== selection.id));
+            setPage((current) =>
+                Math.min(current, Math.max(1, Math.ceil(updated.documents.total / DOCUMENTS_PAGE_SIZE))),
+            );
+        } else if (updated && !updated.timeline.data.some((event) => event.eventId === selection.event.eventId)) {
+            const added = Math.max(0, updated.timeline.total - selection.timelineTotal);
+            const targetPage = Math.floor((selection.position + added) / DOCUMENTS_PAGE_SIZE) + 1;
+            setTimelinePage(targetPage);
+        }
+        const failed = refreshed.some((entry) => entry.status === 'rejected');
+        const message = closing
+            ? `Deuda de factura ${selection.document.sale} cerrada. Saldo cliente: ${money(saved.balanceAfter)} USD.`
+            : `Abono de ${money(selection.event.amount, selection.event.currency)} anulado. Nuevo saldo: ${money(saved.balanceAfter)} USD.`;
+        setNotice({
+            variant: failed ? 'warning' : 'success',
+            message: `${message}${failed ? ' No se pudo actualizar la vista.' : ''}`,
+            saved: failed ? saved : null,
+            selection,
+        });
+    };
+    const inlineSuccess = async (saved) => {
+        const selection = action;
+        if (selection.type === 'close') setClosedIds((current) => [...current, selection.id]);
+        else setVoidReasons((current) => ({ ...current, [selection.event.eventId]: saved.reason }));
+        setAction(null);
+        setDirty(false);
+        pendingInlineFocus.current = true;
+        await refreshInlineAccount(saved, selection);
+    };
+    const cancelInline = () => {
+        if (busy) return;
+        setAction(null);
+        setDirty(false);
+        pendingInlineFocus.current = true;
     };
     const clientName = data?.client.name || client.name || client.id;
     const handlePrint = async () => {
@@ -409,8 +466,31 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
             </Modal.Header>
             <Modal.Body>
                 {notice && (
-                    <Alert ref={noticeElement} tabIndex={-1} variant={notice.variant} role="status">
+                    <Alert
+                        ref={noticeElement}
+                        tabIndex={-1}
+                        variant={notice.variant}
+                        role="status"
+                        className={notice.selection ? 'cxc-inline-notice' : undefined}
+                    >
                         {notice.message}
+                        {notice.saved && (
+                            <Button
+                                variant="link"
+                                size="sm"
+                                disabled={busy || isValidating}
+                                onClick={async () => {
+                                    setBusy(true);
+                                    try {
+                                        await refreshInlineAccount(notice.saved, notice.selection);
+                                    } finally {
+                                        setBusy(false);
+                                    }
+                                }}
+                            >
+                                Reintentar consulta
+                            </Button>
+                        )}
                     </Alert>
                 )}
                 {discard && (
@@ -421,7 +501,9 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                                 ref={continueEditing}
                                 variant="outline-light"
                                 onClick={() => {
-                                    const operationTitle = document.getElementById('cxc-operation-title');
+                                    const operationTitle = document.getElementById(
+                                        !operationOpen ? 'cxc-inline-reason' : 'cxc-operation-title',
+                                    );
                                     setDiscard(null);
                                     setTimeout(() => operationTitle?.focus(), 0);
                                 }}
@@ -464,16 +546,18 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                         <section className="cxc-account-overview" aria-label="Resumen de la cuenta">
                             <Summary summary={data.summary} />
                         </section>
-                        <div className={`cxc-detail-grid${action ? ' cxc-detail-grid-operating' : ''}`}>
+                        <div className={`cxc-detail-grid${operationOpen ? ' cxc-detail-grid-operating' : ''}`}>
                             <section
                                 className="cxc-documents-card"
                                 aria-labelledby="cxc-documents-title"
-                                hidden={!!action}
+                                hidden={operationOpen}
                                 aria-busy={isValidating}
                             >
                                 <div className="cxc-section-heading">
                                     <div>
-                                        <h3 id="cxc-documents-title">Facturas</h3>
+                                        <h3 id="cxc-documents-title" tabIndex={-1}>
+                                            Facturas
+                                        </h3>
                                     </div>
                                     <fieldset className="cxc-document-filter" aria-label="Facturas de la cuenta">
                                         {[
@@ -502,7 +586,36 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                                         allowed={allowed}
                                         locked={navigationLocked}
                                         onInvoice={openInvoice}
-                                        onAction={start}
+                                        closedIds={closedIds}
+                                        closeDocumentId={rowClosure ? action.id : null}
+                                        closeForm={
+                                            rowClosure ? (
+                                                <InlineOperationForm
+                                                    key={`close-${action.id}`}
+                                                    client={data.client}
+                                                    action={action}
+                                                    disabled={!allowed}
+                                                    discarding={!!discard}
+                                                    onCancel={cancelInline}
+                                                    onSuccess={inlineSuccess}
+                                                    onBusyChange={setBusy}
+                                                    onDirtyChange={setDirty}
+                                                />
+                                            ) : null
+                                        }
+                                        onAction={(next, trigger) => {
+                                            if (next.type === 'close' && next.id) {
+                                                start(
+                                                    {
+                                                        ...next,
+                                                        document: data.documents.data.find(
+                                                            (document) => document.id === next.id,
+                                                        ),
+                                                    },
+                                                    document.getElementById(`cxc-document-detail-${next.id}`),
+                                                );
+                                            } else start(next, trigger);
+                                        }}
                                     />
                                 ) : (
                                     <p className="cxc-empty">
@@ -521,7 +634,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                                     />
                                 )}
                             </section>
-                            {action ? (
+                            {operationOpen ? (
                                 <div className="cxc-operation-container">
                                     <fieldset
                                         disabled={!data.writesEnabled || !!error || isValidating || !!discard}
@@ -568,8 +681,29 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                                             <p className="cxc-empty">Sin movimientos registrados</p>
                                         )}
                                         <Timeline
-                                            events={data.timeline.data}
+                                            events={data.timeline.data.map((event) =>
+                                                voidReasons[event.eventId]
+                                                    ? { ...event, voidReason: voidReasons[event.eventId] }
+                                                    : event,
+                                            )}
                                             expandedId={expandedMovement}
+                                            locked={navigationLocked}
+                                            voidEventId={action?.type === 'void' ? action.event.eventId : null}
+                                            voidForm={
+                                                action?.type === 'void' ? (
+                                                    <InlineOperationForm
+                                                        key={action.event.eventId}
+                                                        client={data.client}
+                                                        action={{ type: 'void', id: action.event.movementId }}
+                                                        disabled={!allowed}
+                                                        discarding={!!discard}
+                                                        onCancel={cancelInline}
+                                                        onSuccess={inlineSuccess}
+                                                        onBusyChange={setBusy}
+                                                        onDirtyChange={setDirty}
+                                                    />
+                                                ) : null
+                                            }
                                             onExpandedChange={setExpandedMovement}
                                             allowed={allowed}
                                             onInvoice={openInvoice}
@@ -577,8 +711,13 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                                                 start(
                                                     {
                                                         type: 'void',
-                                                        id: event.movementId,
-                                                        scope: `Abono de ${money(event.amount, event.currency)} del ${dateLabel(event.date)}`,
+                                                        event,
+                                                        timelineTotal: data.timeline.total,
+                                                        position:
+                                                            (timelinePage - 1) * DOCUMENTS_PAGE_SIZE +
+                                                            data.timeline.data.findIndex(
+                                                                (movement) => movement.eventId === event.eventId,
+                                                            ),
                                                     },
                                                     trigger,
                                                 )
@@ -590,7 +729,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                                             page={timelinePage}
                                             total={data.timeline.total}
                                             onChange={setTimelinePage}
-                                            busy={busy || isValidating}
+                                            busy={navigationLocked}
                                             label="Historial"
                                         />
                                     )}

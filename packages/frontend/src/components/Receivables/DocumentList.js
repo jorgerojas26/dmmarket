@@ -2,7 +2,17 @@ import { useState } from 'react';
 import Button from 'react-bootstrap/Button';
 import { dateLabel, money, today } from './format';
 
-export default function DocumentList({ documents, allowed, locked, onInvoice, onAction, asOf = today() }) {
+export default function DocumentList({
+    documents,
+    allowed,
+    locked,
+    onInvoice,
+    onAction,
+    closeDocumentId,
+    closeForm,
+    closedIds = [],
+    asOf = today(),
+}) {
     const [expanded, setExpanded] = useState(null);
     return (
         <ul className="cxc-document-list">
@@ -87,48 +97,59 @@ export default function DocumentList({ documents, allowed, locked, onInvoice, on
                                         <dd>{dateLabel(document.issued)}</dd>
                                     </div>
                                 </dl>
-                                <div className="cxc-document-actions">
-                                    {document.eligible && Number(document.balance) > 0 && (
-                                        <Button
-                                            variant="link"
-                                            disabled={!allowed || locked}
-                                            id={`cxc-close-${document.id}`}
-                                            onClick={(event) =>
-                                                onAction(
-                                                    {
-                                                        type: 'close',
-                                                        id: document.id,
-                                                        scope: `Factura ${document.sale}`,
-                                                    },
-                                                    event.currentTarget,
-                                                )
-                                            }
-                                            aria-label={`Cerrar deuda de factura ${document.sale}`}
-                                        >
-                                            Cerrar deuda
-                                        </Button>
-                                    )}
-                                    {document.eligible && Number(document.closed) > 0 && (
-                                        <Button
-                                            variant="link"
-                                            disabled={!allowed || locked}
-                                            id={`cxc-reopen-${document.id}`}
-                                            onClick={(event) =>
-                                                onAction(
-                                                    {
-                                                        type: 'reopen',
-                                                        id: document.id,
-                                                        scope: `Factura ${document.sale}`,
-                                                    },
-                                                    event.currentTarget,
-                                                )
-                                            }
-                                            aria-label={`Reabrir cierre de factura ${document.sale}`}
-                                        >
-                                            Reabrir cierre
-                                        </Button>
-                                    )}
-                                </div>
+                                {document.id === closeDocumentId ? (
+                                    closeForm
+                                ) : (
+                                    <div className="cxc-document-actions">
+                                        {closedIds.includes(document.id) && Number(document.balance) > 0 && (
+                                            <span className="cxc-close-saved" role="status">
+                                                Cierre guardado
+                                            </span>
+                                        )}
+                                        {document.eligible &&
+                                            Number(document.balance) > 0 &&
+                                            !closedIds.includes(document.id) && (
+                                                <Button
+                                                    variant="link"
+                                                    disabled={!allowed || locked}
+                                                    id={`cxc-close-${document.id}`}
+                                                    onClick={(event) =>
+                                                        onAction(
+                                                            {
+                                                                type: 'close',
+                                                                id: document.id,
+                                                                scope: `Factura ${document.sale}`,
+                                                            },
+                                                            event.currentTarget,
+                                                        )
+                                                    }
+                                                    aria-label={`Cerrar deuda de factura ${document.sale}`}
+                                                >
+                                                    Cerrar deuda
+                                                </Button>
+                                            )}
+                                        {document.eligible && Number(document.closed) > 0 && (
+                                            <Button
+                                                variant="link"
+                                                disabled={!allowed || locked || closedIds.includes(document.id)}
+                                                id={`cxc-reopen-${document.id}`}
+                                                onClick={(event) =>
+                                                    onAction(
+                                                        {
+                                                            type: 'reopen',
+                                                            id: document.id,
+                                                            scope: `Factura ${document.sale}`,
+                                                        },
+                                                        event.currentTarget,
+                                                    )
+                                                }
+                                                aria-label={`Reabrir cierre de factura ${document.sale}`}
+                                            >
+                                                Reabrir cierre
+                                            </Button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </li>

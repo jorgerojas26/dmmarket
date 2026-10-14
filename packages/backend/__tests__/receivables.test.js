@@ -235,10 +235,32 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
     expect(String((await db("cxc_movimientos").first()).TasaCambio)).toBe("200.000000");
   });
 
+  it("previews and closes only the selected document without affecting other debt or received money", async () => {
+    await run(payment("25"));
+    const body = { type: "close", id: 2, reason: "Diferencia acordada" };
+    const preview = await service.preview("C1", body);
+    expect(preview.balanceBefore).toBe("125.0000");
+    expect(preview.base).toBe("25.0000");
+    expect(preview.balanceAfter).toBe("100.0000");
+    expect(preview.applications).toEqual([{ id: 2, sale: "A", amount: "25.0000" }]);
+    const closed = await run(body);
+    expect(closed.balanceAfter).toBe(preview.balanceAfter);
+    const detail = await service.detail("C1", { documents: "all" });
+    expect(detail.documents.data.find((d) => d.id === 2)).toMatchObject({
+      balance: "0.0000",
+      applied: "25.0000",
+      closed: "25.0000",
+    });
+    expect(detail.documents.data.find((d) => d.id === 1).balance).toBe("100.0000");
+    expect((await service.list()).summary.received).toBe("25.0000");
+  });
+
   it("closes and reopens only the remaining amount without inventing money", async () => {
     await run(payment("149.70"));
     const close = await run({ type: "close", reason: "Diferencia de redondeo" });
     expect(close.base).toBe("0.3000");
+    expect(close.balanceBefore).toBe("0.3000");
+    expect(close.balanceAfter).toBe("0.0000");
     expect((await service.detail("C1", { documents: "all" })).documents.data.find((d) => d.id === 1).status).toBe(
       "Cerrada manualmente",
     );
@@ -254,6 +276,8 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
     const result = await run(payment("149.70"));
     await run({ type: "close", reason: "Redondeo" });
     const reversal = await run({ type: "void", id: result.movementId, reason: "Abono duplicado" });
+    expect(reversal.balanceBefore).toBe("0.0000");
+    expect(reversal.restored).toBe("149.7000");
     expect(reversal.balanceAfter).toBe("149.7000");
     const detail = await service.detail("C1", { documents: "all" });
     expect(detail.timeline.data.find((e) => e.type === "payment").voidReason).toBe("Abono duplicado");
@@ -263,6 +287,19 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
     await expect(
       service.preview("C1", { type: "void", id: result.movementId, reason: "De nuevo" }),
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("restores only applications, not the unallocated excess of a payment", async () => {
+    const result = await run(payment("170"));
+    const body = { type: "void", id: result.movementId, reason: "Abono duplicado" };
+    const preview = await service.preview("C1", body);
+    expect(preview.base).toBe("170.0000");
+    expect(preview.balanceBefore).toBe("0.0000");
+    expect(preview.restored).toBe("150.0000");
+    expect(preview.balanceAfter).toBe("150.0000");
+    const reversal = await run(body);
+    expect(reversal.restored).toBe(preview.restored);
+    expect(reversal.balanceAfter).toBe(preview.balanceAfter);
   });
 
   it("replays identical request IDs and rejects reuse with changed data", async () => {

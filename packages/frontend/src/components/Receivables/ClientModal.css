@@ -746,3 +746,18 @@
         grid-template-columns: minmax(0, 1fr);
     }
 }
+.cxc-account .cxc-void-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 28px;
+    margin-top: 0.5rem;
+    padding: 0.2rem 0.5rem;
+    color: #ced4da;
+    border-color: #6c757d;
+    font-size: 0.75rem;
+}
+.cxc-account .cxc-void-action:focus-visible {
+    outline: 2px solid #8cbcff;
+    outline-offset: 3px;
+}

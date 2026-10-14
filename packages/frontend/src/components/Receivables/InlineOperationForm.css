@@ -1,0 +1,73 @@
+.cxc-account .cxc-inline-operation {
+    margin-top: 0.75rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid #35404d;
+}
+.cxc-account .cxc-inline-operation .form-label {
+    color: #ced4da;
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
+}
+.cxc-account .cxc-inline-operation .form-control {
+    background: #202a36;
+    color: #e9ecef;
+    border-color: #49586a;
+    font-size: 0.8rem;
+}
+.cxc-account .cxc-inline-operation .form-control::placeholder {
+    color: #adb5bd;
+}
+.cxc-account .cxc-inline-impact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    padding-top: 0.5rem;
+    font-size: 0.75rem;
+    color: #ced4da;
+    font-variant-numeric: tabular-nums;
+}
+.cxc-account .cxc-inline-impact small {
+    flex-basis: 100%;
+    color: #adb5bd;
+    font-size: 0.72rem;
+}
+.cxc-account .cxc-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+.cxc-account .cxc-inline-actions .btn {
+    min-height: 32px;
+    font-size: 0.75rem;
+}
+.cxc-account .cxc-inline-actions .btn-link {
+    color: #adb5bd;
+    text-decoration: none;
+}
+.cxc-account .cxc-inline-actions .btn-outline-secondary {
+    color: #ced4da;
+    border-color: #6c757d;
+}
+.cxc-account .cxc-inline-operation .alert {
+    padding: 0.5rem 0.65rem;
+    margin: 0.5rem 0 0;
+    font-size: 0.75rem;
+}
+.cxc-account .cxc-inline-operation :is(.form-control, .btn, .cxc-inline-impact, .alert):focus-visible {
+    outline: 2px solid #8cbcff;
+    outline-offset: 2px;
+}
+.cxc-account .cxc-movement-summary:disabled {
+    opacity: 1;
+}
+.cxc-account .cxc-inline-notice {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+}
+.cxc-account .cxc-close-saved {
+    color: #adb5bd;
+    font-size: 0.75rem;
+}
