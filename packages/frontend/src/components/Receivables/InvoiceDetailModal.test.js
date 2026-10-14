@@ -43,7 +43,7 @@ it('names the loading dialog with the invoice ID and allows closing', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-it('renders backend products and totals using the existing UI, always requesting FAC', async () => {
+it('renders backend products and totals with optional profit, always requesting FAC', async () => {
     fetch.mockResolvedValue(success());
     const { rerender } = render(
         <ShowNoeContext.Provider value={{ showNoe: true }}>
@@ -54,6 +54,10 @@ it('renders backend products and totals using the existing UI, always requesting
     expect(within(row).getByText('2')).toBeInTheDocument();
     expect(within(row).getByText('$12.50')).toBeInTheDocument();
     expect(screen.getAllByText('$25.00')).toHaveLength(2);
+    expect(screen.queryByRole('columnheader', { name: 'Utilidad' })).not.toBeInTheDocument();
+    expect(screen.queryByText('$5.00')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar utilidad' }));
+    expect(screen.getByRole('columnheader', { name: 'Utilidad' })).toBeInTheDocument();
     expect(screen.getAllByText('$5.00')).toHaveLength(2);
     expect(screen.getByText(/Vendedor Uno/)).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();

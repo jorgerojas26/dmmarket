@@ -173,6 +173,7 @@ const Table = ({
     // ── layout ──
     /** Fill the parent's height (flex column): the table body stretches and scrolls internally. */
     fillHeight = false,
+    scrollLabel,
 
     // ── sorted rows ──
     /** Called with the displayed rows' originals (`Array`) whenever the sorted/filtered data changes. */
@@ -883,7 +884,13 @@ const Table = ({
                 </div>
             )}
             {tableToolbar}
-            <div className={`table-container${isEmpty ? ' table-empty' : ''}`} style={tableContainerStyle}>
+            <div
+                className={`table-container${isEmpty ? ' table-empty' : ''}`}
+                style={tableContainerStyle}
+                role={scrollLabel ? 'region' : undefined}
+                aria-label={scrollLabel}
+                tabIndex={scrollLabel ? 0 : undefined}
+            >
                 {tableElement}
                 {spinner}
             </div>

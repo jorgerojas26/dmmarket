@@ -35,6 +35,7 @@ const InvoiceDetailModal = ({ invoiceId, onClose }) => {
             show
             onClose={onClose}
             documentLabel="Factura"
+            collapseProfit
             invoiceId={invoiceId}
             sale={current.sale}
             error={current.error}

@@ -370,30 +370,3 @@
     min-width: 100px;
     text-align: center;
 }
-
-/* Purchase detail total row */
-.provider-dashboard-modal .purchase-total-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 1rem;
-    border-top: 2px solid #0d6efd;
-    margin-top: 0.5rem;
-    font-size: 1rem;
-    font-weight: 700;
-    color: #e9ecef;
-}
-
-.provider-dashboard-modal .purchase-total-amount {
-    color: #20c997;
-    font-size: 1.1rem;
-}
-
-/* Purchase detail modal is md size */
-.purchase-detail-modal .modal-content {
-    background: #1a1d21;
-    color: #e9ecef;
-    border: 1px solid #2f3338;
-    border-radius: 16px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-}
