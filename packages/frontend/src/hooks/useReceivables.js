@@ -1,5 +1,9 @@
-import { fetchReceivableClient, fetchReceivables } from 'api/receivables';
+import { fetchReceivableBanks, fetchReceivableClient, fetchReceivables } from 'api/receivables';
 import useSWR from 'swr';
+
+export function useReceivableBanks() {
+    return useSWR('receivable-banks', fetchReceivableBanks);
+}
 
 export function useReceivables(filters) {
     return useSWR(['receivables', JSON.stringify(filters)], () => fetchReceivables(filters), {

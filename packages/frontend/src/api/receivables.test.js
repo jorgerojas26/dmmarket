@@ -1,4 +1,9 @@
-import { executeReceivableOperation, fetchReceivableClient, fetchReceivables } from './receivables';
+import {
+    executeReceivableOperation,
+    fetchReceivableBanks,
+    fetchReceivableClient,
+    fetchReceivables,
+} from './receivables';
 
 beforeEach(() => {
     global.fetch = jest.fn();
@@ -32,4 +37,11 @@ it('reports an unreadable success response as a failure', async () => {
         },
     });
     await expect(fetchReceivables({})).rejects.toThrow('respuesta');
+});
+
+it('fetches the bank catalog from its read-only endpoint', async () => {
+    const banks = [{ id: 'BV', name: 'BANCO DE VENEZUELA' }];
+    fetch.mockResolvedValue({ ok: true, json: async () => banks });
+    expect(await fetchReceivableBanks()).toEqual(banks);
+    expect(fetch).toHaveBeenCalledWith('/api/receivables/banks', undefined);
 });

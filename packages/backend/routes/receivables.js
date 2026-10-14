@@ -30,6 +30,10 @@ function createReceivablesRouter(service) {
     handler((req) => service.list(req.query)),
   );
   router.get(
+    "/banks",
+    handler(() => service.banks()),
+  );
+  router.get(
     "/:clientId",
     handler((req) => service.detail(req.params.clientId, req.query)),
   );

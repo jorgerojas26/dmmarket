@@ -1,0 +1,275 @@
+.cxc-payment-drawer.offcanvas-end {
+    width: min(540px, 100vw);
+    background: #171c23;
+    color: #e9ecef;
+    border-left: 1px solid #3a4756;
+}
+.cxc-payment-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.cxc-payment-discard-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    padding: 1.5rem;
+    background: #0d1117b3;
+}
+.cxc-payment-discard {
+    width: 100%;
+    padding: 1.5rem;
+    border: 1px solid #49586a;
+    border-radius: 12px;
+    background: #202a36;
+    box-shadow: 0 16px 40px #0006;
+}
+.cxc-payment-discard h2 {
+    font-size: 1.1rem;
+}
+.cxc-payment-discard p {
+    color: #adb5bd;
+    font-size: 0.9rem;
+}
+.cxc-payment-discard .cxc-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+}
+.cxc-payment-inactive {
+    visibility: hidden;
+}
+.cxc-payment-drawer .offcanvas-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #3a4756;
+}
+.cxc-payment-drawer .offcanvas-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+.cxc-payment-drawer .btn-close {
+    filter: invert(1);
+}
+.cxc-payment-drawer .offcanvas-body {
+    padding: 1.25rem 1.5rem 0;
+}
+.cxc-payment-drawer .cxc-payment-identity {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #3a4756;
+}
+.cxc-payment-identity > div:first-child {
+    flex: 1;
+    min-width: 0;
+}
+.cxc-payment-identity h2,
+.cxc-payment-success h2 {
+    font-size: 1.05rem;
+    overflow-wrap: anywhere;
+    margin: 0 0 0.4rem;
+}
+.cxc-payment-identity p,
+.cxc-payment-picker p,
+.cxc-payment-estimate p {
+    font-size: 0.8rem;
+    color: #adb5bd;
+    margin: 0.6rem 0;
+}
+.cxc-payment-identity .btn-link {
+    padding: 0;
+    font-size: 0.8rem;
+}
+.cxc-payment-balance {
+    flex-basis: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem;
+    background: #202a36;
+    border-radius: 8px;
+}
+.cxc-payment-balance span {
+    color: #ced4da;
+    font-size: 0.85rem;
+}
+.cxc-payment-balance strong {
+    font-size: 1.2rem;
+    font-variant-numeric: tabular-nums;
+}
+.cxc-payment-drawer .form-label {
+    color: #dee2e6;
+    font-size: 0.85rem;
+}
+.cxc-payment-drawer .form-control,
+.cxc-payment-drawer .form-select,
+.cxc-payment-drawer .input-group-text {
+    background: #202a36;
+    color: #e9ecef;
+    border-color: #49586a;
+    color-scheme: dark;
+    min-height: 42px;
+}
+.cxc-payment-drawer .form-control::placeholder {
+    color: #adb5bd;
+}
+.cxc-payment-drawer :is(.form-control, .form-select):focus {
+    background-color: #202a36;
+    color: #e9ecef;
+    border-color: #0d6efd;
+    box-shadow: none;
+    outline: none;
+}
+.cxc-payment-drawer .cxc-operation {
+    background: none;
+    border: 0;
+    padding: 0;
+}
+.cxc-payment-drawer .cxc-operation-heading h3 {
+    font-size: 0.85rem;
+    color: #adb5bd;
+}
+.cxc-payment-drawer .cxc-form-grid {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+}
+.cxc-payment-drawer .cxc-field-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem;
+}
+.cxc-payment-drawer .cxc-fill-balance {
+    padding: 0;
+    font-size: 0.75rem;
+}
+.cxc-payment-currencies {
+    display: flex;
+    gap: 0.4rem;
+}
+.cxc-payment-currencies .btn {
+    flex: 1;
+    min-height: 42px;
+}
+.cxc-payment-drawer .btn-outline-secondary {
+    border-color: #6c757d;
+    color: #ced4da;
+}
+.cxc-payment-drawer .cxc-payment-details-toggle {
+    padding: 0;
+    margin-bottom: 0.8rem;
+    font-size: 0.85rem;
+}
+.cxc-payment-estimate {
+    padding: 1rem;
+    border: 1px solid #3a4756;
+    border-radius: 8px;
+    background: #202a36;
+    margin-top: 1rem;
+}
+.cxc-bank-error {
+    color: #ffc107;
+    font-size: 0.8rem;
+}
+.cxc-payment-estimate h4 {
+    font-size: 0.9rem;
+    margin-bottom: 0.8rem;
+}
+.cxc-payment-drawer dl {
+    margin-bottom: 0;
+}
+.cxc-payment-drawer dl > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.4rem 0;
+}
+.cxc-payment-drawer dt {
+    color: #ced4da;
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+.cxc-payment-drawer dd {
+    font-weight: 600;
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.cxc-payment-drawer .cxc-review-received dd,
+.cxc-payment-success dd {
+    color: #20c997;
+    font-size: 1.2rem;
+}
+.cxc-payment-drawer .cxc-review-meta {
+    margin: 0.8rem 0;
+    border-top: 1px solid #3a4756;
+}
+.cxc-payment-drawer .cxc-preview {
+    margin-top: 0;
+}
+.cxc-payment-drawer .cxc-review-applications {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 1rem;
+}
+.cxc-payment-drawer .cxc-review-applications li,
+.cxc-payment-drawer .cxc-resulting-balance {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+.cxc-payment-drawer .cxc-operation-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: #171c23;
+    border-top: 1px solid #3a4756;
+    margin-top: 1rem;
+    padding: 0.8rem 0 max(0.8rem, env(safe-area-inset-bottom));
+}
+.cxc-payment-drawer .cxc-operation-footer .cxc-actions {
+    margin-top: 0;
+}
+.cxc-payment-drawer .cxc-edit-operation {
+    padding: 0;
+    margin-bottom: 0.7rem;
+}
+.cxc-payment-drawer .alert {
+    font-size: 0.85rem;
+}
+.cxc-payment-drawer .btn:focus-visible,
+.cxc-payment-success h2:focus-visible {
+    outline: 2px solid #0d6efd;
+    outline-offset: 3px;
+}
+.cxc-payment-success {
+    padding: 1rem 0;
+}
+.cxc-payment-success > .btn {
+    width: 100%;
+    margin-top: 1rem;
+}
+@media (max-width: 575px) {
+    .cxc-payment-drawer.offcanvas-end {
+        width: 100vw;
+    }
+    .cxc-payment-drawer .offcanvas-header {
+        padding: 1rem;
+    }
+    .cxc-payment-drawer .offcanvas-body {
+        padding: 1rem 1rem 0;
+    }
+    .cxc-payment-drawer .cxc-form-grid {
+        grid-template-columns: 1fr;
+    }
+}

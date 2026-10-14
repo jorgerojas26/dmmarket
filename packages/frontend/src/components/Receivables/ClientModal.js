@@ -12,6 +12,7 @@ import DocumentList from './DocumentList';
 import { dateLabel, money } from './format';
 import InvoiceDetailModal from './InvoiceDetailModal';
 import OperationForm from './OperationForm';
+import PaymentDrawer from './PaymentDrawer';
 import Pager from './Pager';
 import Summary from './Summary';
 import Timeline from './Timeline';
@@ -67,6 +68,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
     const start = useCallback(
         (next, trigger) => {
             if (!allowed) return;
+            initialFocusSet.current = true;
             actionTrigger.current = trigger || primary.current;
             setNotice(null);
             setDirty(false);
@@ -143,7 +145,12 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                 if (!result.timeline.data.length) break;
                 allEvents.push(...result.timeline.data);
             }
-            const eventTitles = { payment: 'Abono', ANULACION: 'Anulación', CIERRE: 'Cierre manual', REAPERTURA: 'Reapertura' };
+            const eventTitles = {
+                payment: 'Abono',
+                ANULACION: 'Anulación',
+                CIERRE: 'Cierre manual',
+                REAPERTURA: 'Reapertura',
+            };
             const eventRows = allEvents.map((event) => {
                 const payment = event.type === 'payment';
                 const details = [
@@ -218,13 +225,26 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                             headerRows: 1,
                             widths: ['*', 62, 62, 73, 73, 73, 73, 85],
                             body: [
-                                ['Factura', 'Emisión', 'Vencimiento', 'Original', 'Abonado', 'Cierre manual', 'Saldo', 'Estado'],
+                                [
+                                    'Factura',
+                                    'Emisión',
+                                    'Vencimiento',
+                                    'Original',
+                                    'Abonado',
+                                    'Cierre manual',
+                                    'Saldo',
+                                    'Estado',
+                                ],
                                 ...rows,
                             ],
                         },
                         layout: 'lightHorizontalLines',
                     },
-                    { text: `Historial de abonos y movimientos (${firstPage.timeline.total})`, style: 'section', pageBreak: 'before' },
+                    {
+                        text: `Historial de abonos y movimientos (${firstPage.timeline.total})`,
+                        style: 'section',
+                        pageBreak: 'before',
+                    },
                     {
                         style: 'table',
                         table: {
@@ -261,6 +281,22 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
         }
     };
     if (invoice) return <InvoiceDetailModal invoiceId={invoice.id} onClose={closeInvoice} />;
+    if (action?.type === 'payment') {
+        return (
+            <PaymentDrawer
+                client={client}
+                onClose={() => {
+                    setAction(null);
+                    setTimeout(restoreActionFocus, 0);
+                }}
+                onChanged={() => {
+                    setPage(1);
+                    setTimelinePage(1);
+                    return onChanged();
+                }}
+            />
+        );
+    }
     return (
         <Modal
             show

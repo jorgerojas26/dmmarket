@@ -892,7 +892,7 @@ const Table = ({
                 <PrintConfigModal
                     key={printOpenCount}
                     show={showPrintConfig}
-                    columns={columns}
+                    columns={print?.columns || columns}
                     initialOrientation={print?.defaultOrientation}
                     storageKey={print?.storageKey}
                     filters={print?.filters || []}

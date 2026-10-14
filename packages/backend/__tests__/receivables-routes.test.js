@@ -5,6 +5,7 @@ const { isReportPath } = require("../middlewares/report-cache");
 
 function setup() {
   const service = {
+    banks: jest.fn().mockResolvedValue([{ id: "BV", name: "BANCO DE VENEZUELA" }]),
     readiness: jest.fn().mockResolvedValue({ available: true, writesEnabled: false }),
     list: jest.fn().mockResolvedValue({ total: 0 }),
     detail: jest.fn().mockResolvedValue({ client: { id: "C1" } }),
@@ -43,4 +44,14 @@ it("returns actionable errors without treating failures as zero debt", async () 
   const response = await request(app).get("/api/receivables/missing");
   expect(response.status).toBe(404);
   expect(response.body.error.message).toBe("Cliente no encontrado.");
+});
+
+it("returns the bank catalog without treating banks as a client identifier", async () => {
+  const { app, service } = setup();
+  const response = await request(app).get("/api/receivables/banks");
+  expect(response.status).toBe(200);
+  expect(response.headers["cache-control"]).toBe("no-store");
+  expect(response.body).toEqual([{ id: "BV", name: "BANCO DE VENEZUELA" }]);
+  expect(service.banks).toHaveBeenCalledTimes(1);
+  expect(service.detail).not.toHaveBeenCalled();
 });

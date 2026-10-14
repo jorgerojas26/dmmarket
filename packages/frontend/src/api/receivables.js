@@ -22,6 +22,7 @@ const params = (filters) => {
     return query.toString();
 };
 
+export const fetchReceivableBanks = () => request('/banks');
 export const fetchReceivables = (filters) => request(`?${params(filters)}`);
 export const fetchReceivableClient = (id, filters) => request(`/${encodeURIComponent(id)}?${params(filters)}`);
 const post = (id, endpoint, body) =>

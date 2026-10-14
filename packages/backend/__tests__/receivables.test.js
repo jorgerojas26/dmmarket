@@ -327,3 +327,14 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
     expect((await guarded.list()).writesEnabled).toBe(false);
   });
 });
+
+it("reads the bank catalog from the existing bancos table in name order", async () => {
+  const rows = [{ id: "BV", name: "BANCO DE VENEZUELA" }];
+  const query = { select: jest.fn().mockReturnThis(), orderBy: jest.fn().mockResolvedValue(rows) };
+  const db = jest.fn().mockReturnValue(query);
+  const service = createReceivablesService({ db });
+  expect(await service.banks()).toEqual(rows);
+  expect(db).toHaveBeenCalledWith("bancos");
+  expect(query.select).toHaveBeenCalledWith("Id_Banco as id", "Nombre as name");
+  expect(query.orderBy).toHaveBeenCalledWith("Nombre");
+});

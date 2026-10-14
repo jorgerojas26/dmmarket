@@ -14,17 +14,12 @@ import ClientModal from './ClientModal';
 import { dateLabel, money } from './format';
 import { formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
-import PaymentClientPicker from './PaymentClientPicker';
+import PaymentDrawer from './PaymentDrawer';
 import Summary from './Summary';
 import './styles.css';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
-const portfolioOptions = [
-    { value: 'debt', label: 'Con deuda' },
-    { value: 'settled', label: 'Sin deuda' },
-    { value: 'all', label: 'Todos los clientes' },
-];
 const dueOptions = [
     { value: 'all', label: 'Todos los vencimientos' },
     { value: 'overdue', label: 'Con deuda vencida' },
@@ -33,11 +28,9 @@ const dueOptions = [
 
 export default function Receivables() {
     const [search, setSearch] = useState('');
-    const [paymentPicker, setPaymentPicker] = useState(false);
-    const [initialAction, setInitialAction] = useState(null);
+    const [payment, setPayment] = useState(null);
     const [routes, setRoutes] = useState([]);
     const [ruta, setRuta] = useState('');
-    const [state, setState] = useState('debt');
     const [due, setDue] = useState('all');
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState({ sortBy: 'overdue', sortDir: 'desc' });
@@ -45,8 +38,9 @@ export default function Receivables() {
     const [lastSummary, setLastSummary] = useState(null);
     const pageElement = useRef(null);
     const paymentTrigger = useRef(null);
+    const paymentOrigin = useRef(null);
     const currencyRate = useContext(CurrencyRateContext)?.currencyRate;
-    const { data, error, isValidating, mutate } = useReceivables({ search, ruta, state, due, page, ...sort });
+    const { data, error, isValidating, mutate } = useReceivables({ search, ruta, state: 'debt', due, page, ...sort });
     useEffect(() => {
         if (data?.routes) setRoutes(data.routes);
     }, [data?.routes]);
@@ -60,8 +54,11 @@ export default function Receivables() {
         setPage(1);
     }, []);
     const openAccount = useCallback((client) => {
-        setInitialAction(null);
         setSelected(client);
+    }, []);
+    const openPayment = useCallback((client, trigger) => {
+        paymentOrigin.current = trigger;
+        setPayment({ client });
     }, []);
     const columns = useMemo(
         () => [
@@ -91,19 +88,45 @@ export default function Receivables() {
             {
                 Header: 'Vencido',
                 accessor: 'overdue',
-                Cell: ({ value }) => (
-                    <span className={Number(value) > 0 ? 'cxc-overdue' : ''}>{money(value)}</span>
-                ),
+                Cell: ({ value }) => <span className={Number(value) > 0 ? 'cxc-overdue' : ''}>{money(value)}</span>,
             },
             { Header: 'Facturas pendientes', accessor: 'pendingCount' },
             { Header: 'Último abono', accessor: 'lastPayment', Cell: ({ value }) => dateLabel(value) },
+            {
+                Header: 'Acciones',
+                id: 'actions',
+                disableSortBy: true,
+                Cell: ({ row }) => (
+                    <Button
+                        size="sm"
+                        variant="outline-primary"
+                        id={`cxc-pay-${encodeURIComponent(row.original.id)}`}
+                        aria-label={`Abonar a ${row.original.name || row.original.id}`}
+                        disabled={!data?.writesEnabled || !!error || isValidating || Number(row.original.balance) <= 0}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            openPayment(row.original, event.currentTarget.id);
+                        }}
+                    >
+                        Abonar
+                    </Button>
+                ),
+            },
         ],
-        [openAccount],
+        [openAccount, openPayment, data?.writesEnabled, error, isValidating],
     );
     const handlePrint = useCallback(
         async (config) => {
             try {
-                const filters = { search, ruta, state, due, sortBy: sort.sortBy, sortDir: sort.sortDir, limit: 100 };
+                const filters = {
+                    search,
+                    ruta,
+                    state: 'debt',
+                    due,
+                    sortBy: sort.sortBy,
+                    sortDir: sort.sortDir,
+                    limit: 100,
+                };
                 const firstPage = await fetchReceivables({ ...filters, page: 1 });
                 const rows = [...(firstPage.data || [])];
                 for (let currentPage = 2; rows.length < firstPage.total; currentPage += 1) {
@@ -131,7 +154,6 @@ export default function Receivables() {
                 const filtersLabel = [
                     search && `Búsqueda: ${search}`,
                     ruta && `Ruta: ${ruta}`,
-                    state !== 'debt' && `Cartera: ${state === 'settled' ? 'Sin deuda' : 'Todas'}`,
                     due !== 'all' && `Vencimiento: ${due === 'overdue' ? 'Vencido' : 'Por vencer'}`,
                 ]
                     .filter(Boolean)
@@ -171,13 +193,13 @@ export default function Receivables() {
                 console.error('No se pudo imprimir la cartera de cuentas por cobrar:', printError);
             }
         },
-        [search, ruta, state, due, sort, currencyRate],
+        [search, ruta, due, sort, currencyRate],
     );
     const changeFilter = (setter, fallback) => (option) => {
         setter(option?.value ?? fallback);
         setPage(1);
     };
-    const hasFilters = !!ruta || state !== 'debt' || due !== 'all';
+    const hasFilters = !!ruta || due !== 'all';
     return (
         <section className="cxc-page" ref={pageElement}>
             <header className="clients-content-wrapper report-page-header">
@@ -187,7 +209,7 @@ export default function Receivables() {
                 <Button
                     ref={paymentTrigger}
                     disabled={!data?.writesEnabled || !!error}
-                    onClick={() => setPaymentPicker(true)}
+                    onClick={() => openPayment(null, null)}
                 >
                     Registrar abono
                 </Button>
@@ -229,20 +251,6 @@ export default function Receivables() {
                     />
                 </Form.Group>
                 <Form.Group className="cxc-filter">
-                    <Form.Label htmlFor="cxc-state">Cartera</Form.Label>
-                    <Select
-                        inputId="cxc-state"
-                        options={portfolioOptions}
-                        value={portfolioOptions.find((option) => option.value === state)}
-                        onChange={changeFilter(setState, 'debt')}
-                        isSearchable={false}
-                        styles={darkSelectStyles}
-                        classNamePrefix="search-select"
-                        menuPortalTarget={document.body}
-                        menuPlacement="auto"
-                    />
-                </Form.Group>
-                <Form.Group className="cxc-filter">
                     <Form.Label htmlFor="cxc-due">Vencimiento</Form.Label>
                     <Select
                         inputId="cxc-due"
@@ -262,7 +270,6 @@ export default function Receivables() {
                         className="cxc-reset-filters"
                         onClick={() => {
                             setRuta('');
-                            setState('debt');
                             setDue('all');
                             setPage(1);
                             document.getElementById('cxc-route')?.focus();
@@ -276,44 +283,45 @@ export default function Receivables() {
                 <Table
                     data={error ? [] : data?.data || []}
                     columns={columns}
-                        loading={!error && (!data || isValidating)}
-                        onRowClick={openAccount}
-                        maxHeight={520}
-                        search={{
-                            enabled: true,
-                            placeholder: 'Buscar por nombre, identificación o RIF…',
-                            ariaLabel: 'Buscar cliente',
-                            onSearch: handleSearch,
-                        }}
-                        emptyMessage={
-                            error
-                                ? 'No se pudo consultar la cartera'
-                                : state === 'debt' && !search && !ruta && due === 'all'
-                                  ? 'No hay clientes con deuda en esta cartera'
-                                  : 'No hay clientes para estos filtros'
-                        }
-                        emptySubtitle={
-                            error
-                                ? 'Reintenta la consulta para ver los saldos.'
-                                : 'Consulta la cartera sin deuda para revisar el historial y reabrir cierres.'
-                        }
-                        sorting={{
-                            enabled: true,
-                            sortBy: [{ id: sort.sortBy, desc: sort.sortDir === 'desc' }],
-                            resetOnDataChange: false,
-                            onSort: (value) => {
-                                if (value[0]) {
-                                    setSort({ sortBy: value[0].id, sortDir: value[0].desc ? 'desc' : 'asc' });
-                                    setPage(1);
-                                }
-                            },
-                        }}
-                        print={{
-                            enabled: true,
-                            onGlobalPrint: handlePrint,
-                            storageKey: 'cuentas-por-cobrar',
-                            defaultOrientation: 'landscape',
-                        }}
+                    loading={!error && (!data || isValidating)}
+                    onRowClick={openAccount}
+                    maxHeight={520}
+                    search={{
+                        enabled: true,
+                        placeholder: 'Buscar por nombre, identificación o RIF…',
+                        ariaLabel: 'Buscar cliente',
+                        onSearch: handleSearch,
+                    }}
+                    emptyMessage={
+                        error
+                            ? 'No se pudo consultar la cartera'
+                            : !search && !ruta && due === 'all'
+                              ? 'No hay clientes con deuda en esta cartera'
+                              : 'No hay clientes para estos filtros'
+                    }
+                    emptySubtitle={
+                        error
+                            ? 'Reintenta la consulta para ver los saldos.'
+                            : 'Solo se muestran clientes con deuda. Prueba otra búsqueda o restablece los filtros.'
+                    }
+                    sorting={{
+                        enabled: true,
+                        sortBy: [{ id: sort.sortBy, desc: sort.sortDir === 'desc' }],
+                        resetOnDataChange: false,
+                        onSort: (value) => {
+                            if (value[0]) {
+                                setSort({ sortBy: value[0].id, sortDir: value[0].desc ? 'desc' : 'asc' });
+                                setPage(1);
+                            }
+                        },
+                    }}
+                    print={{
+                        enabled: true,
+                        onGlobalPrint: handlePrint,
+                        columns: columns.filter((column) => column.id !== 'actions'),
+                        storageKey: 'cuentas-por-cobrar',
+                        defaultOrientation: 'landscape',
+                    }}
                     pagination={{
                         enabled: true,
                         page,
@@ -324,33 +332,30 @@ export default function Receivables() {
                     }}
                 />
             </div>
-            {paymentPicker && (
-                <PaymentClientPicker
+            {payment && (
+                <PaymentDrawer
+                    client={payment.client}
                     onClose={() => {
-                        setPaymentPicker(false);
-                        paymentTrigger.current?.focus();
+                        setPayment(null);
+                        setTimeout(() => {
+                            const trigger = paymentOrigin.current
+                                ? document.getElementById(paymentOrigin.current)
+                                : paymentTrigger.current;
+                            (trigger || pageElement.current?.querySelector('.table-search-input'))?.focus();
+                        }, 0);
                     }}
-                    onSelect={(client) => {
-                        setPaymentPicker(false);
-                        setInitialAction('payment');
-                        setSelected(client);
-                    }}
+                    onChanged={() => mutate()}
                 />
             )}
             {selected && (
                 <ClientModal
                     key={selected.id}
                     client={selected}
-                    initialAction={initialAction}
                     onClose={() => {
                         const id = selected.id;
-                        const fromPayment = !!initialAction;
                         setSelected(null);
-                        setInitialAction(null);
                         setTimeout(() => {
-                            const trigger = fromPayment
-                                ? paymentTrigger.current
-                                : document.getElementById(`cxc-client-${encodeURIComponent(id)}`);
+                            const trigger = document.getElementById(`cxc-client-${encodeURIComponent(id)}`);
                             (trigger || pageElement.current?.querySelector('.table-search-input'))?.focus();
                         }, 0);
                     }}

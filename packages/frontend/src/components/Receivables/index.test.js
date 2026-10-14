@@ -8,13 +8,18 @@ import {
     previewReceivableOperation,
 } from 'api/receivables';
 import pdfMake from 'pdfmake/build/pdfmake';
-import { useReceivableClient, useReceivables } from 'hooks/useReceivables';
+import { useReceivableBanks, useReceivableClient, useReceivables } from 'hooks/useReceivables';
 import ClientModal from './ClientModal';
 import { money } from './format';
 import Receivables from './index';
 import OperationForm from './OperationForm';
+import PaymentDrawer from './PaymentDrawer';
 
-jest.mock('hooks/useReceivables', () => ({ useReceivables: jest.fn(), useReceivableClient: jest.fn() }));
+jest.mock('hooks/useReceivables', () => ({
+    useReceivables: jest.fn(),
+    useReceivableClient: jest.fn(),
+    useReceivableBanks: jest.fn(),
+}));
 jest.mock('api/invoice', () => ({ fetchInvoiceDetail: jest.fn() }));
 jest.mock('api/receivables', () => ({
     executeReceivableOperation: jest.fn(),
@@ -74,11 +79,12 @@ const refresh = jest.fn().mockResolvedValue(undefined);
 
 beforeEach(() => {
     jest.clearAllMocks();
+    useReceivableBanks.mockReturnValue({ data: [{ id: 'BA', name: 'Banco Uno' }], mutate: refresh });
     pdfMake.createPdf.mockReturnValue({ open: jest.fn() });
     useReceivables.mockReturnValue({ data: portfolio, mutate: refresh, isValidating: false });
     useReceivableClient.mockReturnValue({ data: detail, mutate: refresh, isValidating: false });
     previewReceivableOperation.mockResolvedValue(preview);
-    executeReceivableOperation.mockResolvedValue({ operationId: 'saved' });
+    executeReceivableOperation.mockResolvedValue({ ...preview, operationId: 'saved' });
     fetchReceivables.mockResolvedValue(portfolio);
     fetchReceivableClient.mockResolvedValue(detail);
     fetchInvoiceDetail.mockResolvedValue({
@@ -94,6 +100,9 @@ const renderForm = (overrides = {}) => {
     render(
         <OperationForm action={{ type: 'payment' }} client={client} rate="100.000000" {...callbacks} {...overrides} />,
     );
+    if (!overrides.action || overrides.action.type === 'payment') {
+        userEvent.selectOptions(screen.getByLabelText('Moneda'), 'USD');
+    }
     return callbacks;
 };
 
@@ -197,8 +206,8 @@ it('keeps KPI cards and values visible while filters reload the portfolio', asyn
     const stats = container.querySelector('.cxc-stats');
     await waitFor(() => expect(within(stats).getByText('$100,00')).toBeInTheDocument());
     useReceivables.mockReturnValue({ data: undefined, isValidating: true, mutate: refresh });
-    await userEvent.click(screen.getByLabelText('Cartera'));
-    await userEvent.click(screen.getByText('Sin deuda'));
+    await userEvent.click(screen.getByLabelText('Vencimiento'));
+    await userEvent.click(screen.getByText('Con deuda vencida'));
     expect(within(stats).getByText('$100,00')).toBeInTheDocument();
     expect(stats).toHaveAttribute('aria-busy', 'true');
     expect(container.querySelectorAll('.cxc-stat-loading')).toHaveLength(4);
@@ -212,14 +221,17 @@ it('keeps financial errors distinct from an empty debt portfolio', () => {
     expect(screen.queryByText('No hay clientes con deuda en esta cartera')).not.toBeInTheDocument();
 });
 
-it('exposes settled accounts for history and reopening without changing KPI scope', () => {
+it('always queries clients with debt and does not offer a portfolio filter', () => {
     render(<Receivables />);
-    userEvent.click(screen.getByLabelText('Cartera'));
-    userEvent.click(screen.getByText('Sin deuda'));
-    expect(useReceivables).toHaveBeenLastCalledWith(expect.objectContaining({ state: 'settled', page: 1 }));
+    expect(screen.queryByLabelText('Cartera')).not.toBeInTheDocument();
+    expect(useReceivables).toHaveBeenLastCalledWith(expect.objectContaining({ state: 'debt', page: 1 }));
     userEvent.click(screen.getByLabelText('Ruta'));
     userEvent.click(screen.getByText('R1'));
-    expect(useReceivables).toHaveBeenLastCalledWith(expect.objectContaining({ ruta: 'R1', state: 'settled' }));
+    userEvent.click(screen.getByLabelText('Vencimiento'));
+    userEvent.click(screen.getByText('Con deuda vencida'));
+    expect(useReceivables).toHaveBeenLastCalledWith(
+        expect.objectContaining({ ruta: 'R1', state: 'debt', due: 'overdue' }),
+    );
 });
 
 it('disables financial actions until the portfolio is enabled', async () => {
@@ -240,7 +252,9 @@ it('accepts an overpayment and requires preview before saving', async () => {
     expect(await screen.findByText(/Excedente no aplicado/)).toHaveTextContent('no genera saldo a favor');
     expect(executeReceivableOperation).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar abono' }));
-    await waitFor(() => expect(callbacks.onSuccess).toHaveBeenCalledWith({ operationId: 'saved' }));
+    await waitFor(() =>
+        expect(callbacks.onSuccess).toHaveBeenCalledWith(expect.objectContaining({ operationId: 'saved' })),
+    );
     expect(executeReceivableOperation).toHaveBeenCalledWith(
         'C1',
         expect.objectContaining({ amount: '120', snapshot: 'snapshot', requestId: expect.any(String) }),
@@ -338,12 +352,14 @@ it('keeps a successful payment visible even if refreshing its account fails', as
     useReceivableClient.mockImplementation(() => ({ ...state, mutate: reload }));
     render(<ClientModal client={client} onClose={jest.fn()} onChanged={refresh} />);
     fireEvent.click(screen.getByRole('button', { name: 'Registrar abono' }));
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
     fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '120' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Revisar operación' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
     await screen.findByText('Revisa antes de confirmar');
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar abono' }));
-    await screen.findByText(/Operación registrada. No se pudo actualizar la vista/);
-    expect(screen.getByText('La consulta falló')).toBeInTheDocument();
+    await screen.findByText(/El abono está guardado. No se pudo actualizar la vista/);
+    expect(screen.getByRole('region', { name: 'Abono registrado' })).toHaveTextContent('$120,00');
+    expect(screen.getByRole('region', { name: 'Abono registrado' })).toHaveTextContent('Saldo pendiente · USD');
     expect(executeReceivableOperation).toHaveBeenCalledTimes(1);
 });
 
@@ -370,17 +386,15 @@ it('uses native table search and preserves its text while loading another query'
     expect(search).toHaveValue('Cliente');
 });
 
-it('resets route, portfolio and due filters together', () => {
+it('resets route and due filters while retaining debt-only scope', () => {
     render(<Receivables />);
     expect(screen.queryByRole('button', { name: 'Restablecer filtros' })).not.toBeInTheDocument();
-    userEvent.click(screen.getByLabelText('Cartera'));
-    userEvent.click(screen.getByText('Sin deuda'));
     userEvent.click(screen.getByLabelText('Ruta'));
     userEvent.click(screen.getByText('R1'));
     userEvent.click(screen.getByLabelText('Vencimiento'));
     userEvent.click(screen.getByText('Con deuda vencida'));
     expect(useReceivables).toHaveBeenLastCalledWith(
-        expect.objectContaining({ ruta: 'R1', state: 'settled', due: 'overdue' }),
+        expect.objectContaining({ ruta: 'R1', state: 'debt', due: 'overdue' }),
     );
     userEvent.click(screen.getByRole('button', { name: 'Restablecer filtros' }));
     expect(useReceivables).toHaveBeenLastCalledWith(
@@ -394,7 +408,7 @@ it('shows one value per portfolio column without stacked client metadata', () =>
     render(<Receivables />);
     const row = screen.getByRole('button', { name: 'Cliente Uno' }).closest('tr');
     const cells = within(row).getAllByRole('cell');
-    expect(cells).toHaveLength(5);
+    expect(cells).toHaveLength(6);
     expect(cells[0]).toHaveTextContent(/^Cliente Uno$/);
     expect(cells[0].querySelector('small')).toBeNull();
     expect(row).not.toHaveTextContent('Ruta R1');
@@ -404,11 +418,10 @@ it('shows one value per portfolio column without stacked client metadata', () =>
 it('only offers filter reset while a non-default selection exists', () => {
     render(<Receivables />);
     expect(screen.queryByRole('button', { name: 'Restablecer filtros' })).not.toBeInTheDocument();
-    userEvent.click(screen.getByLabelText('Cartera'));
-    userEvent.click(screen.getByText('Sin deuda'));
+    userEvent.click(screen.getByLabelText('Ruta'));
+    userEvent.click(screen.getByText('R1'));
     expect(screen.getByRole('button', { name: 'Restablecer filtros' })).toHaveClass('btn-link');
-    userEvent.click(screen.getByLabelText('Cartera'));
-    userEvent.click(screen.getByText('Con deuda'));
+    userEvent.click(screen.getByRole('button', { name: 'Restablecer filtros' }));
     expect(screen.queryByRole('button', { name: 'Restablecer filtros' })).not.toBeInTheDocument();
     userEvent.click(screen.getByLabelText('Vencimiento'));
     userEvent.click(screen.getByText('Con deuda vencida'));
@@ -428,15 +441,17 @@ it('opens the payment CTA with server-side client selection across the whole por
     render(<Receivables />);
     userEvent.click(screen.getByRole('button', { name: 'Registrar abono' }));
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Continuar' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Continuar' })).not.toBeInTheDocument();
+    const drawer = screen.getByRole('dialog');
     await waitFor(() =>
         expect(fetchReceivables).toHaveBeenCalledWith({ search: '', state: 'debt', page: 1, limit: 20 }),
     );
     userEvent.click(screen.getByLabelText('Cliente'));
     userEvent.click(await screen.findByText('Cliente fuera de la tabla · C2'));
-    userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.getByRole('dialog')).toBe(drawer);
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    expect(screen.getByRole('dialog')).toHaveAccessibleName('Cliente fuera de la tabla');
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Registrar abono');
+    expect(screen.getByRole('region', { name: 'Cliente del abono' })).toHaveTextContent('Cliente fuera de la tabla');
     expect(await screen.findByLabelText('Importe recibido')).toBeInTheDocument();
     expect(useReceivableClient).toHaveBeenLastCalledWith('C2', expect.any(Object));
 });
@@ -453,7 +468,7 @@ it('reports client selection errors instead of presenting an empty valid portfol
     render(<Receivables />);
     userEvent.click(screen.getByRole('button', { name: 'Registrar abono' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Consulta de clientes no disponible');
-    expect(screen.getByRole('button', { name: 'Continuar' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Revisar abono' })).not.toBeInTheDocument();
 });
 
 it('rechecks writes on the client before opening the initial payment form', () => {
@@ -537,11 +552,12 @@ it('asks before discarding unsaved edits without opening a second dialog', async
     render(<ClientModal client={client} onClose={close} onChanged={refresh} />);
     fireEvent.click(screen.getByRole('button', { name: 'Registrar abono' }));
     fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '20' } });
-    fireEvent.click(within(screen.getByRole('dialog')).getByLabelText('Cerrar cuenta'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByLabelText('Cerrar abono'));
     expect(close).not.toHaveBeenCalled();
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Descartar cambios' }));
-    expect(close).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Cliente Uno');
 });
 
 it('keeps client-wide debt closure behind a secondary action and reviews its scope', async () => {
@@ -600,20 +616,21 @@ it('preserves unsaved payment fields when a background account refresh fails', (
     rerender(<ClientModal client={client} onClose={jest.fn()} onChanged={refresh} />);
     expect(screen.getByLabelText('Importe recibido')).toHaveValue(35.0001);
     expect(screen.getByRole('alert')).toHaveTextContent('Saldos sin actualizar');
-    expect(screen.getByRole('button', { name: 'Revisar operación' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Volver al historial' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revisar abono' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancelar' })).not.toBeDisabled();
     useReceivableClient.mockReturnValue({ data: detail, mutate: refresh });
     rerender(<ClientModal client={client} onClose={jest.fn()} onChanged={refresh} />);
     expect(screen.getByLabelText('Importe recibido')).toHaveValue(35.0001);
-    expect(screen.getByRole('button', { name: 'Revisar operación' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revisar abono' })).not.toBeDisabled();
 });
 
 it('locks account navigation while editing to avoid losing a payment draft', () => {
     render(<ClientModal client={client} onClose={jest.fn()} onChanged={refresh} />);
     userEvent.click(screen.getByRole('button', { name: 'Registrar abono' }));
-    expect(screen.getByRole('button', { name: 'Pendientes', hidden: true })).toBeDisabled();
+    expect(screen.getByRole('dialog')).toHaveAccessibleName('Registrar abono');
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Ver factura A' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Más acciones' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Más acciones' })).not.toBeInTheDocument();
 });
 
 it('returns focus to the payment trigger when cancelling an untouched form', async () => {
@@ -629,9 +646,9 @@ it('focuses the safe discard choice and retains the draft when continuing', () =
     render(<ClientModal client={client} onClose={close} onChanged={refresh} />);
     userEvent.click(screen.getByRole('button', { name: 'Registrar abono' }));
     fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '35' } });
-    userEvent.click(screen.getByLabelText('Cerrar cuenta'));
+    userEvent.click(screen.getByLabelText('Cerrar abono'));
     expect(screen.getByRole('button', { name: 'Seguir editando' })).toHaveFocus();
-    expect(screen.getByRole('button', { name: 'Revisar operación' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revisar abono', hidden: true })).toBeDisabled();
     userEvent.click(screen.getByRole('button', { name: 'Seguir editando' }));
     expect(screen.getByLabelText('Importe recibido')).toHaveValue(35);
     expect(close).not.toHaveBeenCalled();
@@ -651,7 +668,7 @@ it('focuses review, summarizes payment metadata and restores all fields on edit'
     renderForm();
     fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '120' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Referencia' }), { target: { value: 'REF-345' } });
-    fireEvent.change(screen.getByRole('textbox', { name: 'Banco' }), { target: { value: 'Banco Uno' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Banco' }), { target: { value: 'Banco Uno' } });
     fireEvent.change(screen.getByRole('textbox', { name: 'Observaciones' }), { target: { value: 'Cobro de ruta' } });
     userEvent.click(screen.getByRole('button', { name: 'Revisar operación' }));
     const reviewTitle = await screen.findByRole('heading', { name: 'Revisa antes de confirmar' });
@@ -665,7 +682,7 @@ it('focuses review, summarizes payment metadata and restores all fields on edit'
     userEvent.click(screen.getByRole('button', { name: 'Editar datos' }));
     expect(screen.getByLabelText('Importe recibido')).toHaveValue(120);
     expect(screen.getByRole('textbox', { name: 'Referencia' })).toHaveValue('REF-345');
-    expect(screen.getByRole('textbox', { name: 'Banco' })).toHaveValue('Banco Uno');
+    expect(screen.getByRole('combobox', { name: 'Banco' })).toHaveValue('Banco Uno');
     expect(screen.getByRole('textbox', { name: 'Observaciones' })).toHaveValue('Cobro de ruta');
     expect(screen.queryByRole('button', { name: 'Confirmar abono' })).not.toBeInTheDocument();
     expect(executeReceivableOperation).not.toHaveBeenCalled();
@@ -709,4 +726,304 @@ it('blocks duplicate confirmations while the first financial request is pending'
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
     await act(async () => finish({ operationId: 'saved' }));
     expect(callbacks.onSuccess).toHaveBeenCalledTimes(1);
+});
+
+it('opens a row payment directly in the drawer and keeps the portfolio behind it', async () => {
+    render(<Receivables />);
+    userEvent.click(screen.getByRole('button', { name: 'Abonar a Cliente Uno' }));
+    expect(screen.getByRole('dialog')).toHaveClass('cxc-payment-drawer', 'offcanvas-end');
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('region', { name: 'Cliente del abono' })).toHaveTextContent('J-123');
+    expect(screen.queryByText('Historial de cobranza')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cliente Uno', hidden: true })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Importe recibido')).toHaveFocus());
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '35' } });
+    const estimate = screen.getByRole('region', { name: 'Estimación del abono' });
+    expect(estimate).toHaveTextContent('$35,00');
+    expect(estimate).toHaveTextContent('$65,00');
+    expect(previewReceivableOperation).not.toHaveBeenCalled();
+    userEvent.click(screen.getByLabelText('Cerrar abono'));
+    expect(screen.getByRole('button', { name: 'Seguir editando' })).toHaveFocus();
+    userEvent.click(screen.getByRole('button', { name: 'Descartar cambios' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Abonar a Cliente Uno' })).toHaveFocus());
+});
+
+it('excludes row payment actions from the portfolio PDF configuration', async () => {
+    render(<Receivables />);
+    userEvent.click(screen.getByRole('button', { name: 'Imprimir', exact: true }));
+    expect(within(screen.getByRole('dialog')).queryByText('Acciones')).not.toBeInTheDocument();
+    userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Imprimir', exact: true }));
+    await waitFor(() => expect(pdfMake.createPdf).toHaveBeenCalled());
+    const table = pdfMake.createPdf.mock.calls[0][0].content.find((item) => item.table);
+    expect(table.table.body[0]).toHaveLength(5);
+});
+
+it('disables row payments for settled clients and while the portfolio reloads', () => {
+    useReceivables.mockReturnValue({
+        data: { ...portfolio, data: [{ ...portfolio.data[0], balance: '0.0000' }] },
+        mutate: refresh,
+    });
+    const { rerender } = render(<Receivables />);
+    expect(screen.getByRole('button', { name: 'Abonar a Cliente Uno' })).toBeDisabled();
+    useReceivables.mockReturnValue({ data: portfolio, isValidating: true, mutate: refresh });
+    rerender(<Receivables />);
+    expect(screen.getByRole('button', { name: 'Abonar a Cliente Uno' })).toBeDisabled();
+});
+
+it('reveals optional drawer details and preserves them when editing a review', async () => {
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    expect(screen.getByRole('textbox', { name: 'Referencia' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Banco' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Observaciones' })).not.toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: '+ Agregar observaciones' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Referencia' }), { target: { value: 'REF-345' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Banco' }), { target: { value: 'Banco Uno' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Observaciones' }), { target: { value: 'Cobro de ruta' } });
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '120' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    await screen.findByRole('heading', { name: 'Revisa antes de confirmar' });
+    expect(screen.getByText('REF-345')).toBeInTheDocument();
+    expect(screen.getByText('Cobro de ruta')).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Editar datos' }));
+    expect(screen.getByRole('textbox', { name: 'Referencia' })).toHaveValue('REF-345');
+    expect(screen.getByRole('textbox', { name: 'Observaciones' })).toHaveValue('Cobro de ruta');
+    userEvent.selectOptions(screen.getByLabelText('Método'), 'EFECTIVO');
+    expect(screen.queryByRole('textbox', { name: 'Referencia' })).not.toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    await screen.findByRole('button', { name: 'Confirmar abono' });
+    expect(previewReceivableOperation).toHaveBeenLastCalledWith(
+        'C1',
+        expect.objectContaining({
+            method: 'EFECTIVO',
+            reference: '',
+            bank: '',
+            notes: 'Cobro de ruta',
+        }),
+    );
+});
+
+it('shows a local bolivar estimate but reviews and saves only the server conversion', async () => {
+    const conversion = {
+        ...preview,
+        amount: '5000.0000',
+        currency: 'BsS',
+        rate: '125.000000',
+        base: '40.0000',
+        applied: '40.0000',
+        excess: '0.0000',
+        balanceAfter: '60.0000',
+        applications: [{ id: 1, sale: 'A', amount: '40.0000' }],
+    };
+    previewReceivableOperation.mockResolvedValue(conversion);
+    executeReceivableOperation.mockResolvedValue({ ...conversion, operationId: 'saved' });
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    userEvent.click(screen.getByRole('button', { name: 'Bolívares' }));
+    expect(screen.getByRole('button', { name: 'Bolívares' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '5000' } });
+    expect(screen.getByRole('region', { name: 'Estimación del abono' })).toHaveTextContent('$50,00');
+    expect(previewReceivableOperation).not.toHaveBeenCalled();
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    await screen.findByRole('button', { name: 'Confirmar abono' });
+    expect(screen.getByText('125,00')).toBeInTheDocument();
+    expect(screen.getAllByText('$40,00')).toHaveLength(3);
+    userEvent.click(screen.getByRole('button', { name: 'Confirmar abono' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Listo' })).not.toBeDisabled());
+    expect(screen.getByRole('region', { name: 'Abono registrado' })).toHaveTextContent('Bs 5.000,00');
+    expect(screen.getByRole('region', { name: 'Abono registrado' })).toHaveTextContent('$60,00');
+    expect(executeReceivableOperation).toHaveBeenCalledWith(
+        'C1',
+        expect.objectContaining({
+            currency: 'BsS',
+            amount: '5000',
+            snapshot: conversion.snapshot,
+            requestId: expect.any(String),
+        }),
+    );
+});
+
+it('blocks unavailable REF in the drawer without blocking a USD payment', () => {
+    useReceivableClient.mockReturnValue({ data: { ...detail, rate: null }, mutate: refresh });
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    userEvent.click(screen.getByRole('button', { name: 'Bolívares' }));
+    expect(screen.getByRole('button', { name: 'Revisar abono' })).toBeDisabled();
+    expect(screen.getByText(/Tasa REF: No disponible/)).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
+    expect(screen.getByRole('button', { name: 'Revisar abono' })).not.toBeDisabled();
+});
+
+it('rechecks client writes and debt before allowing a direct row payment', () => {
+    useReceivableClient.mockReturnValue({ data: { ...detail, writesEnabled: false }, mutate: refresh });
+    const { rerender } = render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    expect(screen.getByRole('button', { name: 'Revisar abono' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Modo consulta');
+    useReceivableClient.mockReturnValue({
+        data: { ...detail, summary: { ...detail.summary, balance: '0.0000' } },
+        mutate: refresh,
+    });
+    rerender(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    expect(screen.getByRole('button', { name: 'Revisar abono' })).toBeDisabled();
+    expect(screen.getByText(/El cliente no tiene deuda pendiente/)).toBeInTheDocument();
+});
+
+it('requires a safe discard before changing clients and clears the previous draft', async () => {
+    const otherClient = { ...client, id: 'C2', name: 'Cliente Dos', balance: '100.0000' };
+    fetchReceivables.mockResolvedValue({ ...portfolio, data: [otherClient] });
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '35' } });
+    userEvent.click(screen.getByRole('button', { name: 'Cambiar cliente' }));
+    expect(screen.getByRole('button', { name: 'Seguir editando' })).toHaveFocus();
+    userEvent.click(screen.getByRole('button', { name: 'Seguir editando' }));
+    expect(screen.getByLabelText('Importe recibido')).toHaveValue(35);
+    userEvent.click(screen.getByRole('button', { name: 'Cambiar cliente' }));
+    userEvent.click(screen.getByRole('button', { name: 'Descartar cambios' }));
+    useReceivableClient.mockReturnValue({ data: { ...detail, client: otherClient }, mutate: refresh });
+    userEvent.click(screen.getByLabelText('Cliente'));
+    userEvent.click(await screen.findByText('Cliente Dos · C2'));
+    expect(screen.getByLabelText('Importe recibido')).toHaveValue(null);
+    expect(useReceivableClient).toHaveBeenLastCalledWith('C2', expect.any(Object));
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '15' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    await screen.findByRole('button', { name: 'Confirmar abono' });
+    expect(previewReceivableOperation).toHaveBeenLastCalledWith('C2', expect.objectContaining({ amount: '15' }));
+});
+
+it('keeps the saved result after refresh errors and retries queries without registering again', async () => {
+    const reload = jest.fn().mockRejectedValueOnce(new Error('Consulta falló')).mockResolvedValue(undefined);
+    useReceivableClient.mockReturnValue({ data: detail, mutate: reload });
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '120' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    userEvent.click(await screen.findByRole('button', { name: 'Confirmar abono' }));
+    await screen.findByText(/El abono está guardado/);
+    expect(screen.getByRole('region', { name: 'Abono registrado' })).toHaveTextContent('Excedente no aplicado: $20,00');
+    userEvent.click(screen.getByRole('button', { name: 'Reintentar consulta' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Reintentar consulta' })).not.toBeInTheDocument());
+    expect(executeReceivableOperation).toHaveBeenCalledTimes(1);
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('region', { name: 'Abono registrado' })).toBeInTheDocument();
+});
+
+it('retains the drawer request ID on retries and blocks closing a pending confirmation', async () => {
+    const close = jest.fn();
+    let finish;
+    executeReceivableOperation.mockRejectedValueOnce(new Error('Conexión interrumpida')).mockImplementationOnce(
+        () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            }),
+    );
+    render(<PaymentDrawer client={client} onClose={close} onChanged={refresh} />);
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '120' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    userEvent.click(await screen.findByRole('button', { name: 'Confirmar abono' }));
+    await screen.findByText('Conexión interrumpida');
+    const original = executeReceivableOperation.mock.calls[0][1].requestId;
+    const confirm = screen.getByRole('button', { name: 'Confirmar abono' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    expect(screen.queryByLabelText('Cerrar abono')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+    expect(executeReceivableOperation).toHaveBeenCalledTimes(2);
+    expect(executeReceivableOperation.mock.calls[1][1].requestId).toBe(original);
+    expect(close).not.toHaveBeenCalled();
+    await act(async () => finish({ ...preview, operationId: 'saved' }));
+    expect(screen.getByRole('region', { name: 'Abono registrado' })).toBeInTheDocument();
+});
+
+it('returns focus to portfolio search after the paid client leaves the table', async () => {
+    render(<Receivables />);
+    userEvent.click(screen.getByRole('button', { name: 'Abonar a Cliente Uno' }));
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '120' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    useReceivables.mockReturnValue({ data: { ...portfolio, data: [], total: 0 }, mutate: refresh });
+    userEvent.click(await screen.findByRole('button', { name: 'Confirmar abono' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Listo' })).not.toBeDisabled());
+    userEvent.click(screen.getByRole('button', { name: 'Listo' }));
+    await waitFor(() => expect(screen.getByRole('searchbox', { name: 'Buscar cliente' })).toHaveFocus());
+});
+
+it('allows retrying the drawer client search after a failed request', async () => {
+    fetchReceivables.mockRejectedValueOnce(new Error('Búsqueda interrumpida'));
+    render(<PaymentDrawer onClose={jest.fn()} onChanged={refresh} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Búsqueda interrumpida');
+    userEvent.click(screen.getByRole('button', { name: 'Reintentar búsqueda' }));
+    userEvent.click(screen.getByLabelText('Cliente'));
+    userEvent.click(await screen.findByText('Cliente Uno · C1'));
+    expect(screen.queryByText('Búsqueda interrumpida')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Importe recibido')).toBeInTheDocument();
+});
+
+it('defaults drawer payments to bolivars on the left with reference and bank visible', async () => {
+    render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    const currencies = within(screen.getByRole('group', { name: 'Moneda' })).getAllByRole('button');
+    expect(currencies[0]).toHaveTextContent('Bolívares');
+    expect(currencies[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(currencies[1]).toHaveTextContent('USD');
+    expect(currencies[1]).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('textbox', { name: 'Referencia' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Banco' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Observaciones' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Se aplica automáticamente por vencimiento/)).not.toBeInTheDocument();
+    userEvent.selectOptions(screen.getByRole('combobox', { name: 'Banco' }), 'Banco Uno');
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '10000' } });
+    userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
+    await screen.findByRole('button', { name: 'Confirmar abono' });
+    expect(previewReceivableOperation).toHaveBeenLastCalledWith(
+        'C1',
+        expect.objectContaining({ currency: 'BsS', amount: '10000', bank: 'Banco Uno' }),
+    );
+});
+
+it('retains the rate slot when switching to dollars instead of inserting another row', () => {
+    const { container } = render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    const rate = container.ownerDocument.querySelector('.cxc-rate');
+    expect(rate).toHaveAttribute('aria-hidden', 'false');
+    userEvent.click(screen.getByRole('button', { name: 'USD' }));
+    expect(container.ownerDocument.querySelector('.cxc-rate')).toBe(rate);
+    expect(rate).toHaveAttribute('aria-hidden', 'true');
+    expect(rate).toHaveClass('cxc-payment-inactive');
+    userEvent.click(screen.getByRole('button', { name: 'Bolívares' }));
+    expect(rate).toHaveAttribute('aria-hidden', 'false');
+});
+
+it('confirms discard in an overlay while keeping the draft in place and inert', () => {
+    const { container } = render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    const amount = screen.getByLabelText('Importe recibido');
+    fireEvent.change(amount, { target: { value: '3500' } });
+    userEvent.click(screen.getByLabelText('Cerrar abono'));
+    const content = container.ownerDocument.querySelector('.cxc-payment-content');
+    expect(content).toHaveAttribute('inert');
+    expect(content).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('alert')).toHaveClass('cxc-payment-discard');
+    expect(screen.getByRole('button', { name: 'Seguir editando' })).toHaveFocus();
+    userEvent.tab();
+    expect(screen.getByRole('button', { name: 'Descartar cambios' })).toHaveFocus();
+    userEvent.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'Seguir editando' })).toHaveFocus();
+    expect(screen.getByLabelText('Importe recibido')).toBe(amount);
+    userEvent.click(screen.getByRole('button', { name: 'Seguir editando' }));
+    expect(content).not.toHaveAttribute('inert');
+    expect(screen.getByLabelText('Importe recibido')).toHaveValue(3500);
+});
+
+it('reports a missing bank catalog and retries its query without clearing the payment', () => {
+    const reload = jest.fn();
+    useReceivableBanks.mockReturnValue({ error: new Error('Conexión perdida'), mutate: reload });
+    const { rerender } = render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '3500' } });
+    expect(screen.getByRole('combobox', { name: 'Banco' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('No se pudo cargar el catálogo de bancos');
+    userEvent.click(screen.getByRole('button', { name: 'Reintentar bancos' }));
+    expect(reload).toHaveBeenCalledTimes(1);
+    useReceivableBanks.mockReturnValue({ data: [{ id: 'BV', name: 'BANCO DE VENEZUELA' }], mutate: reload });
+    rerender(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
+    expect(screen.getByRole('combobox', { name: 'Banco' })).not.toBeDisabled();
+    expect(screen.getByRole('option', { name: 'BANCO DE VENEZUELA' })).toHaveValue('BANCO DE VENEZUELA');
+    expect(screen.getByLabelText('Importe recibido')).toHaveValue(3500);
 });

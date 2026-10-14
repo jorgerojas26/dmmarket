@@ -594,7 +594,11 @@ function createReceivablesService({
     });
   }
 
-  return { readiness, list, detail, preview, execute };
+  async function banks() {
+    return db("bancos").select("Id_Banco as id", "Nombre as name").orderBy("Nombre");
+  }
+
+  return { readiness, list, detail, preview, execute, banks };
 }
 
 module.exports = { createReceivablesService, localDate, input };
