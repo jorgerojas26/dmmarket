@@ -1,20 +1,20 @@
+import { fetchReceivables } from 'api/receivables';
+import RouteFilter from 'components/RouteFilter';
 import { darkSelectStyles } from 'components/selectStyles';
 import Table from 'components/Table';
-import RouteFilter from 'components/RouteFilter';
-import { useReceivables } from 'hooks/useReceivables';
 import { CurrencyRateContext } from 'context/currency_rate';
-import { fetchReceivables } from 'api/receivables';
+import { useReceivables } from 'hooks/useReceivables';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import Select from 'react-select';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
-import ClientModal from './ClientModal';
-import { dateLabel, money } from './format';
+import Select from 'react-select';
 import { formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
+import ClientModal from './ClientModal';
+import { dateLabel, money } from './format';
 import PaymentDrawer from './PaymentDrawer';
 import Summary from './Summary';
 import './styles.css';
@@ -230,7 +230,6 @@ export default function Receivables() {
             </div>
             <div className="cxc-filters clients-content-wrapper">
                 <Form.Group className="cxc-filter cxc-route-filter">
-                    <Form.Label htmlFor="cxc-route">Ruta</Form.Label>
                     <RouteFilter
                         inputId="cxc-route"
                         value={ruta ? { value: ruta, label: ruta } : null}
@@ -238,7 +237,6 @@ export default function Receivables() {
                     />
                 </Form.Group>
                 <Form.Group className="cxc-filter">
-                    <Form.Label htmlFor="cxc-due">Vencimiento</Form.Label>
                     <Select
                         inputId="cxc-due"
                         options={dueOptions}
