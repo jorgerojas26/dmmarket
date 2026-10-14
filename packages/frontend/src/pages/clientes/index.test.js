@@ -9,6 +9,7 @@ jest.mock('hooks/useClients', () => ({ useClientRoutes: jest.fn() }));
 jest.mock('components/ClientDashboardModal', () => () => null);
 jest.mock('components/Sidebar', () => () => null);
 jest.mock('components/ClientsTable', () => () => null);
+jest.mock('components/Receivables', () => () => <div>Vista de cuentas por cobrar</div>);
 jest.mock('components/Dashboard/ClientsDashboard', () => ({ ruta, dateRange }) => (
     <div data-testid="dashboard-filters">{JSON.stringify({ ruta, dateRange })}</div>
 ));
@@ -41,14 +42,25 @@ it('groups the dashboard title and real filters in the responsive header', () =>
     fireEvent.click(container.querySelector('.date-range-trigger'));
     userEvent.click(screen.getByRole('button', { name: 'Hoy' }));
     const today = DateTime.now().toISODate();
-    expect(JSON.parse(screen.getByTestId('dashboard-filters').textContent).dateRange).toEqual({ from: today, to: today });
+    expect(JSON.parse(screen.getByTestId('dashboard-filters').textContent).dateRange).toEqual({
+        from: today,
+        to: today,
+    });
     userEvent.click(screen.getByRole('button', { name: 'Listo' }));
     expect(container.querySelector('.date-range-dropdown')).not.toBeInTheDocument();
 });
 
+it('opens receivables directly from its own sidebar URL view', () => {
+    renderPage('receivables');
+    expect(screen.getByText('Vista de cuentas por cobrar')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Dashboard de Clientes' })).not.toBeInTheDocument();
+});
+
 it('applies the same filter layout to the client breakdown', () => {
     const { container } = renderPage('clients');
-    expect(screen.getByRole('heading', { name: 'Desglose de Clientes' }).closest('.report-page-header')).toBeInTheDocument();
+    expect(
+        screen.getByRole('heading', { name: 'Desglose de Clientes' }).closest('.report-page-header'),
+    ).toBeInTheDocument();
     const filters = container.querySelector('.report-page-filters');
     expect(filters).toContainElement(screen.getByLabelText('Ruta'));
     expect(filters).toContainElement(container.querySelector('.date-range-trigger'));

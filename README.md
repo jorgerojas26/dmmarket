@@ -40,6 +40,8 @@ DMMarket genera respaldos diarios de MySQL y muestra sus fechas y tamaños en **
 
 ## Desarrollo
 
+Para reproducir el motor MySQL 5.0.24 del respaldo de Windows en un contenedor Ubuntu, consulta [configuración y límites de compatibilidad](docs/mysql-5.0.md).
+
 ```sh
 bun install
 bun run dev

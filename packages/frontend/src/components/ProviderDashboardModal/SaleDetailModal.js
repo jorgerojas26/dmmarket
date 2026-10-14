@@ -1,6 +1,6 @@
 import Table from 'components/Table';
 import { DateTime } from 'luxon';
-import { Modal, Spinner } from 'react-bootstrap';
+import { Alert, Button, Modal, Spinner } from 'react-bootstrap';
 import './styles.css';
 
 const formatCurrency = (value) => {
@@ -9,8 +9,11 @@ const formatCurrency = (value) => {
     return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-const SaleDetailModal = ({ show, onClose, sale }) => {
+const SaleDetailModal = ({ show, onClose, sale, documentLabel = 'Venta', invoiceId, error, onRetry }) => {
     const loading = !sale;
+    const documentId = (error ? null : sale?.idFactura) ?? invoiceId;
+    const title = documentId != null ? `${documentLabel} #${documentId}` : 'Cargando...';
+    const emptyMessage = `Sin productos en esta ${documentLabel.toLowerCase()}`;
 
     return (
         <Modal
@@ -20,14 +23,15 @@ const SaleDetailModal = ({ show, onClose, sale }) => {
             backdrop="static"
             centered
             className="provider-dashboard-modal purchase-detail-modal"
+            aria-labelledby="sale-detail-modal-title"
         >
             <Modal.Header closeButton>
                 <div className="d-flex align-items-center gap-3">
-                    <div className="provider-avatar">V</div>
+                    <div className="provider-avatar">{documentLabel.charAt(0)}</div>
                     <div>
-                        <Modal.Title>{sale ? `Venta #${sale.idFactura}` : 'Cargando...'}</Modal.Title>
+                        <Modal.Title id="sale-detail-modal-title">{title}</Modal.Title>
                         <div className="provider-modal-subtitle">
-                            {sale
+                            {sale && !error
                                 ? `${DateTime.fromISO(sale.fecha).toFormat('dd MMM yyyy', { locale: 'es' })} — ${sale.vendedor || ''}`
                                 : ''}
                         </div>
@@ -35,11 +39,20 @@ const SaleDetailModal = ({ show, onClose, sale }) => {
                 </div>
             </Modal.Header>
             <Modal.Body>
-                {loading ? (
+                {error ? (
+                    <Alert variant="danger">
+                        <div>{error.message || 'No se pudo cargar el detalle.'}</div>
+                        {onRetry && (
+                            <Button variant="outline-danger" className="mt-2" onClick={onRetry}>
+                                Reintentar
+                            </Button>
+                        )}
+                    </Alert>
+                ) : loading ? (
                     <div className="d-flex justify-content-center align-items-center" style={{ minHeight: 150 }}>
-                        <Spinner animation="border" variant="light" />
+                        <Spinner animation="border" variant="light" role="status" aria-label="Cargando detalle" />
                     </div>
-                ) : sale.productos && sale.productos.length > 0 ? (
+                ) : Array.isArray(sale.productos) && sale.productos.length > 0 ? (
                     <>
                         <div className="provider-table-container">
                             <Table
@@ -69,7 +82,7 @@ const SaleDetailModal = ({ show, onClose, sale }) => {
                                 ]}
                                 className="provider-table"
                                 maxHeight={null}
-                                emptyMessage="Sin productos en esta venta"
+                                emptyMessage={emptyMessage}
                             />
                         </div>
                         <div className="purchase-total-row">
@@ -83,7 +96,7 @@ const SaleDetailModal = ({ show, onClose, sale }) => {
                     </>
                 ) : (
                     <div className="provider-empty-state">
-                        <span>Sin productos en esta venta</span>
+                        <span>{emptyMessage}</span>
                     </div>
                 )}
             </Modal.Body>

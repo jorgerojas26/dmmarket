@@ -2,6 +2,7 @@ import ClientDashboardModal from 'components/ClientDashboardModal';
 import ClientsTable from 'components/ClientsTable';
 import ClientsDashboard from 'components/Dashboard/ClientsDashboard';
 import DateRangePicker from 'components/DateRangePicker';
+import Receivables from 'components/Receivables';
 import Sidebar from 'components/Sidebar';
 import { darkSelectStyles } from 'components/selectStyles';
 import { ShowNoeContext } from 'context/show_noe';
@@ -12,7 +13,7 @@ import Container from 'react-bootstrap/Container';
 import { useHistory, useLocation } from 'react-router-dom';
 import Select from 'react-select';
 
-const VALID_VIEWS = ['dashboard', 'clients'];
+const VALID_VIEWS = ['dashboard', 'clients', 'receivables'];
 
 const ClientesPage = () => {
     const history = useHistory();
@@ -128,6 +129,11 @@ const ClientesPage = () => {
                     </svg>
                 ),
             },
+            {
+                eventKey: 'receivables',
+                label: 'Cuentas por cobrar',
+                icon: <span aria-hidden="true">$</span>,
+            },
         ],
         [],
     );
@@ -137,6 +143,7 @@ const ClientesPage = () => {
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4">
+                    {activeView === 'receivables' && <Receivables />}
                     {activeView === 'clients' && (
                         <div className="report-page">
                             <div className="clients-content-wrapper report-page-header mb-3">

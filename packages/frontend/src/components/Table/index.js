@@ -43,6 +43,7 @@ import './styles.css';
  * @param {object}         [props.search]                             - Server‑side search config.
  * @param {boolean}         props.search.enabled
  * @param {string}         [props.search.placeholder='Buscar...']     - Search input placeholder.
+ * @param {string}         [props.search.ariaLabel='Buscar...']        - Accessible search input name.
  * @param {Function}        props.search.onSearch                     - Debounced callback `(term)`.
  *
  * @param {object}         [props.print]                              - Print config.
@@ -482,9 +483,9 @@ const Table = ({
     const renderRow = useCallback(
         (row) => {
             prepareRow(row);
-            if (onRowSelect && multiSelect) return <SelectRow row={row} multiSelect={multiSelect} />;
-            if (onRowSelect || onRowClick) return <ClickableRow row={row} onClick={onRowSelect || onRowClick} />;
-            return <StaticRow row={row} />;
+            if (onRowSelect && multiSelect) return <SelectRow key={row.id} row={row} multiSelect={multiSelect} />;
+            if (onRowSelect || onRowClick) return <ClickableRow key={row.id} row={row} onClick={onRowSelect || onRowClick} />;
+            return <StaticRow key={row.id} row={row} />;
         },
         // SelectRow cierra sobre selectedRows/selectedIdSet: cuando la selección
         // cambia, hay que recrear el renderer o la fila muestra estado viejo.
@@ -577,7 +578,7 @@ const Table = ({
         return (
             <thead>
                 {headerGroups.map((hg) => (
-                    <tr {...hg.getHeaderGroupProps()} key={hg.id}>
+                    <tr {...hg.getHeaderGroupProps()} key={hg.getHeaderGroupProps().key}>
                         {hasSelectCol && (
                             <th
                                 style={{
@@ -743,6 +744,7 @@ const Table = ({
                     <input
                         className="table-search-input"
                         placeholder={search.placeholder || 'Buscar...'}
+                        aria-label={search.ariaLabel || search.placeholder || 'Buscar...'}
                         type="search"
                         value={searchTerm}
                         onChange={handleSearchChange}

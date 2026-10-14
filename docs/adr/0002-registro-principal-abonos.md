@@ -1,0 +1,3 @@
+# DMMarket será el registro principal de abonos
+
+La copia inspeccionada contiene registros de cobranza en varias estructuras, con aplicaciones de abonos que no se reflejan en todas ellas y posibles pagos duplicados. Se decidió que DMMarket será el registro principal de abonos y que el sistema anterior dejará de modificar esos mismos cobros, en lugar de mantener dos registros independientes o introducir sincronización bidireccional. La transición exige una cartera inicial conciliada que incluya toda deuda histórica vigente; esta decisión no autoriza migraciones ni correcciones automáticas de los saldos observados.

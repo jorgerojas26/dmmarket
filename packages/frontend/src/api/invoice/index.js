@@ -51,6 +51,14 @@ export const fetchInvoiceList = async ({
 };
 
 export const fetchInvoiceDetail = async (invoiceId, showNoe) => {
-    const response = await fetch(`${BASE_URL}/${invoiceId}/detail?showNoe=${showNoe}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(invoiceId)}/detail?showNoe=${showNoe}`);
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const message =
+            typeof body?.error === 'string' ? body.error : `No se pudo cargar la factura (HTTP ${response.status})`;
+        const error = new Error(message);
+        error.status = response.status;
+        throw error;
+    }
     return response.json();
 };

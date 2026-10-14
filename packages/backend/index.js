@@ -34,6 +34,7 @@ const EXT_MIME = {
 };
 
 const clients_routes = require("./routes/clients");
+const receivables_routes = require("./routes/receivables");
 const groups_routes = require("./routes/groups");
 const invoices_routes = require("./routes/invoices");
 const products_routes = require("./routes/products");
@@ -64,6 +65,7 @@ app.post("/api/cache/clear", (_req, res) => {
 });
 
 app.use("/api/clients", clients_routes);
+app.use("/api/receivables", receivables_routes);
 app.use("/api/groups", groups_routes);
 app.use("/api/invoices", invoices_routes);
 app.use("/api/products", products_routes);

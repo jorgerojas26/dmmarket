@@ -330,6 +330,7 @@ describe("MySQL read-only checks", () => {
     const end = jest.fn().mockResolvedValue();
     mysql.createConnection.mockResolvedValue({ execute, end });
     expect((await testDatabase(fields)).ok).toBe(true);
+    expect(mysql.createConnection).toHaveBeenLastCalledWith(expect.objectContaining({ charset: "UTF8_GENERAL_CI" }));
     expect(execute.mock.calls[0][0].sql).toMatch(/^SELECT /);
     expect(end).toHaveBeenCalled();
   });

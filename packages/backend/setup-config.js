@@ -75,6 +75,7 @@ async function testDatabase(configuration) {
       user: configuration.DATABASE_USER,
       password: configuration.DATABASE_PASSWORD,
       database: configuration.DATABASE_NAME,
+      charset: "UTF8_GENERAL_CI",
       connectTimeout: 5000,
     });
     const required = ["clientes", "productos", "proveedores", "masterfact", "slavefact", "mastercomp", "slavecomp"];
