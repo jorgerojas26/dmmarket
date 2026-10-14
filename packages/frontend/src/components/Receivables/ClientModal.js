@@ -39,6 +39,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
     const [expandedMovement, setExpandedMovement] = useState(null);
     const [voidReasons, setVoidReasons] = useState({});
     const [closedIds, setClosedIds] = useState([]);
+    const accountModal = useRef(null);
     const primary = useRef(null);
     const title = useRef(null);
     const moreActions = useRef(null);
@@ -55,7 +56,14 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
     const navigationLocked = busy || isValidating || !!action;
     const rowClosure = action?.type === 'close' && !!action.id;
     const clientClosure = action?.type === 'close' && !action.id;
-    const operationOpen = !!action && action.type !== 'void' && !rowClosure;
+    const paymentOpen = action?.type === 'payment';
+    const operationOpen = !!action && !paymentOpen && action.type !== 'void' && !rowClosure;
+    useEffect(() => {
+        const dialog = accountModal.current?.dialog;
+        const covered = paymentOpen || clientClosure;
+        dialog?.setAttribute('aria-hidden', String(covered));
+        dialog?.toggleAttribute('inert', covered);
+    }, [paymentOpen, clientClosure, invoice]);
     const openInvoice = useCallback((id, triggerId) => {
         initialFocusSet.current = true;
         setInvoice({ id, triggerId });
@@ -402,25 +410,10 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
             </div>
         ) : null;
     if (invoice) return <InvoiceDetailModal invoiceId={invoice.id} onClose={closeInvoice} />;
-    if (action?.type === 'payment') {
-        return (
-            <PaymentDrawer
-                client={client}
-                onClose={() => {
-                    setAction(null);
-                    setTimeout(restoreActionFocus, 0);
-                }}
-                onChanged={() => {
-                    setPage(1);
-                    setTimelinePage(1);
-                    return onChanged();
-                }}
-            />
-        );
-    }
     return (
         <>
             <Modal
+                ref={accountModal}
                 show
                 onHide={() => cancel('modal')}
                 onEntered={() => {
@@ -772,6 +765,20 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                         {operationForm}
                     </Modal.Body>
                 </Modal>
+            )}
+            {paymentOpen && (
+                <PaymentDrawer
+                    client={client}
+                    onClose={() => {
+                        setAction(null);
+                        setTimeout(restoreActionFocus, 0);
+                    }}
+                    onChanged={() => {
+                        setPage(1);
+                        setTimelinePage(1);
+                        return Promise.all([mutate(), onChanged()]);
+                    }}
+                />
             )}
         </>
     );

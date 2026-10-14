@@ -62,6 +62,8 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
         <Offcanvas
             show
             placement="end"
+            backdrop
+            backdropClassName="cxc-payment-backdrop"
             onHide={() => cancel()}
             restoreFocus={false}
             keyboard={!busy && !refreshing}
