@@ -239,6 +239,7 @@ export default function Receivables() {
                 <Form.Group className="cxc-filter">
                     <Select
                         inputId="cxc-due"
+                        aria-label="Vencimiento"
                         options={dueOptions}
                         value={dueOptions.find((option) => option.value === due)}
                         onChange={changeFilter(setDue, 'all')}
