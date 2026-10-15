@@ -275,6 +275,46 @@ Hay una interrupción breve mientras reinicia y aplica migraciones. Esto no es a
 
 Al terminar la instalación, comprobar el estado y acceder desde otra máquina. Luego reiniciar físicamente el servidor y verificar que la misma URL vuelve a responder sin iniciar sesión.
 
+### Actualizar Ubuntu por terminal sin abrir la aplicación
+
+Si DMMarket ya está instalado como `dmmarket.service`, puedes reemplazar solo su ejecutable, incluso si la versión anterior no consigue arrancar. No necesitas abrir el asistente, reinstalar el servicio ni tener Node.js o Bun en el servidor. Se conservan el `.env`, Docker, el acceso de red y Caddy.
+
+Antes de actualizar, detén el servicio, comprueba que no haya otra instancia usando la misma base y guarda un respaldo actualizado de MySQL. Una copia del ejecutable no sustituye el respaldo de la base de datos.
+
+```sh
+sudo systemctl stop dmmarket.service
+sudo systemctl show dmmarket.service -p ExecStart -p WorkingDirectory
+```
+
+Los comandos siguientes son para la instalación estándar, cuyo ejecutable es `/var/lib/dmmarket/dmmarket-app`. Si `ExecStart` muestra otra ubicación, adapta las rutas antes de continuar. La descarga requiere acceso a GitHub, `curl` y `sha256sum`. El bloque se detiene si falla la descarga o la verificación.
+
+```sh
+(
+  set -eu
+  VERSION=1.5.1
+  BASE="https://github.com/jorgerojas26/dmmarket/releases/download/v$VERSION"
+  DOWNLOAD="$(mktemp -d)"
+  trap 'rm -rf "$DOWNLOAD"' EXIT
+  cd "$DOWNLOAD"
+  curl -fL "$BASE/dmmarket-app-linux" -o dmmarket-app-linux
+  curl -fL "$BASE/dmmarket-app-linux.sha256" -o dmmarket-app-linux.sha256
+  printf '%s  %s\n' "$(tr -d '\r\n' < dmmarket-app-linux.sha256)" dmmarket-app-linux | sha256sum --check -
+  sudo cp -p /var/lib/dmmarket/dmmarket-app "/var/lib/dmmarket/dmmarket-app.before-$VERSION-$(date +%Y%m%d%H%M%S)"
+  sudo install -o dmmarket -g dmmarket -m 755 dmmarket-app-linux /var/lib/dmmarket/dmmarket-app.new
+  sudo mv /var/lib/dmmarket/dmmarket-app.new /var/lib/dmmarket/dmmarket-app
+  sudo systemctl start dmmarket.service
+)
+```
+
+Comprobar el inicio y seguir los mensajes nuevos:
+
+```sh
+sudo systemctl status dmmarket.service --no-pager
+sudo journalctl -u dmmarket.service --since "5 minutes ago" -f --no-pager
+```
+
+El estado activo por sí solo no garantiza que haya terminado el arranque: revisa que no aparezcan nuevos errores y que la aplicación responda. Si vuelve a fallar, detén el servicio y conserva el log completo. No borres tablas, no marques cambios como aplicados manualmente ni liberes bloqueos sin comprobar que no hay otra instancia trabajando. Restaurar únicamente el ejecutable anterior no revierte los cambios ya aplicados a la base de datos.
+
 ## Ejecución manual y desarrollo
 
 Abrir el ejecutable sin argumentos mantiene el modo manual, sin registrar nada en el sistema operativo. En ese modo el binario intenta abrir el navegador. No usarlo simultáneamente con el servicio instalado.

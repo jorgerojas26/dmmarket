@@ -7,6 +7,8 @@ exports.up = async (knex) => {
   if (!core.every(Boolean)) return;
   if (!(await knex.schema.hasTable("cxc_operaciones"))) {
     await knex.schema.createTable("cxc_operaciones", (table) => {
+      table.charset("utf8");
+      table.collate("utf8_general_ci");
       table.string("IdOperacion", 36).primary();
       table.string("IdCliente", 15).notNullable().index();
       table.string("Tipo", 15).notNullable();
@@ -21,6 +23,8 @@ exports.up = async (knex) => {
   }
   if (!(await knex.schema.hasTable("cxc_cierres"))) {
     await knex.schema.createTable("cxc_cierres", (table) => {
+      table.charset("utf8");
+      table.collate("utf8_general_ci");
       table.increments("IdCierre").primary();
       table.string("IdOperacion", 36).notNullable().references("IdOperacion").inTable("cxc_operaciones");
       table.integer("IdDocumento").notNullable().references("IdDocumento").inTable("cxc_documentos");
