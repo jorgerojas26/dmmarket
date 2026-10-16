@@ -7,6 +7,12 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.5.6] - 2026-10-16
+
+### Mejoras
+
+- **Tablero de clientes más rápido en servidores antiguos**: se reducen las esperas y el trabajo del servidor al consultar actividad, retención y cobertura, conservando los indicadores y los filtros por fecha y ruta.
+
 ## [v1.5.5] - 2026-10-16
 
 ### Mejoras

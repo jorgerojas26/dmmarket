@@ -19,9 +19,6 @@ const getPreviousPeriod = (from, to) => {
   };
 };
 
-// Subquery with the IdCliente values assigned to a route (null when no route filter).
-const routeClientIds = (ruta) => (ruta ? knex("clientes").select("IdCliente").where("Ruta", ruta) : null);
-
 // ── Pure domain functions (operate on already-fetched revenue rows) ──
 
 const computeConcentration = (sortedRevenues, grandTotal) => {
@@ -108,26 +105,60 @@ const computeSegments = (revenues, grandTotal) => {
     .filter((s) => s.num_clients > 0);
 };
 
-// ── Controller ──
-
 const GET_CLIENTS_DASHBOARD = async (req, res) => {
   const { from, to, ruta } = req.query;
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
-  const routeClients = routeClientIds(ruta);
 
   if (!from || !to) {
     return res.status(400).json({ error: "from and to are required" });
   }
 
   try {
-    // Shared query: all client revenues in period
+    const clients = await knex("clientes as c")
+      .select(
+        knex.raw("LOWER(c.IdCliente) as clientId"),
+        "c.Ruta as routeId",
+        knex.raw("LOWER(c.Ruta) as routeKey"),
+        knex.raw("COALESCE(rutas.Nombre, c.Ruta) as routeName"),
+        ruta ? knex.raw("c.Ruta = ? as in_route", [ruta]) : knex.raw("1 as in_route"),
+      )
+      .leftJoin("rutas", "rutas.Id_Ruta", "c.Ruta")
+      .orderBy("c.Ruta", "asc");
+    const scopedClients = clients.filter((c) => Number(c.in_route) === 1);
+    const scopedClientIds = new Set(scopedClients.map((c) => c.clientId));
+
+    const currentActivity = await knex(`${masterTable} as mf`)
+      .select(
+        knex.raw("LOWER(COALESCE(c.IdCliente, mf.IdCliente)) as clientId"),
+        knex.raw("CAST(DATE_FORMAT(mf.Fecha, '%Y-%m') AS CHAR) as month"),
+        knex.raw("COUNT(*) as invoice_count"),
+      )
+      .leftJoin("clientes as c", "c.IdCliente", "mf.IdCliente")
+      .whereBetween("mf.Fecha", [from, to])
+      .andWhere("mf.Anulada", 0)
+      .groupBy("mf.IdCliente", knex.raw("DATE_FORMAT(mf.Fecha, '%Y-%m')"));
+
+    const prevPeriod = getPreviousPeriod(from, to);
+    const previousActivityQuery = knex(`${masterTable} as mf`)
+      .select(
+        knex.raw("LOWER(COALESCE(c.IdCliente, mf.IdCliente)) as clientId"),
+        knex.raw("SUM(sf.Precio * sf.Cantidad) as total_usd"),
+      )
+      .leftJoin("clientes as c", "c.IdCliente", "mf.IdCliente")
+      .leftJoin(`${slaveTable} as sf`, `sf.${idInvoice}`, `mf.${idInvoice}`)
+      .whereBetween("mf.Fecha", [prevPeriod.from, prevPeriod.to])
+      .andWhere("mf.Anulada", 0)
+      .groupBy("mf.IdCliente");
+    if (ruta) previousActivityQuery.where("c.Ruta", ruta);
+    const previousActivity = await previousActivityQuery;
+
     const allClientsRevenueQuery = knex
       .select(
         "clientes.Empresa as name",
         "mf.IdCliente",
-        knex.raw(`COUNT(DISTINCT mf.??) as invoice_count`, [idInvoice]),
-        knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_usd`),
-        knex.raw(`ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad`),
+        knex.raw("COUNT(DISTINCT mf.??) as invoice_count", [idInvoice]),
+        knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_usd"),
+        knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad"),
       )
       .from(`${slaveTable} as sf`)
       .innerJoin(`${masterTable} as mf`, function () {
@@ -137,258 +168,101 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
       .whereBetween("mf.Fecha", [from, to])
       .groupBy("mf.IdCliente")
       .orderBy("total_usd", "desc");
-
-    if (routeClients) allClientsRevenueQuery.where("clientes.Ruta", ruta);
-
+    if (ruta) allClientsRevenueQuery.where("clientes.Ruta", ruta);
     const allClientsRevenue = await allClientsRevenueQuery;
 
-    const grandTotal = allClientsRevenue.reduce((sum, r) => sum + Number(r.total_usd || 0), 0);
+    const currentClients = new Set();
+    const globalCurrentClients = new Set();
+    const clientsByMonth = new Map();
+    let currentInvoices = 0;
+    for (const row of currentActivity) {
+      const monthClients = clientsByMonth.get(row.month) || new Set();
+      if (row.clientId != null) {
+        monthClients.add(row.clientId);
+        globalCurrentClients.add(row.clientId);
+      }
+      clientsByMonth.set(row.month, monthClients);
+      if (!ruta || scopedClientIds.has(row.clientId)) {
+        currentInvoices += Number(row.invoice_count || 0);
+        if (row.clientId != null) currentClients.add(row.clientId);
+      }
+    }
 
-    const concentration = computeConcentration(allClientsRevenue, grandTotal);
-    const abc = computeAbc(allClientsRevenue, grandTotal);
-    const utilityClients = [...allClientsRevenue].sort((a, b) => Number(b.utilidad || 0) - Number(a.utilidad || 0));
-    const grandUtility = utilityClients.reduce((sum, r) => sum + Number(r.utilidad || 0), 0);
-    const abcUtility = computeAbc(utilityClients, grandUtility, "utilidad", "utilityPercent");
-    const revenueBySegment = computeSegments(allClientsRevenue, grandTotal);
-    const treemapTop50 = allClientsRevenue.slice(0, 50).map((r) => ({
-      name: r.name,
-      value: Number(r.total_usd),
-    }));
+    const previousClients = new Set();
+    let previousSales = 0;
+    let retainedSales = 0;
+    for (const row of previousActivity) {
+      if (row.clientId != null) previousClients.add(row.clientId);
+      const sales = Number(row.total_usd || 0);
+      previousSales += sales;
+      if (currentClients.has(row.clientId)) retainedSales += sales;
+    }
+    previousSales = Number(previousSales.toFixed(2));
+    retainedSales = Number(retainedSales.toFixed(2));
+    const retained = [...currentClients].filter((id) => previousClients.has(id)).length;
+    const waterfall = {
+      retained,
+      lost: previousClients.size - retained,
+      gained: currentClients.size - retained,
+      previous: previousClients.size,
+      current: currentClients.size,
+    };
 
-    const prevPeriod = getPreviousPeriod(from, to);
-
-    const [
-      totalClientsRow,
-      activeClientsRow,
-      retentionRow,
-      frequencyRow,
-      monthlyActive,
-      waterfallRows,
-      routeCoverage,
-      routeActivos,
-      totalGlobalRow,
-      withoutRouteRow,
-      sinFacturarRow,
-    ] = await Promise.all([
-      // 1. Total clients (optionally scoped to route)
-      (async () => {
-        let q = knex("clientes").count("* as total");
-        if (routeClients) q = q.where("Ruta", ruta);
-        return q.first();
-      })(),
-
-      // 2. Active clients
-      (async () => {
-        let q = knex(`${masterTable} as mf`)
-          .countDistinct("mf.IdCliente as total")
-          .whereBetween("mf.Fecha", [from, to])
-          .andWhere("mf.Anulada", 0);
-        if (routeClients) q = q.whereIn("mf.IdCliente", routeClients);
-        return q.first();
-      })(),
-
-      // 3. Retention rate ($) — una pasada sobre el periodo anterior: LEFT JOIN
-      //    con los clientes activos del periodo actual y SUM condicional (antes
-      //    eran dos escaneos casi idénticos del periodo anterior).
-      (async () => {
-        const currentClients = knex(`${masterTable}`)
-          .distinct(`${masterTable}.IdCliente`)
-          .whereBetween("Fecha", [from, to])
-          .andWhere("Anulada", 0);
-        if (routeClients) currentClients.whereIn("IdCliente", routeClients);
-
-        let q = knex(`${masterTable} as mf`)
-          .innerJoin(`${slaveTable} as sf`, function () {
-            this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-          })
-          .leftJoin(currentClients.as("cur"), "cur.IdCliente", "mf.IdCliente")
-          .select(
-            knex.raw(`ROUND(SUM(sf.Precio * sf.Cantidad), 2) as prev_total`),
-            knex.raw(
-              `ROUND(SUM(CASE WHEN cur.IdCliente IS NOT NULL THEN sf.Precio * sf.Cantidad ELSE 0 END), 2) as retained`,
-            ),
-          )
-          .whereBetween("mf.Fecha", [prevPeriod.from, prevPeriod.to]);
-        if (routeClients) q = q.whereIn("mf.IdCliente", routeClients);
-
-        const row = await q.first();
-        const prevTotal = Number(row?.prev_total) || 0;
-        const retained = Number(row?.retained) || 0;
-        return { retained, prevTotal, rate: prevTotal > 0 ? Math.round((retained / prevTotal) * 10000) / 100 : 0 };
-      })(),
-
-      // 4. Avg frequency
-      (async () => {
-        let q = knex(`${masterTable} as mf`).select(
-          knex.raw(
-            `ROUND(COUNT(DISTINCT mf.${idInvoice}) / NULLIF(COUNT(DISTINCT mf.IdCliente), 0), 1) as avg_frequency`,
-          ),
-        );
-        if (routeClients) q = q.whereIn("mf.IdCliente", routeClients);
-        return q.whereBetween("mf.Fecha", [from, to]).andWhere("mf.Anulada", 0).first();
-      })(),
-
-      // 5. Monthly active clients chart (solo masterfact: el revenue no se usa en el frontend)
-      (async () => {
-        let q = knex(`${masterTable} as mf`)
-          .select(
-            knex.raw("DATE_FORMAT(mf.Fecha, '%Y-%m') as month"),
-            knex.raw("COUNT(DISTINCT mf.IdCliente) as count"),
-          )
-          .whereBetween("mf.Fecha", [from, to])
-          .andWhere("mf.Anulada", 0);
-        if (routeClients) q = q.whereIn("mf.IdCliente", routeClients);
-        return q.groupBy(knex.raw("DATE_FORMAT(mf.Fecha, '%Y-%m')")).orderBy("month", "asc");
-      })(),
-
-      // 6. Waterfall retention
-      (async () => {
-        const currentSub = knex(`${masterTable}`)
-          .distinct(`${masterTable}.IdCliente`)
-          .whereBetween("Fecha", [from, to])
-          .andWhere("Anulada", 0);
-        const prevSub = knex(`${masterTable}`)
-          .distinct(`${masterTable}.IdCliente`)
-          .whereBetween("Fecha", [prevPeriod.from, prevPeriod.to])
-          .andWhere("Anulada", 0);
-        if (routeClients) {
-          currentSub.whereIn("IdCliente", routeClients);
-          prevSub.whereIn("IdCliente", routeClients);
-        }
-
-        const [retained, lost, gained] = await Promise.all([
-          knex(`${masterTable} as mf`)
-            .countDistinct("mf.IdCliente as count")
-            .whereBetween("mf.Fecha", [from, to])
-            .andWhere("mf.Anulada", 0)
-            .whereIn("mf.IdCliente", prevSub)
-            .first(),
-
-          (() => {
-            const q = knex(`${masterTable}`)
-              .countDistinct("IdCliente as count")
-              .whereBetween("Fecha", [prevPeriod.from, prevPeriod.to])
-              .andWhere("Anulada", 0)
-              .whereNotIn("IdCliente", currentSub);
-            if (routeClients) q.whereIn("IdCliente", routeClients);
-            return q.first();
-          })(),
-
-          (() => {
-            const q = knex(`${masterTable}`)
-              .countDistinct("IdCliente as count")
-              .whereBetween("Fecha", [from, to])
-              .andWhere("Anulada", 0)
-              .whereNotIn("IdCliente", prevSub);
-            if (routeClients) q.whereIn("IdCliente", routeClients);
-            return q.first();
-          })(),
-        ]);
-
-        return {
-          retained: Number(retained?.count) || 0,
-          lost: Number(lost?.count) || 0,
-          gained: Number(gained?.count) || 0,
-          previous: Number(retained?.count || 0) + Number(lost?.count || 0),
-          current: Number(retained?.count || 0) + Number(gained?.count || 0),
-        };
-      })(),
-
-      // 8. Route coverage: clients assigned per route (global breakdown)
-      knex("clientes")
-        .select(
-          "clientes.Ruta as Id_Ruta",
-          knex.raw("COALESCE(rutas.Nombre, clientes.Ruta) as Nombre"),
-          knex.raw("COUNT(*) as asignados"),
-        )
-        .leftJoin("rutas", "rutas.Id_Ruta", "clientes.Ruta")
-        .whereNotNull("clientes.Ruta")
-        .groupBy("clientes.Ruta"),
-
-      // 9. Route coverage: active clients per route in period
-      knex(`${masterTable} as mf`)
-        .select("clientes.Ruta as Id_Ruta", knex.raw("COUNT(DISTINCT mf.IdCliente) as activos"))
-        .innerJoin("clientes", function () {
-          this.on("clientes.IdCliente", "mf.IdCliente");
-        })
-        .whereBetween("mf.Fecha", [from, to])
-        .andWhere("mf.Anulada", 0)
-        .whereNotNull("clientes.Ruta")
-        .groupBy("clientes.Ruta"),
-
-      // 10. Total clients (global, unaffected by route filter)
-      knex("clientes").count("* as total").first(),
-
-      // 11. Clients without a route assigned
-      knex("clientes").whereNull("Ruta").count("* as total").first(),
-
-      // 12. Clients without invoices in the period. Anti-join explícito (LEFT
-      //     JOIN ... IS NULL) en vez de NOT IN: misma semántica y sin el footgun
-      //     de NOT IN ante NULLs. No se puede derivar como total − activos porque
-      //     hay facturas con IdCliente huérfano (no existe en tabla clientes).
-      (async () => {
-        const invoicedInPeriod = knex(`${masterTable}`)
-          .distinct(`${masterTable}.IdCliente`)
-          .whereBetween("Fecha", [from, to])
-          .andWhere("Anulada", 0);
-
-        let q = knex("clientes")
-          .count("* as total")
-          .leftJoin(invoicedInPeriod.as("inv"), "inv.IdCliente", "clientes.IdCliente")
-          .whereNull("inv.IdCliente");
-        if (routeClients) q = q.where("clientes.Ruta", ruta);
-
-        return q.first();
-      })(),
-    ]);
-
-    // ── Route coverage (global cartera breakdown, merged) ──
-    const totalGlobal = Number(totalGlobalRow?.total) || 0;
     const routeMap = new Map();
-    routeCoverage.forEach((r) => {
-      routeMap.set(r.Id_Ruta, { Id_Ruta: r.Id_Ruta, Nombre: r.Nombre, asignados: Number(r.asignados), activos: 0 });
-    });
-    routeActivos.forEach((r) => {
-      const entry = routeMap.get(r.Id_Ruta);
-      if (entry) entry.activos = Number(r.activos);
-    });
+    for (const client of clients) {
+      if (client.routeId == null) continue;
+      const route = routeMap.get(client.routeKey) || {
+        Id_Ruta: client.routeId,
+        Nombre: client.routeName,
+        asignados: 0,
+        activos: 0,
+      };
+      route.asignados++;
+      if (globalCurrentClients.has(client.clientId)) route.activos++;
+      routeMap.set(client.routeKey, route);
+    }
     const coverage = {
-      totalClients: totalGlobal,
-      routes: Array.from(routeMap.values())
+      totalClients: clients.length,
+      routes: [...routeMap.values()]
         .map((r) => ({
           ...r,
-          coberturaPct: r.asignados > 0 ? Math.round((r.activos / r.asignados) * 1000) / 10 : 0,
-          sharePct: totalGlobal > 0 ? Math.round((r.asignados / totalGlobal) * 1000) / 10 : 0,
+          coberturaPct: Math.round((r.activos / r.asignados) * 1000) / 10,
+          sharePct: Math.round((r.asignados / clients.length) * 1000) / 10,
         }))
         .sort((a, b) => b.asignados - a.asignados),
     };
 
+    const grandTotal = allClientsRevenue.reduce((sum, r) => sum + Number(r.total_usd || 0), 0);
+    const utilityClients = [...allClientsRevenue].sort((a, b) => Number(b.utilidad || 0) - Number(a.utilidad || 0));
+    const grandUtility = utilityClients.reduce((sum, r) => sum + Number(r.utilidad || 0), 0);
+
     res.status(200).json({
       kpis: {
-        totalClients: Number(totalClientsRow?.total) || 0,
-        activeClients: Number(activeClientsRow?.total) || 0,
-        activePercent: totalClientsRow?.total
-          ? Math.round((Number(activeClientsRow?.total) / Number(totalClientsRow?.total)) * 1000) / 10
-          : 0,
-        sinFacturar: Number(sinFacturarRow?.total) || 0,
-        withoutRoute: Number(withoutRouteRow?.total) || 0,
-        concentration,
+        totalClients: scopedClients.length,
+        activeClients: currentClients.size,
+        activePercent: scopedClients.length ? Math.round((currentClients.size / scopedClients.length) * 1000) / 10 : 0,
+        sinFacturar: scopedClients.filter((c) => !currentClients.has(c.clientId)).length,
+        withoutRoute: clients.filter((c) => c.routeId == null).length,
+        concentration: computeConcentration(allClientsRevenue, grandTotal),
         retention: {
-          retainedRevenue: Number(retentionRow?.retained) || 0,
-          prevPeriodRevenue: Number(retentionRow?.prevTotal) || 0,
-          rate: Number(retentionRow?.rate) || 0,
+          retainedRevenue: retainedSales,
+          prevPeriodRevenue: previousSales,
+          rate: previousSales > 0 ? Math.round((retainedSales / previousSales) * 10000) / 100 : 0,
         },
-        avgFrequency: Number(frequencyRow?.avg_frequency) || 0,
+        avgFrequency: currentClients.size ? Math.round((currentInvoices * 10) / currentClients.size) / 10 : 0,
       },
-      monthlyActive: monthlyActive.map((r) => ({
-        month: r.month,
-        count: Number(r.count),
-      })),
-      revenueBySegment,
-      waterfall: waterfallRows,
-      treemapTop50,
-      abc,
-      abcUtility,
+      monthlyActive: [...clientsByMonth]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, ids]) => ({
+          month,
+          count: ruta ? [...ids].filter((id) => scopedClientIds.has(id)).length : ids.size,
+        }))
+        .filter((row) => !ruta || row.count > 0),
+      revenueBySegment: computeSegments(allClientsRevenue, grandTotal),
+      waterfall,
+      treemapTop50: allClientsRevenue.slice(0, 50).map((r) => ({ name: r.name, value: Number(r.total_usd) })),
+      abc: computeAbc(allClientsRevenue, grandTotal),
+      abcUtility: computeAbc(utilityClients, grandUtility, "utilidad", "utilityPercent"),
       coverage,
     });
   } catch (error) {
