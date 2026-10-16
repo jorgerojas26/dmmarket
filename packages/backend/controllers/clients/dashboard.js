@@ -108,58 +108,6 @@ const computeSegments = (revenues, grandTotal) => {
     .filter((s) => s.num_clients > 0);
 };
 
-// Keep the original two dates: the latest header anchors the 12-month
-// window, while the latest invoice WITH lines determines inactivity. Empty
-// headers must neither make a client active nor remove zero-revenue buckets.
-const buildInactiveBucketsQuery = ({ masterTable, slaveTable, idInvoice, to, routeClients }) => {
-  const lastByClient = knex(`${masterTable} as h`)
-    .select("h.IdCliente", knex.raw("MAX(h.Fecha) as last"))
-    .select(
-      knex.raw(
-        `MAX(CASE WHEN EXISTS (SELECT 1 FROM ?? as detail WHERE detail.?? = h.??)
-       THEN h.Fecha END) as last_with_lines`,
-        [slaveTable, idInvoice, idInvoice],
-      ),
-    )
-    .where("h.Fecha", "<=", to)
-    .andWhere("h.Anulada", 0)
-    .groupBy("h.IdCliente");
-  if (routeClients) lastByClient.whereIn("h.IdCliente", routeClients);
-
-  const inner = knex
-    .from(lastByClient.as("l"))
-    .select("l.IdCliente")
-    .select(knex.raw("COALESCE(SUM(sf.Precio * sf.Cantidad), 0) as win_usd"))
-    .select(knex.raw("DATEDIFF(?, l.last_with_lines) as days_since", [to]))
-    .innerJoin(`${masterTable} as mf`, function () {
-      this.on("mf.IdCliente", "l.IdCliente")
-        .andOn("mf.Anulada", knex.raw("0"))
-        .andOn("mf.Fecha", "<=", "l.last")
-        .andOn("mf.Fecha", ">=", knex.raw("DATE_SUB(l.last, INTERVAL 12 MONTH)"));
-    })
-    .leftJoin(`${slaveTable} as sf`, `sf.${idInvoice}`, `mf.${idInvoice}`)
-    .whereNotNull("l.last_with_lines")
-    .groupBy("l.IdCliente", "l.last_with_lines");
-
-  return knex
-    .from(inner.as("inactive_data"))
-    .select(
-      knex.raw(`CASE
-      WHEN days_since <= 7 THEN '0-7d'
-      WHEN days_since <= 15 THEN '8-15d'
-      WHEN days_since <= 30 THEN '16-30d'
-      WHEN days_since <= 60 THEN '31-60d'
-      WHEN days_since <= 90 THEN '61-90d'
-      ELSE '>90d' END as bucket`),
-    )
-    .select(knex.raw("COUNT(*) as count"))
-    .select(knex.raw("ROUND(SUM(win_usd), 2) as revenue"))
-    .select(knex.raw("SUM(CASE WHEN days_since > 60 THEN win_usd ELSE 0 END) as risk_amount"))
-    .select(knex.raw("SUM(CASE WHEN days_since > 60 THEN 1 ELSE 0 END) as risk_clients"))
-    .groupBy("bucket")
-    .orderBy(knex.raw("MIN(days_since)"), "asc");
-};
-
 // ── Controller ──
 
 const GET_CLIENTS_DASHBOARD = async (req, res) => {
@@ -216,7 +164,6 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
       frequencyRow,
       monthlyActive,
       waterfallRows,
-      inactiveBuckets,
       routeCoverage,
       routeActivos,
       totalGlobalRow,
@@ -347,9 +294,6 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
         };
       })(),
 
-      // 7. Only join invoice lines inside each client's activity window.
-      buildInactiveBucketsQuery({ masterTable, slaveTable, idInvoice, to, routeClients }),
-
       // 8. Route coverage: clients assigned per route (global breakdown)
       knex("clientes")
         .select(
@@ -398,17 +342,6 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
       })(),
     ]);
 
-    // ── Derivados ──
-
-    // Revenue at risk: suma de los buckets con más de 60 días sin comprar.
-    const revenueAtRisk = inactiveBuckets.reduce(
-      (acc, r) => ({
-        amount: acc.amount + Number(r.risk_amount || 0),
-        clients: acc.clients + Number(r.risk_clients || 0),
-      }),
-      { amount: 0, clients: 0 },
-    );
-
     // ── Route coverage (global cartera breakdown, merged) ──
     const totalGlobal = Number(totalGlobalRow?.total) || 0;
     const routeMap = new Map();
@@ -446,10 +379,6 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
           rate: Number(retentionRow?.rate) || 0,
         },
         avgFrequency: Number(frequencyRow?.avg_frequency) || 0,
-        revenueAtRisk: {
-          amount: Number(revenueAtRisk.amount) || 0,
-          clients: Number(revenueAtRisk.clients) || 0,
-        },
       },
       monthlyActive: monthlyActive.map((r) => ({
         month: r.month,
@@ -460,11 +389,6 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
       treemapTop50,
       abc,
       abcUtility,
-      inactiveBuckets: inactiveBuckets.map((r) => ({
-        bucket: r.bucket,
-        count: Number(r.count),
-        revenue: Number(r.revenue),
-      })),
       coverage,
     });
   } catch (error) {
@@ -473,4 +397,4 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
   }
 };
 
-module.exports = { GET_CLIENTS_DASHBOARD, computeAbc, buildInactiveBucketsQuery };
+module.exports = { GET_CLIENTS_DASHBOARD, computeAbc };

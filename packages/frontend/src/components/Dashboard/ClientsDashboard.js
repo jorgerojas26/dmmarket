@@ -82,8 +82,9 @@ const WaterfallBar = ({ bar, barHeight }) => {
     const [hovered, setHovered] = useState(false);
 
     return (
-        <div
-            style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}
+        <figure
+            aria-label={bar.label}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative', margin: 0 }}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
         >
@@ -143,7 +144,7 @@ const WaterfallBar = ({ bar, barHeight }) => {
                     </ChartTooltip>
                 </div>
             )}
-        </div>
+        </figure>
     );
 };
 
@@ -182,15 +183,6 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
         () => segmentPieData.reduce((sum, s) => sum + Number(s.value || 0), 0),
         [segmentPieData],
     );
-
-    const inactiveBucketData = useMemo(() => {
-        if (!data?.inactiveBuckets) return [];
-        return data.inactiveBuckets.map((b) => ({
-            bucket: b.bucket,
-            Clientes: b.count,
-            'Revenue ($)': b.revenue,
-        }));
-    }, [data?.inactiveBuckets]);
 
     const coverageRoutes = useMemo(
         () =>
@@ -383,20 +375,6 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                     que: 'Cuántas facturas emite en promedio cada cliente en el periodo.',
                                     leer: '2,5 = un cliente típico compra entre 2 y 3 veces en el periodo.',
                                     servir: 'Frecuencia baja con clientes activos = venta esporádica; hay espacio para más visitas y pedidos.',
-                                }}
-                            />
-                        </div>
-                        <div>
-                            <KpiCard
-                                label="Revenue en Riesgo"
-                                value={formatCurrency(kpis?.revenueAtRisk?.amount)}
-                                icon="money"
-                                accent="pink"
-                                help={{
-                                    que: 'Cuánto facturaron, en sus últimos 12 meses de actividad, los clientes que llevan más de 60 días sin comprar.',
-                                    leer: 'Es el dinero "dormido" medido por lo que vendía el cliente en el año previo a dejar de comprar (no toda su historia). Número alto = clientes que movían dinero real y se fueron.',
-                                    servir: 'Priorizar la recuperación de clientes antes de que se pierdan.',
-                                    accion: 'Combínalo con el gráfico "Inactividad por Días" para ubicar y contactar a esos clientes.',
                                 }}
                             />
                         </div>
@@ -654,9 +632,8 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                 </div>
             )}
 
-            {/* Charts Row 2: Waterfall + Inactive Buckets */}
             <div className="row g-3 mb-4">
-                <div className="col-12 col-lg-6">
+                <div className="col-12">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
                         <PanelHelpTitle
                             title="Waterfall de Retención"
@@ -667,56 +644,6 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                             }}
                         />
                         <div style={{ minHeight: 200, paddingTop: 10 }}>{renderWaterfall()}</div>
-                    </div>
-                </div>
-                <div className="col-12 col-lg-6">
-                    <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <PanelHelpTitle
-                            title="Inactividad por Días"
-                            help={{
-                                que: 'Clasifica a los clientes según cuántos días llevan sin comprar: 0-7, 8-15, 16-30, 31-60, 61-90 y más de 90 días.',
-                                leer: 'Cada barra es un rango de días; mientras más clientes en 61-90 y +90 días, más cartera se está perdiendo. El revenue de cada barra es lo que facturaba el cliente en sus últimos 12 meses de actividad.',
-                                servir: 'Es el semáforo de abandono: actuar antes de que los clientes se pierdan definitivamente.',
-                                accion: 'Combínalo con "Revenue en Riesgo" para saber cuánto dinero está dormido.',
-                            }}
-                        />
-                        <div style={{ height: 280 }}>
-                            {inactiveBucketData.length > 0 ? (
-                                <ResponsiveBar
-                                    data={inactiveBucketData}
-                                    theme={nivoTheme}
-                                    keys={['Clientes']}
-                                    indexBy="bucket"
-                                    margin={{ top: 10, right: 10, bottom: 40, left: 50 }}
-                                    colors={['#f59e0b']}
-                                    borderRadius={4}
-                                    axisBottom={{
-                                        tickSize: 5,
-                                        tickPadding: 5,
-                                        tickRotation: -25,
-                                    }}
-                                    axisLeft={{
-                                        tickSize: 5,
-                                        tickPadding: 5,
-                                    }}
-                                    labelSkipWidth={20}
-                                    labelSkipHeight={16}
-                                    enableGridY={true}
-                                    tooltip={({ id, value, data }) => (
-                                        <ChartTooltip title={String(data.bucket)}>
-                                            <span>{id}</span>
-                                            <strong>{formatNumber(value)}</strong>
-                                            <span>Revenue (últimos 12m de actividad)</span>
-                                            <strong>{formatCurrency(data['Revenue ($)'] ?? 0)}</strong>
-                                        </ChartTooltip>
-                                    )}
-                                />
-                            ) : (
-                                <div className="d-flex align-items-center justify-content-center h-100 text-muted">
-                                    Sin datos
-                                </div>
-                            )}
-                        </div>
                     </div>
                 </div>
             </div>

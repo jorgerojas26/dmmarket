@@ -3,7 +3,7 @@
 const describeDatabase = process.env.RUN_DB_TESTS === "1" ? describe : describe.skip;
 
 describeDatabase("client historical aggregations (MySQL)", () => {
-  let db, buildInactiveBucketsQuery, buildClientHistoryQuery;
+  let db, buildClientHistoryQuery;
   const masterTable = `test_client_headers_${process.pid}`;
   const slaveTable = `test_client_lines_${process.pid}`;
   const idInvoice = "IdFactura";
@@ -12,7 +12,6 @@ describeDatabase("client historical aggregations (MySQL)", () => {
     const knex = require("knex");
     db = knex({ ...require("../knexfile"), pool: { min: 1, max: 1 } });
     jest.doMock("../database", () => db);
-    ({ buildInactiveBucketsQuery } = require("../controllers/clients/dashboard"));
     ({ buildClientHistoryQuery } = require("../utils/client-history"));
     await db.raw(
       `CREATE TABLE ?? (
@@ -30,11 +29,8 @@ describeDatabase("client historical aggregations (MySQL)", () => {
       { IdFactura: 2, IdCliente: "recent", Fecha: "2025-09-28", Anulada: 0 },
       { IdFactura: 3, IdCliente: "recent", Fecha: "2025-09-27", Anulada: 0 },
       { IdFactura: 4, IdCliente: "old", Fecha: "2024-01-01", Anulada: 0 },
-      { IdFactura: 5, IdCliente: "old", Fecha: "2026-09-20", Anulada: 0 }, // no lines; window anchor only
+      { IdFactura: 5, IdCliente: "old", Fecha: "2026-09-20", Anulada: 0 },
       { IdFactura: 6, IdCliente: "empty", Fecha: "2026-09-25", Anulada: 0 },
-      { IdFactura: 7, IdCliente: "risk", Fecha: "2026-01-01", Anulada: 0 },
-      { IdFactura: 8, IdCliente: "risk", Fecha: "2026-09-28", Anulada: 1 },
-      { IdFactura: 9, IdCliente: "risk", Fecha: "2026-10-01", Anulada: 0 },
     ]);
     await db(slaveTable).insert([
       { IdFactura: 1, Precio: 10, Cantidad: 2 },
@@ -42,9 +38,6 @@ describeDatabase("client historical aggregations (MySQL)", () => {
       { IdFactura: 2, Precio: 100, Cantidad: 1 },
       { IdFactura: 3, Precio: 1000, Cantidad: 1 },
       { IdFactura: 4, Precio: 900, Cantidad: 1 },
-      { IdFactura: 7, Precio: 300, Cantidad: 1 },
-      { IdFactura: 8, Precio: 9999, Cantidad: 1 },
-      { IdFactura: 9, Precio: 9999, Cantidad: 1 },
     ]);
   });
 
@@ -55,37 +48,6 @@ describeDatabase("client historical aggregations (MySQL)", () => {
     }
   });
 
-  it("filters lines to 12 months without changing activity for headers without lines", async () => {
-    const query = buildInactiveBucketsQuery({ masterTable, slaveTable, idInvoice, to: "2026-09-29" });
-    // The lower bound must filter the join, not merely condition the SUM.
-    expect(query.toSQL().sql).toMatch(/and `mf`\.`Fecha` >= DATE_SUB/);
-    const rows = await query;
-    const values = rows.map((r) => ({
-      bucket: r.bucket,
-      count: Number(r.count),
-      revenue: Number(r.revenue),
-      risk_amount: Number(r.risk_amount),
-      risk_clients: Number(r.risk_clients),
-    }));
-    expect(values).toEqual([
-      { bucket: "0-7d", count: 1, revenue: 125, risk_amount: 0, risk_clients: 0 },
-      // 'old' remains here with zero revenue, despite its recent empty header.
-      { bucket: ">90d", count: 2, revenue: 300, risk_amount: 300, risk_clients: 2 },
-    ]);
-  });
-
-  it("scopes activity and revenue to the selected route clients", async () => {
-    const rows = await buildInactiveBucketsQuery({
-      masterTable,
-      slaveTable,
-      idInvoice,
-      to: "2026-09-29",
-      routeClients: ["old"],
-    });
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toEqual(expect.objectContaining({ bucket: ">90d", count: 1 }));
-    expect(Number(rows[0].revenue)).toBe(0);
-  });
   it("combines history and money without losing empty headers or multiplying revenue", async () => {
     const rows = await buildClientHistoryQuery({
       masterTable,
