@@ -84,7 +84,7 @@ function checkAdmin() {
 function stopWindows(dir) {
   const runner = psQuote(path.win32.join(dir, "run-service.ps1"));
   powershell(
-    `Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains(${runner}) } | ForEach-Object { & taskkill.exe /PID $_.ProcessId /T /F | Out-Null }; $task = Get-ScheduledTask -TaskName '${TASK}' -ErrorAction SilentlyContinue; if ($task) { Stop-ScheduledTask -TaskName '${TASK}'; Unregister-ScheduledTask -TaskName '${TASK}' -Confirm:$false }`,
+    `Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and $_.CommandLine.Contains(${runner}) } | ForEach-Object { & taskkill.exe /PID $_.ProcessId /T /F | Out-Null }; $task = Get-ScheduledTask | Where-Object { $_.TaskName -eq '${TASK}' }; if ($task) { Stop-ScheduledTask -TaskName '${TASK}'; Unregister-ScheduledTask -TaskName '${TASK}' -Confirm:$false }`,
   );
 }
 

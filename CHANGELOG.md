@@ -7,6 +7,12 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.5.3] - 2026-10-16
+
+### Correcciones
+
+- **Primera instalación en Windows**: se corrige un error que detenía el asistente al confirmar la instalación en un equipo donde DMMarket todavía no estaba instalado.
+
 ## [v1.5.2] - 2026-10-16
 
 ### Correcciones
