@@ -1,10 +1,17 @@
-exports.config = { transaction: false };
+exports.config = { transaction: false, scope: "dmmarket" };
 
 exports.up = async (knex) => {
   const core = await Promise.all(
     ["cxc_documentos", "cxc_movimientos", "cxc_cruces"].map((table) => knex.schema.hasTable(table)),
   );
   if (!core.every(Boolean)) return;
+  const [[server]] = await knex.raw("SELECT VERSION() AS version");
+  const parts = server.version.match(/(\d+)\.(\d+)\.(\d+)(?=-MariaDB)/i) || server.version.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!parts) throw new Error("No se pudo identificar la versión de MySQL para preparar cuentas por cobrar.");
+  const version = Number(parts[1]) * 10000 + Number(parts[2]) * 100 + Number(parts[3]);
+  const maria = /MariaDB/i.test(server.version);
+  const json = version >= (maria ? 100207 : 50708);
+  const fractional = version >= (maria ? 50300 : 50604);
   if (!(await knex.schema.hasTable("cxc_operaciones"))) {
     await knex.schema.createTable("cxc_operaciones", (table) => {
       table.charset("utf8");
@@ -15,8 +22,9 @@ exports.up = async (knex) => {
       table.integer("Referencia").nullable().index();
       table.string("Huella", 64).notNullable();
       table.text("Motivo").nullable();
-      table.json("Datos").notNullable();
-      table.dateTime("FechaRegistro", { precision: 3 }).notNullable();
+      if (json) table.json("Datos").notNullable();
+      else table.text("Datos", "longtext").notNullable();
+      table.dateTime("FechaRegistro", fractional ? { precision: 3 } : {}).notNullable();
       table.index(["IdCliente", "FechaRegistro"]);
       table.index(["Tipo", "Referencia"]);
     });

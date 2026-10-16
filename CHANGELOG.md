@@ -7,6 +7,18 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.5.4] - 2026-10-16
+
+### Correcciones
+
+- **Inicio con MySQL antiguo**: se corrige un error que impedía arrancar al preparar cuentas por cobrar en servidores antiguos.
+- **Recuperación después de una interrupción**: el inicio puede recuperar una preparación abandonada sin permitir que dos instancias preparen la misma base al mismo tiempo.
+- **Protección de la base compartida**: el arranque solo prepara tablas propias de DMMarket. Los cambios de índices y la activación de la captura histórica de comisiones que afectan al sistema de ventas requieren mantenimiento autorizado; no se modifican los mecanismos ya existentes.
+- **Índices existentes conservados**: la optimización manual del desglose de ventas ya no elimina el índice anterior, que puede ser utilizado por otros sistemas.
+- **Respaldos compatibles con la herramienta instalada**: las copias se ajustan a las opciones disponibles y muestran la causa real cuando fallan, sin exponer la contraseña.
+- **Respaldos sin detener las ventas cuando la base lo permite**: el modo habitual crea una copia consistente sin bloqueo global. Si la base requiere bloquear las escrituras, exige habilitación expresa en lugar de hacerlo automáticamente.
+- **Instalación con un diagnóstico más claro**: el asistente permite que la primera preparación tarde varios minutos y muestra los errores del intento actual, sin confundirlos con fallos anteriores.
+
 ## [v1.5.3] - 2026-10-16
 
 ### Correcciones

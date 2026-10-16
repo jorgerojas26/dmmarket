@@ -4,7 +4,7 @@ La instalación de servidor es la opción recomendada en Ubuntu, Windows y macOS
 
 La instalación básica registra únicamente el servicio de DMMarket y usa acceso directo. No requiere Caddy, un dominio ni DNS. **Configuración de dominio local** y cambios de firewall son opciones adicionales, deshabilitadas por defecto en instalaciones nuevas. Se pueden configurar más adelante desde el mismo asistente; al reinstalar se conserva un dominio previamente habilitado para revisarlo antes de confirmar. Sin autorización explícita no se modifican reglas de firewall; las reglas existentes no se eliminan.
 
-El ejecutable incluye aplicación, interfaz web y runtime: el servidor no necesita Node.js ni Bun. MySQL debe estar disponible por separado; no se instala con DMMarket. Si la base de datos no está lista al arrancar, el supervisor reintenta el inicio. Respaldar la base de datos antes de instalar o actualizar: las migraciones pendientes se aplican al iniciar.
+El ejecutable incluye aplicación, interfaz web y runtime: el servidor no necesita Node.js ni Bun. MySQL debe estar disponible por separado; no se instala con DMMarket. Si la base de datos no está lista al arrancar, el supervisor reintenta el inicio. Respaldar la base de datos antes de instalar o actualizar: al iniciar solo se aplican las migraciones de tablas propias de DMMarket. Los índices y triggers de las tablas compartidas se administran por separado, con autorización y ventana de mantenimiento; consulta la [política de cambios compartidos](adr/0003-esquema-compartido-y-migraciones.md).
 
 ## Instalación recomendada: asistente gráfico
 
@@ -271,7 +271,7 @@ Después de instalar, verificar acceso desde otra máquina y reiniciar físicame
 
 Las actualizaciones desde la interfaz descargan y verifican el nuevo binario. En modo servicio se coloca el reemplazo antes de salir; el supervisor vuelve a iniciar la misma ruta. No se crea una instancia independiente ni se modifica el registro de arranque automático.
 
-Hay una interrupción breve mientras reinicia y aplica migraciones. Esto no es alta disponibilidad: no se puede atender mientras el servidor está apagado, suspendido, sin red o con la base de datos caída. Desactivar la suspensión automática y, si MySQL es local, habilitar también su arranque automático.
+Hay una interrupción mientras reinicia y prepara sus tablas propias. La primera preparación puede tardar varios minutos; el asistente muestra un error de arranque real si se produce y espera hasta diez minutos antes de pedir una nueva comprobación. Esto no es alta disponibilidad: no se puede atender mientras el servidor está apagado, suspendido, sin red o con la base de datos caída. Desactivar la suspensión automática y, si MySQL es local, habilitar también su arranque automático.
 
 Al terminar la instalación, comprobar el estado y acceder desde otra máquina. Luego reiniciar físicamente el servidor y verificar que la misma URL vuelve a responder sin iniciar sesión.
 

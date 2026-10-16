@@ -271,13 +271,13 @@ async function checkStartup() {
   byId('retry-button').hidden = true;
   byId('result-title').textContent = 'Comprobando tu servidor…';
   byId('installation-result').className = 'notice';
-  byId('installation-result').textContent = 'El servicio está registrado. Esperando a que DMMarket responda…';
+  byId('installation-result').textContent = 'El servicio está registrado. La primera preparación de la base de datos puede tardar varios minutos mientras se crean los índices. Mantén abierta la ventana del instalador…';
   try {
-    const deadline = Date.now() + 45000;
+    const deadline = Date.now() + 10 * 60 * 1000;
     let result;
     do {
       result = await api('status');
-      if (result.ready) break;
+      if (result.ready || result.startupError) break;
       await new Promise((resolve) => setTimeout(resolve, 1500));
     } while (Date.now() < deadline);
     const proxy = payload().WEB_MODE === 'caddy';
@@ -285,7 +285,8 @@ async function checkStartup() {
     byId('installation-result').className = result.ready ? 'notice success' : 'notice error';
     byId('installation-result').textContent = result.ready
       ? proxy ? 'El acceso mediante dominio está configurado en este servidor y los servicios tienen arranque automático. Configura o comprueba el DNS desde las otras máquinas antes de dar por terminado el acceso por dominio.' : 'El sistema está funcionando y arrancará automáticamente al encender el servidor.'
-      : 'No pudimos confirmar el inicio. No des la instalación por terminada: el supervisor seguirá reintentando, pero puede haber un error de MySQL, del puerto o de las migraciones.';
+      : result.startupError ? 'No se pudo iniciar DMMarket: ' + result.startupError
+      : 'La preparación está tardando más de lo esperado. No cierres el instalador ni vuelvas a instalar mientras pueda haber una migración en curso. Revisa el diagnóstico y vuelve a comprobar el inicio.';
     byId('access-links').replaceChildren();
     for (const url of result.urls) {
       const item = document.createElement('li');

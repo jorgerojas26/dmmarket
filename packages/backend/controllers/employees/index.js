@@ -121,7 +121,7 @@ const GET_SALES = async (req, res) => {
 };
 
 const FALLBACK_CREATE_TABLE = async (recursive_callback) => {
-  let sqlPath = path.join(__dirname, "controllers/employees/create-table-vendedor-comisiones.sql");
+  let sqlPath = path.join(__dirname, "create-table-vendedor-comisiones.sql");
   if (typeof Bun !== "undefined" && Bun.embeddedFiles.length > 0) {
     sqlPath = require("../../assets.js").default["./controllers/employees/create-table-vendedor-comisiones.sql"];
   }

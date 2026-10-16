@@ -22,12 +22,4 @@ CREATE TABLE IF NOT EXISTS `fact_vendedor_comisiones` (
   FOREIGN KEY (`grupoId`) REFERENCES `grupos`(`IdGrupo`) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-DROP TRIGGER IF EXISTS `freeze_vendedor_comision_on_fact_insert`;
-
-CREATE TRIGGER `freeze_vendedor_comision_on_fact_insert`
-  AFTER INSERT
-  ON `masterfact` FOR EACH ROW
-  INSERT INTO `fact_vendedor_comisiones` (`masterfactId`, `grupoId`, `comision`)
-  SELECT NEW.IdFactura, `grupoId`, `comision` FROM `vendedor_comisiones` WHERE `vendedor_comisiones`.`vendedorId` = NEW.IdVend;
-
 COMMIT;

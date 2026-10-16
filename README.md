@@ -14,7 +14,7 @@ Sistema de reportes de compras, ventas, productos, clientes, proveedores y vende
 
 El asistente pide los datos de **tu MySQL existente**, comprueba la conexión, configura el acceso por red local y registra el arranque automático. No necesitas editar `.env`, instalar Node.js/Bun ni escribir comandos de servicios.
 
-Necesitas un respaldo reciente de la base del negocio. Al iniciar, DMMarket aplica sus migraciones pendientes. No instala MySQL ni importa una base de datos nueva.
+Necesitas un respaldo reciente de la base del negocio. Al iniciar, DMMarket solo prepara sus tablas propias. Los cambios de índices o triggers de las tablas compartidas requieren autorización y mantenimiento manual; no se ejecutan automáticamente. No instala MySQL ni importa una base de datos nueva. Consulta la [política de cambios en la base compartida](docs/adr/0003-esquema-compartido-y-migraciones.md).
 
 ### Ubuntu sin escritorio
 

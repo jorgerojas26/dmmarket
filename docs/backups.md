@@ -10,10 +10,14 @@ Al arrancar recupera únicamente el último respaldo pendiente, no todos los dí
 - Ubuntu: instalar `mysql-client` para MySQL o `mariadb-client` para MariaDB.
 - Windows: instalar las herramientas de cliente MySQL y configurar la ruta completa del ejecutable si no está en el PATH del servicio.
 - macOS: instalar el cliente correspondiente y configurar su ruta completa si el servicio no encuentra el comando.
-- El usuario configurado necesita permisos para leer datos, vistas, triggers, eventos y rutinas, y realizar el bloqueo global usado por `--lock-all-tables`. Los privilegios concretos dependen de la versión de MySQL/MariaDB; en MySQL se requiere `RELOAD` o `FLUSH_TABLES` para el bloqueo global, además de los permisos de los objetos. Consultar la documentación de `mysqldump` de esa versión.
+- El usuario configurado necesita permisos para leer datos, vistas, triggers y rutinas, además de eventos cuando el servidor los admite. Los privilegios concretos dependen de la versión de MySQL/MariaDB. El modo opcional con bloqueo global requiere también los privilegios correspondientes, como `RELOAD` o `FLUSH_TABLES`; consultar la documentación del cliente instalado.
 - La cuenta del servicio debe poder escribir en la carpeta de respaldos y ejecutar la herramienta.
 
-Se usa **bloqueo global de lectura** durante el dump para respaldar de forma consistente también tablas MyISAM. **Las escrituras de otras aplicaciones pueden quedar esperando mientras se genera el respaldo**; no basta una transacción para proteger tablas no transaccionales. Ejecutarlo en horario de poca actividad. No modificar esquemas durante el dump.
+Por defecto se usa **una transacción consistente sin bloqueo global**, con `--single-transaction` y `--skip-lock-tables`. Antes de empezar se comprueba que todas las tablas sean InnoDB. Esto permite respaldar mientras el sistema de ventas escribe; no se debe modificar la estructura de las tablas durante el dump.
+
+Si existen tablas MyISAM, MEMORY u otros motores no transaccionales, el respaldo se rechaza: no se genera una copia silenciosamente inconsistente ni se cambia a un bloqueo global automáticamente. Solo con autorización y una ventana de mantenimiento puede configurarse `BACKUP_CONSISTENCY=locked`. En ese modo se usa `--lock-all-tables` y **las escrituras de otras aplicaciones pueden quedar esperando durante todo el respaldo**.
+
+Las opciones se verifican con la ayuda del cliente, sin conectarlo a la base. No se pasa `--events` a MySQL 5.0, ni `--no-tablespaces` a clientes que no lo admiten. Si el servidor tiene objetos que el cliente no puede respaldar, se pide un cliente compatible en lugar de omitirlos silenciosamente. Los errores muestran el detalle acotado de la herramienta, sin la contraseña.
 
 ## Ubicación estándar
 
@@ -38,13 +42,14 @@ Variables opcionales en el `.env` del servidor:
 ```dotenv
 BACKUP_DIRECTORY=/ruta/privada/respaldos
 BACKUP_DUMP_COMMAND=/ruta/al/mysqldump
+BACKUP_CONSISTENCY=transactional
 ```
 
 `BACKUP_DUMP_COMMAND` es un ejecutable, no una línea de comandos ni un script de shell con argumentos. Por ejemplo, en Windows: `BACKUP_DUMP_COMMAND="C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin\\mysqldump.exe"`. Reinicia DMMarket después de cambiar estas variables. Usa una carpeta privada, fuera del directorio público del frontend, en un disco con espacio suficiente. Ejecuta una sola instancia de DMMarket por carpeta de respaldos y base de datos.
 
 ## Crear un respaldo manual
 
-En **Configuración → Respaldos**, pulsa **Crear respaldo ahora** y confirma la operación. Se genera una copia nueva incluso si ya existe un respaldo del día, sin reemplazar archivos anteriores ni modificar la programación diaria. El aviso recuerda que MySQL puede bloquear temporalmente las escrituras durante el dump.
+En **Configuración → Respaldos**, pulsa **Crear respaldo ahora** y confirma la operación. Se genera una copia nueva incluso si ya existe un respaldo del día, sin reemplazar archivos anteriores ni modificar la programación diaria. El modo transaccional no utiliza un bloqueo global de escrituras. Si se ha autorizado expresamente el modo `locked`, la copia debe ejecutarse en una ventana de mantenimiento porque puede bloquear al sistema de ventas.
 
 El botón se desactiva mientras hay un respaldo en curso; no se ejecutan respaldos manuales y programados simultáneamente. La solicitud inicia el trabajo en segundo plano, no indica que haya terminado. La pantalla consulta el estado cada tres segundos mientras se ejecuta y muestra el archivo únicamente después de completarlo correctamente. Si falla, conserva las copias anteriores y permite reintentar con el botón sin esperar una hora. Los respaldos manuales fallidos no se reintentan automáticamente.
 

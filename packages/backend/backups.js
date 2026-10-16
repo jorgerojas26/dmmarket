@@ -46,7 +46,7 @@ function optionValue(value) {
   return `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
-async function dumpDatabase(destination, env = process.env, spawnProcess = spawn) {
+async function dumpDatabase(destination, env = process.env, spawnProcess = spawn, tool) {
   if (!env.DATABASE_NAME || env.DATABASE_NAME.startsWith("-") || /[\0\r\n]/.test(env.DATABASE_NAME)) {
     throw new Error("Configura DATABASE_NAME antes de generar respaldos.");
   }
@@ -54,6 +54,7 @@ async function dumpDatabase(destination, env = process.env, spawnProcess = spawn
   const credentials = path.join(temporary, "client.cnf");
   let child;
   let timer;
+  let stderr = "";
   try {
     await fsp.chmod(temporary, 0o700);
     const options = {
@@ -70,23 +71,27 @@ async function dumpDatabase(destination, env = process.env, spawnProcess = spawn
       { mode: 0o600 },
     );
     child = spawnProcess(
-      env.BACKUP_DUMP_COMMAND || "mysqldump",
+      tool?.command || env.BACKUP_DUMP_COMMAND || "mysqldump",
       [
         `--defaults-file=${credentials}`,
-        "--protocol=TCP",
-        "--lock-all-tables",
-        "--quick",
-        "--routines",
-        "--events",
-        "--triggers",
-        "--hex-blob",
-        "--no-tablespaces",
+        ...(tool?.args || [
+          "--protocol=TCP",
+          "--lock-all-tables",
+          "--quick",
+          "--routines",
+          "--events",
+          "--triggers",
+          "--hex-blob",
+          "--no-tablespaces",
+        ]),
         "--databases",
         env.DATABASE_NAME,
       ],
       { stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
     );
-    child.stderr.resume();
+    child.stderr.on("data", (chunk) => {
+      if (stderr.length < 8192) stderr += chunk.toString("utf8").slice(0, 8192 - stderr.length);
+    });
     const completion = new Promise((resolve, reject) => {
       child.once("error", (error) =>
         reject(
@@ -97,15 +102,15 @@ async function dumpDatabase(destination, env = process.env, spawnProcess = spawn
           ),
         ),
       );
-      child.once("close", (code) =>
-        code === 0
-          ? resolve()
-          : reject(
-              new Error(
-                "El respaldo MySQL falló. Revisa la conexión, la versión del cliente y los permisos de lectura, vistas, rutinas, eventos y bloqueo de tablas.",
-              ),
-            ),
-      );
+      child.once("close", (code) => {
+        if (code === 0) return resolve();
+        const detail = env.DATABASE_PASSWORD ? stderr.split(env.DATABASE_PASSWORD).join("[oculta]") : stderr;
+        reject(
+          new Error(
+            `El respaldo MySQL falló (salida ${code}). ${detail.trim() || "Revisa la herramienta y sus permisos."}`,
+          ),
+        );
+      });
     });
     timer = setTimeout(() => child.kill("SIGKILL"), RETRY_MS);
     let bytes = 0;
@@ -136,9 +141,19 @@ async function dumpDatabase(destination, env = process.env, spawnProcess = spawn
   }
 }
 
+async function configuredDump(destination) {
+  const tool = await require("./backup-tool").backupOptions();
+  console.log(
+    tool.mode === "transactional"
+      ? "Creando respaldo transaccional sin bloqueo global de escrituras."
+      : "Creando respaldo con bloqueo global autorizado. No deben registrarse ventas durante la copia.",
+  );
+  return dumpDatabase(destination, process.env, spawn, tool);
+}
+
 function createBackupService({
   directory = backupDirectory(),
-  dump = dumpDatabase,
+  dump = configuredDump,
   now = () => new Date(),
   logger = console,
 } = {}) {

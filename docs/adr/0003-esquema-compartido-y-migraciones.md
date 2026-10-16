@@ -1,0 +1,13 @@
+# Cambios automáticos limitados a tablas propias de DMMarket
+
+La base de datos es compartida con el sistema que registra las ventas. Que un índice mejore un reporte no autoriza a DMMarket a crearlo, sustituirlo o eliminarlo durante el arranque. En MySQL 5.0 un cambio de índice también puede bloquear las operaciones del sistema de ventas.
+
+Las migraciones automáticas deben declarar `config.scope = "dmmarket"` y limitarse a tablas propias. Las migraciones sin esa declaración quedan reservadas a mantenimiento manual, aunque sean anteriores a otras migraciones ya aplicadas. No se marcan como aplicadas cuando se omiten. Las migraciones históricas aplicadas siguen presentes en la fuente para validar el historial sin volver a ejecutarlas.
+
+El arranque no ejecuta cambios de índices ni crea o elimina triggers sobre tablas compartidas. El inicializador de comisiones solo prepara sus tablas propias. La captura de nuevas comisiones mediante un trigger es una instalación manual opcional: `scripts/sql/instalar-trigger-comisiones.sql`. No se eliminan triggers existentes automáticamente; sin ese mecanismo de captura, las nuevas ventas no generan por sí solas registros históricos en `fact_vendedor_comisiones`.
+
+Los cambios compartidos se ejecutan únicamente con autorización del responsable de la base, respaldo y ventana de mantenimiento. `bun run migrate` en `packages/backend` es una operación administrativa explícita: puede aplicar las migraciones compartidas pendientes. No debe ejecutarse como parte rutinaria del arranque ni mientras el otro sistema registra ventas. Las reversiones manuales requieren la misma revisión.
+
+El migrador y los comandos administrativos de esta versión usan el mismo bloqueo de sesión MySQL mediante `GET_LOCK`, en una conexión exclusiva que se mantiene mientras se preparan las tablas. No se usan transacciones para envolver cambios DDL de MySQL. Al terminar se cierra esa conexión; si el proceso muere, MySQL libera su bloqueo de sesión. Solo después de obtener acceso exclusivo y validar el historial conocido se recupera un marcador de Knex abandonado. No deben mezclarse migradores de versiones antiguas que no participen de este protocolo.
+
+La adaptación para MySQL antiguo conserva JSON y milisegundos donde están disponibles; en MySQL 5.0 las nuevas tablas propias usan LONGTEXT para el contenido JSON y DATETIME sin precisión fraccionaria. No se convierten automáticamente columnas ya existentes ni se corrigen saldos del negocio. Las escrituras de cobranza siguen bajo su habilitación explícita y las condiciones de conciliación de la decisión 0002.

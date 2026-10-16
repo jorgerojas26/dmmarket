@@ -15,6 +15,24 @@ const {
 const page = require("./setup-ui");
 const { webEnabled, accessOptions, accessUrls } = require("./web-config");
 
+function startupFailure(directory, since) {
+  let descriptor;
+  try {
+    const file = path.join(directory, "dmmarket-error.log");
+    const stat = fs.statSync(file);
+    if (stat.mtimeMs < since) return "";
+    descriptor = fs.openSync(file, "r");
+    const buffer = Buffer.alloc(Math.min(stat.size, 8192));
+    const length = fs.readSync(descriptor, buffer, 0, buffer.length, 0);
+    const lines = buffer.subarray(0, length).toString("utf8").split(/\r?\n/);
+    return (lines[1] || "").slice(0, 1500);
+  } catch {
+    return "";
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+}
+
 function createSetupApp({
   token,
   port = 8765,
@@ -34,6 +52,7 @@ function createSetupApp({
   let busy = false;
   let tested;
   let applied;
+  let installStartedAt;
   let warnings = [];
   let closed = false;
   app.disable("x-powered-by");
@@ -123,6 +142,7 @@ function createSetupApp({
       }
       const settings = firewallSettings(input, configuration);
       await checkPort(configuration, existing, installed);
+      installStartedAt = Date.now();
       await install(configuration);
       applied = configuration;
       if (settings.enabled) {
@@ -144,6 +164,8 @@ function createSetupApp({
   app.get("/api/status", async (_req, res) => {
     if (!applied) return res.status(409).json({ error: "La instalación aún no se ha realizado." });
     const isReady = await ready(applied);
+    let startupError = isReady ? "" : startupFailure(directory, installStartedAt);
+    if (applied.DATABASE_PASSWORD) startupError = startupError.split(applied.DATABASE_PASSWORD).join("[oculta]");
     const urls = accessUrls(applied, addresses);
     const dnsRecords = webEnabled(applied)
       ? addresses.map(({ address }) => ({ name: applied.WEB_HOSTNAME, type: "A", address }))
@@ -156,6 +178,7 @@ function createSetupApp({
           : "Get-ScheduledTaskInfo -TaskName DMMarket";
     res.json({
       ready: isReady,
+      startupError,
       urls,
       warnings: webEnabled(applied)
         ? [
