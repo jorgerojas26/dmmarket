@@ -9,10 +9,10 @@ const withSalesBase = (q, { masterTable, slaveTable, idInvoice, from, to }) =>
     .innerJoin(`${masterTable} as mf`, function () {
       this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
     })
-    .innerJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
-    .innerJoin("vendedores", "vendedores.idVend", "mf.IdVend")
-    .innerJoin("productos", "productos.IdProducto", "sf.IdProducto")
-    .innerJoin("grupos", "grupos.idGrupo", "productos.Grupo")
+    .leftJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
+    .leftJoin("vendedores", "vendedores.idVend", "mf.IdVend")
+    .leftJoin("productos", "productos.IdProducto", "sf.IdProducto")
+    .leftJoin("grupos", "grupos.idGrupo", "productos.Grupo")
     .whereBetween("mf.Fecha", [from, to]);
 
 // Filtros comunes (cliente, categoría, vendedor, ruta, proveedor) + búsqueda.
@@ -30,7 +30,7 @@ const searchByFactura = (search, idInvoice) => (q) => {
   q.where("clientes.Empresa", "like", `%${search}%`)
     .orWhere(`mf.${idInvoice}`, "like", `%${search}%`)
     .orWhere("productos.Descripcion", "like", `%${search}%`)
-    .orWhere("productos.IdProducto", "like", `%${search}%`);
+    .orWhere("sf.IdProducto", "like", `%${search}%`);
 };
 
 // GET /api/sales/facturas — invoices grouped by invoice ID
@@ -61,6 +61,8 @@ const GET_FACTURAS = async (req, res) => {
 
   const sortCol = (() => {
     switch (sortBy) {
+      case "invoiceId":
+        return `mf.${idInvoice}`;
       case "monto":
         return knex.raw("SUM(sf.Precio * sf.Cantidad)");
       case "utilidad":
@@ -93,8 +95,8 @@ const GET_FACTURAS = async (req, res) => {
       .select(
         knex.raw(`mf.?? as invoiceId`, [idInvoice]),
         "mf.Fecha as fecha",
-        "clientes.Empresa as cliente",
-        "vendedores.Empresa as vendedor",
+        knex.raw("COALESCE(clientes.Empresa, ?) as cliente", ["Cliente no registrado"]),
+        knex.raw("COALESCE(vendedores.Empresa, ?) as vendedor", ["Vendedor no registrado"]),
         knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as monto"),
         knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad"),
         knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as promedio"),
@@ -164,7 +166,7 @@ const GET_PRODUCTOS = async (req, res) => {
       case "quantity":
         return knex.raw("SUM(sf.Cantidad)");
       case "peso":
-        return knex.raw("SUM(sf.Cantidad * productos.Peso)");
+        return knex.raw("CASE WHEN COUNT(productos.Peso) = COUNT(*) THEN SUM(sf.Cantidad * productos.Peso) END");
       case "rawProfit":
         return knex.raw("SUM(sf.Precio * sf.Cantidad)");
       case "netProfit":
@@ -187,23 +189,27 @@ const GET_PRODUCTOS = async (req, res) => {
 
     // Count distinct products
     const [{ total }] = await knex
-      .countDistinct("productos.IdProducto as total")
+      .countDistinct("sf.IdProducto as total")
       .modify(withSalesBase, { masterTable, slaveTable, idInvoice, from, to })
       .modify(applySalesFilters, { ...filters, searchExpr });
 
     // Data query
     const data = await knex
       .select(
-        "productos.Descripcion as product",
+        knex.raw("COALESCE(productos.Descripcion, CONCAT(?, sf.IdProducto, ')')) as product", [
+          "Producto no registrado (",
+        ]),
         knex.raw("ROUND(SUM(sf.Cantidad), 3) as quantity"),
-        knex.raw("ROUND(SUM(sf.Cantidad * productos.Peso), 3) as peso"),
+        knex.raw(
+          "CASE WHEN COUNT(productos.Peso) = COUNT(*) THEN ROUND(SUM(sf.Cantidad * productos.Peso), 3) END as peso",
+        ),
         knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as rawProfit"),
         knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as netProfit"),
         knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent"),
       )
       .modify(withSalesBase, { masterTable, slaveTable, idInvoice, from, to })
       .modify(applySalesFilters, { ...filters, searchExpr })
-      .groupBy("productos.IdProducto")
+      .groupBy("sf.IdProducto")
       .orderBy(sortCol, sortDirection)
       .limit(Number(limit))
       .offset(Number(offset));
@@ -213,12 +219,12 @@ const GET_PRODUCTOS = async (req, res) => {
     const [totals] = await knex
       .select(
         knex.raw("ROUND(SUM(sf.Cantidad), 3) as quantity"),
-        knex.raw("ROUND(SUM(sf.Cantidad * productos.Peso), 3) as peso"),
+        knex.raw(
+          "CASE WHEN COUNT(productos.Peso) = COUNT(*) THEN ROUND(SUM(sf.Cantidad * productos.Peso), 3) END as peso",
+        ),
         knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as rawProfit"),
         knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as netProfit"),
-        knex.raw(
-          "ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent",
-        ),
+        knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent"),
       )
       .modify(withSalesBase, { masterTable, slaveTable, idInvoice, from, to })
       .modify(applySalesFilters, { ...filters, searchExpr });
