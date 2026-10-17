@@ -4,6 +4,7 @@ import {
     fetchProviderSummary,
     fetchProviderSales,
     fetchProviderClients,
+    fetchProviderSellers,
     fetchProviderProducts,
     fetchProviderPurchases,
     fetchPurchaseDetail,
@@ -88,6 +89,32 @@ export function useProviderClients(
         key,
         () =>
             fetchProviderClients(providerId, {
+                from,
+                to,
+                page,
+                limit,
+                search,
+                sortBy,
+                sortDir,
+                showNoe,
+            }),
+        { keepPreviousData: true },
+    );
+}
+
+export function useProviderSellers(
+    providerId,
+    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe },
+    enabled = true,
+) {
+    const key =
+        enabled && providerId && from && to
+            ? ['provider-sellers', providerId, from, to, page, limit, search, sortBy, sortDir, showNoe]
+            : null;
+    return useSWR(
+        key,
+        () =>
+            fetchProviderSellers(providerId, {
                 from,
                 to,
                 page,

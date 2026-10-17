@@ -8,6 +8,7 @@ router.route("/best").get(controller.GET_BEST_PROVIDERS);
 router.route("/:providerId/summary").get(controller.GET_PROVIDER_SUMMARY);
 router.route("/:providerId/sales").get(controller.GET_PROVIDER_SALES);
 router.route("/:providerId/clients").get(controller.GET_PROVIDER_CLIENTS);
+router.route("/:providerId/sellers").get(controller.GET_PROVIDER_SELLERS);
 router.route("/:providerId/products").get(controller.GET_PROVIDER_PRODUCTS);
 router.route("/:providerId/purchases").get(controller.GET_PROVIDER_PURCHASES);
 router.route("/:providerId/purchases/:invoiceId").get(controller.GET_PURCHASE_DETAIL);

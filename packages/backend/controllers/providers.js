@@ -517,6 +517,107 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
   }
 };
 
+const GET_PROVIDER_SELLERS = async (req, res) => {
+  const { providerId } = req.params;
+  const { from, to, page = 1, limit = 20, search, sortBy = "totalVentas", sortDir = "desc" } = req.query;
+  const showNoeParam = req.query.showNoe === "true";
+  const { masterTable, slaveTable, idInvoice } = showNoeParam
+    ? { masterTable: "masternoe", slaveTable: "slavenoe", idInvoice: "IdNoe" }
+    : { masterTable: "masterfact", slaveTable: "slavefact", idInvoice: "IdFactura" };
+  const offset = (Number(page) - 1) * Number(limit);
+
+  const sortCol = (() => {
+    switch (sortBy) {
+      case "vendedor":
+        return "vendedores.Empresa";
+      case "totalVentas":
+        return "totalVentas";
+      case "cantidad":
+        return "cantidad";
+      case "numClientes":
+        return "numClientes";
+      case "utilidad":
+        return "utilidad";
+      default:
+        return "totalVentas";
+    }
+  })();
+  const sortDirection = sortDir.toUpperCase() === "ASC" ? "asc" : "desc";
+
+  try {
+    const countQuery = knex
+      .countDistinct({ count: "vendedores.IdVend" })
+      .from(`${slaveTable}`)
+      .innerJoin(`${masterTable}`, function () {
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
+      .where("productos.Proveedor", providerId)
+      .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
+
+    const dataQuery = knex
+      .select(
+        "vendedores.Empresa as vendedor",
+        knex.raw(`COUNT(DISTINCT ${masterTable}.IdCliente) as numClientes`),
+        knex.raw(`COALESCE(SUM(${slaveTable}.Cantidad), 0) as cantidad`),
+        knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`),
+        knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
+      )
+      .from(`${slaveTable}`)
+      .innerJoin(`${masterTable}`, function () {
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
+      .where("productos.Proveedor", providerId)
+      .andWhereBetween(`${masterTable}.Fecha`, [from, to])
+      .groupBy("vendedores.IdVend")
+      .orderBy(sortCol, sortDirection)
+      .limit(Number(limit))
+      .offset(Number(offset));
+
+    if (search) {
+      countQuery.where("vendedores.Empresa", "like", `%${search}%`);
+      dataQuery.where("vendedores.Empresa", "like", `%${search}%`);
+    }
+
+    const totalsQuery = knex
+      .select(
+        knex.raw(`COUNT(DISTINCT ${masterTable}.IdCliente) as numClientes`),
+        knex.raw(`COALESCE(SUM(${slaveTable}.Cantidad), 0) as cantidad`),
+        knex.raw(`ROUND(COALESCE(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 0), 2) as totalVentas`),
+        knex.raw(
+          `ROUND(COALESCE(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 0), 2) as utilidad`,
+        ),
+      )
+      .from(`${slaveTable}`)
+      .innerJoin(`${masterTable}`, function () {
+        this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
+      })
+      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
+      .where("productos.Proveedor", providerId)
+      .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
+    if (search) totalsQuery.where("vendedores.Empresa", "like", `%${search}%`);
+
+    const [{ count }] = await countQuery;
+    const data = await dataQuery;
+    const [totals] = await totalsQuery;
+
+    res.status(200).json({
+      data,
+      totals,
+      total: Number(count),
+      page: Number(page),
+      limit: Number(limit),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 const GET_PROVIDER_PRODUCTS = async (req, res) => {
   const { providerId } = req.params;
   const { from, to, page = 1, limit = 20, search, sortBy = "totalVentas", sortDir = "desc" } = req.query;
@@ -766,6 +867,7 @@ module.exports = {
   GET_PROVIDER_SUMMARY,
   GET_PROVIDER_SALES,
   GET_PROVIDER_CLIENTS,
+  GET_PROVIDER_SELLERS,
   GET_PROVIDER_PRODUCTS,
   GET_PROVIDER_PURCHASES,
   GET_PURCHASE_DETAIL,

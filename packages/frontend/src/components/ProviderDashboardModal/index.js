@@ -12,6 +12,7 @@ import {
     fetchSaleDetail,
     useProviderClients,
     useProviderProducts,
+    useProviderSellers,
     useProviderPurchases,
     useProviderSales,
     useProviderSummary,
@@ -48,6 +49,24 @@ const CLIENTS_COLUMNS = [
         Cell: ({ value }) => formatCurrency(value),
         Footer: currencyFooter('utilidad'),
     },
+];
+
+const SELLERS_COLUMNS = [
+    { Header: 'Vendedor', accessor: 'vendedor' },
+    {
+        Header: 'Total Ventas',
+        accessor: 'totalVentas',
+        Cell: ({ value }) => formatCurrency(value),
+        Footer: currencyFooter('totalVentas'),
+    },
+    {
+        Header: 'Utilidad',
+        accessor: 'utilidad',
+        Cell: ({ value }) => formatCurrency(value),
+        Footer: currencyFooter('utilidad'),
+    },
+    { Header: 'Unidades', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString() },
+    { Header: 'Número de clientes', accessor: 'numClientes' },
 ];
 
 const PRODUCTS_COLUMNS = [
@@ -192,18 +211,21 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const [purchasesPage, setPurchasesPage] = useState(1);
     const [salesPage, setSalesPage] = useState(1);
     const [clientsPage, setClientsPage] = useState(1);
+    const [sellersPage, setSellersPage] = useState(1);
     const [productsPage, setProductsPage] = useState(1);
 
     // Search
     const [purchasesSearch, setPurchasesSearch] = useState('');
     const [salesSearch, setSalesSearch] = useState('');
     const [clientsSearch, setClientsSearch] = useState('');
+    const [sellersSearch, setSellersSearch] = useState('');
     const [productsSearch, setProductsSearch] = useState('');
 
     // Sort
     const [purchasesSort, setPurchasesSort] = useState([{ id: 'fecha', desc: true }]);
     const [salesSort, setSalesSort] = useState([{ id: 'fecha', desc: true }]);
     const [clientsSort, setClientsSort] = useState([{ id: 'totalVentas', desc: true }]);
+    const [sellersSort, setSellersSort] = useState([{ id: 'totalVentas', desc: true }]);
     const [productsSort, setProductsSort] = useState([{ id: 'totalVentas', desc: true }]);
 
     // Sub-modals
@@ -265,6 +287,25 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         enabled,
     );
 
+    const {
+        data: sellersData,
+        isLoading: sellersLoading,
+        error: sellersError,
+    } = useProviderSellers(
+        provider?.IdProveedor,
+        {
+            from: dateRange.from,
+            to: dateRange.to,
+            page: sellersPage,
+            limit: LIMIT,
+            search: sellersSearch || undefined,
+            sortBy: sellersSort[0]?.id,
+            sortDir: sellersSort[0]?.desc ? 'desc' : 'asc',
+            showNoe,
+        },
+        enabled && activeTab === 'vendedores',
+    );
+
     const { data: productsData, isLoading: productsLoading } = useProviderProducts(
         provider?.IdProveedor,
         {
@@ -286,6 +327,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         setSalesPage(1);
         setClientsPage(1);
         setProductsPage(1);
+        setSellersPage(1);
     };
 
     const handlePurchasesSearch = useCallback((term) => {
@@ -299,6 +341,10 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const handleClientsSearch = useCallback((term) => {
         setClientsSearch(term || '');
         setClientsPage(1);
+    }, []);
+    const handleSellersSearch = useCallback((term) => {
+        setSellersSearch(term || '');
+        setSellersPage(1);
     }, []);
     const handleProductsSearch = useCallback((term) => {
         setProductsSearch(term || '');
@@ -316,6 +362,10 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const handleClientsSort = useCallback((s) => {
         setClientsSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
         setClientsPage(1);
+    }, []);
+    const handleSellersSort = useCallback((s) => {
+        setSellersSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
+        setSellersPage(1);
     }, []);
     const handleProductsSort = useCallback((s) => {
         setProductsSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
@@ -631,6 +681,66 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         [provider?.IdProveedor, provider?.Empresa, dateRange, clientsSearch, clientsData?.total, showNoe, currencyRate],
     );
 
+    const handlePrintAllSellers = useCallback(
+        async (config) => {
+            try {
+                const { fetchProviderSellers } = await import('api/providers');
+                const result = await fetchProviderSellers(provider.IdProveedor, {
+                    from: dateRange.from,
+                    to: dateRange.to,
+                    page: 1,
+                    limit: sellersData?.total || 9999,
+                    search: sellersSearch || undefined,
+                    showNoe,
+                });
+                const rows = sortRows(result.data || [], config?.sortBy);
+                const currency = config?.currency;
+                const rate = currencyRate?.Cambio;
+                const cols = config?.columns?.length ? config.columns : SELLERS_COLUMNS;
+                const body = [
+                    cols.map((c) => c.Header),
+                    ...rows.map((r) => cols.map((c) => printCellValue(c, r, currency, rate))),
+                ];
+                pdfMake
+                    .createPdf({
+                        content: [
+                            { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                            {
+                                text: 'CALLE ILUSTRES PROCERES LOCAL NRO S/N SECTOR CENTRO ALTAGRACIA DE ORITUCO DE ORITUCO ZONA POSTAL 2320.',
+                                style: 'header',
+                            },
+                            { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                            { text: `Vendedores de: ${provider.Empresa}`, style: 'subheader' },
+                            {
+                                text: `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} — ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')}`,
+                                style: 'subheader',
+                                margin: [0, 0, 0, 12],
+                            },
+                            {
+                                style: 'table',
+                                table: {
+                                    widths: cols.map((_, i) => (i === 0 ? '*' : 'auto')),
+                                    body,
+                                },
+                            },
+                        ],
+                        styles: {
+                            header: { alignment: 'center', fontSize: 10 },
+                            subheader: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 2] },
+                            table: { margin: [0, 10, 0, 0], fontSize: 8 },
+                        },
+                        pageMargins: 40,
+                        pageSize: 'LETTER',
+                        pageOrientation: config?.orientation || 'portrait',
+                    })
+                    .open();
+            } catch (err) {
+                console.error('Failed to print all sellers:', err);
+            }
+        },
+        [provider?.IdProveedor, provider?.Empresa, dateRange, sellersSearch, sellersData?.total, showNoe, currencyRate],
+    );
+
     const handlePrintAllProducts = useCallback(
         async (config) => {
             try {
@@ -792,6 +902,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         { key: 'ventas', label: 'Ventas' },
         { key: 'compras', label: 'Compras' },
         { key: 'clientes', label: 'Clientes' },
+        { key: 'vendedores', label: 'Vendedores' },
         { key: 'productos', label: 'Productos' },
     ];
 
@@ -871,6 +982,20 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 emptyMessage: 'Sin clientes en este período',
                 searchPlaceholder: 'Buscar por cliente...',
                 columns: CLIENTS_COLUMNS,
+            },
+            vendedores: {
+                data: sellersData,
+                loading: sellersLoading,
+                page: sellersPage,
+                setPage: setSellersPage,
+                search: sellersSearch,
+                onSearch: handleSellersSearch,
+                sort: sellersSort,
+                onSort: handleSellersSort,
+                onGlobalPrint: handlePrintAllSellers,
+                emptyMessage: sellersError ? 'Error al cargar vendedores' : 'Sin vendedores en este período',
+                searchPlaceholder: 'Buscar por vendedor...',
+                columns: SELLERS_COLUMNS,
             },
             productos: {
                 data: productsData,

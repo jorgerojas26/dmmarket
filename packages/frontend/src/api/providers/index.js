@@ -77,6 +77,24 @@ export const fetchProviderClients = async (
     return response.json();
 };
 
+export const fetchProviderSellers = async (
+    providerId,
+    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe },
+) => {
+    const params = new URLSearchParams();
+    params.append('from', from);
+    params.append('to', to);
+    params.append('page', page);
+    params.append('limit', limit);
+    params.append('showNoe', showNoe);
+    if (search) params.append('search', search);
+    if (sortBy) params.append('sortBy', sortBy);
+    if (sortDir) params.append('sortDir', sortDir);
+    const response = await fetch(`${BASE_URL}/${providerId}/sellers?${params.toString()}`);
+    if (!response.ok) throw new Error('Error al cargar vendedores');
+    return response.json();
+};
+
 export const fetchProviderProducts = async (
     providerId,
     { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe },
