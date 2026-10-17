@@ -12,7 +12,7 @@ import { DateTime } from 'luxon';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import Modal from 'components/Modal';
 import { Alert, Badge, Spinner } from 'react-bootstrap';
-import { formatCurrency, formatMoney } from 'utils/format';
+import { formatCurrency, formatMoney, formatReportId } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import SaleDetailModal from '../ProviderDashboardModal/SaleDetailModal';
 import './styles.css';
@@ -537,7 +537,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                         <div className="client-avatar">{avatarLetter}</div>
                         <div>
                             <Modal.Title>{client?.Empresa}</Modal.Title>
-                            <div className="modal-subtitle">Cliente #{client?.IdCliente}</div>
+                            <div className="modal-subtitle">Cliente #{formatReportId(client?.IdCliente)}</div>
                         </div>
                     </div>
                 </Modal.Header>

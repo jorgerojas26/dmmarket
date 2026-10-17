@@ -1,3 +1,5 @@
+const { identityKey } = require("../utils/report-identity");
+
 // La fecha de primera compra aproxima el ingreso del producto al catálogo.
 // Comparar contra el fin del rango, no contra hoy, para que reportes históricos
 // mantengan la misma clasificación con el paso del tiempo.
@@ -10,7 +12,9 @@ const splitParetoByAge = (rows, firstPurchases, to) => {
   const newProducts = [];
 
   for (const row of rows) {
-    const value = firstPurchases.get(row.productId);
+    const value = firstPurchases.has(row.productId)
+      ? firstPurchases.get(row.productId)
+      : firstPurchases.get(identityKey(row.productId));
     const firstPurchaseDate = Buffer.isBuffer(value) ? value.toString("utf8") : value;
     const product = { ...row, firstPurchaseDate };
     if (firstPurchaseDate && firstPurchaseDate > cutoffDate) newProducts.push(product);

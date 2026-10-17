@@ -154,17 +154,19 @@ const GET_CLIENTS_DASHBOARD = async (req, res) => {
 
     const allClientsRevenueQuery = knex
       .select(
-        "clientes.Empresa as name",
+        knex.raw(
+          "CASE WHEN NULLIF(mf.IdCliente, '') IS NULL THEN 'Cliente no registrado (sin ID)' ELSE COALESCE(NULLIF(clientes.Empresa, ''), NULLIF(MAX(mf.Nombre), ''), CONCAT('Cliente no registrado (', mf.IdCliente, ')')) END as name",
+        ),
         "mf.IdCliente",
         knex.raw("COUNT(DISTINCT mf.??) as invoice_count", [idInvoice]),
-        knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_usd"),
-        knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad"),
+        knex.raw("SUM(sf.Precio * sf.Cantidad) as total_usd"),
+        knex.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad) as utilidad"),
       )
       .from(`${slaveTable} as sf`)
       .innerJoin(`${masterTable} as mf`, function () {
         this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
       })
-      .innerJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
+      .leftJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
       .whereBetween("mf.Fecha", [from, to])
       .groupBy("mf.IdCliente")
       .orderBy("total_usd", "desc");

@@ -13,6 +13,11 @@ import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
+const inventoryAmount = (value, currency, rate) =>
+    value == null ? 'No disponible' : formatMoney(value, currency, rate);
+const inventorySum = (rows, key) =>
+    rows.some((row) => row[key] == null) ? null : rows.reduce((sum, row) => sum + Number(row[key]), 0);
+
 const CHART_TOP_N = 40;
 const PAGE_SIZE = 20;
 
@@ -119,7 +124,7 @@ const buildColumns = (cfg) => {
         columns.push({
             Header: 'Valor inventario',
             accessor: cfg.inventoryValueKey,
-            Cell: ({ value }) => formatCurrency(value),
+            Cell: ({ value }) => inventoryAmount(value),
         });
     }
 
@@ -191,7 +196,7 @@ const buildNewProductsPdf = (products, cfg, config, rate, rangeLabel) => {
                       accessor: cfg.inventoryValueKey,
                       label: 'Valor inventario',
                       width: 'auto',
-                      render: (p) => formatMoney(p[cfg.inventoryValueKey], currency, rate),
+                      render: (p) => inventoryAmount(p[cfg.inventoryValueKey], currency, rate),
                   },
               ]
             : []),
@@ -201,10 +206,12 @@ const buildNewProductsPdf = (products, cfg, config, rate, rangeLabel) => {
     const selected = selectedAccessors.size ? columns.filter((col) => selectedAccessors.has(col.accessor)) : columns;
     const totals = {
         [cfg.valueKey]: products.reduce((sum, p) => sum + Number(p[cfg.valueKey] || 0), 0),
-        ...(cfg.inventoryValueKey
-            ? { [cfg.inventoryValueKey]: products.reduce((sum, p) => sum + Number(p[cfg.inventoryValueKey] || 0), 0) }
-            : {}),
+        ...(cfg.inventoryValueKey ? { [cfg.inventoryValueKey]: inventorySum(products, cfg.inventoryValueKey) } : {}),
     };
+    const formatTotal = (accessor) =>
+        accessor === cfg.inventoryValueKey
+            ? inventoryAmount(totals[accessor], currency, rate)
+            : formatMoney(totals[accessor], currency, rate);
     return {
         content: [
             { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
@@ -217,9 +224,12 @@ const buildNewProductsPdf = (products, cfg, config, rate, rangeLabel) => {
                         selected.map((col) => ({ text: col.label, style: 'th' })),
                         ...products.map((p) => selected.map((col) => col.render(p))),
                         selected.map((col, i) => ({
-                            text: i === 0
-                                ? `Total${col.accessor in totals ? `: ${formatMoney(totals[col.accessor], currency, rate)}` : ''}`
-                                : col.accessor in totals ? formatMoney(totals[col.accessor], currency, rate) : '',
+                            text:
+                                i === 0
+                                    ? `Total${col.accessor in totals ? `: ${formatTotal(col.accessor)}` : ''}`
+                                    : col.accessor in totals
+                                      ? formatTotal(col.accessor)
+                                      : '',
                             style: 'total',
                         })),
                     ],
@@ -240,15 +250,20 @@ const buildNewProductsPdf = (products, cfg, config, rate, rangeLabel) => {
 
 const NewProductsTable = ({ products, cfg, table, loading }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
-    const handlePrint = useCallback(async (config) => {
-        try {
-            const allProducts = await table.fetchAll();
-            const sorted = sortRows(allProducts, config?.sortBy);
-            pdfMake.createPdf(buildNewProductsPdf(sorted, cfg, config, currencyRate?.Cambio, table.rangeLabel)).open();
-        } catch (error) {
-            console.error('No se pudo imprimir productos nuevos:', error);
-        }
-    }, [table.fetchAll, table.rangeLabel, cfg, currencyRate?.Cambio]);
+    const handlePrint = useCallback(
+        async (config) => {
+            try {
+                const allProducts = await table.fetchAll();
+                const sorted = sortRows(allProducts, config?.sortBy);
+                pdfMake
+                    .createPdf(buildNewProductsPdf(sorted, cfg, config, currencyRate?.Cambio, table.rangeLabel))
+                    .open();
+            } catch (error) {
+                console.error('No se pudo imprimir productos nuevos:', error);
+            }
+        },
+        [table.fetchAll, table.rangeLabel, cfg, currencyRate?.Cambio],
+    );
     if (!table?.count) return null;
     const columns = [
         { Header: 'Producto', accessor: cfg.nameKey },
@@ -261,7 +276,7 @@ const NewProductsTable = ({ products, cfg, table, loading }) => {
                   {
                       Header: 'Valor inventario',
                       accessor: cfg.inventoryValueKey,
-                      Cell: ({ value }) => formatCurrency(value),
+                      Cell: ({ value }) => inventoryAmount(value),
                   },
               ]
             : []),
@@ -300,7 +315,7 @@ const NewProductsTable = ({ products, cfg, table, loading }) => {
                 showFooter={Boolean(cfg.inventoryValueKey)}
                 summaries={
                     cfg.inventoryValueKey
-                        ? { [cfg.nameKey]: 'Total', [cfg.inventoryValueKey]: formatCurrency(table.inventoryTotal) }
+                        ? { [cfg.nameKey]: 'Total', [cfg.inventoryValueKey]: inventoryAmount(table.inventoryTotal) }
                         : undefined
                 }
                 print={{
@@ -319,7 +334,7 @@ const NewProductsTable = ({ products, cfg, table, loading }) => {
 const buildParetoPdf = (products, filterLabel, cfg, config = {}, rate) => {
     const hasQuantity = Boolean(cfg.quantityKey);
     const total = products.reduce((s, p) => s + Number(p[cfg.valueKey] || 0), 0);
-    const inventoryTotal = products.reduce((s, p) => s + Number(p[cfg.inventoryValueKey] || 0), 0);
+    const inventoryTotal = inventorySum(products, cfg.inventoryValueKey);
     const currency = config?.currency;
     // Column metadata for the PDF, keyed by accessor (order defines layout).
     const pdfColumns = [
@@ -347,7 +362,7 @@ const buildParetoPdf = (products, filterLabel, cfg, config = {}, rate) => {
                       accessor: cfg.inventoryValueKey,
                       Header: 'Valor inventario',
                       width: 'auto',
-                      render: (p) => formatMoney(p[cfg.inventoryValueKey], currency, rate),
+                      render: (p) => inventoryAmount(p[cfg.inventoryValueKey], currency, rate),
                   },
               ]
             : []),
@@ -376,7 +391,7 @@ const buildParetoPdf = (products, filterLabel, cfg, config = {}, rate) => {
                         : col.accessor === cfg.valueKey
                           ? formatMoney(total, currency, rate)
                           : col.accessor === cfg.inventoryValueKey
-                            ? formatMoney(inventoryTotal, currency, rate)
+                            ? inventoryAmount(inventoryTotal, currency, rate)
                             : '',
                 style: 'total',
             })),
@@ -481,8 +496,8 @@ const CumulativeLine = ({ bars, xScale, innerHeight, innerWidth, data }) => {
                 80%
             </text>
             <path d={linePath} fill="none" stroke="#3b82f6" strokeWidth={2.5} opacity={0.85} />
-            {dots.map((d, i) => (
-                <circle key={i} cx={d.x} cy={d.y} r={3.5} fill="#3b82f6" />
+            {dots.map((d) => (
+                <circle key={`${d.x}-${d.y}`} cx={d.x} cy={d.y} r={3.5} fill="#3b82f6" />
             ))}
         </g>
     );
@@ -490,7 +505,15 @@ const CumulativeLine = ({ bars, xScale, innerHeight, innerWidth, data }) => {
 
 // ── component ──
 
-const ParetoChart = ({ products = [], newProducts = [], newProductsTable, summary = null, loading = false, config = {}, sorting }) => {
+const ParetoChart = ({
+    products = [],
+    newProducts = [],
+    newProductsTable,
+    summary = null,
+    loading = false,
+    config = {},
+    sorting,
+}) => {
     const cfg = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [abcFilter, setAbcFilter] = useState('all');
@@ -530,9 +553,7 @@ const ParetoChart = ({ products = [], newProducts = [], newProductsTable, summar
         return products.filter((p) => p.abcClass === abcFilter);
     }, [products, abcFilter]);
 
-    const inventoryTotal = cfg.inventoryValueKey
-        ? filteredProducts.reduce((sum, p) => sum + Number(p[cfg.inventoryValueKey] || 0), 0)
-        : 0;
+    const inventoryTotal = cfg.inventoryValueKey ? inventorySum(filteredProducts, cfg.inventoryValueKey) : 0;
     const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
     const tableData = useMemo(
         () => filteredProducts.slice((tablePage - 1) * PAGE_SIZE, tablePage * PAGE_SIZE),
@@ -838,7 +859,7 @@ const ParetoChart = ({ products = [], newProducts = [], newProductsTable, summar
                 showFooter={Boolean(cfg.inventoryValueKey)}
                 summaries={
                     cfg.inventoryValueKey
-                        ? { rank: 'Total', [cfg.inventoryValueKey]: formatCurrency(inventoryTotal) }
+                        ? { rank: 'Total', [cfg.inventoryValueKey]: inventoryAmount(inventoryTotal) }
                         : undefined
                 }
                 // La tabla nunca debe exceder el alto del viewport: se le reserva

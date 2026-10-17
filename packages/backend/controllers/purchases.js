@@ -24,11 +24,11 @@ const buildDashboardQuery = ({ hasCompare }) => {
   const bestProvider = `
     SELECT 
       mastercomp.IdProveedor as id,
-      proveedores.Empresa as name,
+      COALESCE(NULLIF(proveedores.Empresa, ''), MAX(NULLIF(mastercomp.Nombre, '')), CONCAT('Proveedor no registrado (', COALESCE(NULLIF(mastercomp.IdProveedor, ''), 'sin ID'), ')')) as name,
       ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as totalPurchased
     FROM slavecomp
     INNER JOIN mastercomp ON mastercomp.IdFactura = slavecomp.IdFactura AND mastercomp.Anulada = 0
-    INNER JOIN proveedores ON proveedores.IdProveedor = mastercomp.IdProveedor
+    LEFT JOIN proveedores ON proveedores.IdProveedor = mastercomp.IdProveedor
     WHERE mastercomp.Fecha BETWEEN :from AND :to
     GROUP BY mastercomp.IdProveedor
     ORDER BY totalPurchased DESC
@@ -37,26 +37,26 @@ const buildDashboardQuery = ({ hasCompare }) => {
   // Statement 3 — Top 30 productos por monto comprado
   const topProducts = `
     SELECT 
-      productos.Descripcion as product,
+      COALESCE(NULLIF(productos.Descripcion, ''), MAX(NULLIF(slavecomp.Descripcion, '')), CONCAT('Producto no registrado (', COALESCE(slavecomp.IdProducto, 'sin ID'), ')')) as product,
       ROUND(SUM(slavecomp.Cantidad), 3) as quantity,
       ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as totalPurchased,
       ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad) / NULLIF(SUM(slavecomp.Cantidad), 0), 2) as avgUnitCost
     FROM slavecomp
     INNER JOIN mastercomp ON mastercomp.IdFactura = slavecomp.IdFactura AND mastercomp.Anulada = 0
-    INNER JOIN productos ON productos.IdProducto = slavecomp.IdProducto
+    LEFT JOIN productos ON productos.IdProducto = slavecomp.IdProducto
     WHERE mastercomp.Fecha BETWEEN :from AND :to
-    GROUP BY productos.IdProducto
+    GROUP BY slavecomp.IdProducto
     ORDER BY totalPurchased DESC
     LIMIT 30`;
 
   // Statement 4 — Top 30 proveedores por monto comprado
   const topProviders = `
     SELECT 
-      proveedores.Empresa as provider,
+      COALESCE(NULLIF(proveedores.Empresa, ''), MAX(NULLIF(mastercomp.Nombre, '')), CONCAT('Proveedor no registrado (', COALESCE(NULLIF(mastercomp.IdProveedor, ''), 'sin ID'), ')')) as provider,
       ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as totalPurchased
     FROM slavecomp
     INNER JOIN mastercomp ON mastercomp.IdFactura = slavecomp.IdFactura AND mastercomp.Anulada = 0
-    INNER JOIN proveedores ON proveedores.IdProveedor = mastercomp.IdProveedor
+    LEFT JOIN proveedores ON proveedores.IdProveedor = mastercomp.IdProveedor
     WHERE mastercomp.Fecha BETWEEN :from AND :to
     GROUP BY proveedores.IdProveedor
     ORDER BY totalPurchased DESC
@@ -70,14 +70,14 @@ const buildDashboardQuery = ({ hasCompare }) => {
   // Statement 6 — Gráfico de categorías (torta) por monto comprado
   const groupPurchases = `
     SELECT 
-      grupos.Descripcion as categoria,
+      COALESCE(NULLIF(grupos.Descripcion, ''), CONCAT('Grupo no registrado (', COALESCE(NULLIF(productos.Grupo, ''), 'sin ID'), ')')) as categoria,
       ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as totalPurchased
     FROM slavecomp
     INNER JOIN mastercomp ON mastercomp.IdFactura = slavecomp.IdFactura AND mastercomp.Anulada = 0
-    INNER JOIN productos ON productos.IdProducto = slavecomp.IdProducto
-    INNER JOIN grupos ON grupos.IdGrupo = productos.Grupo
+    LEFT JOIN productos ON productos.IdProducto = slavecomp.IdProducto
+    LEFT JOIN grupos ON grupos.IdGrupo = productos.Grupo
     WHERE mastercomp.Fecha BETWEEN :from AND :to
-    GROUP BY grupos.IdGrupo`;
+    GROUP BY productos.Grupo`;
 
   return [kpisCurrent, bestProvider, topProducts, topProviders, kpisCompare, groupPurchases].join(";");
 };
@@ -147,7 +147,9 @@ const GET_PARETO_PURCHASES = async (req, res) => {
   try {
     const rows = await knex
       .select(
-        "productos.Descripcion as product",
+        knex.raw(
+          "COALESCE(NULLIF(productos.Descripcion, ''), MAX(NULLIF(slavecomp.Descripcion, '')), CONCAT('Producto no registrado (', COALESCE(slavecomp.IdProducto, 'sin ID'), ')')) as product",
+        ),
         knex.raw(`ROUND(SUM(slavecomp.Cantidad), 3) as quantity`),
         knex.raw(`ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as totalPurchased`),
       )
@@ -155,9 +157,9 @@ const GET_PARETO_PURCHASES = async (req, res) => {
       .innerJoin("mastercomp", function () {
         this.on("mastercomp.IdFactura", "slavecomp.IdFactura").andOn("mastercomp.Anulada", 0);
       })
-      .innerJoin("productos", "productos.IdProducto", "slavecomp.IdProducto")
+      .leftJoin("productos", "productos.IdProducto", "slavecomp.IdProducto")
       .whereBetween("mastercomp.Fecha", [from, to])
-      .groupBy("productos.IdProducto")
+      .groupBy("slavecomp.IdProducto")
       .orderBy("totalPurchased", "DESC");
 
     // Calcular acumulados en JS
@@ -255,8 +257,8 @@ const GET_INVOICES = async (req, res) => {
       .innerJoin("mastercomp as mc", function () {
         this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
       })
-      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
-      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .leftJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .leftJoin("productos", "productos.IdProducto", "sc.IdProducto")
       .whereBetween("mc.Fecha", [from, to])
       .modify(buildFilters);
 
@@ -264,7 +266,9 @@ const GET_INVOICES = async (req, res) => {
     const data = await knex
       .select(
         "mc.IdFactura as invoiceId",
-        "proveedores.Empresa as proveedor",
+        knex.raw(
+          "COALESCE(NULLIF(proveedores.Empresa, ''), MAX(NULLIF(mc.Nombre, '')), CONCAT('Proveedor no registrado (', COALESCE(NULLIF(mc.IdProveedor, ''), 'sin ID'), ')')) as proveedor",
+        ),
         "mc.Fecha as fecha",
         knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as monto"),
         knex.raw("ROUND(SUM(sc.Cantidad), 3) as unidades"),
@@ -273,8 +277,8 @@ const GET_INVOICES = async (req, res) => {
       .innerJoin("mastercomp as mc", function () {
         this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
       })
-      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
-      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .leftJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .leftJoin("productos", "productos.IdProducto", "sc.IdProducto")
       .whereBetween("mc.Fecha", [from, to])
       .modify(buildFilters)
       .groupBy("mc.IdFactura")
@@ -293,8 +297,8 @@ const GET_INVOICES = async (req, res) => {
       .innerJoin("mastercomp as mc", function () {
         this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
       })
-      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
-      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .leftJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .leftJoin("productos", "productos.IdProducto", "sc.IdProducto")
       .whereBetween("mc.Fecha", [from, to])
       .modify(buildFilters);
 
@@ -345,25 +349,29 @@ const GET_PRODUCTS = async (req, res) => {
     const buildFilters = (q) => {
       if (proveedorId) q.andWhere("mc.IdProveedor", proveedorId);
       if (groupId) q.andWhere("productos.Grupo", groupId);
-      if (search) q.andWhere("productos.Descripcion", "like", `%${search}%`);
+      if (search)
+        q.andWhere(knex.raw("COALESCE(NULLIF(productos.Descripcion, ''), sc.Descripcion)"), "like", `%${search}%`);
     };
 
     // Count distinct products
     const [{ total }] = await knex
-      .countDistinct("productos.IdProducto as total")
+      .countDistinct({ total: knex.raw("COALESCE(sc.IdProducto, '__none__')") })
       .from("slavecomp as sc")
       .innerJoin("mastercomp as mc", function () {
         this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
       })
-      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
-      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .leftJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .leftJoin("productos", "productos.IdProducto", "sc.IdProducto")
       .whereBetween("mc.Fecha", [from, to])
       .modify(buildFilters);
 
     // Data query
     const data = await knex
       .select(
-        "productos.Descripcion as product",
+        "sc.IdProducto as productId",
+        knex.raw(
+          "COALESCE(NULLIF(productos.Descripcion, ''), MAX(NULLIF(sc.Descripcion, '')), CONCAT('Producto no registrado (', COALESCE(sc.IdProducto, 'sin ID'), ')')) as product",
+        ),
         knex.raw("ROUND(SUM(sc.Cantidad), 3) as quantity"),
         knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as monto"),
         knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad) / NULLIF(SUM(sc.Cantidad), 0), 2) as avgUnitCost"),
@@ -372,11 +380,11 @@ const GET_PRODUCTS = async (req, res) => {
       .innerJoin("mastercomp as mc", function () {
         this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
       })
-      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
-      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .leftJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .leftJoin("productos", "productos.IdProducto", "sc.IdProducto")
       .whereBetween("mc.Fecha", [from, to])
       .modify(buildFilters)
-      .groupBy("productos.IdProducto")
+      .groupBy("sc.IdProducto")
       .orderBy(sortCol, sortDirection)
       .limit(limit)
       .offset(offset);
@@ -391,8 +399,8 @@ const GET_PRODUCTS = async (req, res) => {
       .innerJoin("mastercomp as mc", function () {
         this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
       })
-      .innerJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
-      .innerJoin("productos", "productos.IdProducto", "sc.IdProducto")
+      .leftJoin("proveedores", "proveedores.IdProveedor", "mc.IdProveedor")
+      .leftJoin("productos", "productos.IdProducto", "sc.IdProducto")
       .whereBetween("mc.Fecha", [from, to])
       .modify(buildFilters);
 

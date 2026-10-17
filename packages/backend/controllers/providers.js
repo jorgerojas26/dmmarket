@@ -1,4 +1,5 @@
 const knex = require("../database");
+const { reportId, identityKey, missingName, filterIdentity, searchText } = require("../utils/report-identity");
 
 // Los selectores solo necesitan nombres: no calcular todo el historial del reporte.
 const GET_PROVIDER_OPTIONS = async (req, res) => {
@@ -58,23 +59,7 @@ const GET_PROVIDERS_LIST = async (req, res) => {
   };
 
   try {
-    // 1. Providers matching search (source of truth for `total`; providers
-    //    without purchases/sales still appear with zeros).
-    let providersQuery = knex("proveedores as p").select("p.IdProveedor", "p.Empresa");
-    if (search) providersQuery = providersQuery.where("p.Empresa", "like", `%${search}%`);
-    const providers = await providersQuery;
-
-    if (providers.length === 0) {
-      return res.status(200).json({
-        data: [],
-        total: 0,
-        page: pageNum,
-        limit: limitNum,
-        totals: { total_compras: 0, num_compras: 0, total_ventas: 0, num_ventas: 0, utilidad: 0 },
-      });
-    }
-
-    const providerIds = providers.map((p) => p.IdProveedor);
+    const providers = await knex("proveedores as p").select("p.IdProveedor", "p.Empresa");
 
     // 2. Purchases: invoice counts from mastercomp (1 row per purchase invoice)
     //    and money totals from the slavecomp join.
@@ -82,7 +67,6 @@ const GET_PROVIDERS_LIST = async (req, res) => {
       knex("mastercomp as mc")
         .select("mc.IdProveedor")
         .select(knex.raw("COUNT(*) as num_compras"))
-        .whereIn("mc.IdProveedor", providerIds)
         .andWhere("mc.Anulada", 0),
       "mc.Fecha",
     ).groupBy("mc.IdProveedor");
@@ -93,60 +77,69 @@ const GET_PROVIDERS_LIST = async (req, res) => {
           this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
         })
         .select("mc.IdProveedor")
-        .select(knex.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2) as total_compras"))
-        .whereIn("mc.IdProveedor", providerIds),
+        .select(knex.raw("SUM(sc.Precio * sc.Cantidad) as total_compras")),
       "mc.Fecha",
     ).groupBy("mc.IdProveedor");
 
-    // 3. Sales: providers are mapped through productos (product -> provider),
-    //    so both passes join productos -> slavefact -> masterfact.
     const salesCounts = await applyRange(
-      knex("productos as pr")
-        .innerJoin(`${slaveTable} as sf`, "sf.IdProducto", "pr.IdProducto")
+      knex(`${slaveTable} as sf`)
+        .leftJoin("productos as pr", "pr.IdProducto", "sf.IdProducto")
         .innerJoin(`${masterTable} as mf`, function () {
           this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
         })
         .select("pr.Proveedor")
-        .select(knex.raw(`COUNT(DISTINCT mf.${idInvoice}) as num_ventas`))
-        .whereIn("pr.Proveedor", providerIds),
+        .select(knex.raw(`COUNT(DISTINCT mf.${idInvoice}) as num_ventas`)),
       "mf.Fecha",
     ).groupBy("pr.Proveedor");
 
     const salesTotals = await applyRange(
-      knex("productos as pr")
-        .innerJoin(`${slaveTable} as sf`, "sf.IdProducto", "pr.IdProducto")
+      knex(`${slaveTable} as sf`)
+        .leftJoin("productos as pr", "pr.IdProducto", "sf.IdProducto")
         .innerJoin(`${masterTable} as mf`, function () {
           this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
         })
         .select("pr.Proveedor")
-        .select(knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as total_ventas"))
-        .select(knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as utilidad"))
-        .whereIn("pr.Proveedor", providerIds),
+        .select(knex.raw("SUM(sf.Precio * sf.Cantidad) as total_ventas"))
+        .select(knex.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad) as utilidad")),
       "mf.Fecha",
     ).groupBy("pr.Proveedor");
 
-    // 4. Merge, sort and paginate in JS.
-    const toMap = (rows, key) => new Map(rows.map((r) => [r[key], r]));
+    const toMap = (rows, key) => new Map(rows.map((row) => [identityKey(row[key]), row]));
     const purchasesCountsMap = toMap(purchasesCounts, "IdProveedor");
     const purchasesTotalsMap = toMap(purchasesTotals, "IdProveedor");
     const salesCountsMap = toMap(salesCounts, "Proveedor");
     const salesTotalsMap = toMap(salesTotals, "Proveedor");
-
-    const rows = providers.map((p) => {
-      const pc = purchasesCountsMap.get(p.IdProveedor);
-      const pt = purchasesTotalsMap.get(p.IdProveedor);
-      const sc = salesCountsMap.get(p.IdProveedor);
-      const st = salesTotalsMap.get(p.IdProveedor);
-      return {
-        IdProveedor: p.IdProveedor,
-        Empresa: p.Empresa,
-        total_compras: Number(pt ? pt.total_compras : 0) || 0,
-        num_compras: Number(pc ? pc.num_compras : 0) || 0,
-        total_ventas: Number(st ? st.total_ventas : 0) || 0,
-        utilidad: Number(st ? st.utilidad : 0) || 0,
-        num_ventas: Number(sc ? sc.num_ventas : 0) || 0,
-      };
-    });
+    const identities = new Map(providers.map((provider) => [identityKey(provider.IdProveedor), provider]));
+    for (const [rows, field] of [
+      [purchasesCounts, "IdProveedor"],
+      [salesCounts, "Proveedor"],
+    ]) {
+      for (const row of rows) {
+        const key = identityKey(row[field]);
+        if (!identities.has(key))
+          identities.set(key, {
+            IdProveedor: reportId(row[field]),
+            Empresa: missingName("Proveedor", row[field]),
+          });
+      }
+    }
+    const rows = [...identities]
+      .filter(([, provider]) => !search || searchText(provider.Empresa).includes(searchText(search)))
+      .map(([key, provider]) => {
+        const pc = purchasesCountsMap.get(key);
+        const pt = purchasesTotalsMap.get(key);
+        const sc = salesCountsMap.get(key);
+        const st = salesTotalsMap.get(key);
+        return {
+          IdProveedor: provider.IdProveedor,
+          Empresa: provider.Empresa,
+          total_compras: Number(pt?.total_compras || 0),
+          num_compras: Number(pc?.num_compras || 0),
+          total_ventas: Number(st?.total_ventas || 0),
+          utilidad: Number(st?.utilidad || 0),
+          num_ventas: Number(sc?.num_ventas || 0),
+        };
+      });
 
     rows.sort((a, b) => {
       const va = a[sortCol];
@@ -195,16 +188,18 @@ const GET_BEST_PROVIDERS = async (req, res) => {
     if (mode === "compras") {
       const response = await knex
         .select(
-          "proveedores.Empresa as proveedor",
+          knex.raw(
+            "COALESCE(NULLIF(proveedores.Empresa, ''), CONCAT('Proveedor no registrado (', COALESCE(NULLIF(mastercomp.IdProveedor, ''), 'sin ID'), ')')) as proveedor",
+          ),
           knex.raw("ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) as monto"),
         )
         .from("slavecomp")
         .innerJoin("mastercomp", function () {
           this.on("mastercomp.IdFactura", "slavecomp.IdFactura").andOn("mastercomp.Anulada", 0);
         })
-        .innerJoin("proveedores", "proveedores.IdProveedor", "mastercomp.IdProveedor")
+        .leftJoin("proveedores", "proveedores.IdProveedor", "mastercomp.IdProveedor")
         .whereBetween("mastercomp.Fecha", [from, to])
-        .groupBy("proveedores.IdProveedor")
+        .groupBy("mastercomp.IdProveedor")
         .orderBy("monto", "desc");
 
       res.status(200).json(response);
@@ -216,17 +211,19 @@ const GET_BEST_PROVIDERS = async (req, res) => {
 
       const response = await knex
         .select(
-          "proveedores.Empresa as proveedor",
+          knex.raw(
+            "COALESCE(NULLIF(proveedores.Empresa, ''), CONCAT('Proveedor no registrado (', COALESCE(NULLIF(productos.Proveedor, ''), 'sin ID'), ')')) as proveedor",
+          ),
           knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as monto`),
         )
         .from(`${slaveTable}`)
         .innerJoin(`${masterTable}`, function () {
           this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
         })
-        .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-        .innerJoin("proveedores", "proveedores.IdProveedor", "productos.Proveedor")
+        .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+        .leftJoin("proveedores", "proveedores.IdProveedor", "productos.Proveedor")
         .whereBetween(`${masterTable}.Fecha`, [from, to])
-        .groupBy("proveedores.IdProveedor")
+        .groupBy("productos.Proveedor")
         .orderBy("monto", "desc");
 
       res.status(200).json(response);
@@ -253,7 +250,7 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
       )
       .from("slavecomp")
       .innerJoin("mastercomp", "mastercomp.IdFactura", "slavecomp.IdFactura")
-      .where("mastercomp.IdProveedor", providerId)
+      .modify((query) => filterIdentity(query, "mastercomp.IdProveedor", providerId))
       .andWhere("mastercomp.Anulada", 0)
       .andWhereBetween("mastercomp.Fecha", [from, to]);
 
@@ -269,24 +266,26 @@ const GET_PROVIDER_SUMMARY = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .where("productos.Proveedor", providerId)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
 
     const bestSellerResult = await knex
       .select(
-        "vendedores.Empresa",
+        knex.raw(
+          `COALESCE(NULLIF(vendedores.Empresa, ''), CONCAT('Vendedor no registrado (', COALESCE(NULLIF(${masterTable}.IdVend, ''), 'sin ID'), ')')) as Empresa`,
+        ),
         knex.raw(`COALESCE(ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2), 0) as total`),
       )
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
-      .where("productos.Proveedor", providerId)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to])
-      .groupBy("vendedores.IdVend")
+      .groupBy(`${masterTable}.IdVend`)
       .orderBy("total", "desc")
       .first();
 
@@ -341,8 +340,8 @@ const GET_PROVIDER_SALES = async (req, res) => {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .leftJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .where("productos.Proveedor", providerId)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
 
     const dataQuery = knex
@@ -360,9 +359,9 @@ const GET_PROVIDER_SALES = async (req, res) => {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .leftJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
-      .where("productos.Proveedor", providerId)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to])
       .groupBy(`${masterTable}.${idInvoice}`)
       .orderBy(sortCol, sortDirection)
@@ -397,9 +396,9 @@ const GET_PROVIDER_SALES = async (req, res) => {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
       .leftJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
-      .where("productos.Proveedor", providerId)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
     if (search) {
       totalsQuery.where(function () {
@@ -410,11 +409,9 @@ const GET_PROVIDER_SALES = async (req, res) => {
     }
 
     for (const query of [countQuery, dataQuery, totalsQuery]) {
-      if (req.query.productId) query.andWhere("productos.IdProducto", req.query.productId);
-      if (req.query.sellerId === "__none__") query.whereNull(`${masterTable}.IdVend`);
-      else if (req.query.sellerId != null) query.andWhere(`${masterTable}.IdVend`, req.query.sellerId);
-      if (req.query.clientId === "__none__") query.whereNull(`${masterTable}.IdCliente`);
-      else if (req.query.clientId != null) query.andWhere(`${masterTable}.IdCliente`, req.query.clientId);
+      if (req.query.productId) filterIdentity(query, `${slaveTable}.IdProducto`, req.query.productId);
+      if (req.query.sellerId != null) filterIdentity(query, `${masterTable}.IdVend`, req.query.sellerId);
+      if (req.query.clientId != null) filterIdentity(query, `${masterTable}.IdCliente`, req.query.clientId);
     }
 
     const [{ count }] = await countQuery;
@@ -471,14 +468,16 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
-      .where("productos.Proveedor", providerId)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
 
     const dataQuery = knex
       .select(
-        `${masterTable}.IdCliente as clientId`,
+        knex.raw(
+          `CASE WHEN ${masterTable}.IdCliente IS NULL THEN '__none__' WHEN ${masterTable}.IdCliente = '' THEN '__empty__' ELSE ${masterTable}.IdCliente END as clientId`,
+        ),
         knex.raw("COALESCE(clientes.Empresa, 'Sin cliente') as cliente"),
         knex.raw(`COALESCE(SUM(${slaveTable}.Cantidad), 0) as cantidad`),
         knex.raw(`COUNT(DISTINCT ${masterTable}.${idInvoice}) as numVentas`),
@@ -489,9 +488,9 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
-      .where("productos.Proveedor", providerId)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to])
       .groupBy(`${masterTable}.IdCliente`)
       .orderBy(sortCol, sortDirection)
@@ -512,9 +511,9 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`)
-      .where("productos.Proveedor", providerId)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
     if (productId) {
       countQuery
@@ -526,7 +525,9 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
         );
       dataQuery
         .select(
-          `${masterTable}.IdVend as sellerId`,
+          knex.raw(
+            `CASE WHEN ${masterTable}.IdVend IS NULL THEN '__none__' WHEN ${masterTable}.IdVend = '' THEN '__empty__' ELSE ${masterTable}.IdVend END as sellerId`,
+          ),
           knex.raw("COALESCE(vendedores.Empresa, 'Sin vendedor') as vendedor"),
         )
         .groupBy(`${masterTable}.IdVend`)
@@ -535,9 +536,11 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
 
     for (const query of [countQuery, dataQuery, totalsQuery]) {
       if (productId) {
-        query
-          .andWhere("productos.IdProducto", productId)
-          .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`);
+        filterIdentity(query, `${slaveTable}.IdProducto`, productId).leftJoin(
+          "vendedores",
+          "vendedores.IdVend",
+          `${masterTable}.IdVend`,
+        );
       }
       if (search) {
         query.where(function () {
@@ -545,8 +548,7 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
           if (productId) this.orWhere("vendedores.Empresa", "like", `%${search}%`);
         });
       }
-      if (req.query.sellerId === "__none__") query.whereNull(`${masterTable}.IdVend`);
-      else if (req.query.sellerId != null) query.andWhere(`${masterTable}.IdVend`, req.query.sellerId);
+      if (req.query.sellerId != null) filterIdentity(query, `${masterTable}.IdVend`, req.query.sellerId);
     }
 
     const [{ count }] = await countQuery;
@@ -600,14 +602,16 @@ const GET_PROVIDER_SELLERS = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
-      .where("productos.Proveedor", providerId)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
 
     const dataQuery = knex
       .select(
-        `${masterTable}.IdVend as sellerId`,
+        knex.raw(
+          `CASE WHEN ${masterTable}.IdVend IS NULL THEN '__none__' WHEN ${masterTable}.IdVend = '' THEN '__empty__' ELSE ${masterTable}.IdVend END as sellerId`,
+        ),
         knex.raw("COALESCE(vendedores.Empresa, 'Sin vendedor') as vendedor"),
         knex.raw(`COUNT(DISTINCT ${masterTable}.IdCliente) as numClientes`),
         knex.raw(`COALESCE(SUM(${slaveTable}.Cantidad), 0) as cantidad`),
@@ -618,9 +622,9 @@ const GET_PROVIDER_SELLERS = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
-      .where("productos.Proveedor", providerId)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to])
       .groupBy(`${masterTable}.IdVend`)
       .orderBy(sortCol, sortDirection)
@@ -646,15 +650,15 @@ const GET_PROVIDER_SELLERS = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
-      .where("productos.Proveedor", providerId)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
     if (search) totalsQuery.where("vendedores.Empresa", "like", `%${search}%`);
 
     if (req.query.productId) {
       for (const query of [countQuery, dataQuery, totalsQuery]) {
-        query.andWhere("productos.IdProducto", req.query.productId);
+        filterIdentity(query, `${slaveTable}.IdProducto`, req.query.productId);
       }
     }
 
@@ -702,19 +706,23 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
 
   try {
     const countQuery = knex
-      .countDistinct({ count: "productos.IdProducto" })
+      .countDistinct({ count: knex.raw(`COALESCE(${slaveTable}.IdProducto, '__none__')`) })
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .where("productos.Proveedor", providerId)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
 
     const dataQuery = knex
       .select(
-        "productos.IdProducto as productId",
-        "productos.Descripcion as producto",
+        knex.raw(
+          `CASE WHEN ${slaveTable}.IdProducto IS NULL THEN '__none__' WHEN ${slaveTable}.IdProducto = '' THEN '__empty__' ELSE ${slaveTable}.IdProducto END as productId`,
+        ),
+        knex.raw(
+          `COALESCE(NULLIF(productos.Descripcion, ''), MAX(NULLIF(${slaveTable}.Descripcion, '')), CONCAT('Producto no registrado (', COALESCE(${slaveTable}.IdProducto, 'sin ID'), ')')) as producto`,
+        ),
         knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 2) as cantidad`),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
@@ -723,10 +731,10 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .where("productos.Proveedor", providerId)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to])
-      .groupBy("productos.IdProducto")
+      .groupBy(`${slaveTable}.IdProducto`)
       .orderBy(sortCol, sortDirection)
       .limit(Number(limit))
       .offset(Number(offset));
@@ -747,8 +755,8 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .where("productos.Proveedor", providerId)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
     if (search) totalsQuery.where("productos.Descripcion", "like", `%${search}%`);
 
@@ -790,7 +798,7 @@ const GET_PROVIDER_PURCHASES = async (req, res) => {
     const countQuery = knex
       .countDistinct({ count: "mastercomp.IdFactura" })
       .from("mastercomp")
-      .where("mastercomp.IdProveedor", providerId)
+      .modify((query) => filterIdentity(query, "mastercomp.IdProveedor", providerId))
       .andWhere("mastercomp.Anulada", 0)
       .andWhereBetween("mastercomp.Fecha", [from, to]);
 
@@ -802,7 +810,7 @@ const GET_PROVIDER_PURCHASES = async (req, res) => {
       )
       .from("mastercomp")
       .innerJoin("slavecomp", "slavecomp.IdFactura", "mastercomp.IdFactura")
-      .where("mastercomp.IdProveedor", providerId)
+      .modify((query) => filterIdentity(query, "mastercomp.IdProveedor", providerId))
       .andWhere("mastercomp.Anulada", 0)
       .andWhereBetween("mastercomp.Fecha", [from, to])
       .groupBy("mastercomp.IdFactura")
@@ -842,13 +850,15 @@ const GET_PURCHASE_DETAIL = async (req, res) => {
 
     const productos = await knex
       .select(
-        "productos.Descripcion as descripcion",
+        knex.raw(
+          "COALESCE(NULLIF(productos.Descripcion, ''), NULLIF(slavecomp.Descripcion, ''), CONCAT('Producto no registrado (', COALESCE(slavecomp.IdProducto, 'sin ID'), ')')) as descripcion",
+        ),
         "slavecomp.Cantidad as cantidad",
         "slavecomp.Precio as precio",
         knex.raw("ROUND(slavecomp.Cantidad * slavecomp.Precio, 2) as subtotal"),
       )
       .from("slavecomp")
-      .innerJoin("productos", "productos.IdProducto", "slavecomp.IdProducto")
+      .leftJoin("productos", "productos.IdProducto", "slavecomp.IdProducto")
       .where("slavecomp.IdFactura", invoiceId);
 
     const total = productos.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
@@ -890,16 +900,18 @@ const GET_SALE_DETAIL = async (req, res) => {
 
     const productos = await knex
       .select(
-        "productos.Descripcion as descripcion",
+        knex.raw(
+          `COALESCE(NULLIF(productos.Descripcion, ''), NULLIF(${slaveTable}.Descripcion, ''), CONCAT('Producto no registrado (', COALESCE(${slaveTable}.IdProducto, 'sin ID'), ')')) as descripcion`,
+        ),
         `${slaveTable}.Cantidad as cantidad`,
         `${slaveTable}.Precio as precio`,
         knex.raw(`ROUND(${slaveTable}.Cantidad * ${slaveTable}.Precio, 2) as subtotal`),
         knex.raw(`ROUND((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad, 2) as utilidad`),
       )
       .from(slaveTable)
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .where(`${slaveTable}.${idInvoice}`, invoiceId)
-      .andWhere("productos.Proveedor", providerId);
+      .modify((query) => filterIdentity(query, "productos.Proveedor", providerId));
 
     const total = productos.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
     const utilidad = productos.reduce((sum, p) => sum + Number(p.utilidad || 0), 0);

@@ -12,6 +12,12 @@ const makeBuilder = (queue) => {
     leftJoin: jest.fn(() => b),
     where: jest.fn(() => b),
     andWhere: jest.fn(() => b),
+    whereNull: jest.fn(() => b),
+    whereNotNull: jest.fn(() => b),
+    modify: jest.fn((callback, ...args) => {
+      callback(b, ...args);
+      return b;
+    }),
     whereIn: jest.fn(() => b),
     whereNotIn: jest.fn(() => b),
     whereBetween: jest.fn(() => b),
@@ -102,8 +108,7 @@ describe("GET_CLIENTS_LIST", () => {
     req.query.search = "Uno";
     await controller.GET_CLIENTS_LIST(req, res);
 
-    const clientsBuilder = mockDb.mock.results[0].value;
-    expect(clientsBuilder.where).toHaveBeenCalledWith("clientes.Empresa", "like", "%Uno%");
+    expect(res.json.mock.calls[0][0].data.map((client) => client.IdCliente)).toEqual(["C1"]);
   });
 
   it("should filter clients by route", async () => {
@@ -111,18 +116,17 @@ describe("GET_CLIENTS_LIST", () => {
     req.query.ruta = "R1";
     await controller.GET_CLIENTS_LIST(req, res);
 
-    const clientsBuilder = mockDb.mock.results[0].value;
-    expect(clientsBuilder.where).toHaveBeenCalledWith("clientes.Ruta", "R1");
+    expect(res.json.mock.calls[0][0].data).toEqual([]);
   });
 
-  it("should restrict aggregates to the filtered client ids", async () => {
+  it("should not restrict sales aggregates to current catalog ids", async () => {
     setup([clients, masterAgg, slaveAgg]);
     await controller.GET_CLIENTS_LIST(req, res);
 
     const masterBuilder = mockDb.mock.results[1].value;
     const slaveBuilder = mockDb.mock.results[2].value;
-    expect(masterBuilder.whereIn).toHaveBeenCalledWith("mf.IdCliente", ["C1", "C2", "C3"]);
-    expect(slaveBuilder.whereIn).toHaveBeenCalledWith("mf.IdCliente", ["C1", "C2", "C3"]);
+    expect(masterBuilder.whereIn).not.toHaveBeenCalled();
+    expect(slaveBuilder.whereIn).not.toHaveBeenCalled();
   });
 
   it("should apply the date range to both aggregates", async () => {
@@ -198,8 +202,7 @@ describe("GET_CLIENTS_LIST", () => {
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: [], total: 0 }));
-    // Aggregates never run when there are no clients
-    expect(mockDb).toHaveBeenCalledTimes(1);
+    expect(mockDb).toHaveBeenCalledTimes(3);
   });
 
   it("should return 500 on database error", async () => {

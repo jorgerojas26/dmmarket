@@ -291,7 +291,15 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             {/* Pareto Analysis */}
             <div className="row g-3 mb-4">
                 <div className="col-12">
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 8,
+                            justifyContent: 'space-between',
+                            marginBottom: 12,
+                        }}
+                    >
                         <PanelHelpTitle
                             title="Modos del Pareto"
                             help={{
@@ -309,7 +317,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                         padding: '6px 16px',
                                         borderRadius: 6,
                                         border:
-                                            paretoMode === key ? `1.5px solid ${color}` : '1px solid rgba(255,255,255,0.1)',
+                                            paretoMode === key
+                                                ? `1.5px solid ${color}`
+                                                : '1px solid rgba(255,255,255,0.1)',
                                         background: paretoMode === key ? `${color}18` : 'transparent',
                                         color: paretoMode === key ? color : '#9ca3af',
                                         fontSize: 12,
@@ -329,7 +339,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                         newProductsTable={{
                             count: paretoData?.newProductsCount || 0,
                             total: paretoData?.newProductsTotal || 0,
-                            inventoryTotal: paretoData?.newProductsInventoryTotal || 0,
+                            inventoryTotal: paretoData ? paretoData.newProductsInventoryTotal : 0,
                             page: newPage,
                             pageSize: NEW_PAGE_SIZE,
                             sort: newSort,

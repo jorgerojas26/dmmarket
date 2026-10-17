@@ -18,7 +18,7 @@ import {
     useProviderSales,
     useProviderSummary,
 } from 'hooks/useProviders';
-import { formatCurrency, formatMoney } from 'utils/format';
+import { formatCurrency, formatMoney, formatReportId } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import ProductDetailModal from './ProductDetailModal';
 import PurchaseDetailModal from './PurchaseDetailModal';
@@ -1072,7 +1072,9 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         <div className="provider-avatar">{avatarLetter}</div>
                         <div>
                             <Modal.Title>{provider?.Empresa}</Modal.Title>
-                            <div className="provider-modal-subtitle">Proveedor #{provider?.IdProveedor}</div>
+                            <div className="provider-modal-subtitle">
+                                Proveedor #{formatReportId(provider?.IdProveedor)}
+                            </div>
                         </div>
                     </div>
                 </Modal.Header>

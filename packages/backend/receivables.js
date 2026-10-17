@@ -1,3 +1,4 @@
+const { reportId, missingName } = require("./utils/report-identity");
 const { createHash } = require("node:crypto");
 const { Money, fail, decimal, fixed, total, allocate } = require("./utils/receivables-money");
 
@@ -85,6 +86,8 @@ const eligible = (d) =>
   d.MonedaOriginal === "USD" &&
   d.Estatus !== "ANULADO" &&
   Number(d.saleCancelled) === 0 &&
+  d.saleClient != null &&
+  d.IdCliente != null &&
   d.saleClient === d.IdCliente;
 
 function createReceivablesService({
@@ -127,12 +130,22 @@ function createReceivablesService({
       .orderBy("d.IdDocumento");
   }
 
-  async function context(connection, clientId, lock = false) {
+  async function context(connection, clientId, lock = false, allowUnregistered = false) {
     const clientQuery = connection("clientes").where("IdCliente", clientId).first();
-    const client = await (lock ? clientQuery.forUpdate() : clientQuery);
-    if (!client) fail("Cliente no encontrado.", 404);
+    let client = await (lock ? clientQuery.forUpdate() : clientQuery);
+    if (!client && !allowUnregistered) fail("Cliente no encontrado.", 404);
     const docsQuery = documents(connection, clientId);
     const docs = await (lock ? docsQuery.forUpdate() : docsQuery);
+    if (!client) {
+      if (!docs.length) fail("Cliente no encontrado.", 404);
+      client = {
+        IdCliente: clientId,
+        Empresa: missingName("Cliente", clientId),
+        Rif: null,
+        Ruta: null,
+        unregistered: true,
+      };
+    }
     const closures = await connection("cxc_cierres as c")
       .join("cxc_documentos as d", "d.IdDocumento", "c.IdDocumento")
       .where("d.IdCliente", clientId)
@@ -364,12 +377,17 @@ function createReceivablesService({
       .select("m.IdCliente")
       .max("m.Fecha as lastPayment")
       .groupBy("m.IdCliente");
-    return db("clientes as c")
-      .join(aggregates.as("a"), "a.IdCliente", "c.IdCliente")
-      .leftJoin(lastPayment.as("p"), "p.IdCliente", "c.IdCliente")
+    return db
+      .from(aggregates.as("a"))
+      .leftJoin("clientes as c", "c.IdCliente", "a.IdCliente")
+      .leftJoin(lastPayment.as("p"), "p.IdCliente", "a.IdCliente")
       .select(
-        "c.IdCliente as id",
-        "c.Empresa as name",
+        db.raw(
+          "CASE WHEN a.IdCliente IS NULL THEN '__none__' WHEN a.IdCliente = '' THEN '__empty__' ELSE a.IdCliente END as id",
+        ),
+        db.raw(
+          "COALESCE(NULLIF(c.Empresa, ''), CONCAT('Cliente no registrado (', COALESCE(NULLIF(a.IdCliente, ''), 'sin ID'), ')')) as name",
+        ),
         "c.Ruta as ruta",
         "a.balance",
         "a.overdue",
@@ -389,7 +407,7 @@ function createReceivablesService({
     if (!["debt", "settled", "all"].includes(state) || !["all", "overdue", "upcoming"].includes(due))
       fail("Filtro de cartera no válido.");
     const sort = {
-      name: "c.Empresa",
+      name: "name",
       balance: "a.balance",
       overdue: "a.overdue",
       pendingCount: "a.pendingCount",
@@ -406,7 +424,7 @@ function createReceivablesService({
       .select(db.raw("SUM(CASE WHEN balance > 0 THEN 1 ELSE 0 END) as debtors"))
       .first();
     const received = db("cxc_movimientos as m")
-      .join("clientes as c", "c.IdCliente", "m.IdCliente")
+      .leftJoin("clientes as c", "c.IdCliente", "m.IdCliente")
       .leftJoin("cxc_operaciones as v", function () {
         this.on("v.Referencia", "m.IdMov").andOnVal("v.Tipo", "ANULACION");
       })
@@ -418,8 +436,14 @@ function createReceivablesService({
     const query = scope.clone();
     if (search)
       query.where(function () {
-        this.where("c.Empresa", "like", `%${search}%`)
-          .orWhere("c.IdCliente", "like", `%${search}%`)
+        this.where(
+          db.raw(
+            "COALESCE(NULLIF(c.Empresa, ''), CONCAT('Cliente no registrado (', COALESCE(NULLIF(a.IdCliente, ''), 'sin ID'), ')'))",
+          ),
+          "like",
+          `%${search}%`,
+        )
+          .orWhere("a.IdCliente", "like", `%${search}%`)
           .orWhere("c.Rif", "like", `%${search}%`);
       });
     if (state === "debt") query.where("a.balance", ">", 0);
@@ -430,7 +454,7 @@ function createReceivablesService({
     const data = await query
       .orderBy(sort, filters.sortDir || "desc")
       .orderBy("a.balance", "desc")
-      .orderBy("c.IdCliente")
+      .orderBy("a.IdCliente")
       .limit(limit)
       .offset((page - 1) * limit);
     const routes = await db("clientes as c")
@@ -460,12 +484,13 @@ function createReceivablesService({
   }
 
   async function detail(clientId, filters = {}) {
+    clientId = clientId === "__none__" ? null : clientId === "__empty__" ? "" : clientId;
     const status = await requireSchema();
     const page = integer(filters.page, 1);
     const timelinePage = integer(filters.timelinePage, 1);
     const limit = 20;
     return db.transaction(async (connection) => {
-      const state = await context(connection, clientId);
+      const state = await context(connection, clientId, false, true);
       const applied = await connection("cxc_cruces as x")
         .join("cxc_movimientos as m", "m.IdMov", "x.IdMovimiento")
         .leftJoin("cxc_operaciones as v", function () {
@@ -561,8 +586,9 @@ function createReceivablesService({
       const rateRow = await connection("divisas").where("Simbolo", "BsS").orderBy("IdDivisa").first();
       return {
         ...status,
+        writesEnabled: status.writesEnabled && !state.client.unregistered,
         client: {
-          id: state.client.IdCliente,
+          id: reportId(state.client.IdCliente),
           name: state.client.Empresa,
           rif: state.client.Rif,
           ruta: state.client.Ruta,

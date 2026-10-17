@@ -32,3 +32,5 @@ export const computeComparison = (current, previous) => {
     const pct = ((current - previous) / previous) * 100;
     return { pct: Math.abs(pct).toFixed(1), isPositive: pct >= 0 };
 };
+
+export const formatReportId = (value) => (['__none__', '__empty__'].includes(value) ? 'Sin ID' : value);

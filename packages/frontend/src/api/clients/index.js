@@ -21,7 +21,7 @@ export const fetchBestClientsPerProduct = async (productId, dateRange, showNoe) 
 };
 
 export const fetchMonthlyAverage = async (clientId, showNoe) => {
-    const response = await fetch(`${BASE_URL}/average/month/${clientId}?showNoe=${showNoe}`);
+    const response = await fetch(`${BASE_URL}/average/month/${encodeURIComponent(clientId)}?showNoe=${showNoe}`);
     const report = response.json();
     return report;
 };
@@ -32,13 +32,15 @@ export const fetchClientSales = async (
 ) => {
     const params = new URLSearchParams({ from, to, page, limit, showNoe, sortBy, sortDir });
     if (search) params.set('search', search);
-    const response = await fetch(`${BASE_URL}/${clientId}/sales?${params}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(clientId)}/sales?${params}`);
     if (!response.ok) throw new Error('Error al cargar las ventas del cliente');
     return response.json();
 };
 
 export const fetchClientSummary = async (clientId, { from, to, showNoe }) => {
-    const response = await fetch(`${BASE_URL}/${clientId}/summary?from=${from}&to=${to}&showNoe=${showNoe}`);
+    const response = await fetch(
+        `${BASE_URL}/${encodeURIComponent(clientId)}/summary?from=${from}&to=${to}&showNoe=${showNoe}`,
+    );
     return response.json();
 };
 

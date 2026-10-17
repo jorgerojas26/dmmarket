@@ -10,6 +10,11 @@ const makeBuilder = (value) => {
     innerJoin: jest.fn(() => b),
     where: jest.fn(() => b),
     andWhere: jest.fn(() => b),
+    whereNull: jest.fn(() => b),
+    modify: jest.fn((callback, ...args) => {
+      callback(b, ...args);
+      return b;
+    }),
     whereIn: jest.fn(() => b),
     whereBetween: jest.fn(() => b),
     andWhereBetween: jest.fn(() => b),
@@ -71,7 +76,9 @@ describe("GET_PROVIDER_OPTIONS", () => {
   });
 
   it("returns 500 on a database error", async () => {
-    mockDb.mockImplementation(() => { throw new Error("DB error"); });
+    mockDb.mockImplementation(() => {
+      throw new Error("DB error");
+    });
     const log = jest.spyOn(console, "error").mockImplementation(() => {});
     await controller.GET_PROVIDER_OPTIONS({ query: {} }, res);
     expect(res.status).toHaveBeenCalledWith(500);
@@ -164,16 +171,15 @@ describe("GET_PROVIDERS_LIST", () => {
     req.query.search = "Proveedor";
     await controller.GET_PROVIDERS_LIST(req, res);
 
-    const providersBuilder = mockDb.mock.results[0].value;
-    expect(providersBuilder.where).toHaveBeenCalledWith("p.Empresa", "like", "%Proveedor%");
+    expect(res.json.mock.calls[0][0].data.every((provider) => provider.Empresa.includes("Proveedor"))).toBe(true);
   });
 
-  it("should restrict all aggregates to the filtered provider ids", async () => {
+  it("should keep aggregates independent of current provider catalog ids", async () => {
     await controller.GET_PROVIDERS_LIST(req, res);
 
     for (let i = 1; i <= 4; i++) {
       const builder = mockDb.mock.results[i].value;
-      expect(builder.whereIn).toHaveBeenCalledWith(expect.any(String), [1, 2]);
+      expect(builder.whereIn).not.toHaveBeenCalled();
     }
   });
 
@@ -183,9 +189,10 @@ describe("GET_PROVIDERS_LIST", () => {
 
     const salesCountsBuilder = mockDb.mock.results[3].value;
     const salesTotalsBuilder = mockDb.mock.results[4].value;
-    expect(salesCountsBuilder.innerJoin).toHaveBeenCalledWith("slavenoe as sf", "sf.IdProducto", "pr.IdProducto");
+    expect(mockDb).toHaveBeenCalledWith("slavenoe as sf");
+    expect(salesCountsBuilder.leftJoin).toHaveBeenCalledWith("productos as pr", "pr.IdProducto", "sf.IdProducto");
     expect(salesCountsBuilder.innerJoin).toHaveBeenCalledWith("masternoe as mf", expect.any(Function));
-    expect(salesTotalsBuilder.innerJoin).toHaveBeenCalledWith("slavenoe as sf", "sf.IdProducto", "pr.IdProducto");
+    expect(salesTotalsBuilder.leftJoin).toHaveBeenCalledWith("productos as pr", "pr.IdProducto", "sf.IdProducto");
     expect(salesTotalsBuilder.innerJoin).toHaveBeenCalledWith("masternoe as mf", expect.any(Function));
   });
 
@@ -224,8 +231,7 @@ describe("GET_PROVIDERS_LIST", () => {
 
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: [], total: 0 }));
-    // Aggregates never run when there are no providers
-    expect(mockDb).toHaveBeenCalledTimes(1);
+    expect(mockDb).toHaveBeenCalledTimes(5);
   });
 
   it("should order by total_ventas DESC by default", async () => {

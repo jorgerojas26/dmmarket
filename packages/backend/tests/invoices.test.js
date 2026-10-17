@@ -3,6 +3,7 @@ const makeBuilder = (rows) => {
     select: jest.fn(() => builder),
     from: jest.fn(() => builder),
     innerJoin: jest.fn(() => builder),
+    leftJoin: jest.fn(() => builder),
     where: jest.fn(() => builder),
     on: jest.fn(() => builder),
     andOn: jest.fn(() => builder),

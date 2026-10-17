@@ -7,7 +7,7 @@ import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatMoney, formatNumber } from 'utils/format';
+import { formatMoney, formatNumber, formatReportId } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -66,7 +66,12 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
                 const pdfColumns = [
-                    { accessor: 'IdCliente', Header: 'ID', width: 'auto', render: (c) => String(c.IdCliente ?? '') },
+                    {
+                        accessor: 'IdCliente',
+                        Header: 'ID',
+                        width: 'auto',
+                        render: (c) => String(formatReportId(c.IdCliente) ?? ''),
+                    },
                     { accessor: 'Empresa', Header: 'Empresa', width: '*', render: (c) => c.Empresa ?? '' },
                     {
                         accessor: 'total_ventas',
@@ -157,7 +162,7 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
 
     const columns = useMemo(
         () => [
-            { Header: 'IdCliente', accessor: 'IdCliente' },
+            { Header: 'IdCliente', accessor: 'IdCliente', Cell: ({ value }) => formatReportId(value) },
             { Header: 'Empresa', accessor: 'Empresa' },
             {
                 Header: 'Total Ventas',

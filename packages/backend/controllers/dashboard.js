@@ -1,4 +1,5 @@
 const knex = require("../database");
+const { reportId, identityKey, missingName } = require("../utils/report-identity");
 const { splitParetoByAge } = require("./pareto-age");
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10,12 +11,6 @@ const { splitParetoByAge } = require("./pareto-age");
 //   Q3 — solo si hay compare: KPIs del período anterior (1 fila)
 //   L1/L2/L3 — nombres de vendedores, clientes y grupos (tablas de 9-1960 filas)
 //
-// Los nombres se resuelven en JS con lookups baratos en vez de joins: además de
-// evitar joins en el scan pesado, esto reproduce EXACTAMENTE el INNER JOIN del
-// código anterior (facturas con cliente/vendedor/grupo faltante se excluyen de
-// los rankings pero cuentan en los KPIs).
-// ─────────────────────────────────────────────────────────────────────────────
-
 const round2 = (n) => Math.round(Number(n) * 100) / 100;
 const round3 = (n) => Math.round(Number(n) * 1000) / 1000;
 
@@ -38,8 +33,8 @@ const invoicesQuery = `
 // Statement 2 — nivel producto: top productos + torta por categoría
 const productsQuery = `
   SELECT
-    productos.IdProducto AS productId,
-    productos.Descripcion AS product,
+    sf.IdProducto AS productId,
+    COALESCE(NULLIF(productos.Descripcion, ''), MAX(NULLIF(sf.Descripcion, '')), CONCAT('Producto no registrado (', COALESCE(sf.IdProducto, 'sin ID'), ')')) AS product,
     productos.Grupo AS grupoId,
     SUM(sf.Cantidad) AS quantity,
     SUM(sf.Precio * sf.Cantidad) AS rawProfit,
@@ -48,9 +43,9 @@ const productsQuery = `
   FROM ${"${slaveTable}"} sf
   INNER JOIN ${"${masterTable}"} mf
     ON mf.${"${idInvoice}"} = sf.${"${idInvoice}"} AND mf.Anulada = 0
-  INNER JOIN productos ON productos.IdProducto = sf.IdProducto
+  LEFT JOIN productos ON productos.IdProducto = sf.IdProducto
   WHERE mf.Fecha BETWEEN :from AND :to
-  GROUP BY productos.IdProducto, productos.Descripcion, productos.Grupo`;
+  GROUP BY sf.IdProducto, productos.Descripcion, productos.Grupo`;
 
 // Statement 3 — KPIs comparativos (1 fila, sin datos de detalle)
 const kpisCompareQuery = `
@@ -99,9 +94,9 @@ const fetchNameLookups = async () => {
     knex.select("idGrupo as id", "Descripcion as name").from("grupos"),
   ]);
   return {
-    vendName: new Map(vendedores.map((v) => [v.id, v.name])),
-    clientName: new Map(clientes.map((c) => [c.id, c.name])),
-    groupName: new Map(grupos.map((g) => [g.id, g.name])),
+    vendName: new Map(vendedores.map((v) => [identityKey(v.id), v.name])),
+    clientName: new Map(clientes.map((c) => [identityKey(c.id), c.name])),
+    groupName: new Map(grupos.map((g) => [identityKey(g.id), g.name])),
   };
 };
 
@@ -129,11 +124,11 @@ const computeKpis = (invoices) => {
 const computeBestEmployee = (invoices, nameLookups) => {
   const byVendor = new Map();
   for (const r of invoices) {
-    const name = nameLookups.vendName.get(r.vendId);
-    if (!name) continue; // equivalente al INNER JOIN original
-    const entry = byVendor.get(r.vendId) || { id: r.vendId, name, totalSales: 0 };
+    const key = identityKey(r.vendId);
+    const name = nameLookups.vendName.get(key) || missingName("Vendedor", r.vendId);
+    const entry = byVendor.get(key) || { id: reportId(r.vendId), name, totalSales: 0 };
     entry.totalSales += Number(r.rawProfit || 0);
-    byVendor.set(r.vendId, entry);
+    byVendor.set(key, entry);
   }
   const best = [...byVendor.values()].sort((a, b) => b.totalSales - a.totalSales)[0];
   return best ? { ...best, totalSales: round2(best.totalSales) } : null;
@@ -142,12 +137,12 @@ const computeBestEmployee = (invoices, nameLookups) => {
 const computeTopClients = (invoices, nameLookups) => {
   const byClient = new Map();
   for (const r of invoices) {
-    const name = nameLookups.clientName.get(r.clientId);
-    if (!name) continue; // equivalente al INNER JOIN original
-    const entry = byClient.get(r.clientId) || { client: name, total_USD: 0, netProfit: 0 };
+    const key = identityKey(r.clientId);
+    const name = nameLookups.clientName.get(key) || missingName("Cliente", r.clientId);
+    const entry = byClient.get(key) || { client: name, total_USD: 0, netProfit: 0 };
     entry.total_USD += Number(r.rawProfit || 0);
     entry.netProfit += Number(r.netProfit || 0);
-    byClient.set(r.clientId, entry);
+    byClient.set(key, entry);
   }
   return [...byClient.values()]
     .sort((a, b) => b.netProfit - a.netProfit)
@@ -172,12 +167,12 @@ const computeTopProducts = (products) =>
 const computeGroupSales = (products, nameLookups) => {
   const byGroup = new Map();
   for (const p of products) {
-    const name = nameLookups.groupName.get(p.grupoId);
-    if (!name) continue; // equivalente al INNER JOIN de grupos original
-    const entry = byGroup.get(p.grupoId) || { categoria: name, rawProfit: 0, netProfit: 0 };
+    const key = identityKey(p.grupoId);
+    const name = nameLookups.groupName.get(key) || missingName("Grupo", p.grupoId);
+    const entry = byGroup.get(key) || { categoria: name, rawProfit: 0, netProfit: 0 };
     entry.rawProfit += Number(p.rawProfit || 0);
     entry.netProfit += Number(p.netProfit || 0);
-    byGroup.set(p.grupoId, entry);
+    byGroup.set(key, entry);
   }
   return [...byGroup.values()]
     .sort((a, b) => a.categoria.localeCompare(b.categoria))
@@ -258,9 +253,13 @@ const fetchSalesParetoRows = async ({ from, to, masterTable, slaveTable, idInvoi
   const [sales, boughtIds] = await Promise.all([
     knex
       .select(
-        "productos.IdProducto as productId",
-        "productos.Descripcion as product",
-        knex.raw("ROUND(COALESCE(productos.PrecioA, 0) * COALESCE(productos.Existencia, 0), 2) as inventoryValue"),
+        `${slaveTable}.IdProducto as productId`,
+        knex.raw(
+          `COALESCE(NULLIF(productos.Descripcion, ''), MAX(NULLIF(${slaveTable}.Descripcion, '')), CONCAT('Producto no registrado (', COALESCE(${slaveTable}.IdProducto, 'sin ID'), ')')) as product`,
+        ),
+        knex.raw(
+          "CASE WHEN productos.IdProducto IS NOT NULL THEN ROUND(COALESCE(productos.PrecioA, 0) * COALESCE(productos.Existencia, 0), 2) END as inventoryValue",
+        ),
         knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
@@ -269,9 +268,9 @@ const fetchSalesParetoRows = async ({ from, to, masterTable, slaveTable, idInvoi
       .innerJoin(masterTable, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .whereBetween(`${masterTable}.Fecha`, [from, to])
-      .groupBy("productos.IdProducto")
+      .groupBy(`${slaveTable}.IdProducto`)
       .orderBy("netProfit", "DESC"),
     knex.raw(
       `SELECT DISTINCT slavecomp.IdProducto AS productId
@@ -282,8 +281,8 @@ const fetchSalesParetoRows = async ({ from, to, masterTable, slaveTable, idInvoi
     ),
   ]);
 
-  const bought = new Set((boughtIds[0] || []).map((r) => r.productId));
-  return sales.filter((r) => bought.has(r.productId));
+  const bought = new Set((boughtIds[0] || []).map((r) => identityKey(r.productId)));
+  return sales.filter((r) => bought.has(identityKey(r.productId)));
 };
 
 // Compras del rango sin ventas en el mismo rango — 2 pasadas + merge en JS.
@@ -293,16 +292,16 @@ const fetchUnsoldPurchasesRows = async ({ from, to, masterTable, slaveTable, idI
   const [purchases, soldIds] = await Promise.all([
     knex.raw(
       `SELECT
-        productos.IdProducto AS productId,
-        productos.Descripcion AS product,
-        ROUND(COALESCE(productos.PrecioA, 0) * COALESCE(productos.Existencia, 0), 2) AS inventoryValue,
+        slavecomp.IdProducto AS productId,
+        COALESCE(NULLIF(productos.Descripcion, ''), MAX(NULLIF(slavecomp.Descripcion, '')), CONCAT('Producto no registrado (', COALESCE(slavecomp.IdProducto, 'sin ID'), ')')) AS product,
+        CASE WHEN productos.IdProducto IS NOT NULL THEN ROUND(COALESCE(productos.PrecioA, 0) * COALESCE(productos.Existencia, 0), 2) END AS inventoryValue,
         ROUND(SUM(slavecomp.Cantidad), 3) AS quantity,
         ROUND(SUM(slavecomp.Precio * slavecomp.Cantidad), 2) AS totalPurchased
       FROM slavecomp
       INNER JOIN mastercomp ON mastercomp.IdFactura = slavecomp.IdFactura AND mastercomp.Anulada = 0
-      INNER JOIN productos ON productos.IdProducto = slavecomp.IdProducto
+      LEFT JOIN productos ON productos.IdProducto = slavecomp.IdProducto
       WHERE mastercomp.Fecha BETWEEN :from AND :to
-      GROUP BY productos.IdProducto, productos.Descripcion
+      GROUP BY slavecomp.IdProducto, productos.Descripcion
       ORDER BY totalPurchased DESC`,
       { from, to },
     ),
@@ -316,8 +315,8 @@ const fetchUnsoldPurchasesRows = async ({ from, to, masterTable, slaveTable, idI
     ),
   ]);
 
-  const sold = new Set((soldIds[0] || []).map((r) => r.productId));
-  return (purchases[0] || []).filter((r) => !sold.has(r.productId));
+  const sold = new Set((soldIds[0] || []).map((r) => identityKey(r.productId)));
+  return (purchases[0] || []).filter((r) => !sold.has(identityKey(r.productId)));
 };
 
 // Primera compra histórica de los SKUs del resultado, hasta el fin del rango.
@@ -329,10 +328,13 @@ const fetchFirstPurchases = async (rows, to) => {
     .innerJoin("mastercomp as mc", function () {
       this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
     })
-    .whereIn("sc.IdProducto", rows.map((r) => r.productId))
+    .whereIn(
+      "sc.IdProducto",
+      rows.map((r) => r.productId),
+    )
     .where("mc.Fecha", "<=", to)
     .groupBy("sc.IdProducto");
-  return new Map(firstDates.map((r) => [r.productId, r.firstPurchaseDate]));
+  return new Map(firstDates.map((r) => [identityKey(r.productId), r.firstPurchaseDate]));
 };
 
 // Columnas ordenables por modo (whitelist — solo las que el UI expone como
@@ -349,9 +351,13 @@ const sortProducts = (products, sortBy, sortDir) => {
   return [...products].sort((a, b) => {
     const av = a[sortBy];
     const bv = b[sortBy];
-    const result = typeof av === "string"
-      ? dir * String(av).localeCompare(String(bv))
-      : dir * (Number(av || 0) - Number(bv || 0));
+    if (av == null || bv == null) {
+      if (av != null) return -1;
+      if (bv != null) return 1;
+      return String(a.productId).localeCompare(String(b.productId));
+    }
+    const result =
+      typeof av === "string" ? dir * String(av).localeCompare(String(bv)) : dir * (Number(av || 0) - Number(bv || 0));
     return result || String(a.productId).localeCompare(String(b.productId));
   });
 };
@@ -425,9 +431,15 @@ const GET_DASHBOARD_PARETO = async (req, res) => {
     // Búsqueda, orden y página de nuevos se aplican SOLO a esa tabla; no cambian
     // la población ni los porcentajes del Pareto. Sin newLimit devuelve todos
     // los resultados filtrados para imprimir todas las páginas.
-    const search = String(req.query.newSearch || "").trim().toLocaleLowerCase("es");
+    const search = String(req.query.newSearch || "")
+      .trim()
+      .toLocaleLowerCase("es");
     const filteredNew = search
-      ? newProducts.filter((p) => String(p.product || "").toLocaleLowerCase("es").includes(search))
+      ? newProducts.filter((p) =>
+          String(p.product || "")
+            .toLocaleLowerCase("es")
+            .includes(search),
+        )
       : newProducts;
     const newSortColumns = ["product", "quantity", valueKey, "inventoryValue", "firstPurchaseDate"];
     const newSortBy = newSortColumns.includes(req.query.newSortBy) ? req.query.newSortBy : "firstPurchaseDate";
@@ -437,12 +449,9 @@ const GET_DASHBOARD_PARETO = async (req, res) => {
     const newPage = Math.max(1, Math.floor(Number(req.query.newPage) || 1));
     response.newProductsCount = newProducts.length;
     response.newProductsTotal = filteredNew.length;
-    response.newProductsInventoryTotal = Math.round(
-      filteredNew.reduce((sum, p) => sum + Number(p.inventoryValue || 0), 0) * 100,
-    ) / 100;
-    response.newProducts = newLimit > 0
-      ? sortedNew.slice((newPage - 1) * newLimit, newPage * newLimit)
-      : sortedNew;
+    response.newProductsInventoryTotal =
+      Math.round(filteredNew.reduce((sum, p) => sum + Number(p.inventoryValue || 0), 0) * 100) / 100;
+    response.newProducts = newLimit > 0 ? sortedNew.slice((newPage - 1) * newLimit, newPage * newLimit) : sortedNew;
 
     // Server-side sorting: whitelist por modo, default = orden canónico por valor.
     const allowed = PARETO_SORT_COLUMNS[isPurchasesMode ? "compras-sin-vender" : "ventas"];

@@ -34,14 +34,14 @@ const GET_SALES = async (req, res) => {
     // Count query — count distinct products in the grouped result
     const [{ total }] = await knex.count("* as total").from(
       knex
-        .select("productos.IdProducto")
+        .select(`${slaveTable}.IdProducto`)
         .from(slaveTable)
         .innerJoin(masterTable, function () {
           this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
         })
-        .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+        .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
         .whereBetween(`${masterTable}.Fecha`, [from, to])
-        .groupBy("productos.IdProducto")
+        .groupBy(`${slaveTable}.IdProducto`)
         .as("sub"),
     );
 
@@ -105,7 +105,9 @@ const GET_BY_GROUP = async (req, res) => {
   try {
     const response = await knex
       .select(
-        "grupos.Descripcion as categoria",
+        knex.raw(
+          "COALESCE(NULLIF(grupos.Descripcion, ''), CONCAT('Grupo no registrado (', COALESCE(NULLIF(productos.Grupo, ''), 'sin ID'), ')')) as categoria",
+        ),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
       )
@@ -113,10 +115,10 @@ const GET_BY_GROUP = async (req, res) => {
       .innerJoin(masterTable, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .innerJoin("grupos", "grupos.idGrupo", "productos.Grupo")
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("grupos", "grupos.idGrupo", "productos.Grupo")
       .whereBetween(`${masterTable}.Fecha`, [from, to])
-      .groupBy("grupos.idGrupo");
+      .groupBy("productos.Grupo");
 
     res.status(200).json(response);
   } catch (error) {
@@ -133,8 +135,12 @@ const GET_INVOICE_DETAIL = async (req, res) => {
       .select(
         knex.raw(`mf.?? as idFactura`, [idInvoice]),
         "mf.Fecha as fecha",
-        "clientes.Empresa as cliente",
-        "vendedores.Empresa as vendedor",
+        knex.raw(
+          "COALESCE(NULLIF(clientes.Empresa, ''), NULLIF(mf.Nombre, ''), CONCAT('Cliente no registrado (', COALESCE(NULLIF(mf.IdCliente, ''), 'sin ID'), ')')) as cliente",
+        ),
+        knex.raw(
+          "COALESCE(NULLIF(vendedores.Empresa, ''), CONCAT('Vendedor no registrado (', COALESCE(NULLIF(mf.IdVend, ''), 'sin ID'), ')')) as vendedor",
+        ),
         "sf.Descripcion as descripcion",
         "sf.Cantidad as cantidad",
         "sf.Precio as precio",
@@ -145,8 +151,8 @@ const GET_INVOICE_DETAIL = async (req, res) => {
       .innerJoin(`${masterTable} as mf`, function () {
         this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
       })
-      .innerJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
-      .innerJoin("vendedores", "vendedores.idVend", "mf.IdVend")
+      .leftJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
+      .leftJoin("vendedores", "vendedores.idVend", "mf.IdVend")
       .where(`mf.${idInvoice}`, invoiceId);
 
     if (rows.length === 0) {

@@ -39,7 +39,9 @@ export const fetchBestProviders = async (dateRange, showNoe, mode) => {
 };
 
 export const fetchProviderSummary = async (providerId, { from, to, showNoe }) => {
-    const response = await fetch(`${BASE_URL}/${providerId}/summary?from=${from}&to=${to}&showNoe=${showNoe}`);
+    const response = await fetch(
+        `${BASE_URL}/${encodeURIComponent(providerId)}/summary?from=${from}&to=${to}&showNoe=${showNoe}`,
+    );
     return response.json();
 };
 
@@ -59,7 +61,7 @@ export const fetchProviderSales = async (
     if (search) params.append('search', search);
     if (sortBy) params.append('sortBy', sortBy);
     if (sortDir) params.append('sortDir', sortDir);
-    const response = await fetch(`${BASE_URL}/${providerId}/sales?${params.toString()}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(providerId)}/sales?${params.toString()}`);
     if (!response.ok) throw new Error('Error al cargar ventas');
     return response.json();
 };
@@ -79,7 +81,7 @@ export const fetchProviderClients = async (
     if (search) params.append('search', search);
     if (sortBy) params.append('sortBy', sortBy);
     if (sortDir) params.append('sortDir', sortDir);
-    const response = await fetch(`${BASE_URL}/${providerId}/clients?${params.toString()}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(providerId)}/clients?${params.toString()}`);
     if (!response.ok) throw new Error('Error al cargar clientes');
     return response.json();
 };
@@ -98,7 +100,7 @@ export const fetchProviderSellers = async (
     if (search) params.append('search', search);
     if (sortBy) params.append('sortBy', sortBy);
     if (sortDir) params.append('sortDir', sortDir);
-    const response = await fetch(`${BASE_URL}/${providerId}/sellers?${params.toString()}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(providerId)}/sellers?${params.toString()}`);
     if (!response.ok) throw new Error('Error al cargar vendedores');
     return response.json();
 };
@@ -116,7 +118,7 @@ export const fetchProviderProducts = async (
     if (search) params.append('search', search);
     if (sortBy) params.append('sortBy', sortBy);
     if (sortDir) params.append('sortDir', sortDir);
-    const response = await fetch(`${BASE_URL}/${providerId}/products?${params.toString()}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(providerId)}/products?${params.toString()}`);
     return response.json();
 };
 
@@ -132,16 +134,16 @@ export const fetchProviderPurchases = async (
     if (search) params.append('search', search);
     if (sortBy) params.append('sortBy', sortBy);
     if (sortDir) params.append('sortDir', sortDir);
-    const response = await fetch(`${BASE_URL}/${providerId}/purchases?${params.toString()}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(providerId)}/purchases?${params.toString()}`);
     return response.json();
 };
 
 export const fetchPurchaseDetail = async (providerId, invoiceId) => {
-    const response = await fetch(`${BASE_URL}/${providerId}/purchases/${invoiceId}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(providerId)}/purchases/${invoiceId}`);
     return response.json();
 };
 
 export const fetchSaleDetail = async (providerId, invoiceId, showNoe) => {
-    const response = await fetch(`${BASE_URL}/${providerId}/sales/${invoiceId}?showNoe=${showNoe}`);
+    const response = await fetch(`${BASE_URL}/${encodeURIComponent(providerId)}/sales/${invoiceId}?showNoe=${showNoe}`);
     return response.json();
 };

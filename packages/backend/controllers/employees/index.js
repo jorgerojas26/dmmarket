@@ -87,6 +87,7 @@ const GET_SALES = async (req, res) => {
         `${masterTable}.Fecha as createdAt`,
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as invoiceTotal`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
+        knex.raw("SUM(CASE WHEN productos.IdProducto IS NULL THEN 1 ELSE 0 END) as linesWithoutCommissionGroup"),
         knex.raw(
           `ROUND(SUM(CASE WHEN ISNULL(fact_vendedor_comisiones.comision) 
                 THEN 0 
@@ -97,7 +98,7 @@ const GET_SALES = async (req, res) => {
       )
       .from(`${masterTable}`)
       .innerJoin(`${slaveTable}`, `${slaveTable}.${idInvoice}`, `${masterTable}.${idInvoice}`)
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .leftJoin("fact_vendedor_comisiones", function () {
         this.on("fact_vendedor_comisiones.grupoId", "productos.Grupo").andOn(
           "fact_vendedor_comisiones.masterfactId",
@@ -109,7 +110,12 @@ const GET_SALES = async (req, res) => {
       .andWhere(`${masterTable}.Anulada`, 0)
       .groupBy(`${masterTable}.${idInvoice}`)
       .orderBy(`${masterTable}.Fecha`, "DESC");
-    res.status(200).json(response);
+    res.status(200).json(
+      response.map(({ linesWithoutCommissionGroup, ...sale }) => ({
+        ...sale,
+        commissionTotal: Number(linesWithoutCommissionGroup || 0) > 0 ? null : sale.commissionTotal,
+      })),
+    );
   } catch (error) {
     if (error.code === "ER_NO_SUCH_TABLE") {
       FALLBACK_CREATE_TABLE(() => {

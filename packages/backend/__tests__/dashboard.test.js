@@ -191,8 +191,8 @@ describe("GET /api/dashboard/pareto", () => {
         .query({ ...WIDE_RANGE, showNoe: "false" }),
     ]);
 
-    const soldNames = new Set(sales.body.products.map((p) => p.product));
-    const leaked = unsold.body.products.filter((p) => soldNames.has(p.product));
+    const soldIds = new Set(sales.body.products.map((p) => String(p.productId).toLowerCase()));
+    const leaked = unsold.body.products.filter((p) => soldIds.has(String(p.productId).toLowerCase()));
     expect(leaked).toEqual([]);
   });
 
@@ -268,11 +268,12 @@ describe("GET /api/dashboard/pareto", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.products.length).toBeGreaterThan(0);
-    const values = res.body.products.map((p) => Number(p.inventoryValue));
+    const knownProducts = res.body.products.filter((p) => p.inventoryValue != null);
+    const values = knownProducts.map((p) => Number(p.inventoryValue));
     expect(values).toEqual([...values].sort((a, b) => a - b));
     const [{ PrecioA, Existencia }] = await require("../database")("productos")
       .select("PrecioA", "Existencia")
-      .where("IdProducto", res.body.products[0].productId);
+      .where("IdProducto", knownProducts[0].productId);
     expect(values[0]).toBeCloseTo(Number(PrecioA || 0) * Number(Existencia || 0), 2);
     expect(res.body.products[0]).toHaveProperty("abcClass");
   });

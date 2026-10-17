@@ -50,9 +50,10 @@ const columns = [
         Header: 'Comisión',
         accessor: 'commissionTotal',
         Cell: ({ value }) => {
-            return value ? `$${value}` : '';
+            return value == null ? 'No disponible' : value ? `$${value}` : '';
         },
         Footer: ({ data }) => {
+            if (data.some((row) => row.commissionTotal == null)) return 'No disponible';
             const total = data.reduce((acc, current) => {
                 return acc + current.commissionTotal;
             }, 0);

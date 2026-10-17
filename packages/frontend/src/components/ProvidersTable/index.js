@@ -7,7 +7,7 @@ import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
+import { formatCurrency, formatMoney, formatReportId, formatNumber } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import './styles.css';
 
@@ -69,7 +69,7 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                         accessor: 'IdProveedor',
                         Header: 'ID',
                         width: 'auto',
-                        render: (p) => String(p.IdProveedor ?? ''),
+                        render: (p) => String(formatReportId(p.IdProveedor) ?? ''),
                     },
                     { accessor: 'Empresa', Header: 'Empresa', width: '*', render: (p) => p.Empresa ?? '' },
                     {
@@ -183,7 +183,7 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
 
     const columns = useMemo(
         () => [
-            { Header: 'IdProveedor', accessor: 'IdProveedor' },
+            { Header: 'IdProveedor', accessor: 'IdProveedor', Cell: ({ value }) => formatReportId(value) },
             { Header: 'Empresa', accessor: 'Empresa' },
             {
                 Header: 'Total Compras',

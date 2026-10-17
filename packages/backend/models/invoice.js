@@ -53,7 +53,7 @@ exports.GET_INVOICES = async ({
   }
 
   if (ruta) {
-    idQuery.innerJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`).where("clientes.Ruta", ruta);
+    idQuery.leftJoin("clientes", "clientes.IdCliente", `${masterTable}.IdCliente`).where("clientes.Ruta", ruta);
   }
 
   // Count sobre el mismo query (ya DISTINCT por invoiceId) → total = facturas
@@ -114,15 +114,6 @@ exports.GET_INVOICES = async ({
     .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
     .leftJoin("grupos", "grupos.IdGrupo", "productos.Grupo")
     .whereIn(`${masterTable}.${idInvoice}`, invoiceIds)
-    .groupBy(
-      `${masterTable}.${idInvoice}`,
-      `${slaveTable}.IdProducto`,
-      `${slaveTable}.Descripcion`,
-      `${slaveTable}.Cantidad`,
-      `${slaveTable}.Precio`,
-      `${slaveTable}.Costo`,
-      "productos.Peso",
-    )
     .orderBy("productos.Descripcion", "DESC");
 
   // ── Step 3: Group line items into invoices ──
@@ -141,8 +132,8 @@ exports.GET_INVOICES = async ({
     invoices[invoice.invoiceId].products.push({
       productId: invoice.IdProducto,
       product: invoice.Descripcion,
-      quantity: Number(invoice.Cantidad.toFixed(2)),
-      price: Number(invoice.Precio.toFixed(2)),
+      quantity: Number(invoice.Cantidad),
+      price: Number(invoice.Precio),
       cost: Number(invoice.Costo != null ? invoice.Costo : 0),
       group: invoice.group,
       peso: Number(invoice.peso != null ? invoice.peso : 0),
@@ -152,14 +143,12 @@ exports.GET_INVOICES = async ({
   // Calculate invoice totals and profit
   Object.keys(invoices).forEach((invoiceId) => {
     const invoice = invoices[invoiceId];
-    invoice.total = 0;
-    invoice.utilidad = 0;
-    invoice.products.forEach((product) => {
-      invoice.total += product.quantity * product.price;
-      invoice.total = Number(invoice.total.toFixed(2));
-      invoice.utilidad += (product.price - product.cost) * product.quantity;
-      invoice.utilidad = Number(invoice.utilidad.toFixed(2));
-    });
+    invoice.total = Number(
+      invoice.products.reduce((sum, product) => sum + product.quantity * product.price, 0).toFixed(2),
+    );
+    invoice.utilidad = Number(
+      invoice.products.reduce((sum, product) => sum + (product.price - product.cost) * product.quantity, 0).toFixed(2),
+    );
   });
 
   const invoicesArray = Object.keys(invoices).map((key) => invoices[key]);
@@ -180,7 +169,9 @@ exports.GET_SALES_QUERY = async ({ from, to, groupId, showNoe, sortBy, sortDir, 
   try {
     const query = knex
       .select(
-        "productos.Descripcion as product",
+        knex.raw(
+          `COALESCE(NULLIF(productos.Descripcion, ''), MAX(NULLIF(${slaveTable}.Descripcion, '')), CONCAT('Producto no registrado (', COALESCE(${slaveTable}.IdProducto, 'sin ID'), ')')) as product`,
+        ),
         knex.raw(`ROUND(SUM(${slaveTable}.Cantidad), 3) as quantity`),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
@@ -192,19 +183,19 @@ exports.GET_SALES_QUERY = async ({ from, to, groupId, showNoe, sortBy, sortDir, 
       .innerJoin(masterTable, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
       .modify((query) => {
         if (groupId) {
-          query.innerJoin("grupos", "grupos.idGrupo", "productos.Grupo");
+          query.leftJoin("grupos", "grupos.idGrupo", "productos.Grupo");
         }
       })
       .whereBetween(`${masterTable}.Fecha`, [from, to])
       .modify((query) => {
         if (groupId) {
-          query.andWhere("grupos.idGrupo", groupId);
+          query.andWhere("productos.Grupo", groupId);
         }
       })
-      .groupBy("productos.IdProducto")
+      .groupBy(`${slaveTable}.IdProducto`)
       .orderBy(sortBy || "rawProfit", sortDir || "DESC");
 
     if (limit) query.limit(Number(limit));
@@ -223,7 +214,9 @@ exports.GET_BY_GROUP_QUERY = async ({ from, to, showNoe }) => {
   try {
     const response = await knex
       .select(
-        "grupos.Descripcion as categoria",
+        knex.raw(
+          "COALESCE(NULLIF(grupos.Descripcion, ''), CONCAT('Grupo no registrado (', COALESCE(NULLIF(productos.Grupo, ''), 'sin ID'), ')')) as categoria",
+        ),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
       )
@@ -231,10 +224,10 @@ exports.GET_BY_GROUP_QUERY = async ({ from, to, showNoe }) => {
       .innerJoin(masterTable, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-      .innerJoin("grupos", "grupos.idGrupo", "productos.Grupo")
+      .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+      .leftJoin("grupos", "grupos.idGrupo", "productos.Grupo")
       .whereBetween(`${masterTable}.Fecha`, [from, to])
-      .groupBy("grupos.idGrupo");
+      .groupBy("productos.Grupo");
 
     return response;
   } catch (error) {
@@ -246,7 +239,9 @@ exports.GET_SALES_BY_CATEGORY = async ({ from, to, categoryId, showNoe }) => {
   const { masterTable, slaveTable, idInvoice } = showNoe;
   const response = await knex
     .select(
-      "grupos.Descripcion as categoria",
+      knex.raw(
+        "COALESCE(NULLIF(grupos.Descripcion, ''), CONCAT('Grupo no registrado (', COALESCE(NULLIF(productos.Grupo, ''), 'sin ID'), ')')) as categoria",
+      ),
       knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as rawProfit`),
       knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as netProfit`),
     )
@@ -254,11 +249,11 @@ exports.GET_SALES_BY_CATEGORY = async ({ from, to, categoryId, showNoe }) => {
     .innerJoin(masterTable, function () {
       this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
     })
-    .innerJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
-    .innerJoin("grupos", "grupos.idGrupo", "productos.Grupo")
+    .leftJoin("productos", "productos.IdProducto", `${slaveTable}.IdProducto`)
+    .leftJoin("grupos", "grupos.idGrupo", "productos.Grupo")
     .whereBetween(`${masterTable}.Fecha`, [from, to])
-    .andWhere("grupos.idGrupo", categoryId)
-    .groupBy("grupos.idGrupo");
+    .andWhere("productos.Grupo", categoryId)
+    .groupBy("productos.Grupo");
 
   return response;
 };
