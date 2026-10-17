@@ -1,7 +1,8 @@
 import Table from 'components/Table';
 import { DateTime } from 'luxon';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Form, Modal, Spinner } from 'react-bootstrap';
+import Modal from 'components/Modal';
+import { Alert, Button, Form, Spinner } from 'react-bootstrap';
 import './styles.css';
 
 const EMPTY_PRODUCTS = [];

@@ -4,7 +4,7 @@
 
 Revisión de todos los archivos JavaScript/JSX y CSS de `packages/frontend/src`, excluyendo pruebas y artefactos de compilación. Incluye ventas, compras, clientes, proveedores, inventario, vendedores, cuentas por cobrar, configuración y sus modales.
 
-Resultado: 24 usos de `Table` en 22 archivos consumidores. El único elemento HTML `<table>` de la aplicación está en `packages/frontend/src/components/Table/index.js`.
+Resultado: 25 usos de `Table` en 23 archivos consumidores, incluyendo el detalle de vendedores, clientes y documentos de un producto del proveedor. El único elemento HTML `<table>` de la aplicación está en `packages/frontend/src/components/Table/index.js`.
 
 ## Hallazgos y correcciones
 

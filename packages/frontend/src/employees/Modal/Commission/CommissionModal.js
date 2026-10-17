@@ -1,7 +1,8 @@
 import { updateComisionInfo } from 'api/employees';
 import { useComisionInfo } from 'hooks/useEmployees';
 import { useState } from 'react';
-import { Alert, Button, Modal, Spinner } from 'react-bootstrap';
+import Modal from 'components/Modal';
+import { Alert, Button, Spinner } from 'react-bootstrap';
 
 const CommissionModal = ({ employee, show, onClose }) => {
     const [formData, setFormData] = useState({});

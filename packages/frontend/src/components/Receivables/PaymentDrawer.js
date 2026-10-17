@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Offcanvas from 'react-bootstrap/Offcanvas';
+import { modalManager } from 'components/Modal';
 import Spinner from 'react-bootstrap/Spinner';
 import { money } from './format';
 import OperationForm from './OperationForm';
@@ -60,6 +61,7 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
     };
     return (
         <Offcanvas
+            manager={modalManager}
             show
             placement="end"
             backdrop

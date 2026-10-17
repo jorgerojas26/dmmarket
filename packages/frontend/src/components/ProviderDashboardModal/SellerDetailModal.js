@@ -1,12 +1,14 @@
 import { fetchProviderClients, fetchProviderSales } from 'api/providers';
 import Table from 'components/Table';
+import InvoiceDetailModal from 'components/InvoiceDetailModal';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { useProviderClients, useProviderSales } from 'hooks/useProviders';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useState } from 'react';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { Alert, Button, Modal } from 'react-bootstrap';
+import Modal from 'components/Modal';
+import { Alert, Button } from 'react-bootstrap';
 import { formatCurrency, formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
@@ -37,6 +39,7 @@ const SALES_COLUMNS = [
 
 const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
+    const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
     const [printError, setPrintError] = useState('');
     const [clientPage, setClientPage] = useState(1);
     const [clientSearch, setClientSearch] = useState('');
@@ -44,7 +47,7 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
     const [selectedClient, setSelectedClient] = useState(null);
     const [salesPage, setSalesPage] = useState(1);
     const [salesSort, setSalesSort] = useState(DEFAULT_SALES_SORT);
-    const params = { ...dateRange, showNoe, sellerId: seller.sellerId, limit: LIMIT };
+    const params = { ...dateRange, showNoe, sellerId: seller.sellerId ?? '__none__', limit: LIMIT };
     const {
         data: clients,
         isLoading: clientsLoading,
@@ -178,71 +181,83 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
     };
 
     return (
-        <Modal show={show} onHide={onClose} size="xl" scrollable className="provider-dashboard-modal">
-            <Modal.Header closeButton>
-                <div>
-                    <Modal.Title>{seller.vendedor}</Modal.Title>
-                    <div className="provider-modal-subtitle">
-                        {provider.Empresa} · {DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} —{' '}
-                        {DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')} ·{' '}
-                        {showNoe ? 'Notas de entrega' : 'Facturas'}
-                    </div>
-                </div>
-            </Modal.Header>
-            <Modal.Body>
-                {printError && <Alert variant="danger">{printError}</Alert>}
-                {clientsError && (
-                    <Alert variant="danger">No se pudieron cargar los clientes. Intenta nuevamente.</Alert>
-                )}
-                <h5>Clientes</h5>
-                <p>Selecciona un cliente para consultar sus ventas con este vendedor.</p>
-                <Table
-                    columns={CLIENT_COLUMNS}
-                    data={clients?.data || []}
-                    loading={clientsLoading}
-                    showFooter={!!clients?.totals}
-                    summaries={clients?.totals}
-                    emptyMessage={clientsError ? 'Error al cargar clientes' : 'Sin clientes en este período'}
-                    onRowClick={handleClientClick}
-                    print={{
-                        enabled: true,
-                        onGlobalPrint: (config) => handlePrint('clients', config),
-                        storageKey: 'proveedor-vendedor-clientes',
-                    }}
-                    pagination={pagination(clients, clientPage, setClientPage)}
-                    search={{ enabled: true, onSearch: handleClientSearch, placeholder: 'Buscar por cliente...' }}
-                    sorting={{ enabled: true, sortBy: clientSort, onSort: handleClientSort }}
-                />
-                {selectedClient && (
-                    <section className="mt-4" key={selectedClient.clientId}>
-                        <div className="d-flex align-items-center justify-content-between mb-3">
-                            <h5 className="mb-0">Ventas de {selectedClient.cliente}</h5>
-                            <Button variant="outline-secondary" size="sm" onClick={() => setSelectedClient(null)}>
-                                Ocultar ventas
-                            </Button>
+        <>
+            <Modal show={show} onHide={onClose} size="xl" scrollable className="provider-dashboard-modal">
+                <Modal.Header closeButton>
+                    <div>
+                        <Modal.Title>{seller.vendedor}</Modal.Title>
+                        <div className="provider-modal-subtitle">
+                            {provider.Empresa} · {DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} —{' '}
+                            {DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')} ·{' '}
+                            {showNoe ? 'Notas de entrega' : 'Facturas'}
                         </div>
-                        {salesError && (
-                            <Alert variant="danger">No se pudieron cargar las ventas. Intenta nuevamente.</Alert>
-                        )}
-                        <Table
-                            print={{
-                                enabled: true,
-                                onGlobalPrint: (config) => handlePrint('sales', config),
-                                storageKey: 'proveedor-vendedor-cliente-ventas',
-                            }}
-                            columns={SALES_COLUMNS}
-                            data={sales?.data || []}
-                            loading={salesLoading}
-                            showFooter={!!sales?.totals}
-                            summaries={sales?.totals}
-                            emptyMessage={salesError ? 'Error al cargar ventas' : 'Sin ventas en este período'}
-                            pagination={pagination(sales, salesPage, setSalesPage)}
-                            sorting={{ enabled: true, sortBy: salesSort, onSort: handleSalesSort }}
-                        />
-                    </section>
-                )}
-            </Modal.Body>
-        </Modal>
+                    </div>
+                </Modal.Header>
+                <Modal.Body>
+                    {printError && <Alert variant="danger">{printError}</Alert>}
+                    {clientsError && (
+                        <Alert variant="danger">No se pudieron cargar los clientes. Intenta nuevamente.</Alert>
+                    )}
+                    <h5>Clientes</h5>
+                    <p>Selecciona un cliente para consultar sus ventas con este vendedor.</p>
+                    <Table
+                        columns={CLIENT_COLUMNS}
+                        data={clients?.data || []}
+                        loading={clientsLoading}
+                        showFooter={!!clients?.totals}
+                        summaries={clients?.totals}
+                        emptyMessage={clientsError ? 'Error al cargar clientes' : 'Sin clientes en este período'}
+                        onRowClick={handleClientClick}
+                        print={{
+                            enabled: true,
+                            onGlobalPrint: (config) => handlePrint('clients', config),
+                            storageKey: 'proveedor-vendedor-clientes',
+                        }}
+                        pagination={pagination(clients, clientPage, setClientPage)}
+                        search={{ enabled: true, onSearch: handleClientSearch, placeholder: 'Buscar por cliente...' }}
+                        sorting={{ enabled: true, sortBy: clientSort, onSort: handleClientSort }}
+                    />
+                    {selectedClient && (
+                        <section className="mt-4" key={selectedClient.clientId}>
+                            <div className="d-flex align-items-center justify-content-between mb-3">
+                                <h5 className="mb-0">Ventas de {selectedClient.cliente}</h5>
+                                <Button variant="outline-secondary" size="sm" onClick={() => setSelectedClient(null)}>
+                                    Ocultar ventas
+                                </Button>
+                            </div>
+                            {salesError && (
+                                <Alert variant="danger">No se pudieron cargar las ventas. Intenta nuevamente.</Alert>
+                            )}
+                            <Table
+                                print={{
+                                    enabled: true,
+                                    onGlobalPrint: (config) => handlePrint('sales', config),
+                                    storageKey: 'proveedor-vendedor-cliente-ventas',
+                                }}
+                                onRowClick={(sale) => setSelectedInvoiceId(sale.idFactura)}
+                                columns={SALES_COLUMNS}
+                                data={sales?.data || []}
+                                loading={salesLoading}
+                                showFooter={!!sales?.totals}
+                                summaries={sales?.totals}
+                                emptyMessage={salesError ? 'Error al cargar ventas' : 'Sin ventas en este período'}
+                                pagination={pagination(sales, salesPage, setSalesPage)}
+                                sorting={{ enabled: true, sortBy: salesSort, onSort: handleSalesSort }}
+                            />
+                        </section>
+                    )}
+                </Modal.Body>
+            </Modal>
+            {show && selectedInvoiceId != null && (
+                <InvoiceDetailModal
+                    key={`${selectedInvoiceId}-${showNoe}`}
+                    invoiceId={selectedInvoiceId}
+                    showNoe={showNoe}
+                    collapseProfit={false}
+                    onClose={() => setSelectedInvoiceId(null)}
+                />
+            )}
+        </>
     );
 };
 

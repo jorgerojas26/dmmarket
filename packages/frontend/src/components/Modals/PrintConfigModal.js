@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, Modal, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
+import Modal from 'components/Modal';
+import { Button, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
 import Select from 'react-select';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import {

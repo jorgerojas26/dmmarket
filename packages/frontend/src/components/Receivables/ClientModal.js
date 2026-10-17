@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Dropdown from 'react-bootstrap/Dropdown';
-import Modal from 'react-bootstrap/Modal';
+import Modal from 'components/Modal';
 import Spinner from 'react-bootstrap/Spinner';
 import DocumentList from './DocumentList';
 import { dateLabel, money } from './format';

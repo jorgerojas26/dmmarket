@@ -4,7 +4,8 @@ import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { Badge, Modal, Spinner } from 'react-bootstrap';
+import Modal from 'components/Modal';
+import { Badge, Spinner } from 'react-bootstrap';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import {
@@ -19,6 +20,7 @@ import {
 } from 'hooks/useProviders';
 import { formatCurrency, formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
+import ProductDetailModal from './ProductDetailModal';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import SaleDetailModal from './SaleDetailModal';
 import SellerDetailModal from './SellerDetailModal';
@@ -208,6 +210,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const [dateRange, setDateRange] = useState({ from: oneMonthAgo, to: today });
     const [activeTab, setActiveTab] = useState('ventas');
     const [selectedSeller, setSelectedSeller] = useState(null);
+    const [selectedProduct, setSelectedProduct] = useState(null);
 
     // Pagination
     const [purchasesPage, setPurchasesPage] = useState(1);
@@ -1013,6 +1016,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 emptyMessage: 'Sin productos en este período',
                 searchPlaceholder: 'Buscar por producto...',
                 columns: PRODUCTS_COLUMNS,
+                onRowClick: setSelectedProduct,
             },
         };
         const c = configs[tab];
@@ -1106,6 +1110,17 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 </Modal.Body>
             </Modal>
 
+            {selectedProduct && (
+                <ProductDetailModal
+                    key={`${provider?.IdProveedor}-${selectedProduct.productId}-${dateRange.from}-${dateRange.to}-${showNoe}`}
+                    show={show}
+                    onClose={() => setSelectedProduct(null)}
+                    product={selectedProduct}
+                    provider={provider}
+                    dateRange={dateRange}
+                    showNoe={showNoe}
+                />
+            )}
             {selectedSeller && (
                 <SellerDetailModal
                     key={`${provider?.IdProveedor}-${selectedSeller.sellerId}-${dateRange.from}-${dateRange.to}-${showNoe}`}

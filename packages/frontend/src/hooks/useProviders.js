@@ -49,7 +49,7 @@ export function useProviderSummary(providerId, { from, to, showNoe }, enabled = 
  */
 export function useProviderSales(
     providerId,
-    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe, sellerId, clientId },
+    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe, sellerId, clientId, productId },
     enabled = true,
 ) {
     const key =
@@ -65,6 +65,7 @@ export function useProviderSales(
                   sortBy,
                   sortDir,
                   showNoe,
+                  productId,
                   sellerId,
                   clientId,
               ]
@@ -81,6 +82,7 @@ export function useProviderSales(
                 sortBy,
                 sortDir,
                 showNoe,
+                productId,
                 sellerId,
                 clientId,
             }),
@@ -93,12 +95,25 @@ export function useProviderSales(
  */
 export function useProviderClients(
     providerId,
-    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe, sellerId },
+    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe, sellerId, productId },
     enabled = true,
 ) {
     const key =
         enabled && providerId && from && to
-            ? ['provider-clients', providerId, from, to, page, limit, search, sortBy, sortDir, showNoe, sellerId]
+            ? [
+                  'provider-clients',
+                  providerId,
+                  from,
+                  to,
+                  page,
+                  limit,
+                  search,
+                  sortBy,
+                  sortDir,
+                  showNoe,
+                  sellerId,
+                  productId,
+              ]
             : null;
     return useSWR(
         key,
@@ -112,6 +127,7 @@ export function useProviderClients(
                 sortBy,
                 sortDir,
                 showNoe,
+                productId,
                 sellerId,
             }),
         { keepPreviousData: true },
@@ -120,12 +136,12 @@ export function useProviderClients(
 
 export function useProviderSellers(
     providerId,
-    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe },
+    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe, productId },
     enabled = true,
 ) {
     const key =
         enabled && providerId && from && to
-            ? ['provider-sellers', providerId, from, to, page, limit, search, sortBy, sortDir, showNoe]
+            ? ['provider-sellers', providerId, from, to, page, limit, search, sortBy, sortDir, showNoe, productId]
             : null;
     return useSWR(
         key,
@@ -139,6 +155,7 @@ export function useProviderSellers(
                 sortBy,
                 sortDir,
                 showNoe,
+                productId,
             }),
         { keepPreviousData: true },
     );

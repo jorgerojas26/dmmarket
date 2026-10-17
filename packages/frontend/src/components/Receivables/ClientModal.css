@@ -762,12 +762,6 @@
     outline-offset: 3px;
 }
 
-.modal.cxc-closure-modal {
-    z-index: 1070;
-}
-.modal-backdrop.cxc-closure-backdrop {
-    z-index: 1065;
-}
 .cxc-account.cxc-closure-modal .modal-dialog {
     max-width: 520px;
     margin-left: auto;

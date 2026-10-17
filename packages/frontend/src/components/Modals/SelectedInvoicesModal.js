@@ -1,7 +1,8 @@
 import Table from 'components/Table';
 import dayjs from 'dayjs';
 import { useMemo } from 'react';
-import { Button, Modal } from 'react-bootstrap';
+import Modal from 'components/Modal';
+import { Button } from 'react-bootstrap';
 import './SelectedInvoicesModal.css';
 
 /**

@@ -1,7 +1,7 @@
 import { ResponsivePie } from '@nivo/pie';
 import ChartTooltip from 'components/ChartTooltip';
 import { useState } from 'react';
-import Modal from 'react-bootstrap/Modal';
+import Modal from 'components/Modal';
 import { formatCurrency, formatPercent } from 'utils/format';
 
 const CATEGORY_COLORS = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24'];
