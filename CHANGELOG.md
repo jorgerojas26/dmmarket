@@ -7,6 +7,28 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.6.0] - 2026-10-16
+
+### Nuevas funciones
+
+- **Vendedores de cada proveedor**: consulta cuánto vendió cada vendedor, su utilidad, las unidades vendidas y los clientes atendidos. Abre sus clientes y facturas para revisar el detalle e imprimir los listados.
+- **Seguimiento de un producto hasta sus clientes**: desde los productos de un proveedor puedes consultar quiénes lo vendieron, a qué clientes y en qué documentos. Filtra por vendedor o vuelve a ver todos los clientes del producto, con búsqueda, ordenamiento e impresión.
+
+### Mejoras
+
+- **Ventas del cliente más fáciles de consultar**: busca por documento o vendedor, ordena los resultados e imprime todas las páginas filtradas desde la ficha del cliente.
+- **Ficha del cliente con un período más cercano**: el rango inicial pasa de un año a un mes, conservando la referencia a la última factura cuando corresponde.
+- **Tablas con una presentación uniforme**: los listados de los distintos módulos y ventanas comparten colores, encabezados y filas de totales, también en respaldos, segmentos de clientes y facturas seleccionadas para despacho.
+
+### Correcciones
+
+- **Filtros de fechas más claros**: Despacho muestra el día actual al entrar y el filtro de Desglose de Clientes vuelve a aparecer a la derecha del título.
+- **Facturas y reportes completos aunque falten fichas**: las ventas, compras y sus importes se conservan cuando falta el registro de un cliente, vendedor, producto, grupo o proveedor. Los detalles de las facturas y notas de entrega también pueden abrirse en esos casos.
+- **Despachos con todas sus líneas**: las líneas repetidas de una factura ya no desaparecen y los importes se calculan sin redondear antes de tiempo sus cantidades o precios.
+- **Cartera histórica consultable**: las cuentas de clientes que ya no tienen ficha siguen disponibles para consulta, sin habilitar cobros sobre ellas ni relajar las comprobaciones de seguridad.
+- **Datos no disponibles claramente indicados**: cuando falta la información necesaria para determinar una comisión o el valor de inventario, se muestra «No disponible» en lugar de asumir un importe.
+- **Ventanas de detalle mejor separadas**: cada ventana superpuesta oscurece la anterior y permite regresar a ella sin perder la selección ni la información consultada.
+
 ## [v1.5.6] - 2026-10-16
 
 ### Mejoras
