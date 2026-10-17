@@ -29,7 +29,19 @@ const UpdateToast = () => {
             </Toast.Header>
             <Toast.Body>
                 {applied ? (
-                    <p className="mb-0">Actualización preparada. La app se reiniciará.</p>
+                    <>
+                        <p>Actualización preparada. La app se reiniciará.</p>
+                        {applyError ? (
+                            <>
+                                <p>{applyError}</p>
+                                <Button variant="light" onClick={() => window.location.reload()}>
+                                    Recargar página
+                                </Button>
+                            </>
+                        ) : (
+                            <p className="mb-0">La página se recargará automáticamente cuando termine el reinicio.</p>
+                        )}
+                    </>
                 ) : (
                     <>
                         <p>Versión {version} disponible.</p>

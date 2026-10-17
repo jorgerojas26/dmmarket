@@ -1,7 +1,7 @@
 const BASE_URL = '/api/update';
 
-export const fetchUpdateStatus = async () => {
-    const response = await fetch(`${BASE_URL}/status`);
+export const fetchUpdateStatus = async ({ signal } = {}) => {
+    const response = await fetch(`${BASE_URL}/status`, { cache: 'no-store', signal });
     const data = await response.json().catch(() => null);
     return { status: response.status, data };
 };

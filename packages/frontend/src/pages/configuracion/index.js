@@ -200,8 +200,15 @@ const ConfiguracionPage = () => {
                                     {checkError && <span className="text-danger">{checkError}</span>}
                                     {downloadError && <span className="text-danger">{downloadError}</span>}
                                     {applyError && <span className="text-danger">{applyError}</span>}
-                                    {(applying || applied) && (
-                                        <span className="text-info">Actualizando — la app se reiniciará…</span>
+                                    {(applying || applied) && !applyError && (
+                                        <span className="text-info">
+                                            Actualizando — la app se reiniciará… La página se recargará automáticamente.
+                                        </span>
+                                    )}
+                                    {applied && applyError && (
+                                        <Button variant="primary" onClick={() => window.location.reload()}>
+                                            Recargar página
+                                        </Button>
                                     )}
                                 </div>
 

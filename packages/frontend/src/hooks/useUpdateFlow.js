@@ -44,6 +44,51 @@ const useUpdateFlow = () => {
         };
     }, [downloading]);
 
+    useEffect(() => {
+        if (!applied) return undefined;
+        let cancelled = false;
+        let timer;
+        let controller;
+        const timeout = setTimeout(() => {
+            cancelled = true;
+            clearTimeout(timer);
+            controller?.abort();
+            setApplyError('El reinicio está tardando más de lo esperado. Recarga la página para comprobar el estado.');
+        }, 120000);
+
+        const waitForRestart = async () => {
+            controller = new AbortController();
+            const requestTimeout = setTimeout(() => controller.abort(), 5000);
+            try {
+                const { status: resStatus, data } = await fetchUpdateStatus({ signal: controller.signal });
+                if (
+                    !cancelled &&
+                    resStatus === 200 &&
+                    data?.currentVersion &&
+                    data.currentVersion === checkResult?.latestVersion &&
+                    data.currentVersion !== status?.currentVersion
+                ) {
+                    cancelled = true;
+                    clearTimeout(timeout);
+                    window.location.reload();
+                    return;
+                }
+            } catch {
+            } finally {
+                clearTimeout(requestTimeout);
+            }
+            if (!cancelled) timer = setTimeout(waitForRestart, 1000);
+        };
+
+        timer = setTimeout(waitForRestart, 1000);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+            clearTimeout(timeout);
+            controller?.abort();
+        };
+    }, [applied, checkResult?.latestVersion, status?.currentVersion]);
+
     const handleCheck = useCallback(async () => {
         if (busy.current) return;
         busy.current = true;
