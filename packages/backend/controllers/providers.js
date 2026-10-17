@@ -404,6 +404,11 @@ const GET_PROVIDER_SALES = async (req, res) => {
       });
     }
 
+    for (const query of [countQuery, dataQuery, totalsQuery]) {
+      if (req.query.sellerId) query.andWhere(`${masterTable}.IdVend`, req.query.sellerId);
+      if (req.query.clientId) query.andWhere(`${masterTable}.IdCliente`, req.query.clientId);
+    }
+
     const [{ count }] = await countQuery;
     const data = await dataQuery;
     const [totals] = await totalsQuery;
@@ -436,6 +441,8 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
         return "clientes.Empresa";
       case "totalVentas":
         return "totalVentas";
+      case "cantidad":
+        return "cantidad";
       case "numVentas":
         return "numVentas";
       case "utilidad":
@@ -460,7 +467,9 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
 
     const dataQuery = knex
       .select(
+        "clientes.IdCliente as clientId",
         "clientes.Empresa as cliente",
+        knex.raw(`COALESCE(SUM(${slaveTable}.Cantidad), 0) as cantidad`),
         knex.raw(`COUNT(DISTINCT ${masterTable}.${idInvoice}) as numVentas`),
         knex.raw(`ROUND(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 2) as totalVentas`),
         knex.raw(`ROUND(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 2) as utilidad`),
@@ -499,6 +508,10 @@ const GET_PROVIDER_CLIENTS = async (req, res) => {
       .where("productos.Proveedor", providerId)
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
     if (search) totalsQuery.where("clientes.Empresa", "like", `%${search}%`);
+
+    for (const query of [countQuery, dataQuery, totalsQuery]) {
+      if (req.query.sellerId) query.andWhere(`${masterTable}.IdVend`, req.query.sellerId);
+    }
 
     const [{ count }] = await countQuery;
     const data = await dataQuery;
@@ -558,6 +571,7 @@ const GET_PROVIDER_SELLERS = async (req, res) => {
 
     const dataQuery = knex
       .select(
+        "vendedores.IdVend as sellerId",
         "vendedores.Empresa as vendedor",
         knex.raw(`COUNT(DISTINCT ${masterTable}.IdCliente) as numClientes`),
         knex.raw(`COALESCE(SUM(${slaveTable}.Cantidad), 0) as cantidad`),

@@ -21,6 +21,7 @@ import { formatCurrency, formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import PurchaseDetailModal from './PurchaseDetailModal';
 import SaleDetailModal from './SaleDetailModal';
+import SellerDetailModal from './SellerDetailModal';
 import './styles.css';
 
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
@@ -206,6 +207,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
 
     const [dateRange, setDateRange] = useState({ from: oneMonthAgo, to: today });
     const [activeTab, setActiveTab] = useState('ventas');
+    const [selectedSeller, setSelectedSeller] = useState(null);
 
     // Pagination
     const [purchasesPage, setPurchasesPage] = useState(1);
@@ -996,6 +998,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 emptyMessage: sellersError ? 'Error al cargar vendedores' : 'Sin vendedores en este período',
                 searchPlaceholder: 'Buscar por vendedor...',
                 columns: SELLERS_COLUMNS,
+                onRowClick: setSelectedSeller,
             },
             productos: {
                 data: productsData,
@@ -1103,6 +1106,17 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 </Modal.Body>
             </Modal>
 
+            {selectedSeller && (
+                <SellerDetailModal
+                    key={`${provider?.IdProveedor}-${selectedSeller.sellerId}-${dateRange.from}-${dateRange.to}-${showNoe}`}
+                    show={show}
+                    onClose={() => setSelectedSeller(null)}
+                    seller={selectedSeller}
+                    provider={provider}
+                    dateRange={dateRange}
+                    showNoe={showNoe}
+                />
+            )}
             {detailModalShow && (
                 <PurchaseDetailModal
                     show={detailModalShow}
