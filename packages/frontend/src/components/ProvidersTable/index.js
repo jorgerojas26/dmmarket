@@ -214,7 +214,6 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                     columns={columns}
                     loading={isLoading}
                     onRowClick={onRowSelect}
-                    className="providers-table"
                     emptyMessage="Sin datos"
                     showFooter={!!summaries}
                     summaries={summaries}

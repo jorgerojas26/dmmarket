@@ -26,10 +26,14 @@ export const fetchMonthlyAverage = async (clientId, showNoe) => {
     return report;
 };
 
-export const fetchClientSales = async (clientId, { from, to, page = 1, limit = 20, showNoe }) => {
-    const response = await fetch(
-        `${BASE_URL}/${clientId}/sales?from=${from}&to=${to}&page=${page}&limit=${limit}&showNoe=${showNoe}`,
-    );
+export const fetchClientSales = async (
+    clientId,
+    { from, to, page = 1, limit = 20, showNoe, search, sortBy = 'fecha', sortDir = 'desc' },
+) => {
+    const params = new URLSearchParams({ from, to, page, limit, showNoe, sortBy, sortDir });
+    if (search) params.set('search', search);
+    const response = await fetch(`${BASE_URL}/${clientId}/sales?${params}`);
+    if (!response.ok) throw new Error('Error al cargar las ventas del cliente');
     return response.json();
 };
 

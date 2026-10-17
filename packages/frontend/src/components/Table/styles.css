@@ -1,3 +1,75 @@
+div.table-container {
+    overflow: auto;
+}
+
+.data-table {
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    border-collapse: collapse;
+    border: 1px solid #2d3138;
+    background: #1e2126;
+}
+.data-table th {
+    background: #252830;
+    color: #9ca3af;
+    border: none;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 8px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.data-table td {
+    background: #1e2126;
+    color: #c4cad4;
+    font-weight: 400;
+    border-right: 1px solid #2d3138;
+    padding: 10px 8px;
+    font-size: 0.88rem;
+}
+.data-table td:first-child {
+    padding: 10px 8px;
+    text-align: left;
+}
+.data-table td:last-child {
+    border-right: none;
+}
+.data-table strong {
+    color: #e4e6ea;
+    font-weight: 600;
+}
+.data-table tr {
+    border-bottom: 1px solid #2d3138;
+}
+.data-table tr:last-child {
+    border-bottom: none;
+}
+.data-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+.data-table tfoot {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: #252830;
+}
+.data-table tfoot td {
+    color: #e4e6ea;
+    font-weight: 700;
+    background: #252830;
+    border-top: 1px solid #2d3138;
+}
+
+.table-container tr.row-selected,
+.table-container tr.row-selected td {
+    background: #2d3748;
+    color: #e4e6ea;
+}
+
 /* ── Table toolbar ── */
 .table-toolbar {
     display: flex;
@@ -291,7 +363,7 @@ th.sortable-header:hover {
    espacio extra entre las filas → con pocas filas crecen para llenar el
    contenedor. Acá las filas conservan su alto natural; el contenedor
    (overflow: auto) absorbe el espacio sobrante. */
-div.table-container > table {
+div.table-container > .data-table {
     height: auto;
 }
 
@@ -311,7 +383,7 @@ div.table-container.table-empty {
     flex-direction: column;
 }
 
-div.table-container.table-empty > table {
+div.table-container.table-empty > .data-table {
     height: 100%;
     flex: 1 1 auto;
     min-height: 0;
@@ -319,13 +391,13 @@ div.table-container.table-empty > table {
     flex-direction: column;
 }
 
-div.table-container.table-empty > table thead {
+div.table-container.table-empty > .data-table thead {
     display: table;
     width: 100%;
     flex-shrink: 0;
 }
 
-div.table-container.table-empty > table tbody.table-body-empty {
+div.table-container.table-empty > .data-table tbody.table-body-empty {
     flex: 1 1 auto;
     display: flex;
     min-height: 0;
@@ -367,4 +439,9 @@ div.table-container.table-empty tbody.table-body-empty td.table-empty-cell {
 .table-empty-subtitle {
     font-size: 0.82rem;
     color: #6b7280;
+}
+
+.table-container[tabindex]:focus-visible {
+    outline: 2px solid #0d6efd;
+    outline-offset: -2px;
 }

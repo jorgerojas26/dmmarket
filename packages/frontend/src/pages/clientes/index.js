@@ -132,9 +132,7 @@ const ClientesPage = () => {
                         <div className="report-page">
                             <div className="clients-content-wrapper report-page-header mb-3">
                                 <h4 className="m-0 text-light">Desglose de Clientes</h4>
-                            </div>
-                            <div className="clients-content-wrapper">
-                                <div className="report-page-filters mb-3">
+                                <div className="report-page-filters">
                                     <div className="clients-page-route-filter">
                                         <RouteFilter
                                             value={selectedRuta}

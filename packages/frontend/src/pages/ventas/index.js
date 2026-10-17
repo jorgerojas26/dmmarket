@@ -10,12 +10,13 @@ import DesgloseView from './DesgloseView';
 import DespachoView from './DespachoView';
 
 const VALID_VIEWS = ['dashboard', 'desglose', 'despacho'];
-const DEFAULT_FROM_BY_VIEW = {
-    dashboard: DateTime.now().startOf('year').toISODate(),
-    desglose: DateTime.now().startOf('day').toISODate(),
-    despacho: DateTime.now().startOf('day').toISODate(),
+const getDefaultDateRange = (view) => {
+    const now = DateTime.now();
+    return {
+        from: view === 'dashboard' ? now.startOf('year').toISODate() : now.toISODate(),
+        to: now.toISODate(),
+    };
 };
-const DEFAULT_TO = DateTime.now().toISODate();
 
 const VentasPage = () => {
     const { showNoe } = useContext(ShowNoeContext);
@@ -29,9 +30,10 @@ const VentasPage = () => {
     const urlTo = searchParams.get('to');
 
     const initialView = VALID_VIEWS.includes(urlView) ? urlView : 'dashboard';
+    const defaultDateRange = getDefaultDateRange(initialView);
     const initialDateRange = {
-        from: urlFrom || DEFAULT_FROM_BY_VIEW[initialView] || DEFAULT_TO,
-        to: urlTo || DEFAULT_TO,
+        from: urlFrom || defaultDateRange.from,
+        to: urlTo || defaultDateRange.to,
     };
 
     const [activeView, setActiveView] = useState(initialView);
@@ -49,10 +51,7 @@ const VentasPage = () => {
     const handleViewChange = useCallback((view) => {
         setActiveView(view);
         if (VALID_VIEWS.includes(view)) {
-            setDateRange({
-                from: DEFAULT_FROM_BY_VIEW[view] || DEFAULT_TO,
-                to: DEFAULT_TO,
-            });
+            setDateRange(getDefaultDateRange(view));
         }
     }, []);
 
@@ -162,6 +161,7 @@ const VentasPage = () => {
                         <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
                             <h4 className="m-0 p-0 bg-red text-light">{currentView.heading}</h4>
                             <DateRangePicker
+                                key={activeView}
                                 initialFrom={dateRange.from}
                                 initialTo={dateRange.to}
                                 onChange={handleDateRangeChange}

@@ -230,9 +230,6 @@
     width: auto;
     font-size: 0.8rem;
 }
-.cxc-documents td {
-    vertical-align: top;
-}
 .cxc-documents small {
     display: block;
     margin-top: 0.3rem;

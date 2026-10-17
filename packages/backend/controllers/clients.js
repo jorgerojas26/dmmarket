@@ -142,21 +142,44 @@ const MONTHLY_AVERAGE = async (req, res) => {
 
 const GET_CLIENT_SALES = async (req, res) => {
   const { clientId } = req.params;
-  const { from, to, page = 1, limit = 20 } = req.query;
+  const { from, to, page = 1, limit = 20, search, sortBy = "fecha", sortDir = "desc" } = req.query;
   const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
   const offset = (page - 1) * limit;
 
+  const sortColumns = {
+    idFactura: `${masterTable}.${idInvoice}`,
+    vendedor: "vendedores.Empresa",
+    fecha: `${masterTable}.Fecha`,
+    monto: "monto",
+    utilidad: "utilidad",
+  };
+  const sortColumn = Object.hasOwn(sortColumns, sortBy) ? sortColumns[sortBy] : sortColumns.fecha;
+  const direction = String(sortDir).toLowerCase() === "asc" ? "asc" : "desc";
+  const applySearch = (query) => {
+    if (search) {
+      query.andWhere(function () {
+        this.where(`${masterTable}.${idInvoice}`, "like", `%${search}%`).orWhere(
+          "vendedores.Empresa",
+          "like",
+          `%${search}%`,
+        );
+      });
+    }
+    return query;
+  };
+
   try {
-    const [{ count }] = await knex
+    const countQuery = knex
       .countDistinct({ count: `${masterTable}.${idInvoice}` })
       .from(`${slaveTable}`)
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
+      .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
       .whereBetween(`${masterTable}.Fecha`, [from, to])
       .andWhere(`${masterTable}.IdCliente`, clientId);
 
-    const data = await knex
+    const dataQuery = knex
       .select(
         knex.raw("?? as idFactura", [`${masterTable}.${idInvoice}`]),
         "vendedores.Empresa as vendedor",
@@ -168,15 +191,16 @@ const GET_CLIENT_SALES = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
-      .innerJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
+      .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
       .whereBetween(`${masterTable}.Fecha`, [from, to])
       .andWhere(`${masterTable}.IdCliente`, clientId)
       .groupBy(`${masterTable}.${idInvoice}`)
-      .orderBy(`${masterTable}.Fecha`, "desc")
+      .orderBy(sortColumn, direction)
+      .orderBy(`${masterTable}.${idInvoice}`, direction)
       .limit(Number(limit))
       .offset(Number(offset));
 
-    const [totals] = await knex
+    const totalsQuery = knex
       .select(
         knex.raw(`ROUND(COALESCE(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 0), 2) as monto`),
         knex.raw(
@@ -187,8 +211,13 @@ const GET_CLIENT_SALES = async (req, res) => {
       .innerJoin(`${masterTable}`, function () {
         this.on(`${masterTable}.${idInvoice}`, `${slaveTable}.${idInvoice}`).andOn(`${masterTable}.Anulada`, 0);
       })
+      .leftJoin("vendedores", "vendedores.IdVend", `${masterTable}.IdVend`)
       .whereBetween(`${masterTable}.Fecha`, [from, to])
       .andWhere(`${masterTable}.IdCliente`, clientId);
+
+    const [{ count }] = await applySearch(countQuery);
+    const data = await applySearch(dataQuery);
+    const [totals] = await applySearch(totalsQuery);
 
     res.status(200).json({
       data,

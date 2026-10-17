@@ -485,7 +485,8 @@ const Table = ({
         (row) => {
             prepareRow(row);
             if (onRowSelect && multiSelect) return <SelectRow key={row.id} row={row} multiSelect={multiSelect} />;
-            if (onRowSelect || onRowClick) return <ClickableRow key={row.id} row={row} onClick={onRowSelect || onRowClick} />;
+            if (onRowSelect || onRowClick)
+                return <ClickableRow key={row.id} row={row} onClick={onRowSelect || onRowClick} />;
             return <StaticRow key={row.id} row={row} />;
         },
         // SelectRow cierra sobre selectedRows/selectedIdSet: cuando la selección
@@ -856,7 +857,7 @@ const Table = ({
 
     /* ── Table element ── */
     const tableElement = (
-        <table {...getTableProps()} className={className}>
+        <table {...getTableProps()} className={['data-table', className].filter(Boolean).join(' ')}>
             {thead}
             {tbody}
             {tfoot}

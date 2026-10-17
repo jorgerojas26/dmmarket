@@ -333,72 +333,12 @@
     color: #adb5c1;
 }
 
-.backups-panel .backups-table {
-    height: auto;
-    border: 0;
-    text-align: left;
-    color: #d8dde5;
-    font-size: 12px;
-    margin: 0;
-    border-color: #353b44;
-}
-
-.backups-table th {
-    position: static;
-    text-transform: none;
-    letter-spacing: 0;
-    font-size: inherit;
-    color: inherit;
-}
-
-.backups-table td {
-    border-right: 0;
-    font-size: inherit;
-    color: inherit;
-    min-width: 75px;
-}
-
-.backups-panel .backups-table > :not(:first-child) {
-    border-top: 1px solid #353b44;
-}
-
-.backups-table > :not(caption) > * > * {
-    background: transparent;
-    box-shadow: none;
-    padding: 14px 10px;
-    border-bottom: 1px solid #353b44;
-    vertical-align: middle;
-}
-
-.backups-table thead th {
-    background: #191c21;
-    color: #adb5c1;
-    font-weight: 500;
-    padding-top: 10px;
-    padding-bottom: 10px;
-}
-
-.backups-table tbody tr:hover {
-    background: #262b33;
-}
-
-.backups-table .backups-filename {
-    min-width: 180px;
-    font-weight: 500;
-    overflow-wrap: anywhere;
-}
-
 .backups-filename svg {
     width: 16px;
     height: 16px;
     color: #93c5fd;
     vertical-align: middle;
     margin-right: 4px;
-}
-
-.backups-table td[data-label="Finalizado"] {
-    min-width: 130px;
-    font-variant-numeric: tabular-nums;
 }
 
 .backups-details {
@@ -578,58 +518,6 @@
 
     .backups-stat dd:not(.backups-stat-note) {
         font-size: 18px;
-    }
-
-    .backups-table thead {
-        display: none;
-    }
-
-    .backups-panel .backups-table > :not(:first-child) {
-        border-top: 0;
-    }
-
-    .backups-table,
-    .backups-table tbody,
-    .backups-table tr,
-    .backups-table .backups-filename,
-    .backups-table td {
-        display: block;
-        width: 100%;
-        min-width: 0;
-    }
-
-    .backups-table tbody tr {
-        background: #191c21;
-        border: 1px solid #353b44;
-        border-radius: 8px;
-        padding: 12px;
-        margin-bottom: 10px;
-    }
-
-    .backups-table > :not(caption) > * > * {
-        padding: 6px 0;
-        border: 0;
-    }
-
-    .backups-table .backups-filename {
-        padding: 0 0 10px;
-        margin-bottom: 6px;
-        border-bottom: 1px solid #353b44;
-    }
-
-    .backups-table td[data-label] {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        min-width: 0;
-        text-align: right;
-    }
-
-    .backups-table td::before {
-        content: attr(data-label);
-        color: #adb5c1;
-        text-align: left;
     }
 }
 

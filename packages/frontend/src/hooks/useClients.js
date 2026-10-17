@@ -93,9 +93,16 @@ export function useMonthlyAverage(clientId, showNoe, enabled = true) {
 /**
  * Client sales (paginated).
  */
-export function useClientSales(clientId, { from, to, page = 1, limit = 20, showNoe }, enabled = true) {
-    const key = enabled && clientId && from && to ? ['client-sales', clientId, from, to, page, limit, showNoe] : null;
-    return useSWR(key, () => fetchClientSales(clientId, { from, to, page, limit, showNoe }), {
+export function useClientSales(
+    clientId,
+    { from, to, page = 1, limit = 20, showNoe, search, sortBy = 'fecha', sortDir = 'desc' },
+    enabled = true,
+) {
+    const key =
+        enabled && clientId && from && to
+            ? ['client-sales', clientId, from, to, page, limit, showNoe, search, sortBy, sortDir]
+            : null;
+    return useSWR(key, () => fetchClientSales(clientId, { from, to, page, limit, showNoe, search, sortBy, sortDir }), {
         keepPreviousData: true,
     });
 }

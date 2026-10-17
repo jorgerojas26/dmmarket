@@ -1,4 +1,8 @@
 import { ResponsiveLine } from '@nivo/line';
+import { fetchClientSales } from 'api/clients';
+import { CurrencyRateContext } from 'context/currency_rate';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
 import DateRangePicker from 'components/DateRangePicker';
 import Table from 'components/Table';
 import { fetchInvoiceDetail } from 'api/invoice';
@@ -6,13 +10,45 @@ import { ShowNoeContext } from 'context/show_noe';
 import { useClientSales, useClientSummary } from 'hooks/useClients';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { Badge, Modal, Spinner } from 'react-bootstrap';
-import { formatCurrency } from 'utils/format';
+import { Alert, Badge, Modal, Spinner } from 'react-bootstrap';
+import { formatCurrency, formatMoney } from 'utils/format';
+import { sortRows } from 'utils/sortRows';
 import SaleDetailModal from '../ProviderDashboardModal/SaleDetailModal';
 import './styles.css';
 
+pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
+
+const DEFAULT_SORT = [{ id: 'fecha', desc: true }];
 const LIMIT = 50;
 const CHART_LIMIT = 1000;
+
+const SALES_COLUMNS = [
+    { Header: 'Documento', accessor: 'idFactura' },
+    { Header: 'Vendedor', accessor: 'vendedor' },
+    {
+        Header: 'Fecha',
+        accessor: 'fecha',
+        Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }),
+    },
+    {
+        Header: 'Monto',
+        accessor: 'monto',
+        Cell: ({ value }) => formatCurrency(value),
+        Footer: ({ data, summary }) =>
+            formatCurrency(
+                summary != null ? Number(summary) : data.reduce((sum, row) => sum + Number(row.monto || 0), 0),
+            ),
+    },
+    {
+        Header: 'Utilidad',
+        accessor: 'utilidad',
+        Cell: ({ value }) => formatCurrency(value),
+        Footer: ({ data, summary }) =>
+            formatCurrency(
+                summary != null ? Number(summary) : data.reduce((sum, row) => sum + Number(row.utilidad || 0), 0),
+            ),
+    },
+];
 
 const IconSales = () => (
     <svg
@@ -107,20 +143,20 @@ const aggregateSalesByMonth = (sales) => {
 
 const ClientDashboardModal = ({ show, onClose, client }) => {
     const { showNoe } = useContext(ShowNoeContext);
+    const { currencyRate } = useContext(CurrencyRateContext) || {};
+    const [salesSearch, setSalesSearch] = useState('');
+    const [salesSort, setSalesSort] = useState(DEFAULT_SORT);
+    const [printError, setPrintError] = useState('');
 
     const today = DateTime.now().toISODate();
-    const oneYearAgo = DateTime.now().minus({ years: 1 }).toISODate();
-
-    // Smart default: anchor the range on the client's last invoice (when known,
-    // e.g. from the "Clientes Sin Facturar" table), so inactive clients open on
-    // their real activity window instead of an empty last year.
+    const oneMonthAgo = DateTime.now().minus({ months: 1 }).toISODate();
     const initialRange =
         client?.last_factura && DateTime.fromISO(client.last_factura).isValid
             ? {
-                  from: DateTime.fromISO(client.last_factura).minus({ years: 1 }).toISODate(),
+                  from: DateTime.fromISO(client.last_factura).minus({ months: 1 }).toISODate(),
                   to: DateTime.fromISO(client.last_factura).toISODate(),
               }
-            : { from: oneYearAgo, to: today };
+            : { from: oneMonthAgo, to: today };
 
     const [dateRange, setDateRange] = useState(initialRange);
     const [salesPage, setSalesPage] = useState(1);
@@ -137,13 +173,20 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
         isLoading: summaryLoading,
     } = useClientSummary(client?.IdCliente, { from: dateRange.from, to: dateRange.to, showNoe }, clientEnabled);
 
-    const { data: salesData, isLoading: salesLoading } = useClientSales(
+    const {
+        data: salesData,
+        isLoading: salesLoading,
+        error: salesError,
+    } = useClientSales(
         client?.IdCliente,
         {
             from: dateRange.from,
             to: dateRange.to,
             page: salesPage,
             limit: LIMIT,
+            search: salesSearch || undefined,
+            sortBy: salesSort[0]?.id,
+            sortDir: salesSort[0]?.desc ? 'desc' : 'asc',
             showNoe,
         },
         clientEnabled,
@@ -173,6 +216,83 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
     const handleDateRangeChange = ({ from, to }) => {
         setDateRange({ from, to });
         setSalesPage(1);
+    };
+
+    const handleSalesSearch = useCallback((term) => {
+        setSalesSearch(term || '');
+        setSalesPage(1);
+    }, []);
+
+    const handleSalesSort = useCallback((sort) => {
+        setSalesSort(sort.length ? sort : DEFAULT_SORT);
+        setSalesPage(1);
+    }, []);
+
+    const handlePrintSales = async (config) => {
+        setPrintError('');
+        try {
+            const result = await fetchClientSales(client.IdCliente, {
+                ...dateRange,
+                page: 1,
+                limit: salesData?.total || LIMIT,
+                search: salesSearch || undefined,
+                sortBy: salesSort[0]?.id,
+                sortDir: salesSort[0]?.desc ? 'desc' : 'asc',
+                showNoe,
+            });
+            const rows = sortRows(result.data || [], config?.sortBy);
+            const columns = config?.columns?.length ? config.columns : SALES_COLUMNS;
+            const moneyKeys = ['monto', 'utilidad'];
+            const formatValue = (key, value) => {
+                if (moneyKeys.includes(key)) return formatMoney(value, config?.currency, currencyRate?.Cambio);
+                if (key === 'fecha') return DateTime.fromISO(value).toFormat('dd/MM/yyyy');
+                return String(value ?? '');
+            };
+            pdfMake
+                .createPdf({
+                    content: [
+                        { text: 'ALIMENTOS DM MARKET, C.A.', style: 'header' },
+                        { text: 'R.I.F.: J-41270446-0', style: 'header' },
+                        { text: `Ventas de: ${client.Empresa}`, style: 'subtitle' },
+                        {
+                            text: `Período: ${DateTime.fromISO(dateRange.from).toFormat('dd/MM/yyyy')} — ${DateTime.fromISO(dateRange.to).toFormat('dd/MM/yyyy')} · ${showNoe ? 'Notas de entrega' : 'Facturas'}`,
+                            style: 'subtitle',
+                        },
+                        ...(salesSearch ? [{ text: `Búsqueda: ${salesSearch}`, style: 'subtitle' }] : []),
+                        {
+                            margin: [0, 12, 0, 0],
+                            fontSize: 8,
+                            table: {
+                                headerRows: 1,
+                                widths: columns.map((column) => (column.accessor === 'vendedor' ? '*' : 'auto')),
+                                body: [
+                                    columns.map((column) => ({ text: column.Header, bold: true })),
+                                    ...rows.map((row) =>
+                                        columns.map((column) => formatValue(column.accessor, row[column.accessor])),
+                                    ),
+                                    columns.map((column) => ({
+                                        text: moneyKeys.includes(column.accessor)
+                                            ? formatValue(column.accessor, result.totals?.[column.accessor] ?? 0)
+                                            : '',
+                                        bold: true,
+                                    })),
+                                ],
+                            },
+                        },
+                    ],
+                    styles: {
+                        header: { alignment: 'center', fontSize: 10, bold: true },
+                        subtitle: { alignment: 'center', fontSize: 9, margin: [0, 4, 0, 0] },
+                    },
+                    pageMargins: 40,
+                    pageSize: 'LETTER',
+                    pageOrientation: config?.orientation || 'portrait',
+                })
+                .open();
+        } catch (error) {
+            console.error('Failed to print client sales:', error);
+            setPrintError('No se pudo generar la impresión. Intenta nuevamente.');
+        }
     };
 
     const handleSaleRowClick = useCallback(
@@ -370,43 +490,20 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
             <div className="card-body">
                 <Table
                     data={salesData?.data || []}
-                    columns={[
-                        { Header: 'Vendedor', accessor: 'vendedor' },
-                        {
-                            Header: 'Fecha',
-                            accessor: 'fecha',
-                            Cell: ({ value }) => DateTime.fromISO(value).toFormat('dd MMM yyyy', { locale: 'es' }),
-                        },
-                        {
-                            Header: 'Monto',
-                            accessor: 'monto',
-                            Cell: ({ value }) => formatCurrency(value),
-                            Footer: ({ data, summary }) =>
-                                formatCurrency(
-                                    summary != null
-                                        ? Number(summary)
-                                        : data.reduce((sum, row) => sum + Number(row.monto || 0), 0),
-                                ),
-                        },
-                        {
-                            Header: 'Utilidad',
-                            accessor: 'utilidad',
-                            Cell: ({ value }) => formatCurrency(value),
-                            Footer: ({ data, summary }) =>
-                                formatCurrency(
-                                    summary != null
-                                        ? Number(summary)
-                                        : data.reduce((sum, row) => sum + Number(row.utilidad || 0), 0),
-                                ),
-                        },
-                    ]}
+                    columns={SALES_COLUMNS}
                     loading={salesLoading}
                     showFooter={!!salesData?.totals}
                     summaries={salesData?.totals}
-                    className="table"
                     maxHeight={420}
                     emptyMessage="Sin ventas en este período"
                     onRowClick={handleSaleRowClick}
+                    search={{
+                        enabled: true,
+                        onSearch: handleSalesSearch,
+                        placeholder: 'Buscar por documento o vendedor...',
+                    }}
+                    sorting={{ enabled: true, sortBy: salesSort, onSort: handleSalesSort }}
+                    print={{ enabled: true, onGlobalPrint: handlePrintSales, storageKey: 'cliente-ventas' }}
                     pagination={{
                         enabled: true,
                         page: salesPage,
@@ -444,6 +541,10 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                     </div>
                 </Modal.Header>
                 <Modal.Body>
+                    {salesError && (
+                        <Alert variant="danger">No se pudieron cargar las ventas. Intenta nuevamente.</Alert>
+                    )}
+                    {printError && <Alert variant="danger">{printError}</Alert>}
                     <div className="date-picker-card">
                         <div className="date-picker-label">Rango de fechas</div>
                         <DateRangePicker

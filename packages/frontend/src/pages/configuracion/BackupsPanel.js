@@ -1,7 +1,8 @@
 import { createBackup, fetchBackups } from 'api/backups';
+import Table from 'components/Table';
 import { DateTime } from 'luxon';
-import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Modal, Spinner, Table } from 'react-bootstrap';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Badge, Button, Modal, Spinner } from 'react-bootstrap';
 import BackupIcon from './BackupIcon';
 import DrivePanel from './DrivePanel';
 import './backups.css';
@@ -25,7 +26,10 @@ const BackupsPanel = () => {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState(null);
     const polling = status?.running ? 3000 : 60000;
-    const uploads = Object.fromEntries((drive?.uploads || []).map((entry) => [entry.name, entry]));
+    const uploads = useMemo(
+        () => Object.fromEntries((drive?.uploads || []).map((entry) => [entry.name, entry])),
+        [drive?.uploads],
+    );
     const latest = status?.backups[0];
     const needsAttention = status?.lastError || status?.retentionError;
     const localVariant = error
@@ -46,6 +50,53 @@ const BackupsPanel = () => {
             : latest
               ? 'Disponible'
               : 'Sin copias';
+
+    const columns = useMemo(
+        () => [
+            {
+                Header: 'Archivo',
+                accessor: 'name',
+                Cell: ({ value }) => (
+                    <span className="backups-filename">
+                        <BackupIcon name="file" /> <span>{value}</span>
+                    </span>
+                ),
+            },
+            { Header: 'Finalizado', accessor: 'completedAt', Cell: ({ value }) => formatDate(value) },
+            { Header: 'Tamaño', accessor: 'sizeBytes', Cell: ({ value }) => formatSize(value) },
+            { Header: 'Estado', id: 'status', Cell: () => <Badge bg="backups-success">Exitoso</Badge> },
+            ...(drive?.connected
+                ? [
+                      {
+                          Header: 'Google Drive',
+                          id: 'drive',
+                          Cell: ({ row }) => {
+                              const upload = uploads[row.original.name];
+                              const uploadStatus = !drive?.recoveryConfirmed ? 'disabled' : upload?.status;
+                              return (
+                                  <div>
+                                      <Badge
+                                          bg={`backups-${{ uploaded: 'success', uploading: 'info', error: 'warning' }[uploadStatus] || 'secondary'}`}
+                                      >
+                                          {{
+                                              disabled: 'Desactivado',
+                                              uploaded: 'Subido',
+                                              uploading: 'Subiendo',
+                                              error: 'Error',
+                                          }[uploadStatus] || 'Pendiente'}
+                                      </Badge>
+                                      {upload?.uploadedAt && (
+                                          <div className="backups-upload-date">{formatDate(upload.uploadedAt)}</div>
+                                      )}
+                                  </div>
+                              );
+                          },
+                      },
+                  ]
+                : []),
+        ],
+        [drive?.connected, drive?.recoveryConfirmed, uploads],
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -250,67 +301,12 @@ const BackupsPanel = () => {
                                     <p>Las copias completadas aparecerán aquí con su fecha y tamaño.</p>
                                 </div>
                             ) : (
-                                <Table className="backups-table" responsive>
-                                    <caption className="visually-hidden">
-                                        Respaldos exitosos guardados en el servidor, del más reciente al más antiguo.
-                                    </caption>
-                                    <thead>
-                                        <tr>
-                                            <th scope="col">Archivo</th>
-                                            <th scope="col">Finalizado</th>
-                                            <th scope="col">Tamaño</th>
-                                            <th scope="col">Estado</th>
-                                            {drive?.connected && <th scope="col">Google Drive</th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {status.backups.map((backup) => {
-                                            const upload = uploads[backup.name];
-                                            const uploadStatus = !drive?.recoveryConfirmed
-                                                ? 'disabled'
-                                                : upload?.status;
-                                            return (
-                                                <tr key={backup.name}>
-                                                    <th scope="row" className="backups-filename">
-                                                        <BackupIcon name="file" /> <span>{backup.name}</span>
-                                                    </th>
-                                                    <td data-label="Finalizado">{formatDate(backup.completedAt)}</td>
-                                                    <td data-label="Tamaño">{formatSize(backup.sizeBytes)}</td>
-                                                    <td data-label="Estado">
-                                                        <Badge bg="backups-success">Exitoso</Badge>
-                                                    </td>
-                                                    {drive?.connected && (
-                                                        <td data-label="Google Drive">
-                                                            <div>
-                                                                <Badge
-                                                                    bg={`backups-${
-                                                                        {
-                                                                            uploaded: 'success',
-                                                                            uploading: 'info',
-                                                                            error: 'warning',
-                                                                        }[uploadStatus] || 'secondary'
-                                                                    }`}
-                                                                >
-                                                                    {{
-                                                                        disabled: 'Desactivado',
-                                                                        uploaded: 'Subido',
-                                                                        uploading: 'Subiendo',
-                                                                        error: 'Error',
-                                                                    }[uploadStatus] || 'Pendiente'}
-                                                                </Badge>
-                                                                {upload?.uploadedAt && (
-                                                                    <div className="backups-upload-date">
-                                                                        {formatDate(upload.uploadedAt)}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    )}
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </Table>
+                                <Table
+                                    data={status.backups}
+                                    columns={columns}
+                                    maxHeight={520}
+                                    scrollLabel="Respaldos exitosos guardados en el servidor, del más reciente al más antiguo"
+                                />
                             )}
                         </>
                     )}

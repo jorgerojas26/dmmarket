@@ -229,62 +229,6 @@
     padding: 0;
 }
 
-/* La tabla de ventas tiene un alto máximo (maxHeight del Table) y scrollea
-   internamente con el header fijo; el card-body no debe estirarse más. */
-.client-dashboard-modal .sales-card .card-body > .table-container {
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
-.client-dashboard-modal .table {
-    width: 100%;
-    height: 100%;
-    margin-bottom: 0;
-    color: #dee2e6;
-    border-collapse: separate;
-    border-spacing: 0;
-}
-
-.client-dashboard-modal .table thead th {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: #1a1d21;
-    color: #adb5bd;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 600;
-    padding: 0.6rem 0.75rem;
-    border-bottom: 1px solid #2f3338;
-    text-align: left;
-}
-
-.client-dashboard-modal .table tbody td {
-    padding: 0.65rem 0.75rem;
-    border-bottom: 1px solid #2a2e33;
-    color: #e9ecef;
-    font-size: 0.85rem;
-    text-align: left;
-}
-
-.client-dashboard-modal .table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-.client-dashboard-modal .table tbody tr:hover td {
-    background: rgba(13, 110, 253, 0.08);
-}
-
-.client-dashboard-modal .table td:first-child {
-    padding-left: 0.75rem;
-}
-
-.client-dashboard-modal .table .amount {
-    font-weight: 600;
-    color: #20c997;
-}
-
 /* Empty state */
 .client-dashboard-modal .empty-state {
     display: flex;

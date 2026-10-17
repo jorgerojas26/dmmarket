@@ -1,4 +1,6 @@
+import Table from 'components/Table';
 import dayjs from 'dayjs';
+import { useMemo } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import './SelectedInvoicesModal.css';
 
@@ -8,64 +10,62 @@ import './SelectedInvoicesModal.css';
  * individual invoices from it before printing.
  */
 const SelectedInvoicesModal = ({ show, invoices = [], totalSummary = 0, onRemove, onClear, onClose }) => {
+    const columns = useMemo(
+        () => [
+            { Header: 'ID', accessor: 'invoiceId' },
+            { Header: 'Cliente', accessor: 'client' },
+            { Header: 'RIF', accessor: 'rif' },
+            {
+                Header: 'Total',
+                accessor: 'total',
+                Cell: ({ value }) => (value != null ? `$${Number(value).toFixed(2)}` : ''),
+            },
+            { Header: 'Fecha', accessor: 'createdAt', Cell: ({ value }) => dayjs(value).format('MMM DD, YYYY') },
+            {
+                Header: '',
+                id: 'remove',
+                Cell: ({ row }) => (
+                    <button
+                        type="button"
+                        className="si-remove"
+                        title="Quitar de la selección"
+                        aria-label={`Quitar factura ${row.original.invoiceId} de la selección`}
+                        onClick={() => onRemove(row.original.invoiceId)}
+                    >
+                        <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                        >
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                ),
+            },
+        ],
+        [onRemove],
+    );
     return (
         <Modal show={show} size="lg" onHide={onClose} centered className="selected-invoices-modal">
             <Modal.Header closeButton>
                 <Modal.Title>Facturas seleccionadas ({invoices.length})</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-                {invoices.length === 0 ? (
-                    <div className="si-empty">No hay facturas seleccionadas.</div>
-                ) : (
-                    <div className="si-table-wrap">
-                        <table className="si-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Cliente</th>
-                                    <th>RIF</th>
-                                    <th>TOTAL</th>
-                                    <th>Fecha</th>
-                                    <th style={{ width: 44 }} />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {invoices.map((inv) => (
-                                    <tr key={inv.invoiceId}>
-                                        <td>{inv.invoiceId}</td>
-                                        <td>{inv.client}</td>
-                                        <td>{inv.rif}</td>
-                                        <td>${inv.total != null ? inv.total.toFixed(2) : ''}</td>
-                                        <td>{dayjs(inv.createdAt).format('MMM DD, YYYY')}</td>
-                                        <td className="si-remove-cell">
-                                            <button
-                                                type="button"
-                                                className="si-remove"
-                                                title="Quitar de la selección"
-                                                onClick={() => onRemove(inv.invoiceId)}
-                                            >
-                                                <svg
-                                                    width="13"
-                                                    height="13"
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="2.5"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    aria-hidden="true"
-                                                >
-                                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                                </svg>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                <Table
+                    data={invoices}
+                    columns={columns}
+                    maxHeight="60vh"
+                    emptyMessage="No hay facturas seleccionadas."
+                    emptySubtitle=""
+                    scrollLabel="Facturas seleccionadas para despacho"
+                />
             </Modal.Body>
             <Modal.Footer>
                 <span className="si-total">Total: ${totalSummary.toFixed(2)}</span>

@@ -2,6 +2,7 @@ import { ResponsiveBar } from '@nivo/bar';
 import { ResponsiveLine } from '@nivo/line';
 import { ResponsivePie } from '@nivo/pie';
 import ChartTooltip from 'components/ChartTooltip';
+import Table from 'components/Table';
 import { useClientsDashboard } from 'hooks/useClients';
 import { DateTime } from 'luxon';
 import { useMemo, useState } from 'react';
@@ -14,6 +15,14 @@ import SinFacturarTable from './SinFacturarTable';
 
 // Qué significa cada etiqueta de segmento (clasificación por venta del cliente en el periodo).
 // Debe coincidir con los SEGMENT_THRESHOLDS del backend (controllers/clients/dashboard.js).
+const SEGMENT_COLUMNS = [
+    { Header: 'Segmento', accessor: 'segment' },
+    { Header: 'Clientes', accessor: 'num_clients', Cell: ({ value }) => formatNumber(value) },
+    { Header: 'Revenue', accessor: 'revenue', Cell: ({ value }) => formatCurrency(value) },
+    { Header: '%', accessor: 'revenue_pct', Cell: ({ value }) => formatPercent(value) },
+    { Header: 'Frec. Prom', accessor: 'avg_invoices', Cell: ({ value }) => formatNumber(value) },
+];
+
 const SEGMENT_DESCRIPTIONS = {
     'A: >100K': 'Clientes que compraron más de $100K en el periodo',
     'B: 20K-100K': 'Clientes que compraron entre $20K y $100K',
@@ -705,30 +714,12 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                 servir: 'Analizar cada segmento con detalle.',
                             }}
                         />
-                        <div style={{ overflowX: 'auto' }}>
-                            <table className="table table-dark table-sm" style={{ margin: 0 }}>
-                                <thead>
-                                    <tr>
-                                        <th>Segmento</th>
-                                        <th className="text-end">Clientes</th>
-                                        <th className="text-end">Revenue</th>
-                                        <th className="text-end">%</th>
-                                        <th className="text-end">Frec. Prom</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {(data?.revenueBySegment || []).map((s) => (
-                                        <tr key={s.segment}>
-                                            <td style={{ fontWeight: 600 }}>{s.segment}</td>
-                                            <td className="text-end">{formatNumber(s.num_clients)}</td>
-                                            <td className="text-end">{formatCurrency(s.revenue)}</td>
-                                            <td className="text-end">{formatPercent(s.revenue_pct)}</td>
-                                            <td className="text-end">{formatNumber(s.avg_invoices)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <Table
+                            data={data?.revenueBySegment || []}
+                            columns={SEGMENT_COLUMNS}
+                            maxHeight={350}
+                            emptyMessage="Sin segmentos en este período"
+                        />
                     </div>
                 </div>
             </div>

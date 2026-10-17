@@ -36,7 +36,12 @@ const DocumentDetailModal = ({
     const profitVisible = showProfit && (!collapseProfit || profitExpanded);
     const query = search.trim().toLocaleLowerCase('es');
     const filtered = useMemo(
-        () => products.filter((product) => String(product.descripcion || '').toLocaleLowerCase('es').includes(query)),
+        () =>
+            products.filter((product) =>
+                String(product.descripcion || '')
+                    .toLocaleLowerCase('es')
+                    .includes(query),
+            ),
         [products, query],
     );
     const columns = useMemo(
@@ -117,7 +122,6 @@ const DocumentDetailModal = ({
                             <Table
                                 data={filtered}
                                 columns={columns}
-                                className={`document-detail-table${profitVisible ? ' document-detail-with-profit' : ''}`}
                                 fillHeight
                                 scrollLabel={`Productos de la ${documentLabel.toLowerCase()}`}
                                 emptyMessage="No se encontraron productos"
