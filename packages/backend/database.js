@@ -10,6 +10,7 @@ const database = knex({
     password: process.env.DATABASE_PASSWORD,
     database: process.env.DATABASE_NAME,
     charset: "UTF8_GENERAL_CI",
+    dateStrings: ["DATE"],
     multipleStatements: true,
   },
 });

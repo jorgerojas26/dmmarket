@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon';
 import { formatCurrency } from 'utils/format';
 
 const columns = [
@@ -10,12 +11,7 @@ const columns = [
         accessor: 'fecha',
         Cell: ({ value }) => {
             if (!value) return '';
-            const d = new Date(value);
-            return d.toLocaleDateString('es-VE', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-            });
+            return DateTime.fromISO(value).toFormat('dd/MM/yyyy');
         },
     },
     {
