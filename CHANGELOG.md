@@ -7,6 +7,12 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.7.1] - 2026-10-18
+
+### Correcciones
+
+- **Fechas de documentos sin desfases**: las facturas, notas de entrega y compras conservan su fecha original al consultar e imprimir los reportes, aunque el servidor y la computadora usen zonas horarias distintas. Al filtrar un día o un período, las fechas mostradas coinciden con el rango elegido, sin retroceder al día anterior.
+
 ## [v1.7.0] - 2026-10-18
 
 ### Mejoras
