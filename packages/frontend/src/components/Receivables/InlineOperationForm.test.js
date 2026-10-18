@@ -44,7 +44,6 @@ const preview = {
     snapshot: 'snapshot',
 };
 const detail = {
-    writesEnabled: true,
     client,
     summary: { balance: '250.0000', overdue: '50.0000', pendingCount: 0 },
     documents: { data: [], total: 0 },

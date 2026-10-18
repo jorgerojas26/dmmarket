@@ -36,7 +36,6 @@ const otherDocument = {
     applied: '0.0000',
 };
 const detail = {
-    writesEnabled: true,
     client,
     summary: { balance: '120.0000', overdue: '70.0000', pendingCount: 2 },
     documents: { data: [document, otherDocument], total: 2 },
@@ -279,10 +278,10 @@ it('does not offer closing the same debt again when refreshing fails and retries
     expect(executeReceivableOperation).toHaveBeenCalledTimes(1);
 });
 
-it('disables a row closure when writes become unavailable without losing the draft', async () => {
+it('disables a row closure when the client is unregistered without losing the draft', async () => {
     const { rerender } = open();
     await review();
-    current = { ...detail, writesEnabled: false };
+    current = { ...detail, client: { ...client, unregistered: true } };
     rerender(<ClientModal client={client} onClose={jest.fn()} onChanged={portfolioRefresh} />);
     expect(screen.getByLabelText('Motivo del cierre')).toHaveValue('Redondeo acordado');
     expect(screen.getByRole('button', { name: 'Confirmar cierre' })).toBeDisabled();

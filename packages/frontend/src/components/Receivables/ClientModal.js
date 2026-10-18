@@ -1,4 +1,5 @@
 import { fetchReceivableClient } from 'api/receivables';
+import Modal from 'components/Modal';
 import { useReceivableClient } from 'hooks/useReceivables';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
@@ -6,7 +7,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Dropdown from 'react-bootstrap/Dropdown';
-import Modal from 'components/Modal';
 import Spinner from 'react-bootstrap/Spinner';
 import DocumentList from './DocumentList';
 import { dateLabel, money } from './format';
@@ -50,7 +50,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
     const initialFocusSet = useRef(false);
     const pendingInitialAction = useRef(initialAction === 'payment' || initialAction?.type === 'payment');
     const { data, error, isValidating, mutate } = useReceivableClient(client.id, { page, timelinePage, documents });
-    const allowed = !!data?.writesEnabled && !error && !busy && !isValidating;
+    const allowed = !!data && !data.client.unregistered && !error && !busy && !isValidating;
     const hasDebt = Number(data?.summary.balance) > 0;
     const canPay = allowed && hasDebt;
     const navigationLocked = busy || isValidating || !!action;
@@ -382,7 +382,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
         operationOpen && data ? (
             <div className={`cxc-operation-container${clientClosure ? ' cxc-client-closure' : ''}`}>
                 <fieldset
-                    disabled={!data.writesEnabled || !!error || isValidating || !!discard}
+                    disabled={data.client.unregistered || !!error || isValidating || !!discard}
                     onSubmitCapture={(event) => {
                         if (!allowed || discard) {
                             event.preventDefault();
@@ -402,7 +402,7 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                         onDirtyChange={setDirty}
                     />
                 </fieldset>
-                {(!data.writesEnabled || error || isValidating) && (
+                {(data.client.unregistered || error || isValidating) && (
                     <Button variant="outline-secondary" className="mt-2" disabled={busy} onClick={() => cancel()}>
                         {clientClosure ? 'Cancelar cierre' : 'Volver al historial'}
                     </Button>
@@ -561,11 +561,6 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                         )
                     ) : (
                         <>
-                            {!data.writesEnabled && !clientClosure && (
-                                <Alert variant="warning">
-                                    Modo consulta: las escrituras de cuentas por cobrar están deshabilitadas.
-                                </Alert>
-                            )}
                             <section className="cxc-account-overview" aria-label="Resumen de la cuenta">
                                 <Summary summary={data.summary} />
                             </section>
@@ -757,11 +752,6 @@ export default function ClientModal({ client, onClose, onChanged, initialAction 
                     <Modal.Body>
                         {discardNotice}
                         {accountError}
-                        {data && !data.writesEnabled && (
-                            <Alert variant="warning">
-                                Modo consulta: las escrituras de cuentas por cobrar están deshabilitadas.
-                            </Alert>
-                        )}
                         {operationForm}
                     </Modal.Body>
                 </Modal>

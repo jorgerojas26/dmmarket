@@ -7,9 +7,9 @@ import {
     fetchReceivables,
     previewReceivableOperation,
 } from 'api/receivables';
-import pdfMake from 'pdfmake/build/pdfmake';
-import { useReceivableBanks, useReceivableClient, useReceivables } from 'hooks/useReceivables';
 import { useClientRoutes } from 'hooks/useClients';
+import { useReceivableBanks, useReceivableClient, useReceivables } from 'hooks/useReceivables';
+import pdfMake from 'pdfmake/build/pdfmake';
 import ClientModal from './ClientModal';
 import { dateLabel, money, today } from './format';
 import Receivables from './index';
@@ -47,14 +47,12 @@ const preview = {
     applications: [{ id: 1, sale: 'A', amount: '100.0000' }],
 };
 const portfolio = {
-    writesEnabled: true,
     data: [{ ...client, balance: '100.0000', overdue: '50.0000', pendingCount: 1, lastPayment: null }],
     total: 1,
     routes: [{ id: 'R1' }],
     summary: { balance: '100.0000', overdue: '50.0000', debtors: 1, received: '30.0000' },
 };
 const detail = {
-    writesEnabled: true,
     client,
     rate: '100.000000',
     summary: { balance: '100.0000', overdue: '50.0000', pendingCount: 1 },
@@ -242,15 +240,6 @@ it('always queries clients with debt and does not offer a portfolio filter', () 
     expect(useReceivables).toHaveBeenLastCalledWith(
         expect.objectContaining({ ruta: 'R1', state: 'debt', due: 'overdue' }),
     );
-});
-
-it('disables financial actions until the portfolio is enabled', async () => {
-    useReceivableClient.mockReturnValue({ data: { ...detail, writesEnabled: false }, mutate: refresh });
-    render(<ClientModal client={client} onClose={jest.fn()} onChanged={refresh} />);
-    expect(screen.getByRole('button', { name: 'Registrar abono' })).toBeDisabled();
-    await act(async () => userEvent.click(screen.getByRole('button', { name: 'Más acciones' })));
-    expect(screen.getByRole('button', { name: 'Cerrar deuda del cliente' })).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByText(/Modo consulta: las escrituras/)).toBeInTheDocument();
 });
 
 it('accepts an overpayment and requires preview before saving', async () => {
@@ -466,13 +455,6 @@ it('opens the payment CTA with server-side client selection across the whole por
     expect(useReceivableClient).toHaveBeenLastCalledWith('C2', expect.any(Object));
 });
 
-it('does not offer payments when portfolio writes are disabled', () => {
-    useReceivables.mockReturnValue({ data: { ...portfolio, writesEnabled: false }, mutate: refresh });
-    render(<Receivables />);
-    expect(screen.getByRole('button', { name: 'Registrar abono' })).toBeDisabled();
-    expect(screen.getByRole('alert')).toHaveTextContent('Modo consulta');
-});
-
 it('reports client selection errors instead of presenting an empty valid portfolio', async () => {
     fetchReceivables.mockRejectedValueOnce(new Error('Consulta de clientes no disponible'));
     render(<Receivables />);
@@ -481,9 +463,9 @@ it('reports client selection errors instead of presenting an empty valid portfol
     expect(screen.queryByRole('button', { name: 'Revisar abono' })).not.toBeInTheDocument();
 });
 
-it('rechecks writes on the client before opening the initial payment form', () => {
+it('requires a registered client before opening the initial payment form', () => {
     useReceivableClient.mockReturnValue({
-        data: { ...detail, writesEnabled: false },
+        data: { ...detail, client: { ...client, unregistered: true } },
         mutate: refresh,
         isValidating: false,
     });
@@ -864,11 +846,13 @@ it('blocks unavailable REF in the drawer without blocking a USD payment', () => 
     expect(screen.getByRole('button', { name: 'Revisar abono' })).not.toBeDisabled();
 });
 
-it('rechecks client writes and debt before allowing a direct row payment', () => {
-    useReceivableClient.mockReturnValue({ data: { ...detail, writesEnabled: false }, mutate: refresh });
+it('rechecks client registration and debt before allowing a direct row payment', () => {
+    useReceivableClient.mockReturnValue({
+        data: { ...detail, client: { ...client, unregistered: true } },
+        mutate: refresh,
+    });
     const { rerender } = render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
     expect(screen.getByRole('button', { name: 'Revisar abono' })).toBeDisabled();
-    expect(screen.getByRole('alert')).toHaveTextContent('Modo consulta');
     useReceivableClient.mockReturnValue({
         data: { ...detail, summary: { ...detail.summary, balance: '0.0000' } },
         mutate: refresh,
@@ -1103,7 +1087,9 @@ it('keeps the compact estimate concise and warns about excess before review', ()
     const estimate = screen.getByRole('region', { name: 'Estimación del abono' });
     expect(estimate).toHaveTextContent('Equivale a $120,00 USD · Quedarían $0,00 USD');
     expect(within(estimate).queryByRole('definition')).not.toBeInTheDocument();
-    expect(within(estimate).getByRole('alert')).toHaveTextContent('El excedente no genera saldo a favor ni devolución.');
+    expect(within(estimate).getByRole('alert')).toHaveTextContent(
+        'El excedente no genera saldo a favor ni devolución.',
+    );
     expect(screen.getByRole('textbox', { name: 'Referencia' })).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Banco' })).toBeVisible();
     userEvent.selectOptions(screen.getByLabelText('Método'), 'EFECTIVO');
@@ -1221,9 +1207,10 @@ it('focuses a failed confirmation error instead of leaving focus on the financia
 it('focuses Done only after pending account refreshes settle, including failed refreshes', async () => {
     let rejectRefresh;
     const reload = jest.fn(
-        () => new Promise((_resolve, reject) => {
-            rejectRefresh = reject;
-        }),
+        () =>
+            new Promise((_resolve, reject) => {
+                rejectRefresh = reject;
+            }),
     );
     useReceivableClient.mockReturnValue({ data: detail, mutate: reload });
     const close = jest.fn();
@@ -1251,7 +1238,10 @@ it('uses official route names instead of orphan route values from the receivable
         isValidating: false,
     });
     useClientRoutes.mockReturnValue({
-        data: [{ Id_Ruta: 'R1', Nombre: 'Ruta Norte' }, { Id_Ruta: 'R2', Nombre: 'Ruta Sur' }],
+        data: [
+            { Id_Ruta: 'R1', Nombre: 'Ruta Norte' },
+            { Id_Ruta: 'R2', Nombre: 'Ruta Sur' },
+        ],
         isLoading: false,
     });
     render(<Receivables />);

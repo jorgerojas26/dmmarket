@@ -99,7 +99,7 @@ export default function Receivables() {
                         variant="outline-primary"
                         id={`cxc-pay-${encodeURIComponent(row.original.id)}`}
                         aria-label={`Abonar a ${row.original.name || row.original.id}`}
-                        disabled={!data?.writesEnabled || !!error || isValidating || Number(row.original.balance) <= 0}
+                        disabled={!data || !!error || isValidating || Number(row.original.balance) <= 0}
                         onClick={(event) => {
                             event.stopPropagation();
                             openPayment(row.original, event.currentTarget.id);
@@ -110,7 +110,7 @@ export default function Receivables() {
                 ),
             },
         ],
-        [openAccount, openPayment, data?.writesEnabled, error, isValidating],
+        [openAccount, openPayment, data, error, isValidating],
     );
     const handlePrint = useCallback(
         async (config) => {
@@ -203,11 +203,7 @@ export default function Receivables() {
                 <div>
                     <h4 className="m-0 text-light">Cuentas por cobrar</h4>
                 </div>
-                <Button
-                    ref={paymentTrigger}
-                    disabled={!data?.writesEnabled || !!error}
-                    onClick={() => openPayment(null, null)}
-                >
+                <Button ref={paymentTrigger} disabled={!data || !!error} onClick={() => openPayment(null, null)}>
                     Registrar abono
                 </Button>
             </header>
@@ -217,12 +213,6 @@ export default function Receivables() {
                     <Button variant="link" onClick={() => mutate()}>
                         Reintentar
                     </Button>
-                </Alert>
-            )}
-            {data && !data.writesEnabled && (
-                <Alert variant="warning">
-                    Modo consulta: las escrituras de cuentas por cobrar están deshabilitadas. No se pueden registrar
-                    abonos ni modificar deudas. Antes de habilitar cobros, valida y concilia la cartera operativa.
                 </Alert>
             )}
             <div>

@@ -90,11 +90,7 @@ const eligible = (d) =>
   d.IdCliente != null &&
   d.saleClient === d.IdCliente;
 
-function createReceivablesService({
-  db,
-  enabled = () => process.env.CXC_WRITES_ENABLED === "1",
-  now = () => new Date(),
-}) {
+function createReceivablesService({ db, now = () => new Date() }) {
   async function readiness() {
     const tables = await Promise.all(
       ["cxc_documentos", "cxc_movimientos", "cxc_cruces", "cxc_operaciones", "cxc_cierres"].map((table) =>
@@ -103,17 +99,14 @@ function createReceivablesService({
     );
     return {
       available: tables.every(Boolean),
-      writesEnabled: tables.every(Boolean) && enabled(),
       today: localDate(now()),
     };
   }
 
-  async function requireSchema(write = false) {
+  async function requireSchema() {
     const status = await readiness();
     if (!status.available)
       fail("Cuentas por cobrar requiere su esquema y migración. Consulta la guía de habilitación.", 503);
-    if (write && !status.writesEnabled)
-      fail("Los cobros están deshabilitados hasta conciliar la cartera operativa y habilitar CXC_WRITES_ENABLED.", 409);
     return status;
   }
 
@@ -269,7 +262,7 @@ function createReceivablesService({
   }
 
   async function execute(clientId, body) {
-    await requireSchema(true);
+    await requireSchema();
     if (
       typeof body.requestId !== "string" ||
       !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.requestId)
@@ -586,12 +579,12 @@ function createReceivablesService({
       const rateRow = await connection("divisas").where("Simbolo", "BsS").orderBy("IdDivisa").first();
       return {
         ...status,
-        writesEnabled: status.writesEnabled && !state.client.unregistered,
         client: {
           id: reportId(state.client.IdCliente),
           name: state.client.Empresa,
           rif: state.client.Rif,
           ruta: state.client.Ruta,
+          unregistered: !!state.client.unregistered,
         },
         summary: summary(state.docs, status.today),
         rate: rateRow?.Cambio ? String(rateRow.Cambio) : null,

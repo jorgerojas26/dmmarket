@@ -6,7 +6,7 @@ const { isReportPath } = require("../middlewares/report-cache");
 function setup() {
   const service = {
     banks: jest.fn().mockResolvedValue([{ id: "BV", name: "BANCO DE VENEZUELA" }]),
-    readiness: jest.fn().mockResolvedValue({ available: true, writesEnabled: false }),
+    readiness: jest.fn().mockResolvedValue({ available: true }),
     list: jest.fn().mockResolvedValue({ total: 0 }),
     detail: jest.fn().mockResolvedValue({ client: { id: "C1" } }),
     preview: jest.fn().mockResolvedValue({ snapshot: "test" }),

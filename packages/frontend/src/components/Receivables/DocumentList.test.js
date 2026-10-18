@@ -118,7 +118,7 @@ it('blocks both row expansion and invoice navigation while the account is locked
     expect(handlers.onInvoice).not.toHaveBeenCalled();
 });
 
-it('allows read-only inspection but disables financial actions', () => {
+it('keeps invoice inspection available when financial actions are blocked', () => {
     render(<DocumentList documents={[document]} allowed={false} {...callbacks()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Ver desglose de factura FAC-001' }));
     expect(screen.getByRole('button', { name: 'Cerrar deuda de factura FAC-001' })).toBeDisabled();

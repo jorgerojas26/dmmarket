@@ -4,9 +4,9 @@
 
 Clientes → Cuentas por cobrar, o `/clientes?view=receivables`.
 
-La interfaz y API están implementadas. Las escrituras quedan deshabilitadas por defecto: la inspección de la copia local encontró inconsistencias y no certifica la cartera operativa.
+El módulo permite registrar abonos, anularlos, cerrar deudas y reabrir cierres cuando su esquema está disponible, sin una habilitación adicional por configuración. Se conservan las validaciones de cliente, deuda, tasa, previsualización y confirmación de cada operación.
 
-`CXC_WRITES_ENABLED=0` permite consultar una vista preliminar cuando el esquema está disponible. El backend también bloquea las escrituras; no es únicamente un botón deshabilitado.
+La inspección de la copia local encontró inconsistencias y no certifica la cartera operativa. El respaldo, la conciliación y el corte del sistema anterior siguen siendo requisitos operativos antes de registrar cobros.
 
 ## Esquema
 
@@ -32,7 +32,7 @@ bun -e 'require("dotenv").config(); const db=require("./database"); await requir
 3. Conciliar pagos de `pagos` y `cxcmoves`, aplicaciones CxC, ventas anuladas, estados contradictorios y clientes ausentes. Incluir toda deuda histórica vigente en la cartera validada sin duplicar ventas ni cobros.
 4. Revisar que el generador actual crea documentos de facturas en USD y no sobrescribe saldos modificados por abonos o cierres. DMMarket no añade otro generador.
 5. Detener las escrituras de abonos del sistema anterior para esa misma cartera. El sistema de ventas puede seguir generando documentos CxC conforme al proceso validado.
-6. Aplicar las migraciones y probar la cartera en modo de consulta.
+6. Aplicar las migraciones y verificar la cartera conciliada antes de registrar operaciones.
 
 En desarrollo, verificar primero el destino definido en `.env` y luego ejecutar:
 
@@ -42,15 +42,9 @@ bun --filter @dmmarket/backend migrate
 
 El binario compilado aplica las migraciones pendientes al iniciar. No ejecutar una actualización sobre una cartera sin respaldo y validación del esquema.
 
-## Habilitar escrituras
+## Operación
 
-Solo después de la conciliación y el corte, establecer en el entorno del backend:
-
-```text
-CXC_WRITES_ENABLED=1
-```
-
-Reiniciar el backend para cargar la configuración. No introducir esta habilitación en un frontend público ni interpretarla como autenticación: se mantiene el acceso actual sin usuarios y quien acceda a DMMarket puede operar.
+Se mantiene el acceso actual sin usuarios: quien acceda a DMMarket puede operar. Restringir el acceso al sistema al personal autorizado.
 
 La tasa para bolívares se toma de `divisas`, con `Simbolo = 'BsS'`, igual que la REF actual. Debe ser positiva y válida. El servidor conserva la tasa confirmada en cada abono. La fecha de pago puede ser anterior, pero los nuevos abonos usan la tasa REF vigente al confirmarlos, no una tasa histórica inferida.
 

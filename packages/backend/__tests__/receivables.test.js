@@ -94,7 +94,7 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
       t.decimal("Cambio", 18, 6);
     });
     await require("../migrations/20261011_add_receivables_operations").up(db);
-    service = createReceivablesService({ db, enabled: () => true, now });
+    service = createReceivablesService({ db, now });
   });
 
   afterAll(async () => {
@@ -356,12 +356,9 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
     expect(await db.schema.hasTable("cxc_cierres")).toBe(true);
   });
 
-  it("rejects cancelled sales, cross-client targets and writes before reconciliation", async () => {
+  it("rejects cancelled sales and cross-client targets", async () => {
     await expect(service.preview("C1", { type: "close", id: 3, reason: "Cerrar" })).rejects.toThrow("No hay deuda");
     await expect(service.preview("C1", { type: "close", id: 4, reason: "Cerrar" })).rejects.toThrow("No hay deuda");
-    const guarded = createReceivablesService({ db, enabled: () => false, now });
-    await expect(guarded.execute("C1", payment())).rejects.toMatchObject({ status: 409 });
-    expect((await guarded.list()).writesEnabled).toBe(false);
   });
 });
 

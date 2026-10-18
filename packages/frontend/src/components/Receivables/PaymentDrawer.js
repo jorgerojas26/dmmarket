@@ -1,9 +1,9 @@
+import { modalManager } from 'components/Modal';
 import { useReceivableClient } from 'hooks/useReceivables';
 import { useEffect, useRef, useState } from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Offcanvas from 'react-bootstrap/Offcanvas';
-import { modalManager } from 'components/Modal';
 import Spinner from 'react-bootstrap/Spinner';
 import { money } from './format';
 import OperationForm from './OperationForm';
@@ -25,7 +25,8 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
     const account = useReceivableClient(selected?.id, { page: 1, timelinePage: 1, documents: 'pending' });
     const data = selected ? account.data : null;
     const error = selected ? account.error : null;
-    const allowed = !!data?.writesEnabled && !error && !account.isValidating && Number(data?.summary.balance) > 0;
+    const allowed =
+        !!data && !data.client.unregistered && !error && !account.isValidating && Number(data.summary.balance) > 0;
     const identity = data?.client || selected;
     useEffect(() => {
         if (discard) safeChoice.current?.focus();
@@ -180,11 +181,6 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
                             )}
                             {data && (
                                 <>
-                                    {!data.writesEnabled && (
-                                        <Alert variant="warning">
-                                            Modo consulta: las escrituras de cuentas por cobrar están deshabilitadas.
-                                        </Alert>
-                                    )}
                                     {Number(data.summary.balance) <= 0 && (
                                         <Alert variant="info">
                                             El cliente no tiene deuda pendiente para aplicar un abono.

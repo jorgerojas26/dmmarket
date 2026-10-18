@@ -111,7 +111,7 @@ it('opens invoice detail and returns the movement trigger when voiding', () => {
     expect(handlers.onVoid).toHaveBeenCalledWith(payment, screen.getByRole('button', { name: /Ocultar detalles:/ }));
 });
 
-it('keeps inspection available in read-only mode but blocks voiding', () => {
+it('keeps inspection available when voiding is blocked', () => {
     render(<Timeline events={[payment]} allowed={false} {...callbacks()} />);
     expand();
     expect(screen.getByRole('button', { name: 'Ver factura FAC-001' })).not.toBeDisabled();

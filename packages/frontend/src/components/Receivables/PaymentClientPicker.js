@@ -20,10 +20,6 @@ export default function PaymentClientPicker({ onSelect }) {
         try {
             const result = await fetchReceivables({ search, state: 'debt', page: 1, limit: 20 });
             if (current !== query.current) return [];
-            if (!result.writesEnabled) {
-                setError('Las escrituras de cuentas por cobrar están deshabilitadas.');
-                return [];
-            }
             setError('');
             return result.data
                 .filter((client) => Number(client.balance) > 0)
