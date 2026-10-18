@@ -7,6 +7,16 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.7.0] - 2026-10-18
+
+### Mejoras
+
+- **Cobranza sin activación adicional**: registra abonos, anúlalos y gestiona cierres y reaperturas de deuda directamente desde Cuentas por cobrar, conservando la revisión y confirmación de cada operación.
+
+### Correcciones
+
+- **Actualizaciones listas sin recargar a mano**: la página se recarga automáticamente cuando termina el reinicio de la aplicación. Si el reinicio tarda más de lo esperado, muestra un aviso y permite recargarla.
+
 ## [v1.6.0] - 2026-10-16
 
 ### Nuevas funciones
