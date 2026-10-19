@@ -43,7 +43,11 @@ La tabla ocupa el espacio principal. No añadir gráficos decorativos ni métric
 
 - Orden inicial por saldo vencido descendente y luego saldo pendiente descendente.
 - Búsqueda por nombre o identificación del cliente; filtro por ruta.
-- Cartera: con deuda por defecto, sin deuda o todos. El acceso a clientes saldados permite consultar historial y reabrir cierres.
+- Dos pestañas dentro de Cuentas por cobrar: «Con deuda actual» por defecto e «Historial de clientes». Usan el mismo patrón visual `report-tabs` de Ventas, Compras y Despacho. Solo la tabla, con su búsqueda, impresión y paginación, está dentro de las pestañas; encabezado, resumen y filtros quedan fuera.
+- El historial incluye clientes con documentos CxC de facturas en USD registrados, aunque su saldo actual sea cero; no incorpora al catálogo general de clientes que solo compraron de contado. Permite filtrar por estado: todos, con deuda o sin deuda pendiente.
+- En el historial se muestran cliente, estado, saldo actual, último abono y la acción «Ver historial». Saldo cero no se presenta como prueba de pago: el estado de cuenta distingue facturas saldadas, cierres manuales y documentos excluidos.
+- Abrir una cuenta desde el historial muestra todas sus facturas; desde la cobranza diaria mantiene pendientes por defecto. Se reutilizan el historial de movimientos y las operaciones existentes, incluida la reapertura de cierres.
+- La búsqueda y la ruta se conservan al cambiar de pestaña; se reinicia la página y se ordena el historial por cliente. El filtro de vencimiento solo se aplica a la pestaña de deuda actual.
 - Vencimiento: todos, vencidos o por vencer. Los documentos sin vencimiento válido no se presentarán como vencidos por una fecha inventada.
 - Paginación y ordenamiento en servidor; mantener búsqueda, filtros, página y desplazamiento al cerrar el modal.
 - El saldo pendiente cubre toda la deuda vigente. No aplicar el rango mensual al saldo.

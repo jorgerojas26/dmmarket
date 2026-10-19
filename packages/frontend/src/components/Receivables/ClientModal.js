@@ -25,10 +25,16 @@ import './ClientModal.css';
 const DOCUMENTS_PAGE_SIZE = 20;
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
-export default function ClientModal({ client, onClose, onChanged, initialAction = null }) {
+export default function ClientModal({
+    client,
+    onClose,
+    onChanged,
+    initialAction = null,
+    initialDocuments = 'pending',
+}) {
     const [page, setPage] = useState(1);
     const [timelinePage, setTimelinePage] = useState(1);
-    const [documents, setDocuments] = useState('pending');
+    const [documents, setDocuments] = useState(initialDocuments);
     const [action, setAction] = useState(null);
     const [busy, setBusy] = useState(false);
     const [printing, setPrinting] = useState(false);

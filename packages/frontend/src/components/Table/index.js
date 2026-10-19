@@ -298,7 +298,7 @@ const Table = ({
     );
 
     /* ── Server‑side search ── */
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState(search?.initialValue || '');
 
     const onSearchDebounced = useCallback(
         debounce((value) => {
