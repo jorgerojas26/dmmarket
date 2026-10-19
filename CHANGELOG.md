@@ -7,6 +7,12 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.8.0] - 2026-10-19
+
+### Nuevas funciones
+
+- **Historial de clientes con deuda**: consulta desde Cuentas por cobrar a los clientes que tuvieron deuda, aunque ya no tengan saldo pendiente. Revisa todas sus facturas, abonos y cierres manuales, busca por cliente y filtra por ruta o estado de deuda.
+
 ## [v1.7.1] - 2026-10-18
 
 ### Correcciones
