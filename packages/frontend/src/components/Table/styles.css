@@ -76,6 +76,7 @@ div.table-container {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    flex-shrink: 0;
     height: 42px;
     padding: 0 8px 2px 0;
 }

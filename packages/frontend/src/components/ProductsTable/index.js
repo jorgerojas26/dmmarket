@@ -1,7 +1,7 @@
 import Table from 'components/Table';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useMemo, useRef } from 'react';
+import { useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { Card } from 'react-bootstrap';
 import { formatCurrency, formatQuantity } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
@@ -18,8 +18,29 @@ const textSortType = (rowA, rowB, columnId) => {
     return a.localeCompare(b, 'es', { sensitivity: 'base', ignorePunctuation: true });
 };
 
-const ProductsTable = ({ data, totalSummary, printStorageKey }) => {
+const normalizeSearch = (value) =>
+    String(value ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, printStorageKey }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
+    const [search, setSearch] = useState('');
+    const searchTerm = normalizeSearch(search);
+
+    const data = useMemo(() => {
+        if (!searchTerm) return products;
+        return (products || []).filter((item) =>
+            [item.product, item.productId, item.group].some((value) => normalizeSearch(value).includes(searchTerm)),
+        );
+    }, [products, searchTerm]);
+
+    const totalSummary = useMemo(
+        () => (searchTerm ? data.reduce((total, item) => total + Number(item.total || 0), 0) : invoicesTotalSummary),
+        [data, searchTerm, invoicesTotalSummary],
+    );
 
     // Rows in the table's current sort order (for PDF export).
     const sortedRowsRef = useRef([]);
@@ -118,6 +139,11 @@ const ProductsTable = ({ data, totalSummary, printStorageKey }) => {
                     showFooter
                     summaries={summaries}
                     fillHeight
+                    search={{
+                        enabled: true,
+                        placeholder: 'Buscar por producto, ID o categoría...',
+                        onSearch: setSearch,
+                    }}
                     onSortedRowsChange={handleSortedRowsChange}
                     print={{
                         enabled: true,
