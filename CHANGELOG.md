@@ -7,6 +7,16 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.8.1] - 2026-10-19
+
+### Nuevas funciones
+
+- **Búsqueda de productos en Despacho**: encuentra productos por nombre, identificador o categoría sin volver a cargar los datos. La búsqueda ignora mayúsculas y acentos, y los totales y la impresión reflejan los resultados filtrados sin cambiar las facturas seleccionadas.
+
+### Correcciones
+
+- **Buscadores con altura estable**: las barras de búsqueda de las tablas conservan su tamaño tanto cuando hay resultados como cuando el listado está vacío.
+
 ## [v1.8.0] - 2026-10-19
 
 ### Nuevas funciones
