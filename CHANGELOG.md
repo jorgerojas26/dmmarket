@@ -7,6 +7,16 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.8.2] - 2026-10-19
+
+### Mejoras
+
+- **Más atajos de fechas**: consulta los últimos 3 o 6 meses con un solo clic.
+
+### Correcciones
+
+- **Período seleccionado visible**: el atajo que coincide con las fechas elegidas queda resaltado en azul, incluso al entrar al dashboard de ventas. «Este año» abarca desde el 1 de enero hasta hoy.
+
 ## [v1.8.1] - 2026-10-19
 
 ### Nuevas funciones
