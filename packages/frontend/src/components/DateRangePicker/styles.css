@@ -167,8 +167,8 @@
     color: #dee2e6;
 }
 
-.date-range-picker-wrapper .rdrStaticRange {
-    background: transparent;
+.date-range-picker-wrapper .rdrStaticRange.rdrStaticRangeSelected {
+    background: #0d6efd;
 }
 
 .date-range-picker-wrapper .rdrStaticRange:hover,
@@ -179,6 +179,11 @@
 .date-range-picker-wrapper .rdrStaticRangeLabel {
     color: #dee2e6;
     background: transparent;
+}
+
+.date-range-picker-wrapper .rdrStaticRangeSelected .rdrStaticRangeLabel {
+    color: #fff;
+    font-weight: 700;
 }
 
 .date-range-picker-wrapper .rdrStaticRange:hover .rdrStaticRangeLabel,

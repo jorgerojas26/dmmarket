@@ -9,6 +9,7 @@ import './styles.css';
 
 const IconCalendar = () => (
     <svg
+        aria-hidden="true"
         width="18"
         height="18"
         viewBox="0 0 24 24"
@@ -27,6 +28,7 @@ const IconCalendar = () => (
 
 const IconChevron = ({ open }) => (
     <svg
+        aria-hidden="true"
         width="16"
         height="16"
         viewBox="0 0 24 24"
@@ -46,6 +48,8 @@ const staticRanges = createStaticRanges([
     { label: 'Ayer', range: () => ({ startDate: addDays(new Date(), -1), endDate: addDays(new Date(), -1) }) },
     { label: 'Últimos 7 días', range: () => ({ startDate: addDays(new Date(), -7), endDate: new Date() }) },
     { label: 'Últimos 30 días', range: () => ({ startDate: addDays(new Date(), -30), endDate: new Date() }) },
+    { label: 'Últimos 3 meses', range: () => ({ startDate: subMonths(new Date(), 3), endDate: new Date() }) },
+    { label: 'Últimos 6 meses', range: () => ({ startDate: subMonths(new Date(), 6), endDate: new Date() }) },
     { label: 'Este mes', range: () => ({ startDate: startOfMonth(new Date()), endDate: endOfMonth(new Date()) }) },
     {
         label: 'Mes pasado',
@@ -54,7 +58,7 @@ const staticRanges = createStaticRanges([
             endDate: endOfMonth(subMonths(new Date(), 1)),
         }),
     },
-    { label: 'Este año', range: () => ({ startDate: startOfYear(new Date()), endDate: endOfYear(new Date()) }) },
+    { label: 'Este año', range: () => ({ startDate: startOfYear(new Date()), endDate: new Date() }) },
     {
         label: 'Año pasado',
         range: () => ({ startDate: startOfYear(subYears(new Date(), 1)), endDate: endOfYear(subYears(new Date(), 1)) }),
