@@ -88,12 +88,13 @@ export default function OperationForm({
     // Tasa oficial del día del pago: el backend la resuelve a la última publicada,
     // porque el BCV no publica fines de semana ni feriados.
     const { data: bcv } = useBcvRateByDate(fields.date);
-    const bcvRate = bcv && Number(bcv.tasa) > 0 ? Number(bcv.tasa).toFixed(6) : '';
+    // La tasa se maneja con dos decimales, igual que se muestra en toda la app.
+    const bcvRate = bcv && Number(bcv.tasa) > 0 ? Number(bcv.tasa).toFixed(2) : '';
     const pending = fields.rate === '' && !(sameDay && rateAvailable);
     // Tasa en efecto y de dónde salió, para marcar el chip correspondiente.
     const aplicada = fields.rate !== '' ? Number(fields.rate) : sameDay && rateAvailable ? Number(rate) : null;
     const cerca = (valor, referencia) =>
-        valor !== null && referencia !== null && Math.abs(valor - Number(referencia)) < 1e-6;
+        valor !== null && referencia !== null && Math.abs(valor - Number(referencia)) < 0.005;
     const origen =
         aplicada === null
             ? null
@@ -155,7 +156,7 @@ export default function OperationForm({
             closeRate();
             return;
         }
-        setRateDraft(rateText);
+        setRateDraft(rateText === '' ? '' : Number(rateText).toFixed(2));
         setRateError('');
         setRateOpen(true);
     };
@@ -175,7 +176,7 @@ export default function OperationForm({
     // origen; con otra fecha la tasa tiene que quedar explícita.
     const applyRef = () => {
         if (!rateAvailable) return;
-        change('rate', sameDay ? '' : Number(rate).toFixed(6));
+        change('rate', sameDay ? '' : Number(rate).toFixed(2));
         setRateOpen(false);
         setRateError('');
         rateEdit.current?.focus();
@@ -285,8 +286,10 @@ export default function OperationForm({
                         aria-label={opcion.descripcion}
                         aria-pressed={origen === opcion.clave}
                     >
-                        {origen === opcion.clave && <IconCheck />}
-                        <span>{opcion.etiqueta}</span>
+                        <span className="cxc-rate-option-label">
+                            {origen === opcion.clave && <IconCheck />}
+                            <span>{opcion.etiqueta}</span>
+                        </span>
                         <strong>{opcion.valor}</strong>
                     </button>
                 ))}
@@ -474,7 +477,7 @@ export default function OperationForm({
                                                     <Button
                                                         variant="link"
                                                         className="cxc-fill-balance"
-                                                        onClick={() => change('amount', String(balance))}
+                                                        onClick={() => change('amount', String(Number(balance)))}
                                                     >
                                                         Usar saldo completo
                                                     </Button>
@@ -558,7 +561,7 @@ export default function OperationForm({
                                                         variant="link"
                                                         className="cxc-fill-balance"
                                                         disabled={fields.currency !== 'USD'}
-                                                        onClick={() => change('amount', String(balance))}
+                                                        onClick={() => change('amount', String(Number(balance)))}
                                                     >
                                                         Usar saldo completo
                                                     </Button>

@@ -514,8 +514,12 @@
 .cxc-rate-option-static {
     cursor: default;
 }
+.cxc-rate-option-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
 .cxc-rate-option svg {
-    align-self: center;
     flex-shrink: 0;
 }
 .cxc-rate-separator {
