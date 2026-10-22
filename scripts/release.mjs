@@ -126,13 +126,21 @@ const commitList = commits
   : "- No se encontraron commits para esta versión.";
 const notes = `${changelog}\n\n## Commits incluidos\n\n${commitList}`;
 
-// ── 5. Release en GitHub (crea tag remoto + release + sube assets) ─────────
+// ── 5. Tag local + push ───────────────────────────────────────────────────
+// El tag se publica antes de crear la release: si lo creara `gh`, lo anclaría al
+// HEAD de la rama remota, que puede estar atrasado respecto de la versión que se
+// está publicando.
+run("git", ["tag", tag]);
+run("git", ["push", "origin", tag]);
+
+// ── 6. Release en GitHub (usa el tag ya publicado + sube assets) ───────────
 run("gh", [
   "release",
   "create",
   tag,
   "--repo",
   REPO,
+  "--verify-tag",
   "--title",
   `DMMarket ${version}`,
   "--notes",
@@ -145,10 +153,6 @@ run("gh", [
   path.join(backendDir, LINUX_SHA_FILE),
   ...installerAssets,
 ]);
-
-// ── 6. Tag local + push ────────────────────────────────────────────────────
-run("git", ["tag", tag]);
-run("git", ["push", "origin", tag]);
 
 // ── 7. Resumen ─────────────────────────────────────────────────────────────
 console.log(`\n✓ Release ${tag} publicada: https://github.com/${REPO}/releases/tag/${tag}`);
