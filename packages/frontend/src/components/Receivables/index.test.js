@@ -1055,10 +1055,18 @@ it('shows a date input defaulting to today and preserves changes through review 
     expect(screen.queryByText('Hoy')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cambiar fecha' })).not.toBeInTheDocument();
     fireEvent.change(date, { target: { value: '2020-01-15' } });
+    expect(screen.getByRole('button', { name: 'Revisar abono' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Importe recibido'), { target: { value: '1000' } });
+    userEvent.click(screen.getByRole('button', { name: 'Editar la tasa del pago' }));
+    fireEvent.change(screen.getByLabelText('Bolívares por dólar'), { target: { value: '50' } });
+    userEvent.click(screen.getByRole('button', { name: 'Aplicar' }));
+    expect(screen.getByText('Tasa aplicada: 50,00 Bs/USD')).toBeVisible();
     userEvent.click(screen.getByRole('button', { name: 'Revisar abono' }));
     await screen.findByRole('button', { name: 'Confirmar abono' });
-    expect(previewReceivableOperation).toHaveBeenLastCalledWith('C1', expect.objectContaining({ date: '2020-01-15' }));
+    expect(previewReceivableOperation).toHaveBeenLastCalledWith(
+        'C1',
+        expect.objectContaining({ date: '2020-01-15', rate: '50' }),
+    );
     expect(screen.getByText(dateLabel('2020-01-15'))).toBeVisible();
     userEvent.click(screen.getByRole('button', { name: 'Editar datos' }));
     expect(screen.getByLabelText('Fecha del pago')).toBeVisible();

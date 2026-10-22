@@ -5,8 +5,8 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import InputGroup from 'react-bootstrap/InputGroup';
 import Spinner from 'react-bootstrap/Spinner';
-import { dateLabel, money, rateLabel, requestId, today } from './format';
 import BankSelect from './BankSelect';
+import { dateLabel, money, rateLabel, requestId, today } from './format';
 
 const titles = { payment: 'Registrar abono', close: 'Cerrar deuda', reopen: 'Reabrir cierre', void: 'Anular abono' };
 const confirmations = {
@@ -38,6 +38,7 @@ export default function OperationForm({
     const [fields, setFields] = useState({
         amount: '',
         currency: 'BsS',
+        rate: '',
         date: today(),
         method: 'TRANSFERENCIA',
         reference: '',
@@ -47,6 +48,9 @@ export default function OperationForm({
     });
     const [preview, setPreview] = useState(null);
     const [showNotes, setShowNotes] = useState(false);
+    const [rateOpen, setRateOpen] = useState(false);
+    const [rateDraft, setRateDraft] = useState('');
+    const [rateError, setRateError] = useState('');
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const inFlight = useRef(false);
@@ -58,15 +62,26 @@ export default function OperationForm({
     const amountInput = useRef(null);
     const reasonInput = useRef(null);
     const errorElement = useRef(null);
+    const rateEdit = useRef(null);
+    const ratePanel = useRef(null);
     const payment = action.type === 'payment';
     const clientClosure = action.type === 'close' && !action.id;
     const rateAvailable = Number.isFinite(Number(rate)) && Number(rate) > 0;
-    const estimate =
-        fields.currency === 'USD' || rateAvailable
-            ? Number(fields.amount) / (fields.currency === 'USD' ? 1 : Number(rate))
-            : null;
+    const sameDay = fields.date === today();
+    const rateText = fields.rate !== '' ? fields.rate : sameDay && rateAvailable ? String(rate) : '';
+    const appliedRate = Number(rateText);
+    const rateReady = fields.currency === 'USD' || (rateText !== '' && Number.isFinite(appliedRate) && appliedRate > 0);
+    const estimate = rateReady ? Number(fields.amount) / (fields.currency === 'USD' ? 1 : appliedRate) : null;
     const hasEstimate = fields.amount !== '' && estimate !== null && Number.isFinite(estimate) && estimate > 0;
     const estimatedBalance = hasEstimate ? Math.max(0, Number(balance) - Number(estimate.toFixed(4))) : Number(balance);
+    const rateDrift =
+        preview &&
+        preview.currency === 'BsS' &&
+        preview.rateSource === 'MANUAL' &&
+        rateAvailable &&
+        Number(preview.rate) > 0
+            ? Math.abs(Number(preview.rate) / Number(rate) - 1)
+            : 0;
     useEffect(() => {
         mounted.current = true;
         return () => {
@@ -100,8 +115,63 @@ export default function OperationForm({
         setError('');
         id.current = requestId();
     };
+    const openRate = () => {
+        if (busy || disabled) return;
+        if (rateOpen) {
+            closeRate();
+            return;
+        }
+        setRateDraft(rateText);
+        setRateError('');
+        setRateOpen(true);
+    };
+    const closeRate = () => {
+        setRateOpen(false);
+        setRateError('');
+        rateEdit.current?.focus();
+    };
+    const applyRate = () => {
+        const value = rateDraft.trim();
+        if (value === '' || !Number.isFinite(Number(value)) || Number(value) <= 0) {
+            setRateError('Indica una tasa mayor que cero.');
+            return;
+        }
+        change('rate', value);
+        setRateOpen(false);
+        setRateError('');
+        rateEdit.current?.focus();
+    };
+    useEffect(() => {
+        if (!rateOpen) return undefined;
+        const dismiss = () => {
+            setRateOpen(false);
+            setRateError('');
+            rateEdit.current?.focus();
+        };
+        const onPointer = (pointerEvent) => {
+            if (ratePanel.current?.contains(pointerEvent.target) || rateEdit.current?.contains(pointerEvent.target))
+                return;
+            dismiss();
+        };
+        const onKey = (keyEvent) => {
+            if (keyEvent.key !== 'Escape') return;
+            keyEvent.preventDefault();
+            keyEvent.stopPropagation();
+            dismiss();
+        };
+        document.addEventListener('pointerdown', onPointer);
+        document.addEventListener('keydown', onKey, true);
+        return () => {
+            document.removeEventListener('pointerdown', onPointer);
+            document.removeEventListener('keydown', onKey, true);
+        };
+    }, [rateOpen]);
     const payload = payment
-        ? { type: action.type, ...fields }
+        ? {
+              type: action.type,
+              ...fields,
+              rate: fields.currency === 'BsS' && fields.rate !== '' ? fields.rate : undefined,
+          }
         : { type: action.type, id: action.id, reason: clientClosure ? fields.reason.trim() : fields.reason };
     const submit = async (event) => {
         event.preventDefault();
@@ -135,9 +205,90 @@ export default function OperationForm({
         }
     };
     const rateInfo = (
-        <div className={`cxc-rate${!rateAvailable ? ' cxc-rate-unavailable' : ''}`} role="status">
-            <span>Tasa REF: {rateAvailable ? `${rateLabel(rate)} Bs/USD` : 'No disponible'}</span>
-            {!rateAvailable && <p>Actualiza la tasa o registra el abono en USD.</p>}
+        <div
+            className={`cxc-rate${fields.rate === '' && (!sameDay || !rateAvailable) ? ' cxc-rate-unavailable' : ''}`}
+            role="status"
+        >
+            <span>
+                {fields.rate !== ''
+                    ? `Tasa aplicada: ${rateLabel(fields.rate)} Bs/USD`
+                    : sameDay
+                      ? `Tasa REF: ${rateAvailable ? `${rateLabel(rate)} Bs/USD` : 'No disponible'}`
+                      : 'Tasa del pago pendiente'}
+            </span>
+            <Button
+                ref={rateEdit}
+                variant="link"
+                className="cxc-rate-edit"
+                title="Editar la tasa"
+                aria-label="Editar la tasa del pago"
+                aria-expanded={rateOpen}
+                disabled={busy || disabled || fields.currency !== 'BsS'}
+                onClick={openRate}
+            >
+                <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+            </Button>
+            {rateOpen && (
+                <div
+                    ref={ratePanel}
+                    className="cxc-rate-popover"
+                    role="dialog"
+                    aria-label="Editar la tasa del pago"
+                    onKeyDown={(keyEvent) => {
+                        if (keyEvent.key !== 'Enter') return;
+                        keyEvent.preventDefault();
+                        applyRate();
+                    }}
+                >
+                    <Form.Group controlId="cxc-rate-input" className="mb-0">
+                        <Form.Label>Bolívares por dólar</Form.Label>
+                        <Form.Control
+                            autoFocus
+                            type="number"
+                            inputMode="decimal"
+                            min="0.000001"
+                            step="0.000001"
+                            placeholder="0,00"
+                            value={rateDraft}
+                            isInvalid={!!rateError}
+                            onChange={(changeEvent) => {
+                                setRateDraft(changeEvent.target.value);
+                                setRateError('');
+                            }}
+                        />
+                        <Form.Control.Feedback type="invalid">{rateError}</Form.Control.Feedback>
+                        <Form.Text>
+                            {rateAvailable ? `REF de hoy: ${rateLabel(rate)} Bs/USD. ` : 'La REF no está disponible. '}
+                            Usa la tasa del día del pago.
+                        </Form.Text>
+                    </Form.Group>
+                    <div className="cxc-rate-actions">
+                        <Button size="sm" variant="outline-secondary" onClick={closeRate}>
+                            Cancelar
+                        </Button>
+                        <Button size="sm" variant="primary" onClick={applyRate}>
+                            Aplicar
+                        </Button>
+                    </div>
+                </div>
+            )}
+            {fields.rate === '' && sameDay && !rateAvailable && (
+                <p>Actualiza la tasa o registra el abono en USD. También puedes indicar la tasa del día del pago.</p>
+            )}
+            {fields.rate === '' && !sameDay && <p>Indica la tasa del {dateLabel(fields.date)}.</p>}
         </div>
     );
     const dateField = (
@@ -463,7 +614,10 @@ export default function OperationForm({
                                             <>
                                                 <div>
                                                     <dt>Tasa aplicada · Bs/USD</dt>
-                                                    <dd>{rateLabel(preview.rate)}</dd>
+                                                    <dd>
+                                                        {rateLabel(preview.rate)}
+                                                        {preview.rateSource === 'MANUAL' && <small> · indicada</small>}
+                                                    </dd>
                                                 </div>
                                                 <div>
                                                     <dt>Equivalente en USD</dt>
@@ -483,6 +637,12 @@ export default function OperationForm({
                                     </div>
                                 )}
                             </dl>
+                            {rateDrift > 0.25 && (
+                                <p className="cxc-muted">
+                                    La tasa indicada difiere de la REF actual ({rateLabel(rate)} Bs/USD). Verifica la
+                                    fecha del pago.
+                                </p>
+                            )}
                             <dl className="cxc-review-meta">
                                 {payment ? (
                                     <>
@@ -573,7 +733,7 @@ export default function OperationForm({
                                 busy ||
                                 disabled ||
                                 (clientClosure && !fields.reason.trim()) ||
-                                (payment && fields.currency === 'BsS' && !rateAvailable)
+                                (payment && fields.currency === 'BsS' && !rateReady)
                             }
                         >
                             {busy ? (

@@ -434,9 +434,73 @@
     outline-offset: 4px;
 }
 .cxc-rate {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
     font-size: 0.8rem;
     color: #adb5bd;
     margin: 0.5rem 0 0.8rem;
+}
+.cxc-rate p {
+    flex-basis: 100%;
+    margin: 0;
+}
+.cxc-rate .cxc-rate-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 2px;
+    line-height: 1;
+    color: #8fb4d9;
+    border-radius: 4px;
+}
+.cxc-rate .cxc-rate-edit:hover,
+.cxc-rate .cxc-rate-edit:focus-visible {
+    color: #d6e4f0;
+    background: #ffffff14;
+}
+.cxc-rate-popover {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    left: 0;
+    z-index: 30;
+    width: 272px;
+    max-width: calc(100vw - 2.5rem);
+    padding: 0.8rem;
+    background: #202a36;
+    border: 1px solid #49586a;
+    border-radius: 10px;
+    box-shadow: 0 16px 40px #0006;
+    color: #e9ecef;
+}
+.cxc-rate-popover .form-label {
+    color: #dee2e6;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+}
+.cxc-rate-popover .form-control {
+    background: #1b232c;
+    border-color: #49586a;
+    color: #e9ecef;
+    color-scheme: dark;
+    min-height: 36px;
+}
+.cxc-rate-popover .form-control::placeholder {
+    color: #adb5bd;
+}
+.cxc-rate-popover .form-text {
+    color: #adb5bd;
+    font-size: 0.72rem;
+}
+.cxc-rate-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
 }
 .cxc-actions {
     display: flex;

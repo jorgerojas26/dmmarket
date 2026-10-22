@@ -125,7 +125,10 @@ export default function Timeline({
                                     {converted && (
                                         <div>
                                             <dt>Tasa Bs/USD</dt>
-                                            <dd>{rateLabel(event.rate)}</dd>
+                                            <dd>
+                                                {rateLabel(event.rate)}
+                                                {event.data?.rateSource === 'MANUAL' && <small> · indicada</small>}
+                                            </dd>
                                         </div>
                                     )}
                                     {event.bank && (

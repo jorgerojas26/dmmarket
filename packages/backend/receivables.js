@@ -49,6 +49,15 @@ function text(value, max = 250, required = false) {
   return result;
 }
 
+function rateInput(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const text = String(value).trim();
+  if (!/^\d{1,12}(?:\.\d{1,6})?$/.test(text)) fail("Indica una tasa válida con hasta 6 decimales.");
+  const rate = new Money(text);
+  if (rate.lte(0)) fail("La tasa debe ser mayor que cero.");
+  return rate.toFixed(6);
+}
+
 function input(body, today) {
   if (!Object.hasOwn(types, body.type)) fail("Operación de cobranza no válida.");
   const result = { type: body.type };
@@ -56,6 +65,7 @@ function input(body, today) {
     result.amount = fixed(decimal(body.amount, 4, true));
     if (!["USD", "BsS"].includes(body.currency)) fail("Selecciona USD o bolívares.");
     result.currency = body.currency;
+    if (body.currency === "BsS") result.rate = rateInput(body.rate);
     if (
       typeof body.date !== "string" ||
       !/^\d{4}-\d{2}-\d{2}$/.test(body.date) ||
@@ -168,18 +178,29 @@ function createReceivablesService({ db, now = () => new Date() }) {
     const balance = total(valid.map((d) => d.SaldoActual));
     let result;
     let rate = null;
+    let rateSource = null;
     if (payload.type === "payment") {
       if (balance.lte(0)) fail("El cliente no tiene deuda pendiente para aplicar un abono.");
       rate = "1.000000";
       if (payload.currency === "BsS") {
-        const query = connection("divisas").where("Simbolo", "BsS").orderBy("IdDivisa").first();
-        const currency = await (lock ? query.forUpdate() : query);
-        if (!currency || !new Money(currency.Cambio || 0).isFinite() || new Money(currency.Cambio || 0).lte(0))
-          fail("La tasa REF no está disponible. No se puede registrar el abono en bolívares.");
-        rate = decimal(new Money(currency.Cambio).toFixed(6), 6, true).toFixed(6);
+        if (payload.rate) {
+          rate = payload.rate;
+          rateSource = "MANUAL";
+        } else if (payload.date === localDate(now())) {
+          const query = connection("divisas").where("Simbolo", "BsS").orderBy("IdDivisa").first();
+          const currency = await (lock ? query.forUpdate() : query);
+          if (!currency || !new Money(currency.Cambio || 0).isFinite() || new Money(currency.Cambio || 0).lte(0))
+            fail("La tasa REF no está disponible. Indica la tasa del día del pago o registra el abono en dólares.");
+          rate = decimal(new Money(currency.Cambio).toFixed(6), 6, true).toFixed(6);
+          rateSource = "REF";
+        } else {
+          fail(
+            `No hay tasa registrada para el ${payload.date.split("-").reverse().join("/")}. Indica la tasa del día del pago.`,
+          );
+        }
       }
       const base = decimal(new Money(payload.amount).div(rate).toFixed(4), 4, true);
-      result = { ...payload, rate, base: fixed(base), ...allocate(valid, base) };
+      result = { ...payload, rate, rateSource, base: fixed(base), ...allocate(valid, base) };
       result.balanceAfter = fixed(balance.minus(result.applied));
     } else if (payload.type === "close") {
       const selected = valid.filter(

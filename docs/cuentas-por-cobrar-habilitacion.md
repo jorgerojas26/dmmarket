@@ -46,7 +46,7 @@ El binario compilado aplica las migraciones pendientes al iniciar. No ejecutar u
 
 Se mantiene el acceso actual sin usuarios: quien acceda a DMMarket puede operar. Restringir el acceso al sistema al personal autorizado.
 
-La tasa para bolívares se toma de `divisas`, con `Simbolo = 'BsS'`, igual que la REF actual. Debe ser positiva y válida. El servidor conserva la tasa confirmada en cada abono. La fecha de pago puede ser anterior, pero los nuevos abonos usan la tasa REF vigente al confirmarlos, no una tasa histórica inferida.
+La tasa de un abono en bolívares es editable y debe ser positiva con hasta 6 decimales. Si el pago es de hoy y no se indica otra, se usa la REF de `divisas` (`Simbolo = 'BsS'`). Si la fecha es anterior, la tasa es obligatoria: la conversión no consulta todavía `bcv_tasas` y no reutiliza la de hoy. El servidor conserva la tasa aplicada y su origen (`REF` o indicada por el operador) en el movimiento y en el historial de la operación.
 
 ## Verificaciones de operación
 

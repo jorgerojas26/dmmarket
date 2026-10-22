@@ -89,7 +89,7 @@ Acción secundaria: Cerrar deuda del cliente
 
 Formulario dentro del modal, sin abrir otro modal encima. Puede reemplazar temporalmente la columna del timeline y ofrecer una acción de volver.
 
-Campos propuestos: importe, moneda, fecha del pago, método, referencia y observaciones. Banco cuando corresponda al método. La fecha se propone como hoy y se permite editar; la tasa utilizada para un nuevo abono en bolívares es la REF disponible al confirmar, no una tasa histórica inferida.
+Campos propuestos: importe, moneda, fecha del pago, método, referencia y observaciones. Banco cuando corresponda al método. La fecha se propone como hoy y se permite editar. La tasa del abono en bolívares es editable: se propone la REF vigente cuando el pago es de hoy y, si la fecha es anterior, el operador debe indicar la tasa de ese día, porque la conversión todavía no consulta la serie histórica del BCV (`bcv_tasas`). La tasa aplicada y su origen se guardan con el abono y no se recalculan después.
 
 Mostrar antes de guardar:
 
@@ -161,7 +161,7 @@ Los registros dudosos no se mostrarán como deuda cobrable sin validación. No s
 3. Cliente debe USD 100 y abona USD 99,70: quedan USD 0,30. El usuario puede cerrar ese saldo con motivo; dinero recibido sigue siendo USD 99,70.
 4. Reabrir el cierre anterior restituye USD 0,30 y conserva el abono USD 99,70.
 5. Anular un abono revierte sus aplicaciones una sola vez, conserva su historial y actualiza saldos y KPIs.
-6. Abono en bolívares conserva la tasa REF aplicada aunque cambie después.
+6. Abono en bolívares conserva la tasa aplicada y su origen aunque la REF cambie después.
 7. Dos registros simultáneos no aplican más dinero que el saldo disponible.
 8. Reintentar una solicitud no crea un segundo abono.
 9. Una venta anulada no recibe abonos ni se reabre.
