@@ -7,6 +7,14 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.9.0] - 2026-10-22
+
+### Nuevas funciones
+
+- **Módulo de Vendedores**: nuevo espacio en el menú para seguir al equipo de ventas. Incluye un tablero con la cobertura del equipo, quiénes mejoraron respecto al período anterior, la venta promedio por vendedor, la concentración de las ventas y los vendedores que llevan más de 30 días sin vender. El ranking muestra además cómo cambió cada vendedor frente al período anterior.
+- **Detalle de cada vendedor**: abre a cualquier vendedor desde el tablero o desde el desglose para ver su tendencia mensual, sus mejores clientes y productos, y su historial de facturas con búsqueda, orden, paginación e impresión.
+- **Desglose de vendedores**: consulta en una sola tabla las ventas, utilidad, margen, facturas, clientes, ticket promedio, última venta y días sin vender de cada vendedor, con búsqueda, orden y totales.
+
 ## [v1.8.2] - 2026-10-19
 
 ### Mejoras
