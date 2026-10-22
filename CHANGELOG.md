@@ -7,6 +7,18 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.10.0] - 2026-10-22
+
+### Nuevas funciones
+
+- **Tasas del BCV en Configuración**: nueva pantalla con la tasa oficial del bolívar que publica el Banco Central de Venezuela. Muestra la tasa del día y permite consultar la de cualquier fecha de los últimos tres meses, con una gráfica de cómo fue cambiando y la fecha de la última consulta al BCV.
+- **La tasa oficial al registrar un abono**: cuando el pago es de un día anterior, el formulario ofrece la tasa que publicó el BCV ese día —o la última anterior, si fue fin de semana o feriado— junto a la tasa que tiene el sistema, para aplicarla con un clic. Ya no hay que buscarla a mano.
+- **Tasa editable en los abonos en bolívares**: puedes corregir la tasa con la que se convierte un abono desde la línea de la tasa. Si el pago es de hoy se propone la del sistema; si es de otra fecha, indicarla es obligatorio. El historial del cliente distingue si la tasa la puso el sistema o la escribió el operador.
+
+### Mejoras
+
+- **Tableros con gráficos de dona**: los tableros comerciales muestran la participación por categoría en un gráfico circular, con el detalle completo a un clic.
+
 ## [v1.9.0] - 2026-10-22
 
 ### Nuevas funciones
