@@ -87,3 +87,7 @@ _Avoid_: Moneda base (describe el saldo, no necesariamente el dinero recibido)
 **showNoe**:
 Flag booleano que alterna entre dos juegos de tablas de ventas: `masterfact/slavefact` (false) y `masternoe/slavenoe` (true). Representa dos sistemas de facturación diferentes o períodos contables.
 _Avoid_: (n/a — es un flag técnico, no un concepto de negocio)
+
+**Tasa BCV (BCV Reference Rate)**:
+Tipo de cambio de referencia Bs/USD que el Banco Central de Venezuela publica una vez por día hábil con fecha valor, en dos columnas (compra y venta). DMMarket la captura y la conserva por fecha en `bcv_tasas`; es historial, no la tasa vigente.
+_Avoid_: Tasa oficial (esa es la de `divisas`, sin fecha, que mantiene el sistema de ventas)

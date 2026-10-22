@@ -50,6 +50,7 @@ const backups_routes = require("./routes/backups");
 const { backupService } = require("./backups");
 const drive_backups_routes = require("./routes/drive-backups");
 const { driveBackupService } = require("./drive-backups");
+const { bcvRateService } = require("./bcv");
 
 //app.use(express.static(path.join(__dirname, "public")));
 
@@ -161,8 +162,10 @@ async function bootstrap() {
   });
   backupService.start();
   driveBackupService.start();
+  bcvRateService.start();
   server.once("close", backupService.stop);
   server.once("close", driveBackupService.stop);
+  server.once("close", bcvRateService.stop);
   return server;
 }
 
