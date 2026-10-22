@@ -250,7 +250,9 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                     </div>
                     <div className="sales-dashboard-insights">
                         <div className="sales-dashboard-categories">
-                            <PanelHelpTitle
+                            <GroupSales
+                                chartData={chartData}
+                                compact
                                 title="Categorías"
                                 help={{
                                     que: 'Reparte la venta bruta del periodo según la categoría de producto.',
@@ -259,7 +261,6 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     accion: 'Profundiza en el Pareto para ver los productos exactos de cada categoría.',
                                 }}
                             />
-                            <GroupSales chartData={chartData} compact />
                         </div>
                         <div className="sales-dashboard-best-employee">
                             <div className="sales-dashboard-seller-label">

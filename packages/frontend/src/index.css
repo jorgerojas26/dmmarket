@@ -155,17 +155,20 @@ body {
 }
 /* Ventas y compras: métricas e insights como una sola composición. */
 .sales-dashboard-overview,
-.purchases-dashboard-overview {
+.purchases-dashboard-overview,
+.sellers-dashboard-overview {
     container-type: inline-size;
 }
 .sales-dashboard-summary,
-.purchases-dashboard-summary {
+.purchases-dashboard-summary,
+.sellers-dashboard-summary {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 16px;
 }
 .sales-dashboard-insights,
-.purchases-dashboard-insights {
+.purchases-dashboard-insights,
+.sellers-dashboard-insights {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -176,25 +179,22 @@ body {
     border-radius: 12px;
 }
 .sales-dashboard-categories,
-.purchases-dashboard-categories {
-    position: relative;
+.purchases-dashboard-categories,
+.sellers-dashboard-categories {
     min-width: 0;
 }
-.group-sales-overview,
-.group-purchases-overview {
+.donut-overview {
     display: grid;
     grid-template-columns: 128px minmax(0, 1fr);
     align-items: center;
     gap: 12px;
 }
-.group-sales-overview-chart,
-.group-purchases-overview-chart {
+.donut-overview-chart {
     position: relative;
     width: 128px;
     height: 128px;
 }
-.group-sales-overview-center,
-.group-purchases-overview-center {
+.donut-overview-center {
     position: absolute;
     inset: 0;
     display: flex;
@@ -204,25 +204,21 @@ body {
     pointer-events: none;
     color: #e4e6ea;
 }
-.group-sales-overview-center strong,
-.group-purchases-overview-center strong {
+.donut-overview-center strong {
     font-size: 1.25rem;
     line-height: 1.2;
 }
-.group-sales-overview-center span,
-.group-purchases-overview-center span {
+.donut-overview-center span {
     font-size: 0.65rem;
     color: #8b92a0;
 }
-.group-sales-overview-legend,
-.group-purchases-overview-legend {
+.donut-overview-legend {
     list-style: none;
     margin: 0;
     padding: 0;
     min-width: 0;
 }
-.group-sales-overview-legend li,
-.group-purchases-overview-legend li {
+.donut-overview-legend li {
     display: grid;
     grid-template-columns: 7px minmax(0, 1fr) auto;
     align-items: center;
@@ -231,51 +227,53 @@ body {
     color: #adb5bd;
     font-size: 0.65rem;
 }
-.group-sales-overview-legend strong,
-.group-purchases-overview-legend strong {
+.donut-overview-legend strong {
     color: #e4e6ea;
     font-size: 0.7rem;
     font-variant-numeric: tabular-nums;
 }
-.group-sales-swatch,
-.group-purchases-swatch {
+.donut-overview-swatch {
     width: 7px;
     height: 7px;
     border-radius: 2px;
     flex-shrink: 0;
 }
-.group-sales-label,
-.group-purchases-label {
+.donut-overview-label {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
 }
-.group-sales-details,
-.group-purchases-details {
-    position: absolute;
-    top: 0;
-    right: 0;
-    display: block;
-    margin: 0;
+.donut-overview-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 4px 8px;
+}
+.donut-overview-details {
+    flex-shrink: 0;
+    margin: 1px 0 0;
     padding: 0;
     border: 0;
     background: transparent;
     color: #9ca3af;
     font-size: 0.7rem;
+    line-height: 1.2;
 }
-.group-sales-details:hover,
-.group-purchases-details:hover {
+.donut-overview-details:hover {
     color: #e4e6ea;
-    text-decoration: underline;
 }
-.group-sales-category-details,
-.group-purchases-category-details {
+.donut-overview-details:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+.donut-overview-details-list {
     list-style: none;
     margin: 0;
     padding: 0;
 }
-.group-sales-category-details li,
-.group-purchases-category-details li {
+.donut-overview-details-list li {
     display: grid;
     grid-template-columns: 7px minmax(0, 1fr) auto 50px;
     gap: 10px;
@@ -284,41 +282,42 @@ body {
     border-bottom: 1px solid #373b3e;
     font-size: 0.75rem;
 }
-.group-sales-category-details strong,
-.group-purchases-category-details strong {
+.donut-overview-details-list strong {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 @media (max-width: 575px) {
-    .group-sales-category-details li,
-    .group-purchases-category-details li {
+    .donut-overview-details-list li {
         grid-template-columns: 7px minmax(0, 1fr) auto;
         gap: 4px 10px;
     }
-    .group-sales-category-details li > span:nth-child(2),
-    .group-purchases-category-details li > span:nth-child(2) {
+    .donut-overview-details-list li > span:nth-child(2) {
         grid-column: 2 / -1;
         overflow-wrap: anywhere;
     }
-    .group-sales-category-details strong,
-    .group-purchases-category-details strong {
+    .donut-overview-details-list strong {
         grid-column: 2;
     }
 }
 .group-sales-empty,
-.group-purchases-empty {
+.donut-overview-empty {
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 128px;
 }
+/* Con la tarjeta a todo el ancho, el bloque se centra para no separar leyenda y % */
+@container (max-width: 1119px) {
+    .sellers-dashboard-insights .donut-overview {
+        max-width: 380px;
+        margin: 0 auto;
+    }
+}
 @container (max-width: 300px) {
-    .group-sales-overview,
-    .group-purchases-overview {
+    .donut-overview {
         grid-template-columns: 104px minmax(0, 1fr);
     }
-    .group-sales-overview-chart,
-    .group-purchases-overview-chart {
+    .donut-overview-chart {
         width: 104px;
         height: 104px;
     }
@@ -354,42 +353,57 @@ body {
         grid-template-columns: repeat(3, minmax(0, 1fr));
         grid-template-rows: repeat(2, minmax(0, 1fr));
     }
+    .sellers-dashboard-summary {
+        grid-template-columns: minmax(0, 1fr) 360px;
+    }
+    .sellers-dashboard-summary .sellers-dashboard-kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+    }
 }
 .dashboard-kpi-grid.sales-dashboard-kpi-grid,
-.dashboard-kpi-grid.purchases-dashboard-kpi-grid {
+.dashboard-kpi-grid.purchases-dashboard-kpi-grid,
+.dashboard-kpi-grid.sellers-dashboard-kpi-grid {
     grid-auto-rows: auto;
 }
 .sales-dashboard-kpi-grid .dashboard-kpi-card,
-.purchases-dashboard-kpi-grid .dashboard-kpi-card {
+.purchases-dashboard-kpi-grid .dashboard-kpi-card,
+.sellers-dashboard-kpi-grid .dashboard-kpi-card {
     display: flex;
     align-items: center;
     padding: 12px 14px;
 }
 .sales-dashboard-kpi-grid .dashboard-kpi-card-inner,
-.purchases-dashboard-kpi-grid .dashboard-kpi-card-inner {
+.purchases-dashboard-kpi-grid .dashboard-kpi-card-inner,
+.sellers-dashboard-kpi-grid .dashboard-kpi-card-inner {
     width: 100%;
     gap: 8px;
 }
 .sales-dashboard-kpi-grid .dashboard-kpi-icon,
-.purchases-dashboard-kpi-grid .dashboard-kpi-icon {
+.purchases-dashboard-kpi-grid .dashboard-kpi-icon,
+.sellers-dashboard-kpi-grid .dashboard-kpi-icon {
     width: 32px;
     height: 32px;
 }
 .sales-dashboard-kpi-grid .dashboard-kpi-body,
-.purchases-dashboard-kpi-grid .dashboard-kpi-body {
+.purchases-dashboard-kpi-grid .dashboard-kpi-body,
+.sellers-dashboard-kpi-grid .dashboard-kpi-body {
     min-height: 72px;
 }
 .sales-dashboard-kpi-grid .dashboard-kpi-label,
-.purchases-dashboard-kpi-grid .dashboard-kpi-label {
+.purchases-dashboard-kpi-grid .dashboard-kpi-label,
+.sellers-dashboard-kpi-grid .dashboard-kpi-label {
     font-size: 0.7rem;
     letter-spacing: 0.3px;
 }
 .sales-dashboard-kpi-grid .dashboard-kpi-value,
-.purchases-dashboard-kpi-grid .dashboard-kpi-value {
+.purchases-dashboard-kpi-grid .dashboard-kpi-value,
+.sellers-dashboard-kpi-grid .dashboard-kpi-value {
     font-size: 1.2rem;
 }
 .sales-dashboard-kpi-grid .dashboard-kpi-trend,
-.purchases-dashboard-kpi-grid .dashboard-kpi-trend {
+.purchases-dashboard-kpi-grid .dashboard-kpi-trend,
+.sellers-dashboard-kpi-grid .dashboard-kpi-trend {
     flex-wrap: wrap;
     font-size: 0.72rem;
     padding: 2px 6px;
@@ -938,33 +952,40 @@ div.card-body {
         white-space: nowrap;
     }
 }
-/* El calendario y los rangos rápidos caben también en un filtro estrecho. */
+/* Rangos rápidos a la izquierda y calendario a la derecha mientras haya espacio. */
 .report-page-filters .date-range-dropdown {
-    width: 100%;
+    width: max-content;
     min-width: 0;
+    max-width: calc(100vw - 2rem);
     max-height: 70vh;
     overflow: auto;
 }
-.report-page-filters .rdrDateRangePickerWrapper {
-    display: flex;
-    flex-direction: column;
-}
-.report-page-filters .rdrDefinedRangesWrapper,
-.report-page-filters .rdrCalendarWrapper,
-.report-page-filters .rdrMonth {
-    width: 100%;
-    min-width: 0;
-}
-.report-page-filters .rdrDefinedRangesWrapper {
-    border-right: 0;
-}
-.report-page-filters .rdrStaticRanges {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.report-page-filters .rdrStaticRangeLabel {
-    padding: 8px;
-    white-space: normal;
+/* Sin espacio el calendario pasa a columna y los rangos se reparten en dos. */
+@media (max-width: 640px) {
+    .report-page-filters .date-range-dropdown {
+        width: 100%;
+    }
+    .report-page-filters .rdrDateRangePickerWrapper {
+        display: flex;
+        flex-direction: column;
+    }
+    .report-page-filters .rdrDefinedRangesWrapper,
+    .report-page-filters .rdrCalendarWrapper,
+    .report-page-filters .rdrMonth {
+        width: 100%;
+        min-width: 0;
+    }
+    .report-page-filters .rdrDefinedRangesWrapper {
+        border-right: 0;
+    }
+    .report-page-filters .rdrStaticRanges {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .report-page-filters .rdrStaticRangeLabel {
+        padding: 8px;
+        white-space: normal;
+    }
 }
 .clients-content-wrapper .card {
     width: 100%;

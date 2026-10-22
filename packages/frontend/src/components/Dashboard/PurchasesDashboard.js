@@ -156,7 +156,9 @@ const PurchasesDashboard = ({ dateRange }) => {
                     </div>
                     <div className="purchases-dashboard-insights">
                         <div className="purchases-dashboard-categories">
-                            <PanelHelpTitle
+                            <GroupPurchases
+                                chartData={chartData}
+                                compact
                                 title="Categorías"
                                 help={{
                                     que: 'Reparte el total comprado del periodo según la categoría de producto.',
@@ -164,7 +166,6 @@ const PurchasesDashboard = ({ dateRange }) => {
                                     servir: 'Ver dónde se concentra la inversión en mercancía.',
                                 }}
                             />
-                            <GroupPurchases chartData={chartData} compact />
                         </div>
                         <div className="purchases-dashboard-best-provider">
                             <div className="purchases-dashboard-provider-label">

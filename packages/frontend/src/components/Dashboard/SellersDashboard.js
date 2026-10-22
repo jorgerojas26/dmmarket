@@ -1,7 +1,7 @@
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsiveLine } from '@nivo/line';
-import { ResponsivePie } from '@nivo/pie';
 import ChartTooltip from 'components/ChartTooltip';
+import DonutOverview from 'components/DonutOverview';
 import Table from 'components/Table';
 import { useSellersDashboard } from 'hooks/useSellers';
 import { DateTime } from 'luxon';
@@ -115,9 +115,9 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
                 </div>
             )}
 
-            <div className="row g-3 mb-4">
-                <div className="col-12">
-                    <div className="dashboard-kpi-grid dashboard-kpi-grid-compact clients-dashboard-kpi-grid h-100">
+            <div className="sellers-dashboard-overview mb-4">
+                <div className="sellers-dashboard-summary">
+                    <div className="dashboard-kpi-grid dashboard-kpi-grid-compact sellers-dashboard-kpi-grid">
                         <div>
                             <KpiCard
                                 label="Venta del Equipo"
@@ -202,32 +202,43 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
                                 }}
                             />
                         </div>
-                        <div>
-                            <KpiCard
-                                label="+30 Días Sin Vender"
-                                value={formatNumber(kpis?.staleSellers)}
-                                icon="user"
-                                accent="orange"
+                    </div>
+                    <div className="sellers-dashboard-insights">
+                        <div className="sellers-dashboard-categories">
+                            <DonutOverview
+                                data={pieData}
+                                title="Participación"
                                 help={{
-                                    que: 'Vendedores activos cuya última factura fue hace más de 30 días, contados desde el final del período.',
-                                    leer: 'Vendieron en el rango, pero llevan más de un mes sin cerrar una venta al cierre del rango.',
-                                    servir: 'Detectar actividad que se está enfriando aunque el período muestre ventas.',
-                                    accion: 'Revisa a esos vendedores en el desglose, ordenado por "Días Sin Vender".',
+                                    que: 'Reparte las ventas del periodo entre los vendedores que vendieron.',
+                                    leer: 'Cada porción es un vendedor; cuanto más grande, más dinero aporta.',
+                                    servir: 'Ver si la venta está repartida o concentrada en pocas personas.',
+                                    accion: 'Haz clic en una porción para abrir el detalle del vendedor.',
                                 }}
-                            />
-                        </div>
-                        <div>
-                            <KpiCard
-                                label="Bajo el Margen del Equipo"
-                                value={formatNumber(kpis?.lowMarginSellers)}
-                                icon="percent"
-                                accent="pink"
-                                help={{
-                                    que: `Vendedores cuyo margen del período está por debajo del margen del equipo (${formatPercent(kpis?.marginPercent ?? 0)}).`,
-                                    leer: 'Mide quién vende con menos rentabilidad que el promedio, no solo quién vende menos.',
-                                    servir: 'Una venta alta con margen bajo deja menos ganancia: el ranking por monto puede esconder estos casos.',
-                                    accion: 'Revisa precios, descuentos y mezcla de productos de esos vendedores.',
-                                }}
+                                ariaLabel="Participación por vendedor"
+                                centerLabel={pieData.length === 1 ? 'vendedor' : 'vendedores'}
+                                remainingLabel={(count) =>
+                                    count === 1 ? 'Otro vendedor' : `Otros ${count} vendedores`
+                                }
+                                detailsLabel={(count) =>
+                                    count === 1 ? 'Ver el vendedor' : `Ver los ${count} vendedores`
+                                }
+                                detailsId="sellers-share-title"
+                                detailsTitle="Participación por vendedor"
+                                detailsSubtitle="Participación sobre la venta del equipo en el periodo."
+                                emptyMessage="Sin datos"
+                                onSliceClick={(datum) => onSellerSelect(datum.data.seller)}
+                                tooltip={({ datum }) => (
+                                    <ChartTooltip title={datum.label} color={datum.color}>
+                                        <span>Ventas</span>
+                                        <strong>{formatCurrency(datum.value)}</strong>
+                                        <span>Participación</span>
+                                        <strong>{formatPercent(datum.data.sharePercent)}</strong>
+                                        <span>Utilidad</span>
+                                        <strong>{formatCurrency(datum.data.profit)}</strong>
+                                        <span>Facturas</span>
+                                        <strong>{formatNumber(datum.data.invoiceCount)}</strong>
+                                    </ChartTooltip>
+                                )}
                             />
                         </div>
                     </div>
@@ -235,7 +246,7 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
             </div>
 
             <div className="row g-3 mb-4">
-                <div className="col-12 col-xl-8">
+                <div className="col-12">
                     <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
                         <PanelHelpTitle
                             title="Ranking de Vendedores"
@@ -302,67 +313,6 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
                             ) : (
                                 <div className="d-flex align-items-center justify-content-center h-100 text-muted">
                                     Sin ventas en el período
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <div className="col-12 col-xl-4">
-                    <div className="dashboard-panel" style={{ padding: '16px 20px', height: '100%' }}>
-                        <PanelHelpTitle
-                            title="Participación por Vendedor"
-                            help={{
-                                que: 'Reparte las ventas del periodo entre los vendedores que vendieron.',
-                                leer: 'Cada porción es un vendedor; cuanto más grande, más dinero aporta.',
-                                servir: 'Ver si la venta está repartida o concentrada en pocas personas.',
-                                accion: 'Haz clic en una porción para abrir el detalle del vendedor.',
-                            }}
-                        />
-                        <div style={{ height: 340 }}>
-                            {pieData.length > 0 ? (
-                                <ResponsivePie
-                                    data={pieData}
-                                    theme={nivoTheme}
-                                    margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                                    innerRadius={0.5}
-                                    padAngle={1}
-                                    cornerRadius={3}
-                                    colors={[
-                                        '#3b82f6',
-                                        '#8b5cf6',
-                                        '#06b6d4',
-                                        '#22c55e',
-                                        '#f59e0b',
-                                        '#ef4444',
-                                        '#ec4899',
-                                        '#6366f1',
-                                        '#14b8a6',
-                                        '#f97316',
-                                        '#a855f7',
-                                        '#64748b',
-                                    ]}
-                                    borderWidth={1}
-                                    borderColor="#1e2126"
-                                    enableArcLabels={false}
-                                    enableArcLinkLabels={false}
-                                    valueFormat={(value) => formatCurrency(value)}
-                                    onClick={(datum) => onSellerSelect(datum.data.seller)}
-                                    tooltip={({ datum }) => (
-                                        <ChartTooltip title={datum.label} color={datum.color}>
-                                            <span>Ventas</span>
-                                            <strong>{formatCurrency(datum.value)}</strong>
-                                            <span>Participación</span>
-                                            <strong>{formatPercent(datum.data.sharePercent)}</strong>
-                                            <span>Utilidad</span>
-                                            <strong>{formatCurrency(datum.data.profit)}</strong>
-                                            <span>Facturas</span>
-                                            <strong>{formatNumber(datum.data.invoiceCount)}</strong>
-                                        </ChartTooltip>
-                                    )}
-                                />
-                            ) : (
-                                <div className="d-flex align-items-center justify-content-center h-100 text-muted">
-                                    Sin datos
                                 </div>
                             )}
                         </div>

@@ -80,7 +80,7 @@ describe('SalesDashboard', () => {
         expect(grid).not.toContainElement(bestEmployee);
         expect(grid.nextElementSibling).toBe(insights);
         expect(insights).toContainElement(screen.getByText('Categorías'));
-        expect(insights.querySelector('.group-sales-overview-chart')).toBeInTheDocument();
+        expect(insights.querySelector('.donut-overview-chart')).toBeInTheDocument();
         expect(summary.querySelector('.sales-dashboard-categories')).not.toHaveClass('dashboard-panel');
         expect(within(summary).getByRole('list', { name: 'Categorías de ventas' })).toBeInTheDocument();
         expect(grid.querySelectorAll('.dashboard-kpi-trend')).toHaveLength(4);
