@@ -7,6 +7,16 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.11.0] - 2026-10-22
+
+### Mejoras
+
+- **Decimales consistentes en los abonos**: la tasa y el importe que completa el atajo de saldo se muestran con dos decimales, igual que los saldos y el resto del formulario.
+
+### Correcciones
+
+- **Opciones de tasa alineadas**: al marcar una tasa en el selector, su etiqueta se quedaba centrada; ahora el texto se mantiene a la izquierda y el valor a la derecha.
+
 ## [v1.10.0] - 2026-10-22
 
 ### Nuevas funciones
