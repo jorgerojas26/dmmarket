@@ -5,6 +5,7 @@ import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import ClientesPage from 'pages/clientes';
 import ComprasPage from 'pages/compras';
 import InventarioPage from 'pages/inventario';
+import VendedoresPage from 'pages/vendedores';
 import VentasPage from 'pages/ventas';
 import { useContext, useEffect } from 'react';
 import Container from 'react-bootstrap/Container';
@@ -15,7 +16,15 @@ import { CurrencyRateContext } from './context/currency_rate';
 import ConfiguracionPage from './pages/configuracion';
 import ProveedoresPage from './pages/proveedores';
 
-const SIDEBAR_ROUTES = ['/ventas', '/compras', '/clientes', '/proveedores', '/inventario', '/configuracion'];
+const SIDEBAR_ROUTES = [
+    '/ventas',
+    '/compras',
+    '/clientes',
+    '/proveedores',
+    '/vendedores',
+    '/inventario',
+    '/configuracion',
+];
 
 function AppContent() {
     const location = useLocation();
@@ -54,17 +63,19 @@ function AppContent() {
                                 derecha. En mobile el collapse se apila en columna: links con
                                 área táctil amplia y las acciones debajo, como panel. */}
                             <Nav className="me-auto app-navbar-links">
-                                {['ventas', 'compras', 'clientes', 'proveedores', 'inventario'].map((route) => (
-                                    <Link
-                                        key={route}
-                                        to={`/${route}`}
-                                        className={`text-decoration-none nav-link${
-                                            location.pathname.includes(route) ? ' active' : ''
-                                        }`}
-                                    >
-                                        {route}
-                                    </Link>
-                                ))}
+                                {['ventas', 'compras', 'clientes', 'proveedores', 'vendedores', 'inventario'].map(
+                                    (route) => (
+                                        <Link
+                                            key={route}
+                                            to={`/${route}`}
+                                            className={`text-decoration-none nav-link${
+                                                location.pathname.includes(route) ? ' active' : ''
+                                            }`}
+                                        >
+                                            {route}
+                                        </Link>
+                                    ),
+                                )}
                             </Nav>
 
                             <div className="app-navbar-actions">
@@ -124,6 +135,7 @@ function AppContent() {
                         <Route path="/compras" component={ComprasPage} />
                         <Route path="/clientes" component={ClientesPage} />
                         <Route path="/proveedores" component={ProveedoresPage} />
+                        <Route path="/vendedores" component={VendedoresPage} />
                         <Route path="/inventario" component={InventarioPage} />
                         <Route path="/configuracion" component={ConfiguracionPage} />
                     </Switch>

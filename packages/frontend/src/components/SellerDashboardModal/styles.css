@@ -1,0 +1,84 @@
+.seller-dashboard-modal .modal-content {
+    background: #1a1d21;
+    color: #e9ecef;
+    border: 1px solid #2f3338;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.seller-dashboard-modal .modal-header {
+    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
+    color: #fff;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    border-bottom: none;
+    padding: 1.25rem 1.5rem;
+}
+
+.seller-dashboard-modal .modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.seller-dashboard-modal .modal-title {
+    font-weight: 700;
+    letter-spacing: -0.25px;
+}
+
+.seller-dashboard-modal .modal-subtitle {
+    opacity: 0.85;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.seller-dashboard-modal .seller-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.seller-dashboard-modal .modal-body {
+    padding: 1.25rem;
+    background: #1a1d21;
+}
+
+.seller-dashboard-modal .date-picker-card {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background: #212529;
+    border: 1px solid #2f3338;
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.seller-dashboard-modal .date-picker-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #adb5bd;
+}
+
+.seller-dashboard-modal .date-range-picker-wrapper {
+    justify-content: flex-start;
+}
+
+.seller-dashboard-modal .date-range-dropdown {
+    right: 0;
+    left: auto;
+}
+
+.seller-dashboard-modal .date-range-picker-wrapper .rdrDateRangePickerWrapper {
+    border: none;
+    background: transparent;
+}

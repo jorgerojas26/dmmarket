@@ -7,7 +7,7 @@ const PENDING_TTL_MS = 30_000;
 // auto-update progress must stay live; dashboards, modals and drill-downs share
 // the same one-hour policy. Never cache unknown routes or authenticated traffic.
 const isReportPath = (path) =>
-  /^\/(dashboard|clients|providers|purchases|sales|groups|products|invoices|employees)(\/|$)/.test(path);
+  /^\/(dashboard|clients|providers|purchases|sales|groups|products|invoices|employees|sellers)(\/|$)/.test(path);
 
 function createReportCache({
   ttlMs = TTL_MS,
