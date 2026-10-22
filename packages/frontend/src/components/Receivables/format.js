@@ -15,6 +15,8 @@ const rateFormatter = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2,
 export const rateLabel = (value) =>
     Number(value) > 0 && Number.isFinite(Number(value)) ? rateFormatter.format(Number(value)) : '—';
 
+export const shortDate = (value) => (value ? DateTime.fromISO(String(value).slice(0, 10)).toFormat('dd/MM') : '—');
+
 export const dateLabel = (value) =>
     value ? DateTime.fromISO(String(value).slice(0, 10)).toFormat('dd MMM yyyy', { locale: 'es' }) : '—';
 export const today = () => DateTime.now().setZone('America/Caracas').toISODate();

@@ -237,10 +237,9 @@ async function cambiosPendientes(connection, tasas) {
   });
 }
 
-const aTasa = (fila) =>
-  fila
-    ? { fecha: fila.Fecha, compra: Number(fila.Compra), venta: Number(fila.Venta), actualizado: fila.Actualizado }
-    : null;
+// El BCV publica dos columnas (BID y ASK) pero el tipo de cambio de referencia
+// que se cita es el ASK: es el único valor que expone DMMarket como "tasa".
+const aTasa = (fila) => (fila ? { fecha: fila.Fecha, tasa: Number(fila.Venta), actualizado: fila.Actualizado } : null);
 
 function crearServicioTasas({
   connection = knex,

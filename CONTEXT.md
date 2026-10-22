@@ -89,5 +89,5 @@ Flag booleano que alterna entre dos juegos de tablas de ventas: `masterfact/slav
 _Avoid_: (n/a — es un flag técnico, no un concepto de negocio)
 
 **Tasa BCV (BCV Reference Rate)**:
-Tipo de cambio de referencia Bs/USD que el Banco Central de Venezuela publica una vez por día hábil con fecha valor, en dos columnas (compra y venta). DMMarket la captura y la conserva por fecha en `bcv_tasas`; es historial, no la tasa vigente.
-_Avoid_: Tasa oficial (esa es la de `divisas`, sin fecha, que mantiene el sistema de ventas)
+Tipo de cambio de referencia Bs/USD que el Banco Central de Venezuela publica una vez por día hábil con fecha valor. El BCV lo publica en dos columnas (compra y venta): DMMarket captura ambas en `bcv_tasas` para auditar la fuente, pero llama **tasa** a la de venta, que es el valor de referencia con el que se convierte. Es historial, no la tasa vigente de `divisas`.
+_Avoid_: Tasa oficial (esa es la de `divisas`, sin fecha, que mantiene el sistema de ventas), compra, venta (la aplicación expone una sola tasa)

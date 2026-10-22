@@ -1,0 +1,15 @@
+/* react-date-range pinta los días deshabilitados con fondo claro (#f8f8f8), que
+   en el tema oscuro parece un bloque roto. Se corrige solo para este selector
+   para no alterar el de rangos que usan los dashboards. */
+.date-select .rdrDayDisabled {
+    background: transparent;
+}
+
+.date-select .rdrDayDisabled .rdrDayNumber span {
+    color: #495057;
+}
+
+/* Con los selectores de mes y año visibles, el rótulo del mes duplica el dato. */
+.date-select .rdrMonthName {
+    display: none;
+}

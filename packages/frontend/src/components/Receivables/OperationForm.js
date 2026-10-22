@@ -1,4 +1,5 @@
 import { executeReceivableOperation, previewReceivableOperation } from 'api/receivables';
+import { useBcvRateByDate } from 'hooks/useBcvRates';
 import { useEffect, useRef, useState } from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
@@ -6,7 +7,23 @@ import Form from 'react-bootstrap/Form';
 import InputGroup from 'react-bootstrap/InputGroup';
 import Spinner from 'react-bootstrap/Spinner';
 import BankSelect from './BankSelect';
-import { dateLabel, money, rateLabel, requestId, today } from './format';
+import { dateLabel, money, rateLabel, requestId, shortDate, today } from './format';
+
+const IconCheck = () => (
+    <svg
+        aria-hidden="true"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+    >
+        <polyline points="20 6 9 17 4 12" />
+    </svg>
+);
 
 const titles = { payment: 'Registrar abono', close: 'Cerrar deuda', reopen: 'Reabrir cierre', void: 'Anular abono' };
 const confirmations = {
@@ -68,6 +85,23 @@ export default function OperationForm({
     const clientClosure = action.type === 'close' && !action.id;
     const rateAvailable = Number.isFinite(Number(rate)) && Number(rate) > 0;
     const sameDay = fields.date === today();
+    // Tasa oficial del día del pago: el backend la resuelve a la última publicada,
+    // porque el BCV no publica fines de semana ni feriados.
+    const { data: bcv } = useBcvRateByDate(fields.date);
+    const bcvRate = bcv && Number(bcv.tasa) > 0 ? Number(bcv.tasa).toFixed(6) : '';
+    const pending = fields.rate === '' && !(sameDay && rateAvailable);
+    // Tasa en efecto y de dónde salió, para marcar el chip correspondiente.
+    const aplicada = fields.rate !== '' ? Number(fields.rate) : sameDay && rateAvailable ? Number(rate) : null;
+    const cerca = (valor, referencia) =>
+        valor !== null && referencia !== null && Math.abs(valor - Number(referencia)) < 1e-6;
+    const origen =
+        aplicada === null
+            ? null
+            : cerca(aplicada, bcvRate || null)
+              ? 'bcv'
+              : cerca(aplicada, rateAvailable ? rate : null)
+                ? 'ref'
+                : 'manual';
     const rateText = fields.rate !== '' ? fields.rate : sameDay && rateAvailable ? String(rate) : '';
     const appliedRate = Number(rateText);
     const rateReady = fields.currency === 'USD' || (rateText !== '' && Number.isFinite(appliedRate) && appliedRate > 0);
@@ -126,6 +160,22 @@ export default function OperationForm({
         setRateOpen(true);
     };
     const closeRate = () => {
+        setRateOpen(false);
+        setRateError('');
+        rateEdit.current?.focus();
+    };
+    const applyBcv = () => {
+        if (!bcvRate) return;
+        change('rate', bcvRate);
+        setRateOpen(false);
+        setRateError('');
+        rateEdit.current?.focus();
+    };
+    // Con fecha de hoy, dejar el campo vacío equivale a usar la REF y conserva su
+    // origen; con otra fecha la tasa tiene que quedar explícita.
+    const applyRef = () => {
+        if (!rateAvailable) return;
+        change('rate', sameDay ? '' : Number(rate).toFixed(6));
         setRateOpen(false);
         setRateError('');
         rateEdit.current?.focus();
@@ -204,18 +254,69 @@ export default function OperationForm({
             onBusyChange(false);
         }
     };
+    const opciones = [
+        bcvRate && {
+            clave: 'bcv',
+            etiqueta: `BCV ${shortDate(bcv.fecha)}`,
+            valor: rateLabel(bcvRate),
+            titulo: `Tasa BCV del ${dateLabel(bcv.fecha)}`,
+            descripcion: `Tasa BCV del ${dateLabel(bcv.fecha)}: ${rateLabel(bcvRate)} bolívares por dólar`,
+            aplicar: applyBcv,
+        },
+        rateAvailable && {
+            clave: 'ref',
+            etiqueta: 'REF',
+            valor: rateLabel(rate),
+            titulo: 'Tasa REF vigente del sistema',
+            descripcion: `Tasa REF del sistema: ${rateLabel(rate)} bolívares por dólar`,
+            aplicar: applyRef,
+        },
+    ].filter(Boolean);
+    const rateOptions = (block = false) =>
+        (opciones.length > 0 || origen === 'manual') && (
+            <div className={`cxc-rate-options${block ? ' cxc-rate-options-block' : ''}`}>
+                {opciones.map((opcion) => (
+                    <button
+                        key={opcion.clave}
+                        type="button"
+                        className={`cxc-rate-option${origen === opcion.clave ? ' cxc-rate-option-active' : ''}`}
+                        onClick={opcion.aplicar}
+                        title={opcion.titulo}
+                        aria-label={opcion.descripcion}
+                        aria-pressed={origen === opcion.clave}
+                    >
+                        {origen === opcion.clave && <IconCheck />}
+                        <span>{opcion.etiqueta}</span>
+                        <strong>{opcion.valor}</strong>
+                    </button>
+                ))}
+                {origen === 'manual' && (
+                    <span
+                        className="cxc-rate-option cxc-rate-option-active cxc-rate-option-static"
+                        title="Tasa indicada a mano"
+                    >
+                        <IconCheck />
+                        <span>Manual</span>
+                        <strong>{rateLabel(fields.rate)}</strong>
+                    </span>
+                )}
+            </div>
+        );
     const rateInfo = (
         <div
             className={`cxc-rate${fields.rate === '' && (!sameDay || !rateAvailable) ? ' cxc-rate-unavailable' : ''}`}
             role="status"
         >
-            <span>
-                {fields.rate !== ''
-                    ? `Tasa aplicada: ${rateLabel(fields.rate)} Bs/USD`
-                    : sameDay
-                      ? `Tasa REF: ${rateAvailable ? `${rateLabel(rate)} Bs/USD` : 'No disponible'}`
-                      : 'Tasa del pago pendiente'}
-            </span>
+            {fields.rate !== '' ? (
+                <span>Tasa aplicada: {rateLabel(fields.rate)} Bs/USD</span>
+            ) : pending && (bcvRate || rateAvailable) ? (
+                <span>Tasa</span>
+            ) : pending ? (
+                <span>Tasa pendiente</span>
+            ) : (
+                <span>Tasa REF: {rateLabel(rate)} Bs/USD</span>
+            )}
+            {pending && !busy && !disabled && rateOptions()}
             <Button
                 ref={rateEdit}
                 variant="link"
@@ -241,6 +342,7 @@ export default function OperationForm({
                     <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                 </svg>
             </Button>
+            {pending && !bcvRate && !rateAvailable && <p>Indica la tasa o registra el abono en USD.</p>}
             {rateOpen && (
                 <div
                     ref={ratePanel}
@@ -253,6 +355,12 @@ export default function OperationForm({
                         applyRate();
                     }}
                 >
+                    {(bcvRate || rateAvailable) && (
+                        <>
+                            {rateOptions(true)}
+                            <hr className="cxc-rate-separator" />
+                        </>
+                    )}
                     <Form.Group controlId="cxc-rate-input" className="mb-0">
                         <Form.Label>Bolívares por dólar</Form.Label>
                         <Form.Control
@@ -270,10 +378,6 @@ export default function OperationForm({
                             }}
                         />
                         <Form.Control.Feedback type="invalid">{rateError}</Form.Control.Feedback>
-                        <Form.Text>
-                            {rateAvailable ? `REF de hoy: ${rateLabel(rate)} Bs/USD. ` : 'La REF no está disponible. '}
-                            Usa la tasa del día del pago.
-                        </Form.Text>
                     </Form.Group>
                     <div className="cxc-rate-actions">
                         <Button size="sm" variant="outline-secondary" onClick={closeRate}>
@@ -285,10 +389,6 @@ export default function OperationForm({
                     </div>
                 </div>
             )}
-            {fields.rate === '' && sameDay && !rateAvailable && (
-                <p>Actualiza la tasa o registra el abono en USD. También puedes indicar la tasa del día del pago.</p>
-            )}
-            {fields.rate === '' && !sameDay && <p>Indica la tasa del {dateLabel(fields.date)}.</p>}
         </div>
     );
     const dateField = (

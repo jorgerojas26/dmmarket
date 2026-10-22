@@ -7,6 +7,7 @@ import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
 import ReactMarkdown from 'react-markdown';
 import { useHistory, useLocation } from 'react-router-dom';
 import BackupsPanel from './BackupsPanel';
+import RatesPanel from './RatesPanel';
 import './styles.css';
 
 // Renderiza las notas de una release como markdown (seguro: react-markdown
@@ -59,21 +60,44 @@ const sidebarItems = [
             </svg>
         ),
     },
+    {
+        eventKey: 'rates',
+        label: 'Tasas BCV',
+        icon: (
+            <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            >
+                <title>Tasas BCV</title>
+                <path d="M3 17l6-6 4 4 7-7" />
+                <path d="M14 8h6v6" />
+            </svg>
+        ),
+    },
 ];
+
+const VIEWS = { '#acercade': 'about', '#respaldos': 'backups', '#tasas': 'rates' };
+const HASHES = { about: '#acercade', backups: '#respaldos', rates: '#tasas' };
 
 const ConfiguracionPage = () => {
     const historyRouter = useHistory();
     const location = useLocation();
-    const activeView = location.hash === '#respaldos' ? 'backups' : 'about';
+    const activeView = VIEWS[location.hash] || 'about';
 
     useEffect(() => {
-        if (!['#acercade', '#respaldos'].includes(location.hash)) {
-            historyRouter.replace({ ...location, hash: '#acercade' });
+        if (!VIEWS[location.hash]) {
+            historyRouter.replace({ ...location, hash: HASHES.about });
         }
     }, [historyRouter, location]);
 
     const selectView = (view) => {
-        const hash = view === 'backups' ? '#respaldos' : '#acercade';
+        const hash = HASHES[view] || HASHES.about;
         if (location.hash !== hash) historyRouter.push({ ...location, hash });
     };
     const update = useUpdate();
@@ -123,6 +147,7 @@ const ConfiguracionPage = () => {
                 <Sidebar activeKey={activeView} onSelect={selectView} items={sidebarItemsMemo} />
                 <div className="clientes-content p-4">
                     {activeView === 'backups' && <BackupsPanel />}
+                    {activeView === 'rates' && <RatesPanel />}
                     {activeView === 'about' && (
                         <div className="dashboard-panel configuracion-about">
                             <div className="dashboard-panel-header">

@@ -463,6 +463,66 @@
     color: #d6e4f0;
     background: #ffffff14;
 }
+.cxc-rate-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+.cxc-rate-options-block {
+    flex-direction: column;
+    margin-bottom: 0.6rem;
+}
+.cxc-rate-option {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: #b9c6d4;
+    background: #1b232c;
+    border: 1px solid #49586a;
+    border-radius: 6px;
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        background 0.15s ease;
+}
+.cxc-rate-option strong {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #e9ecef;
+    font-variant-numeric: tabular-nums;
+}
+.cxc-rate-option:hover,
+.cxc-rate-option:focus-visible {
+    border-color: #6b8299;
+    background: #223040;
+    color: #e9ecef;
+}
+.cxc-rate-options-block .cxc-rate-option {
+    justify-content: space-between;
+}
+.cxc-rate-option-active {
+    border-color: #3b82f6;
+    background: #16283c;
+    color: #dbeafe;
+}
+.cxc-rate-option-active strong {
+    color: #bfdbfe;
+}
+.cxc-rate-option-static {
+    cursor: default;
+}
+.cxc-rate-option svg {
+    align-self: center;
+    flex-shrink: 0;
+}
+.cxc-rate-separator {
+    margin: 0 0 0.6rem;
+    border-color: #49586a;
+    opacity: 1;
+}
 .cxc-rate-popover {
     position: absolute;
     top: calc(100% + 0.4rem);

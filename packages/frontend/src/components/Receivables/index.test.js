@@ -302,7 +302,7 @@ it('uses the saved rate and blocks bolivars when REF is unavailable', () => {
     renderForm({ rate: null });
     fireEvent.change(screen.getByLabelText('Moneda'), { target: { value: 'BsS' } });
     expect(screen.getByRole('button', { name: 'Revisar operación' })).toBeDisabled();
-    expect(screen.getByText(/Tasa REF: No disponible/)).toBeInTheDocument();
+    expect(screen.getByText('Tasa pendiente')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Moneda'), { target: { value: 'USD' } });
     expect(screen.getByRole('button', { name: 'Revisar operación' })).not.toBeDisabled();
 });
@@ -841,7 +841,7 @@ it('blocks unavailable REF in the drawer without blocking a USD payment', () => 
     render(<PaymentDrawer client={client} onClose={jest.fn()} onChanged={refresh} />);
     userEvent.click(screen.getByRole('button', { name: 'Bolívares' }));
     expect(screen.getByRole('button', { name: 'Revisar abono' })).toBeDisabled();
-    expect(screen.getByText(/Tasa REF: No disponible/)).toBeInTheDocument();
+    expect(screen.getByText('Tasa pendiente')).toBeInTheDocument();
     userEvent.click(screen.getByRole('button', { name: 'USD' }));
     expect(screen.getByRole('button', { name: 'Revisar abono' })).not.toBeDisabled();
 });
@@ -1164,8 +1164,8 @@ it('keeps the unavailable-rate helper mounted across currency changes and hides 
     const rate = screen.getByRole('status');
     const slot = rate.parentElement;
     const helper = slot.parentElement;
-    expect(rate).toHaveTextContent('Tasa REF: No disponible');
-    expect(rate).toHaveTextContent('Actualiza la tasa o registra el abono en USD.');
+    expect(rate).toHaveTextContent('Tasa pendiente');
+    expect(rate).toHaveTextContent('Indica la tasa o registra el abono en USD.');
     userEvent.click(screen.getByRole('button', { name: 'USD' }));
     expect(helper.children[0]).toBe(slot);
     expect(slot).toContainElement(rate);
