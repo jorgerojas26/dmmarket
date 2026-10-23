@@ -2,7 +2,6 @@ import { ResponsiveLine } from '@nivo/line';
 import { syncBcvRates } from 'api/currency_rates';
 import ChartTooltip from 'components/ChartTooltip';
 import DateSelect from 'components/DateSelect';
-import { mutate } from 'hooks/swr-wrapper';
 import { useBcvRateByDate, useBcvRates, useBcvStatus } from 'hooks/useBcvRates';
 import { DateTime } from 'luxon';
 import { useMemo, useState } from 'react';
@@ -102,13 +101,18 @@ const TasaDelDia = ({ vigente, buscada, buscando, error }) => {
 
     return (
         <div className="rates-card rates-card-primary">
-            <span className="rates-card-label">Tasa del día</span>
+            <span className="rates-card-label">{buscada ? 'Tasa consultada' : 'Tasa vigente'}</span>
 
             {error ? (
                 <span className="rates-card-error">{error.message}</span>
             ) : (
                 <>
-                    <strong className="rates-card-value">{buscando ? '…' : `Bs ${formatTasa(mostrada?.tasa)}`}</strong>
+                    <strong className="rates-card-value">
+                        {buscando ? '…' : mostrada ? `Bs ${formatTasa(mostrada.tasa)}` : '—'}
+                    </strong>
+                    {!buscando && mostrada && (
+                        <span className="rates-card-note">Fecha valor: {formatFecha(mostrada.fecha)}</span>
+                    )}
                     {noPublicada && (
                         <span className="rates-card-aviso">
                             No se publicó tasa el {formatFecha(buscada.solicitada)}; se muestra la del{' '}
@@ -122,18 +126,24 @@ const TasaDelDia = ({ vigente, buscada, buscando, error }) => {
 };
 
 const RatesPanel = () => {
-    const { data: status, error: statusError, isLoading: statusLoading } = useBcvStatus();
-    const { data: rates, error: ratesError, isLoading: ratesLoading } = useBcvRates();
+    const { data: status, error: statusError, isLoading: statusLoading, mutate: refreshStatus } = useBcvStatus();
+    const { data: rates, error: ratesError, isLoading: ratesLoading, mutate: refreshRates } = useBcvRates();
     const [fecha, setFecha] = useState('');
-    const { data: buscada, error: busquedaError, isLoading: buscando } = useBcvRateByDate(fecha);
+    const {
+        data: buscada,
+        error: busquedaError,
+        isLoading: buscando,
+        mutate: refreshBuscada,
+    } = useBcvRateByDate(fecha);
     const [syncing, setSyncing] = useState(false);
     const [syncError, setSyncError] = useState(null);
     const [syncMessage, setSyncMessage] = useState(null);
 
     const vigente = status?.ultimaTasa;
+    const publicada = status?.ultimaPublicada;
     const loading = statusLoading || ratesLoading;
     const error = statusError || ratesError;
-    const publicadaManana = status?.publicadaHasta && vigente && status.publicadaHasta > vigente.fecha;
+    const publicadaFutura = publicada?.fecha > hoyEnCaracas();
 
     const sync = async () => {
         setSyncing(true);
@@ -142,12 +152,12 @@ const RatesPanel = () => {
         try {
             const resultado = await syncBcvRates();
             setSyncMessage(
-                resultado?.omitido
-                    ? 'El BCV no publicó cambios desde la última consulta.'
+                !resultado?.escritas
+                    ? 'No se encontraron tasas nuevas ni correcciones en los archivos del BCV.'
                     : `Se actualizaron ${resultado?.escritas ?? 0} tasas.`,
             );
             if (resultado?.fallos?.length) setSyncError(resultado.fallos.join(' · '));
-            await mutate((key) => Array.isArray(key) && ['bcv-rates', 'bcv-status', 'bcv-rate'].includes(key[0]));
+            await Promise.all([refreshStatus(), refreshRates(), ...(fecha ? [refreshBuscada()] : [])]);
         } catch (fallo) {
             setSyncError(fallo.message);
         } finally {
@@ -220,14 +230,26 @@ const RatesPanel = () => {
                             error={busquedaError}
                         />
                         <div className="rates-card">
+                            <span className="rates-card-label">Última tasa publicada</span>
+                            <strong className="rates-card-value">
+                                {publicada ? `Bs ${formatTasa(publicada.tasa)}` : '—'}
+                            </strong>
+                            {publicada && (
+                                <span className="rates-card-note">Fecha valor: {formatFecha(publicada.fecha)}</span>
+                            )}
+                            {publicadaFutura && (
+                                <span className="rates-card-aviso">
+                                    Aplica desde el {formatFecha(publicada.fecha)}; todavía no está vigente.
+                                </span>
+                            )}
+                        </div>
+                        <div className="rates-card">
                             <span className="rates-card-label">Última consulta</span>
                             <strong className="rates-card-value rates-card-value-sm">
                                 {formatHora(status.ultimaSincronizacion)}
                             </strong>
                             <span className="rates-card-note">
-                                {publicadaManana
-                                    ? `Ya está publicada la del ${formatFecha(status.publicadaHasta)}`
-                                    : `Se consulta automáticamente cada ${status.intervaloMinutos} minutos`}
+                                Se consulta automáticamente cada {status.intervaloMinutos} minutos
                             </span>
                         </div>
                     </section>

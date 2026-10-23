@@ -351,6 +351,7 @@ function crearServicioTasas({
       ultimoError,
       intervaloMinutos: Math.round(intervaloMs / 60_000),
       ultimaTasa: aTasa(vigente),
+      ultimaPublicada: aTasa(publicada),
       publicadaHasta: publicada?.Fecha ?? null,
     };
   }
