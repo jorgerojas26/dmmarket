@@ -7,6 +7,16 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.11.1] - 2026-10-23
+
+### Mejoras
+
+- **Tasas del BCV con fechas claras**: se muestran la tasa vigente y la última publicada, cada una con su fecha valor. Si la última publicada aplica en una fecha futura, se indica que todavía no está vigente.
+
+### Correcciones
+
+- **Consulta de tasas actualizada en pantalla**: al pulsar «Consultar BCV», se refrescan los montos, el historial y la fecha de la última consulta sin tener que recargar la página.
+
 ## [v1.11.0] - 2026-10-22
 
 ### Mejoras
