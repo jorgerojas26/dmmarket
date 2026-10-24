@@ -1,4 +1,9 @@
 async function seedSales(db) {
+  if (await db.schema.hasTable("masterfact")) {
+    if (!(await db("masterfact").where("IdFactura", "1").first()))
+      throw new Error("El esquema no pertenece al fixture de ventas.");
+    return;
+  }
   for (const [name, define] of [
     [
       "vendedores",
@@ -17,6 +22,13 @@ async function seedSales(db) {
       },
     ],
     [
+      "grupos",
+      (table) => {
+        table.string("IdGrupo", 32).primary();
+        table.string("Descripcion", 64);
+      },
+    ],
+    [
       "productos",
       (table) => {
         table.string("IdProducto", 32).primary();
@@ -32,6 +44,7 @@ async function seedSales(db) {
         table.string(name === "masterfact" ? "IdFactura" : "IdNoe", 32).primary();
         table.string("IdVend", 32);
         table.string("IdCliente", 32);
+        table.string("Rif", 64);
         table.date("Fecha");
         table.boolean("Anulada");
       },
@@ -41,6 +54,7 @@ async function seedSales(db) {
       (table) => {
         table.string(name === "slavefact" ? "IdFactura" : "IdNoe", 32);
         table.string("IdProducto", 32);
+        table.string("Descripcion", 64);
         table.decimal("Precio", 18, 6);
         table.decimal("Costo", 18, 6);
         table.decimal("Cantidad", 18, 6);
@@ -73,6 +87,7 @@ async function seedSales(db) {
     Ruta: "R",
     Rif: "PRIVATE-IDENTIFICATION",
   });
+  await db("grupos").insert({ IdGrupo: "G", Descripcion: "Grupo sintético" });
   await db("productos").insert({
     IdProducto: "P",
     Descripcion: "Producto sintético",
@@ -89,10 +104,34 @@ async function seedSales(db) {
       { [key]: "2", IdVend: reversed ? "A" : "B", IdCliente: "C", Fecha: "2026-01-02", Anulada: false },
       { [key]: "void", IdVend: "A", IdCliente: "C", Fecha: "2026-01-03", Anulada: true },
     ]);
+    await db(master).update({ Rif: "PRIVATE-SNAPSHOT-RIF" });
     await db(slave).insert([
       { [key]: "1", IdProducto: "P", Precio: 100, Costo: 61, Cantidad: 1 },
       { [key]: "2", IdProducto: "P", Precio: 200, Costo: 93, Cantidad: 1 },
       { [key]: "void", IdProducto: "P", Precio: 999, Costo: 1, Cantidad: 1 },
+    ]);
+    await db(slave).update({ Descripcion: "Línea sintética" });
+    await db(master).insert([
+      {
+        [key]: "previous-A",
+        IdVend: "A",
+        IdCliente: "C",
+        Fecha: "2025-12-01",
+        Anulada: false,
+        Rif: "PRIVATE-PREVIOUS",
+      },
+      {
+        [key]: "previous-B",
+        IdVend: "B",
+        IdCliente: "C",
+        Fecha: "2025-12-02",
+        Anulada: false,
+        Rif: "PRIVATE-PREVIOUS",
+      },
+    ]);
+    await db(slave).insert([
+      { [key]: "previous-A", IdProducto: "P", Descripcion: "Línea anterior A", Precio: 10, Costo: 3, Cantidad: 1 },
+      { [key]: "previous-B", IdProducto: "P", Descripcion: "Línea anterior B", Precio: 20, Costo: 7, Cantidad: 1 },
     ]);
   }
 }

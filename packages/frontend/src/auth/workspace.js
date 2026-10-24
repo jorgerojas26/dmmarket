@@ -4,6 +4,7 @@ import { fetcher } from 'swr-config';
 import AccessEditor from './access-editor';
 import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
+import Parties from './parties';
 import Sales from './sales';
 import { authRequest } from './transport';
 
@@ -263,11 +264,22 @@ export default function SessionWorkspace() {
             </p>
             {can('rates.read') && <Rates />}
             {session.permissions.some((grant) => grant.capability === 'sales.read') && <Sales />}
+            {session.permissions.some((grant) => ['clients.read', 'sellers.read'].includes(grant.capability)) && (
+                <Parties />
+            )}
             {['access.users', 'access.roles', 'access.links', 'access.recover'].some(can) && <ReauthenticationForm />}
             {can('access.users') && <Users />}
             {(can('access.roles') || can('access.links')) && <AccessEditor />}
             {!session.permissions.some((grant) =>
-                ['rates.read', 'sales.read', 'access.users', 'access.roles', 'access.links'].includes(grant.capability),
+                [
+                    'rates.read',
+                    'sales.read',
+                    'clients.read',
+                    'sellers.read',
+                    'access.users',
+                    'access.roles',
+                    'access.links',
+                ].includes(grant.capability),
             ) && <p>No tienes módulos habilitados en esta fase. Consulta al responsable de acceso.</p>}
             <button
                 type="button"

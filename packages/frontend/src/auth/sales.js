@@ -2,6 +2,8 @@ import useSWR from 'hooks/swr-wrapper';
 import { useState } from 'react';
 import { fetcher } from 'swr-config';
 import { AccessForm, Field } from './forms';
+import SalesDetail from './sales-detail';
+import SalesSummary from './sales-summary';
 
 export default function Sales() {
     const today = new Date().toISOString().slice(0, 10);
@@ -12,6 +14,9 @@ export default function Sales() {
     const [kind, setKind] = useState('facturas');
     const [query, setQuery] = useState(null);
     const [page, setPage] = useState(1);
+    const [detail, setDetail] = useState(null);
+    const [compareFrom, setCompareFrom] = useState('');
+    const [compareTo, setCompareTo] = useState('');
     const key = query
         ? `/api/sales/${query.kind}?${new URLSearchParams({ ...query.parameters, page, limit: 20 })}`
         : null;
@@ -45,12 +50,33 @@ export default function Sales() {
                 title="Consultar ventas autorizadas"
                 button="Consultar ventas"
                 onSubmit={async () => {
+                    if (Boolean(compareFrom) !== Boolean(compareTo))
+                        throw new Error('Indica ambas fechas de comparación.');
                     setPage(1);
-                    setQuery({ kind, parameters: { from, to, employeeId, showNoe } });
+                    setDetail(null);
+                    setQuery({
+                        kind,
+                        parameters: { from, to, employeeId, showNoe },
+                        comparison: compareFrom ? { compareFrom, compareTo } : {},
+                    });
                 }}
             >
                 <Field label="Ventas desde" type="date" value={from} onChange={setFrom} />
                 <Field label="Ventas hasta" type="date" value={to} onChange={setTo} />
+                <Field
+                    label="Comparar ventas desde"
+                    type="date"
+                    required={false}
+                    value={compareFrom}
+                    onChange={setCompareFrom}
+                />
+                <Field
+                    label="Comparar ventas hasta"
+                    type="date"
+                    required={false}
+                    value={compareTo}
+                    onChange={setCompareTo}
+                />
                 <Field
                     label="Filtrar vendedor"
                     required={false}
@@ -85,6 +111,8 @@ export default function Sales() {
             </p>
             {query && !data && !error && <p role="status">Consultando ventas…</p>}
             {error && <p role="alert">No se pudo completar la consulta de ventas autorizada.</p>}
+            {query && <SalesSummary query={query} />}
+            {detail && <SalesDetail selection={detail} onClose={() => setDetail(null)} />}
             {data && (
                 <>
                     <table className="table table-dark">
@@ -93,6 +121,7 @@ export default function Sales() {
                                 {visibleColumns.map(([field, label]) => (
                                     <th key={field}>{label}</th>
                                 ))}
+                                {query.kind === 'facturas' && <th>Detalle</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -101,6 +130,19 @@ export default function Sales() {
                                     {visibleColumns.map(([field]) => (
                                         <td key={field}>{row[field] ?? '—'}</td>
                                     ))}
+                                    {query.kind === 'facturas' && (
+                                        <td>
+                                            <button
+                                                type="button"
+                                                className="btn btn-outline-light"
+                                                onClick={() =>
+                                                    setDetail({ id: row.invoiceId, showNoe: query.parameters.showNoe })
+                                                }
+                                            >
+                                                Ver documento {row.invoiceId}
+                                            </button>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
@@ -109,6 +151,7 @@ export default function Sales() {
                                 {visibleColumns.map(([field]) => (
                                     <td key={field}>{data.totals[field] ?? '—'}</td>
                                 ))}
+                                {query.kind === 'facturas' && <td />}
                             </tr>
                         </tfoot>
                     </table>

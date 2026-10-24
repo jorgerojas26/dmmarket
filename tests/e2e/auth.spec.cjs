@@ -307,3 +307,105 @@ test("vendedor consulta solo sus ventas en ambos sistemas sin campos financieros
   await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
   await expect(sales.getByText("Documentos o productos autorizados: 0", { exact: true })).toBeVisible();
 });
+
+test("documento y resumen comparativo no exponen costos, identificación ni ventas ajenas", async ({
+  page,
+  environment,
+}) => {
+  const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const sales = page.getByRole("region", { name: "Consulta de ventas" });
+  await sales.getByLabel("Ventas desde", { exact: true }).fill("2026-01-01");
+  await sales.getByLabel("Ventas hasta", { exact: true }).fill("2026-01-31");
+  await sales.getByLabel("Comparar ventas desde", { exact: true }).fill("2025-12-01");
+  await sales.getByLabel("Comparar ventas hasta", { exact: true }).fill("2025-12-31");
+  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
+  const summary = page.getByRole("region", { name: "Resumen de ventas" });
+  await expect(summary.getByText("Total ventas: 100", { exact: true })).toBeVisible();
+  await expect(summary.getByText("Ventas del período comparado: 10", { exact: true })).toBeVisible();
+  await expect(summary.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+  await sales.getByRole("button", { name: "Ver documento 1", exact: true }).click();
+  const detail = page.getByRole("region", { name: "Detalle de documento" });
+  await expect(detail.getByText("Vendedor: Vendedor A", { exact: true })).toBeVisible();
+  await expect(detail.getByRole("cell", { name: "Línea sintética", exact: true })).toBeVisible();
+  await expect(detail.getByRole("columnheader", { name: "Costo", exact: true })).toHaveCount(0);
+  await expect(detail.getByText("PRIVATE-SNAPSHOT-RIF", { exact: false })).toHaveCount(0);
+  expect(await page.evaluate(async () => (await fetch("/api/invoices/2/detail")).status)).toBe(404);
+  await detail.getByRole("button", { name: "Cerrar documento", exact: true }).click();
+  await expect(detail).toHaveCount(0);
+  await sales.getByLabel("Sistema de ventas", { exact: true }).selectOption("true");
+  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
+  await expect(summary.getByText("Total ventas: 200", { exact: true })).toBeVisible();
+  await sales.getByRole("button", { name: "Ver documento 2", exact: true }).click();
+  await expect(detail.getByText("Total del documento: 200", { exact: true })).toBeVisible();
+});
+
+test("directorio de vendedores no expone contactos ajenos y sus ventas respetan ambos permisos", async ({
+  page,
+  environment,
+}) => {
+  const { seedParties } = require("../support/party-fixtures.cjs");
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await seedParties(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "sellers.read", scope: "global" },
+      { capability: "sellers.personal", scope: "assigned" },
+      { capability: "sales.read", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const directory = page.getByRole("region", { name: "Directorio de clientes y vendedores" });
+  await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
+  await expect(directory.getByRole("cell", { name: "PRIVATE-PHONE-A", exact: true })).toBeVisible();
+  await expect(directory.getByText("PRIVATE-PHONE-B", { exact: true })).toHaveCount(0);
+  await directory.getByLabel("Incluir ventas autorizadas", { exact: true }).check();
+  await directory.getByLabel("Directorio ventas desde", { exact: true }).fill("2026-01-01");
+  await directory.getByLabel("Directorio ventas hasta", { exact: true }).fill("2026-01-31");
+  await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
+  await directory.getByRole("button", { name: "Ver resumen de A", exact: true }).click();
+  const summary = page.getByRole("region", { name: "Resumen de cliente o vendedor" });
+  await expect(summary.getByText("Ventas autorizadas: 100", { exact: true })).toBeVisible();
+  await expect(summary.getByText("Ventas autorizadas del período anterior: 10", { exact: true })).toBeVisible();
+  await expect(directory.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+  const body = await page.evaluate(
+    async () => await (await fetch("/api/sellers/B/summary?from=2026-01-01&to=2026-01-31")).json(),
+  );
+  expect(body.totals.sales).toBe(0);
+  expect(body.seller).not.toHaveProperty("phone");
+});
+
+test("clientes globales no convierten ventas propias en ventas globales ni permiten identificar sin permiso", async ({
+  page,
+  environment,
+}) => {
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "clients.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const directory = page.getByRole("region", { name: "Directorio de clientes y vendedores" });
+  await directory.getByLabel("Incluir ventas autorizadas", { exact: true }).check();
+  await directory.getByLabel("Directorio ventas desde", { exact: true }).fill("2026-01-01");
+  await directory.getByLabel("Directorio ventas hasta", { exact: true }).fill("2026-01-31");
+  await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
+  const customer = directory
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "Cliente sintético", exact: true }) });
+  await expect(customer.getByRole("cell", { name: "100.00", exact: true })).toBeVisible();
+  await expect(directory.getByRole("columnheader", { name: "Identificación", exact: true })).toHaveCount(0);
+  await directory.getByRole("button", { name: "Ver resumen de CB", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "Resumen de cliente o vendedor" })
+      .getByText("Ventas autorizadas: 0", { exact: true }),
+  ).toBeVisible();
+  await directory.getByLabel("Sistema del directorio", { exact: true }).selectOption("true");
+  await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
+  await expect(customer.getByRole("cell", { name: "200.00", exact: true })).toBeVisible();
+});
