@@ -67,6 +67,69 @@ async function bestProduct(transaction, access, query, id) {
   return rows.map((row) => ({ ...row, clientId: reportId(row.clientId) }));
 }
 
+async function inactiveClients(transaction, access, query) {
+  const scope = access.scopeFor("sales.read");
+  if (!scope.global && !scope.sellerIds.length) fail(403);
+  const noe = query.showNoe === "true";
+  const master = noe ? "masternoe" : "masterfact";
+  const slave = noe ? "slavenoe" : "slavefact";
+  const invoice = noe ? "IdNoe" : "IdFactura";
+  const documents = () => {
+    const source = transaction(`${master} as mf`).where("mf.Anulada", 0);
+    if (!scope.global) source.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
+    if (query.employeeId) filterIdentity(source, transaction.raw("BINARY mf.IdVend"), query.employeeId);
+    return source;
+  };
+  const activity = documents()
+    .select(transaction.raw("1"))
+    .whereBetween("mf.Fecha", [query.from, query.to])
+    .whereRaw("BINARY mf.IdCliente = BINARY c.IdCliente");
+  const history = documents()
+    .leftJoin(`${slave} as sf`, `sf.${invoice}`, `mf.${invoice}`)
+    .where("mf.Fecha", "<=", query.to)
+    .select({
+      clientId: "mf.IdCliente",
+      lastSale: transaction.raw("MAX(mf.Fecha)"),
+      revenue: transaction.raw("SUM(sf.Precio * sf.Cantidad)"),
+    })
+    .groupByRaw("BINARY mf.IdCliente");
+  const source = transaction("clientes as c")
+    .leftJoin("rutas as r", "r.Id_Ruta", "c.Ruta")
+    .leftJoin(history.as("h"), function () {
+      this.on(transaction.raw("BINARY h.clientId = BINARY c.IdCliente"));
+    })
+    .whereNotExists(activity);
+  if (query.search) source.where("c.Empresa", "like", `%${query.search}%`);
+  if (query.ruta) source.whereRaw("BINARY c.Ruta = ?", [query.ruta]);
+  const selected = {
+    IdCliente: "c.IdCliente",
+    Empresa: "c.Empresa",
+    ruta_nombre: transaction.raw("COALESCE(r.Nombre, c.Ruta)"),
+    last_factura: transaction.raw("CAST(DATE_FORMAT(h.lastSale, '%Y-%m-%d') AS CHAR)"),
+    dias_inactivo: transaction.raw("DATEDIFF(?, h.lastSale)", [query.to]),
+    revenue_historico: transaction.raw("ROUND(COALESCE(h.revenue, 0), 2)"),
+  };
+  const sort = {
+    IdCliente: selected.IdCliente,
+    Empresa: selected.Empresa,
+    ruta: selected.ruta_nombre,
+    last_factura: "h.lastSale",
+    dias_inactivo: selected.dias_inactivo,
+    revenue_historico: selected.revenue_historico,
+  };
+  const sortBy = query.sortBy || "revenue_historico";
+  if (!Object.hasOwn(sort, sortBy)) fail(400);
+  const [{ total }] = await source.clone().count("* as total");
+  const data = await source
+    .clone()
+    .select(selected)
+    .orderBy(sort[sortBy], query.sortDir)
+    .orderBy("c.IdCliente")
+    .limit(query.limit)
+    .offset((query.page - 1) * query.limit);
+  return { data, total: Number(total), page: query.page, limit: query.limit };
+}
+
 function createClientReports({ sessions }) {
   const router = express.Router();
   const handle = (work, options) => async (req, res, next) => {
@@ -91,6 +154,12 @@ function createClientReports({ sessions }) {
     "/clients/best/product/:productId",
     handle((transaction, access, query, params) => bestProduct(transaction, access, query, params.productId), {
       keys: ["from", "to", "showNoe", "employeeId", "ruta"],
+    }),
+  );
+  router.get(
+    "/clients/sin-facturar",
+    handle(inactiveClients, {
+      keys: ["from", "to", "showNoe", "search", "ruta", "employeeId", "sortBy", "sortDir", "page", "limit"],
     }),
   );
   router.get(

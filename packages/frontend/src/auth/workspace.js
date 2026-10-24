@@ -4,6 +4,7 @@ import { fetcher } from 'swr-config';
 import AccessEditor from './access-editor';
 import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
+import InactiveClients from './inactive-clients';
 import Parties from './parties';
 import Sales from './sales';
 import SellerDashboard from './seller-dashboard';
@@ -268,6 +269,9 @@ export default function SessionWorkspace() {
             {session.permissions.some((grant) => ['clients.read', 'sellers.read'].includes(grant.capability)) && (
                 <Parties />
             )}
+            {['clients.read', 'sales.read'].every((capability) =>
+                session.permissions.some((grant) => grant.capability === capability),
+            ) && <InactiveClients />}
             {['sellers.read', 'sales.read'].every((capability) =>
                 session.permissions.some((grant) => grant.capability === capability),
             ) && <SellerDashboard />}

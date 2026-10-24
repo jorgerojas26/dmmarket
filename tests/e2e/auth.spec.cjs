@@ -533,3 +533,47 @@ test("panel global omite derivados financieros propios y contactos ajenos", asyn
   await expect(inactive.getByRole("cell", { name: "PRIVATE-PHONE-A", exact: true })).toBeVisible();
   await expect(inactive.getByRole("cell", { name: "PRIVATE-PHONE-B", exact: true })).toHaveCount(0);
 });
+
+test("clientes sin documentos no usan actividad ajena ni histórico fuera del corte", async ({ page, environment }) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/party-fixtures.cjs").seedParties(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "clients.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const report = page.getByRole("region", { name: "Clientes sin documentos autorizados", exact: true });
+  await report.getByLabel("Sin documentos desde", { exact: true }).fill("2026-02-01");
+  await report.getByLabel("Sin documentos hasta", { exact: true }).fill("2026-02-28");
+  await report.getByLabel("Ruta de clientes sin documentos", { exact: true }).selectOption("R");
+  for (const [system, amount, date] of [
+    ["false", "110.00", "2026-01-01"],
+    ["true", "210.00", "2026-01-02"],
+  ]) {
+    await report.getByLabel("Sistema de clientes sin documentos", { exact: true }).selectOption(system);
+    await report.getByRole("button", { name: "Consultar clientes sin documentos", exact: true }).click();
+    const table = report.getByRole("table", { name: "Resultado de clientes sin documentos", exact: true });
+    const shared = table
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: "Cliente sintético", exact: true }) });
+    await expect(shared.getByRole("cell", { name: amount, exact: true })).toBeVisible();
+    await expect(shared.getByRole("cell", { name: date, exact: true })).toBeVisible();
+    const other = table
+      .getByRole("row")
+      .filter({ has: page.getByRole("cell", { name: "Cliente exclusivo de B", exact: true }) });
+    await expect(other.getByRole("cell", { name: "0.00", exact: true })).toBeVisible();
+    await expect(
+      other.getByRole("cell", { name: "Sin actividad autorizada hasta el corte", exact: true }),
+    ).toBeVisible();
+    await expect(report.getByText("Clientes sin documentos autorizados: 3", { exact: true })).toBeVisible();
+  }
+  await report.getByLabel("Sin documentos desde", { exact: true }).fill("2025-11-01");
+  await report.getByLabel("Sin documentos hasta", { exact: true }).fill("2025-11-30");
+  await report.getByLabel("Buscar cliente sin documentos", { exact: true }).fill("sintético");
+  await report.getByRole("button", { name: "Consultar clientes sin documentos", exact: true }).click();
+  await expect(report.getByRole("cell", { name: "0.00", exact: true })).toBeVisible();
+  await expect(report.getByText("Clientes sin documentos autorizados: 1", { exact: true })).toBeVisible();
+});
