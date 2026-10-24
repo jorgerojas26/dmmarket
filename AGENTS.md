@@ -14,11 +14,11 @@
 
 ### Issue tracker
 
-Issues live as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+Use Notion as the only issue tracker: `Project Manager / Tasks`, linked to the `DMMarket` project. Do not recreate `.scratch/` or maintain local ticket copies. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-All five roles use their default string names. See `docs/agents/triage-labels.md`.
+All five triage roles use their default string names in the Notion ticket body; the native `Status` property tracks execution separately. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
