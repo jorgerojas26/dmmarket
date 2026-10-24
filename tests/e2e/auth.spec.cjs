@@ -726,3 +726,64 @@ test("Pareto compras sin vender exige ventas globales y omite inventario no auto
   await expect(mature.getByRole("columnheader", { name: "Inventario actual a precio A", exact: true })).toHaveCount(0);
   await expect(mature.getByRole("cell", { name: "Producto maduro", exact: true })).toHaveCount(0);
 });
+
+test("inventario básico no expone precio, valoraciones ni proveedores sin permisos separados", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/inventory-fixtures.cjs").seedInventory(environment.db);
+  const user = await environment.seedUser({ permissions: [{ capability: "inventory.read", scope: "global" }] });
+  await login(page, environment, user);
+  const inventory = page.getByRole("region", { name: "Inventario autorizado", exact: true });
+  await inventory.getByLabel("Buscar en inventario", { exact: true }).fill("Inventario sintético");
+  await inventory.getByRole("button", { name: "Consultar inventario", exact: true }).click();
+  await expect(inventory.getByText("Productos autorizados: 4", { exact: true })).toBeVisible();
+  const table = inventory.getByRole("table", { name: "Existencias autorizadas", exact: true });
+  await expect(table.getByRole("cell", { name: "I-C", exact: true })).toBeVisible();
+  await expect(table.getByRole("columnheader", { name: "Precio A autorizado", exact: true })).toHaveCount(0);
+  await expect(table.getByRole("columnheader", { name: "Proveedor autorizado", exact: true })).toHaveCount(0);
+  await expect(inventory.getByText("Existencias totales del filtro: No disponible", { exact: true })).toBeVisible();
+  await inventory.getByLabel("Sólo existencias positivas", { exact: true }).check();
+  await inventory.getByRole("button", { name: "Consultar inventario", exact: true }).click();
+  await expect(inventory.getByText("Productos autorizados: 1", { exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "I-A", exact: true })).toBeVisible();
+  const response = await page.evaluate(
+    async () => await (await fetch("/api/products?search=Inventario&stockOnly=true")).json(),
+  );
+  expect(response.data[0]).not.toHaveProperty("PrecioA");
+  expect(response.data[0]).not.toHaveProperty("proveedorId");
+  expect(response.totals).not.toHaveProperty("inventoryValue");
+  await expect(
+    page.getByText("No tienes módulos habilitados en esta fase. Consulta al responsable de acceso.", { exact: true }),
+  ).toHaveCount(0);
+});
+
+test("inventario monetario mantiene totales filtrados y omite datos personales del proveedor", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/inventory-fixtures.cjs").seedInventory(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "inventory.read", scope: "global" },
+      { capability: "inventory.costs", scope: "global" },
+      { capability: "providers.read", scope: "global" },
+    ],
+  });
+  await login(page, environment, user);
+  const inventory = page.getByRole("region", { name: "Inventario autorizado", exact: true });
+  await inventory.getByLabel("Buscar en inventario", { exact: true }).fill("Inventario sintético");
+  await inventory.getByLabel("Grupo del inventario", { exact: true }).selectOption("G");
+  await inventory.getByRole("button", { name: "Consultar inventario", exact: true }).click();
+  await expect(inventory.getByText("Valor actual a precio A del filtro: 246.90", { exact: true })).toBeVisible();
+  const table = inventory.getByRole("table", { name: "Existencias autorizadas", exact: true });
+  await expect(table.getByRole("cell", { name: "123.450000", exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "Proveedor inventario B", exact: true })).toBeVisible();
+  await expect(inventory.getByText("PRIVATE-PROVIDER", { exact: false })).toHaveCount(0);
+  await inventory.getByLabel("Proveedor del inventario", { exact: true }).fill("I-PROV-A");
+  await inventory.getByRole("button", { name: "Consultar inventario", exact: true }).click();
+  await expect(inventory.getByText("Productos autorizados: 1", { exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "Proveedor inventario B", exact: true })).toHaveCount(0);
+});

@@ -6,6 +6,7 @@ import ClientDashboard from './client-dashboard';
 import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
 import InactiveClients from './inactive-clients';
+import Inventory from './inventory';
 import Pareto from './pareto';
 import Parties from './parties';
 import Sales from './sales';
@@ -267,6 +268,7 @@ export default function SessionWorkspace() {
                 Los módulos de negocio sin autorización completa permanecen deshabilitados durante esta implementación.
             </p>
             {can('rates.read') && <Rates />}
+            {can('inventory.read') && <Inventory />}
             {session.permissions.some((grant) => grant.capability === 'sales.read') && <Sales />}
             {can('purchases.read') && session.permissions.some((grant) => grant.capability === 'sales.read') && (
                 <Pareto />
@@ -291,6 +293,7 @@ export default function SessionWorkspace() {
             {!session.permissions.some((grant) =>
                 [
                     'rates.read',
+                    'inventory.read',
                     'sales.read',
                     'clients.read',
                     'sellers.read',
