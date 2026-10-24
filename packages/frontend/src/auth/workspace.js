@@ -1,8 +1,10 @@
 import useSWR from 'hooks/swr-wrapper';
 import { useState } from 'react';
 import { fetcher } from 'swr-config';
+import AccessEditor from './access-editor';
 import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
+import Sales from './sales';
 import { authRequest } from './transport';
 
 function Rates() {
@@ -260,15 +262,13 @@ export default function SessionWorkspace() {
                 Los módulos de negocio sin autorización completa permanecen deshabilitados durante esta implementación.
             </p>
             {can('rates.read') && <Rates />}
-            {can('access.users') && (
-                <>
-                    <ReauthenticationForm />
-                    <Users />
-                </>
-            )}
-            {!can('rates.read') && !can('access.users') && (
-                <p>No tienes módulos habilitados en esta fase. Consulta al responsable de acceso.</p>
-            )}
+            {session.permissions.some((grant) => grant.capability === 'sales.read') && <Sales />}
+            {['access.users', 'access.roles', 'access.links', 'access.recover'].some(can) && <ReauthenticationForm />}
+            {can('access.users') && <Users />}
+            {(can('access.roles') || can('access.links')) && <AccessEditor />}
+            {!session.permissions.some((grant) =>
+                ['rates.read', 'sales.read', 'access.users', 'access.roles', 'access.links'].includes(grant.capability),
+            ) && <p>No tienes módulos habilitados en esta fase. Consulta al responsable de acceso.</p>}
             <button
                 type="button"
                 className="btn btn-outline-light my-3"

@@ -28,6 +28,8 @@ async function assertAuthSchema(db) {
       "El esquema de autenticación requiere todas sus tablas InnoDB/utf8_bin preparadas en mantenimiento.",
     );
   }
+  if (!(await db.schema.hasColumn("dmmarket_auth_events", "target_role_id")))
+    throw new Error("El esquema de acceso requiere la migración manual del objetivo de roles.");
   if (!(await db("dmmarket_auth_control").where("id", 1).first()))
     throw new Error("Falta el control transaccional de acceso.");
 }
@@ -49,12 +51,13 @@ async function accessFor(connection, userId) {
 
 async function appendEvent(
   connection,
-  { actorId = null, targetId = null, action, outcome = "success", reason = null, occurredMs },
+  { actorId = null, targetId = null, targetRoleId = null, action, outcome = "success", reason = null, occurredMs },
 ) {
   await connection("dmmarket_auth_events").insert({
     id: randomUUID(),
     actor_id: actorId,
     target_user_id: targetId,
+    target_role_id: targetRoleId,
     action,
     outcome,
     reason,

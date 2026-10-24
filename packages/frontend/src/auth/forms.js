@@ -38,7 +38,17 @@ export function AccessForm({ title, onSubmit, children, button = 'Continuar' }) 
     );
 }
 
-export function Field({ label, value, onChange, type = 'text', autoComplete, minLength, maxLength, inputMode }) {
+export function Field({
+    label,
+    value,
+    onChange,
+    type = 'text',
+    autoComplete,
+    minLength,
+    maxLength,
+    inputMode,
+    required = true,
+}) {
     const id = `auth-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     return (
         <div className="my-3">
@@ -54,7 +64,7 @@ export function Field({ label, value, onChange, type = 'text', autoComplete, min
                 minLength={minLength}
                 maxLength={maxLength}
                 inputMode={inputMode}
-                required
+                required={required}
                 onChange={(event) => onChange(event.target.value)}
             />
         </div>

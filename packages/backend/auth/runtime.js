@@ -8,6 +8,8 @@ const { createAttemptLimiter } = require("./attempts");
 const { createSessionStore } = require("./mysql-store");
 const { createSessionService } = require("./sessions");
 const { createAccountService } = require("./accounts");
+const { createAccessAdministration } = require("./access-administration");
+const { createSalesReports } = require("./sales-reports");
 const { createHttpSecurity, sessionOptions, authErrorHandler } = require("./http-security");
 const { createAuthRouter, forbidden } = require("./router");
 
@@ -24,6 +26,7 @@ async function createAuthRuntime({ db, env = process.env }) {
   const attempts = createAttemptLimiter({ db, secret: env.AUTH_SESSION_SECRET });
   const sessions = await createSessionService({ db, mfa, attempts });
   const accounts = await createAccountService({ db, sessions });
+  const administration = await createAccessAdministration({ db, sessions });
   const connection = mysql.createPool({
     host: env.DATABASE_HOST,
     port: Number(env.DATABASE_PORT || 3306),
@@ -52,7 +55,8 @@ async function createAuthRuntime({ db, env = process.env }) {
     router.use(security.transport);
     router.use(express.json({ limit: "8kb", strict: true }));
     router.use(session(options));
-    router.use("/auth", createAuthRouter({ sessions, accounts, security }));
+    router.use("/auth", createAuthRouter({ sessions, accounts, administration, security }));
+    router.use("/sales", createSalesReports({ sessions }));
     router.use((req, res, next) => {
       sessions
         .withSession(req.sessionID, {}, async ({ access, transaction }) => {

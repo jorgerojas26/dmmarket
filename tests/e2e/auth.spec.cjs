@@ -203,3 +203,107 @@ test("MFA de login y reautenticación se verifican antes de administrar", async 
   await page.getByRole("button", { name: "Confirmar identidad", exact: true }).click();
   await expect(page.getByText("Identidad confirmada.", { exact: true })).toBeVisible();
 });
+
+test("editor crea rol, cambia alcance y administra vínculos revocando sesiones reales", async ({
+  page,
+  browser,
+  environment,
+}) => {
+  if (!(await environment.db.schema.hasTable("vendedores"))) {
+    await environment.db.schema.createTable("vendedores", (table) => {
+      table.engine("InnoDB");
+      table.charset("utf8");
+      table.collate("utf8_bin");
+      table.string("idVend", 32).primary();
+    });
+    await environment.db("vendedores").insert({ idVend: "A" });
+  }
+  const owner = await environment.seedUser({ permissions: ownerPermissions, enrolled: true });
+  const user = await environment.seedUser();
+  await login(page, environment, owner);
+  await page.getByRole("textbox", { name: "Código MFA", exact: true }).fill(await environment.token(owner.secret));
+  await page.getByRole("button", { name: "Verificar código", exact: true }).click();
+  await page.getByRole("button", { name: "Administrar roles y vínculos", exact: true }).click();
+  const name = `Rol E2E ${randomBytes(4).toString("hex")}`;
+  await page.getByRole("textbox", { name: "Nombre del rol", exact: true }).fill(name);
+  await page.getByLabel("sales.read", { exact: true }).selectOption("assigned");
+  await page.getByLabel("rates.read", { exact: true }).selectOption("global");
+  await page.getByRole("textbox", { name: "Motivo del cambio de rol" }).fill("Crear rol real desde interfaz");
+  const createdResponse = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/roles") && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
+  const created = await createdResponse;
+  expect(created.status()).toBe(201);
+  const role = await created.json();
+  await expect(page.getByText("Rol guardado.", { exact: false })).toBeVisible();
+  await page.getByLabel("Rol para editar", { exact: true }).selectOption(role.id);
+  await expect(page.getByLabel("sales.read", { exact: true })).toHaveValue("assigned");
+  await page.getByLabel("sales.read", { exact: true }).selectOption("global");
+  await page.getByRole("textbox", { name: "Motivo del cambio de rol" }).fill("Cambiar alcance real del rol");
+  const updatedResponse = page.waitForResponse(
+    (response) => response.url().endsWith(`/api/auth/roles/${role.id}`) && response.request().method() === "PUT",
+  );
+  await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
+  expect((await updatedResponse).status()).toBe(200);
+  await page.getByLabel("ID del usuario para asignaciones", { exact: true }).fill(user.id);
+  await page.getByLabel("Roles asignados", { exact: true }).selectOption([role.id]);
+  await page.getByRole("textbox", { name: "Motivo de asignación de roles" }).fill("Asignar rol real desde interfaz");
+  await page.getByRole("button", { name: "Guardar roles del usuario", exact: true }).click();
+  await expect(page.getByText("Roles asignados y sesiones del usuario revocadas.", { exact: true })).toBeVisible();
+  const context = await browser.newContext();
+  try {
+    const reader = await context.newPage();
+    await login(reader, environment, user);
+    await expect(reader.getByRole("cell", { name: "42.125000" })).toBeVisible();
+    await page.getByRole("textbox", { name: "IDs de vendedores vinculados", exact: true }).fill("A");
+    await page.getByRole("textbox", { name: "Motivo del cambio de vínculos" }).fill("Vincular vendedor real desde UI");
+    await page.getByRole("button", { name: "Guardar vendedores vinculados", exact: true }).click();
+    await expect(page.getByText("Vínculos guardados y sesiones del usuario revocadas.", { exact: true })).toBeVisible();
+    await reader.reload();
+    await expect(reader.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
+    expect(await environment.db("dmmarket_auth_user_sellers").where("user_id", user.id).pluck("seller_id")).toEqual([
+      "A",
+    ]);
+    await page.getByRole("textbox", { name: "IDs de vendedores vinculados", exact: true }).fill("");
+    await page
+      .getByRole("textbox", { name: "Motivo del cambio de vínculos" })
+      .fill("Quitar todos los vínculos desde UI");
+    const cleared = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/auth/users/${user.id}/sellers`) && response.request().method() === "PUT",
+    );
+    await page.getByRole("button", { name: "Guardar vendedores vinculados", exact: true }).click();
+    expect((await cleared).status()).toBe(200);
+    expect(await environment.db("dmmarket_auth_user_sellers").where("user_id", user.id)).toHaveLength(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("vendedor consulta solo sus ventas en ambos sistemas sin campos financieros ocultos", async ({
+  page,
+  environment,
+}) => {
+  const { seedSales } = require("../support/sales-fixtures.cjs");
+  await seedSales(environment.db);
+  const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const sales = page.getByRole("region", { name: "Consulta de ventas" });
+  await sales.getByLabel("Ventas desde", { exact: true }).fill("2026-01-01");
+  await sales.getByLabel("Ventas hasta", { exact: true }).fill("2026-01-31");
+  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
+  await expect(sales.getByRole("cell", { name: "Vendedor A", exact: true })).toBeVisible();
+  await expect(sales.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
+  await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+  await expect(sales.getByText("Documentos o productos autorizados: 1", { exact: true })).toBeVisible();
+  await expect(sales.getByRole("cell", { name: "1", exact: true })).toBeVisible();
+  await sales.getByLabel("Sistema de ventas", { exact: true }).selectOption("true");
+  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
+  await expect(sales.getByRole("cell", { name: "2", exact: true })).toBeVisible();
+  await expect(sales.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
+  await sales.getByLabel("Filtrar vendedor", { exact: true }).fill("B");
+  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
+  await expect(sales.getByText("Documentos o productos autorizados: 0", { exact: true })).toBeVisible();
+});

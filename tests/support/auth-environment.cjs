@@ -203,6 +203,7 @@ async function startEnvironment({ web = false } = {}) {
       .first();
     if (Number(existing.total)) throw new Error("El contenedor debe tener una base vacía.");
     await migration.up(db);
+    await backend("./migrations/20261025_add_auth_event_role").up(db);
     environment.db = db;
     environment.configuration = configuration;
     environment.mfa = createMfa(configuration.AUTH_MFA_KEY);

@@ -24,7 +24,7 @@ function sessionView(context) {
   };
 }
 
-function createAuthRouter({ sessions, accounts, security }) {
+function createAuthRouter({ sessions, accounts, administration, security }) {
   const router = express.Router();
   const handler = (work) => (req, res, next) =>
     Promise.resolve()
@@ -185,6 +185,42 @@ function createAuthRouter({ sessions, accounts, security }) {
       });
       res.json({ data: roles });
     }),
+  );
+  router.get(
+    "/roles/catalog",
+    handler(async (req, res) => res.json({ data: await administration.catalog(req.sessionID) })),
+  );
+  router.get(
+    "/roles/:id",
+    handler(async (req, res) => res.json(await administration.role(req.sessionID, req.params.id))),
+  );
+  router.post(
+    "/roles",
+    handler(async (req, res) => res.status(201).json(await administration.createRole(req.sessionID, req.body))),
+  );
+  router.put(
+    "/roles/:id",
+    handler(async (req, res) => res.json(await administration.updateRole(req.sessionID, req.params.id, req.body))),
+  );
+  router.get(
+    "/users/:id/roles",
+    handler(async (req, res) =>
+      res.json({ data: await administration.assignments(req.sessionID, req.params.id, "roles") }),
+    ),
+  );
+  router.put(
+    "/users/:id/roles",
+    handler(async (req, res) => res.json(await administration.setRoles(req.sessionID, req.params.id, req.body))),
+  );
+  router.get(
+    "/users/:id/sellers",
+    handler(async (req, res) =>
+      res.json({ data: await administration.assignments(req.sessionID, req.params.id, "sellers") }),
+    ),
+  );
+  router.put(
+    "/users/:id/sellers",
+    handler(async (req, res) => res.json(await administration.setSellers(req.sessionID, req.params.id, req.body))),
   );
   router.post(
     "/users",

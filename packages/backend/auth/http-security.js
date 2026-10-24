@@ -92,6 +92,7 @@ function authErrorHandler(error, _req, res, next) {
     400: "La solicitud de acceso no es válida.",
     401: "La sesión o las credenciales no son válidas.",
     403: "Acceso no permitido.",
+    404: "El recurso de acceso no está disponible.",
     409: "La operación de acceso no se puede completar en el estado actual.",
     413: "La solicitud excede el tamaño permitido.",
     415: "El formato de la solicitud no está permitido.",
