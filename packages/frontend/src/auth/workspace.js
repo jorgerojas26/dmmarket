@@ -6,6 +6,7 @@ import ClientDashboard from './client-dashboard';
 import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
 import InactiveClients from './inactive-clients';
+import Pareto from './pareto';
 import Parties from './parties';
 import Sales from './sales';
 import SellerDashboard from './seller-dashboard';
@@ -267,6 +268,9 @@ export default function SessionWorkspace() {
             </p>
             {can('rates.read') && <Rates />}
             {session.permissions.some((grant) => grant.capability === 'sales.read') && <Sales />}
+            {can('purchases.read') && session.permissions.some((grant) => grant.capability === 'sales.read') && (
+                <Pareto />
+            )}
             {session.permissions.some((grant) => ['clients.read', 'sellers.read'].includes(grant.capability)) && (
                 <Parties />
             )}

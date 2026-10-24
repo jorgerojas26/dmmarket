@@ -655,3 +655,74 @@ test("panel global no clasifica por utilidad propia hasta acotar el conjunto al 
   expect(payload).not.toHaveProperty("abcUtility");
   expect(JSON.stringify(payload)).not.toContain("utilidad");
 });
+
+test("Pareto propio conserva población comprada, maduración y privacidad en ambos sistemas", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/pareto-fixtures.cjs").seedPareto(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "sales.read", scope: "assigned" },
+      { capability: "purchases.read", scope: "global" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const panel = page.getByRole("region", { name: "Pareto autorizado", exact: true });
+  await panel.getByLabel("Pareto desde", { exact: true }).fill("2026-06-01");
+  await panel.getByLabel("Pareto hasta", { exact: true }).fill("2026-07-01");
+  for (const system of ["false", "true"]) {
+    await panel.getByLabel("Sistema de ventas del Pareto", { exact: true }).selectOption(system);
+    await panel.getByRole("button", { name: "Consultar Pareto", exact: true }).click();
+    const mature = panel.getByRole("table", { name: "Productos maduros del Pareto", exact: true });
+    const recent = panel.getByRole("table", { name: "Productos nuevos del Pareto", exact: true });
+    await expect(mature.getByRole("cell", { name: "80", exact: true })).toBeVisible();
+    await expect(mature.getByRole("cell", { name: "Producto reciente", exact: true })).toHaveCount(0);
+    await expect(recent.getByRole("cell", { name: "Producto reciente", exact: true })).toBeVisible();
+    await expect(recent.getByRole("cell", { name: "2026-06-02", exact: true })).toBeVisible();
+    await expect(mature.getByRole("columnheader", { name: "Inventario actual a precio A", exact: true })).toHaveCount(
+      0,
+    );
+    const payload = await page.evaluate(
+      async (showNoe) =>
+        await (
+          await fetch(`/api/dashboard/pareto?from=2026-06-01&to=2026-07-01&metric=rawProfit&showNoe=${showNoe}`)
+        ).json(),
+      system,
+    );
+    expect(payload.products.map((row) => row.rawProfit)).toEqual([100, 80]);
+    expect(JSON.stringify(payload)).not.toMatch(/netProfit|inventoryValue|cumulativeProfit|profitPercent/);
+  }
+  await panel.getByLabel("Buscar entre productos nuevos", { exact: true }).fill("no-match");
+  await panel.getByRole("button", { name: "Consultar Pareto", exact: true }).click();
+  await expect(panel.getByRole("cell", { name: "Producto reciente", exact: true })).toHaveCount(0);
+  await expect(panel.getByText("Productos maduros: 2", { exact: true })).toBeVisible();
+});
+
+test("Pareto compras sin vender exige ventas globales y omite inventario no autorizado", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/pareto-fixtures.cjs").seedPareto(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "sales.read", scope: "global" },
+      { capability: "purchases.read", scope: "global" },
+      { capability: "purchases.costs", scope: "global" },
+    ],
+  });
+  await login(page, environment, user);
+  const panel = page.getByRole("region", { name: "Pareto autorizado", exact: true });
+  await panel.getByLabel("Pareto desde", { exact: true }).fill("2026-06-01");
+  await panel.getByLabel("Pareto hasta", { exact: true }).fill("2026-07-01");
+  await panel.getByLabel("Modo del Pareto", { exact: true }).selectOption("compras-sin-vender");
+  await panel.getByRole("button", { name: "Consultar Pareto", exact: true }).click();
+  const mature = panel.getByRole("table", { name: "Productos maduros del Pareto", exact: true });
+  await expect(mature.getByRole("cell", { name: "Producto sin vender", exact: true })).toBeVisible();
+  await expect(mature.getByRole("cell", { name: "200", exact: true })).toBeVisible();
+  await expect(mature.getByRole("columnheader", { name: "Inventario actual a precio A", exact: true })).toHaveCount(0);
+  await expect(mature.getByRole("cell", { name: "Producto maduro", exact: true })).toHaveCount(0);
+});
