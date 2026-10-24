@@ -577,3 +577,81 @@ test("clientes sin documentos no usan actividad ajena ni histórico fuera del co
   await expect(report.getByRole("cell", { name: "0.00", exact: true })).toBeVisible();
   await expect(report.getByText("Clientes sin documentos autorizados: 1", { exact: true })).toBeVisible();
 });
+
+test("panel de clientes usa sólo actividad propia en clasificación, retención y cobertura", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/party-fixtures.cjs").seedParties(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "clients.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const panel = page.getByRole("region", { name: "Panel de clientes", exact: true });
+  await panel.getByLabel("Panel de clientes desde", { exact: true }).fill("2026-01-01");
+  await panel.getByLabel("Panel de clientes hasta", { exact: true }).fill("2026-01-31");
+  await panel.getByLabel("Ruta del panel de clientes", { exact: true }).selectOption("R");
+  for (const [system, amount] of [
+    ["false", "100"],
+    ["true", "200"],
+  ]) {
+    await panel.getByLabel("Sistema del panel de clientes", { exact: true }).selectOption(system);
+    await panel.getByRole("button", { name: "Consultar panel de clientes", exact: true }).click();
+    const sales = panel.getByRole("table", { name: "Clasificación por ventas autorizadas", exact: true });
+    await expect(sales.getByRole("cell", { name: amount, exact: true }).first()).toBeVisible();
+    await expect(sales.getByRole("cell", { name: "Cliente exclusivo de B", exact: true })).toHaveCount(0);
+    await expect(panel.getByRole("table", { name: "Clasificación por utilidad autorizada", exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      panel
+        .getByRole("region", { name: "Retención autorizada de clientes", exact: true })
+        .getByText("Ventas autorizadas del período anterior: 10", { exact: true }),
+    ).toBeVisible();
+    const coverage = panel.getByRole("table", { name: "Cobertura autorizada de clientes", exact: true });
+    await expect(coverage.getByRole("cell", { name: "33.33", exact: true })).toBeVisible();
+  }
+});
+
+test("panel global no clasifica por utilidad propia hasta acotar el conjunto al vendedor autorizado", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/party-fixtures.cjs").seedParties(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "clients.read", scope: "global" },
+      { capability: "sales.read", scope: "global" },
+      { capability: "sales.costs", scope: "assigned" },
+      { capability: "sales.profit", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const panel = page.getByRole("region", { name: "Panel de clientes", exact: true });
+  await panel.getByLabel("Panel de clientes desde", { exact: true }).fill("2026-01-01");
+  await panel.getByLabel("Panel de clientes hasta", { exact: true }).fill("2026-01-31");
+  await panel.getByRole("button", { name: "Consultar panel de clientes", exact: true }).click();
+  await expect(
+    panel
+      .getByRole("table", { name: "Clasificación por ventas autorizadas", exact: true })
+      .getByRole("cell", { name: "300", exact: true }),
+  ).toBeVisible();
+  await expect(panel.getByRole("table", { name: "Clasificación por utilidad autorizada", exact: true })).toHaveCount(0);
+  await panel.getByLabel("Vendedor del panel de clientes", { exact: true }).fill("A");
+  await panel.getByRole("button", { name: "Consultar panel de clientes", exact: true }).click();
+  const utility = panel.getByRole("table", { name: "Clasificación por utilidad autorizada", exact: true });
+  await expect(utility.getByRole("cell", { name: "39", exact: true })).toBeVisible();
+  await expect(utility.getByRole("cell", { name: "Cliente exclusivo de B", exact: true })).toHaveCount(0);
+  const payload = await page.evaluate(
+    async () => await (await fetch("/api/clients/dashboard?from=2026-01-01&to=2026-01-31")).json(),
+  );
+  expect(payload).not.toHaveProperty("abcUtility");
+  expect(JSON.stringify(payload)).not.toContain("utilidad");
+});

@@ -1,6 +1,8 @@
 const express = require("express");
 const { reportId, missingName, filterIdentity } = require("../utils/report-identity");
 const { parameters, salesBase, financialFields } = require("./sales-reports");
+const { salesDocuments } = require("./sales-documents");
+const { clientDashboard } = require("./client-dashboard");
 
 function fail(status) {
   const error = new Error("La consulta de clientes no está permitida.");
@@ -68,18 +70,8 @@ async function bestProduct(transaction, access, query, id) {
 }
 
 async function inactiveClients(transaction, access, query) {
-  const scope = access.scopeFor("sales.read");
-  if (!scope.global && !scope.sellerIds.length) fail(403);
-  const noe = query.showNoe === "true";
-  const master = noe ? "masternoe" : "masterfact";
-  const slave = noe ? "slavenoe" : "slavefact";
-  const invoice = noe ? "IdNoe" : "IdFactura";
-  const documents = () => {
-    const source = transaction(`${master} as mf`).where("mf.Anulada", 0);
-    if (!scope.global) source.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
-    if (query.employeeId) filterIdentity(source, transaction.raw("BINARY mf.IdVend"), query.employeeId);
-    return source;
-  };
+  const { base, slave, invoice } = salesDocuments(transaction, access, query);
+  const documents = () => base.clone();
   const activity = documents()
     .select(transaction.raw("1"))
     .whereBetween("mf.Fecha", [query.from, query.to])
@@ -162,6 +154,7 @@ function createClientReports({ sessions }) {
       keys: ["from", "to", "showNoe", "search", "ruta", "employeeId", "sortBy", "sortDir", "page", "limit"],
     }),
   );
+  router.get("/clients/dashboard", handle(clientDashboard, { keys: ["from", "to", "showNoe", "ruta", "employeeId"] }));
   router.get(
     "/clients/routes",
     handle(

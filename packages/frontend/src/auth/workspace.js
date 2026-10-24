@@ -2,6 +2,7 @@ import useSWR from 'hooks/swr-wrapper';
 import { useState } from 'react';
 import { fetcher } from 'swr-config';
 import AccessEditor from './access-editor';
+import ClientDashboard from './client-dashboard';
 import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
 import InactiveClients from './inactive-clients';
@@ -271,7 +272,12 @@ export default function SessionWorkspace() {
             )}
             {['clients.read', 'sales.read'].every((capability) =>
                 session.permissions.some((grant) => grant.capability === capability),
-            ) && <InactiveClients />}
+            ) && (
+                <>
+                    <InactiveClients />
+                    <ClientDashboard />
+                </>
+            )}
             {['sellers.read', 'sales.read'].every((capability) =>
                 session.permissions.some((grant) => grant.capability === capability),
             ) && <SellerDashboard />}
