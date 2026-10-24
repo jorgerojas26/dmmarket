@@ -35,6 +35,7 @@ const test = base.extend({
 
 async function login(page, environment, user) {
   await page.goto(environment.origin);
+  await page.bringToFront();
   await page.getByRole("textbox", { name: "Usuario", exact: true }).fill(user.username);
   await page.getByRole("textbox", { name: "Contraseña", exact: true }).fill(user.password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();

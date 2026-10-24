@@ -6,6 +6,7 @@ import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
 import Parties from './parties';
 import Sales from './sales';
+import SellerDashboard from './seller-dashboard';
 import { authRequest } from './transport';
 
 function Rates() {
@@ -267,6 +268,9 @@ export default function SessionWorkspace() {
             {session.permissions.some((grant) => ['clients.read', 'sellers.read'].includes(grant.capability)) && (
                 <Parties />
             )}
+            {['sellers.read', 'sales.read'].every((capability) =>
+                session.permissions.some((grant) => grant.capability === capability),
+            ) && <SellerDashboard />}
             {['access.users', 'access.roles', 'access.links', 'access.recover'].some(can) && <ReauthenticationForm />}
             {can('access.users') && <Users />}
             {(can('access.roles') || can('access.links')) && <AccessEditor />}

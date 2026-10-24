@@ -457,3 +457,79 @@ test("histórico mensual y ranking por producto conservan alcance y año en ambo
     expect(observed.ranking[0]).not.toHaveProperty("utilidad");
   }
 });
+
+test("panel de vendedores intersecta lecturas antes de calcular ranking y margen", async ({ page, environment }) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/party-fixtures.cjs").seedParties(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "sellers.read", scope: "assigned" },
+      { capability: "sales.read", scope: "global" },
+      { capability: "sales.costs", scope: "assigned" },
+      { capability: "sales.profit", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const panel = page.getByRole("region", { name: "Panel de vendedores", exact: true });
+  await panel.getByLabel("Panel de vendedores desde", { exact: true }).fill("2026-01-01");
+  await panel.getByLabel("Panel de vendedores hasta", { exact: true }).fill("2026-01-31");
+  for (const [system, sales, margin] of [
+    ["false", "100", "39"],
+    ["true", "200", "53.5"],
+  ]) {
+    await panel.getByLabel("Sistema del panel de vendedores", { exact: true }).selectOption(system);
+    await panel.getByRole("button", { name: "Consultar panel de vendedores", exact: true }).click();
+    const ranking = panel.getByRole("table", { name: "Ranking autorizado de vendedores", exact: true });
+    await expect(ranking.getByRole("cell", { name: "Vendedor A", exact: true })).toBeVisible();
+    await expect(ranking.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
+    await expect(
+      ranking
+        .getByRole("row")
+        .filter({ has: page.getByRole("cell", { name: "Vendedor A", exact: true }) })
+        .getByRole("cell")
+        .nth(7),
+    ).toHaveText(margin);
+    const trend = panel.getByRole("table", { name: "Tendencia autorizada de vendedores", exact: true });
+    await expect(trend.getByRole("cell", { name: sales, exact: true })).toBeVisible();
+    const response = await page.evaluate(
+      async (showNoe) =>
+        await (await fetch(`/api/sellers/dashboard?from=2026-01-01&to=2026-01-31&showNoe=${showNoe}`)).json(),
+      system,
+    );
+    expect(response.kpis.compareSales).toBe(10);
+    expect(response.ranking.map((row) => row.sellerId)).toEqual(["A"]);
+  }
+});
+
+test("panel global omite derivados financieros propios y contactos ajenos", async ({ page, environment }) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/party-fixtures.cjs").seedParties(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "sellers.read", scope: "global" },
+      { capability: "sales.read", scope: "global" },
+      { capability: "sellers.personal", scope: "assigned" },
+      { capability: "sales.costs", scope: "assigned" },
+      { capability: "sales.profit", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const panel = page.getByRole("region", { name: "Panel de vendedores", exact: true });
+  await panel.getByLabel("Panel de vendedores desde", { exact: true }).fill("2026-01-01");
+  await panel.getByLabel("Panel de vendedores hasta", { exact: true }).fill("2026-01-31");
+  await panel.getByRole("button", { name: "Consultar panel de vendedores", exact: true }).click();
+  const ranking = panel.getByRole("table", { name: "Ranking autorizado de vendedores", exact: true });
+  await expect(ranking.getByRole("cell", { name: "Vendedor B", exact: true })).toBeVisible();
+  await expect(ranking.getByRole("columnheader", { name: "Margen autorizado (%)", exact: true })).toHaveCount(0);
+  await expect(panel.getByText("Vendedores por debajo del margen autorizado del equipo", { exact: true })).toHaveCount(
+    0,
+  );
+  await panel.getByLabel("Panel de vendedores desde", { exact: true }).fill("2026-02-01");
+  await panel.getByLabel("Panel de vendedores hasta", { exact: true }).fill("2026-02-28");
+  await panel.getByRole("button", { name: "Consultar panel de vendedores", exact: true }).click();
+  const inactive = panel.getByRole("table", { name: "Vendedores sin documentos autorizados", exact: true });
+  await expect(inactive.getByRole("cell", { name: "PRIVATE-PHONE-A", exact: true })).toBeVisible();
+  await expect(inactive.getByRole("cell", { name: "PRIVATE-PHONE-B", exact: true })).toHaveCount(0);
+});

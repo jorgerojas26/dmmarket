@@ -175,6 +175,7 @@ async function partyList(transaction, access, query, clients) {
         invoiceCount: count,
         clientCount: raw("COALESCE(a.clients, 0)"),
         lastSale: "a.lastSale",
+        daysInactive: transaction.raw("DATEDIFF(?, a.lastSale)", [query.to]),
         avgTicket: raw("ROUND(COALESCE(a.sales / NULLIF(a.invoices, 0), 0), 2)"),
         ...sellerColumns(transaction, access),
         ...(financial
@@ -303,6 +304,95 @@ async function sellerSummary(transaction, access, query, id) {
   };
 }
 
+async function sellerDashboard(transaction, access, query) {
+  const scope = sellerSalesScope(access);
+  const load = async (range) => {
+    const result = await partyList(
+      transaction,
+      access,
+      { ...range, page: 1, limit: 5001, sortBy: "sales", sortDir: "desc" },
+      false,
+    );
+    if (result.total > 5000) fail(413);
+    return result;
+  };
+  const span = Date.parse(query.to) - Date.parse(query.from) + 86400000;
+  const previousRange = {
+    from: new Date(Date.parse(query.from) - span).toISOString().slice(0, 10),
+    to: new Date(Date.parse(query.from) - 86400000).toISOString().slice(0, 10),
+  };
+  parameters(previousRange);
+  const current = await load(query);
+  const previous = await load({ ...query, ...previousRange });
+  const financial = Object.hasOwn(current.totals, "profit");
+  const round = (value) => Math.round(value * 100) / 100;
+  const totalSales = Number(current.totals.sales);
+  const totalInvoices = Number(current.totals.invoiceCount);
+  const marginPercent = financial && totalSales ? round((Number(current.totals.profit) / totalSales) * 100) : 0;
+  const previousById = new Map(previous.data.map((row) => [row.sellerId, row]));
+  const ranking = current.data
+    .filter((row) => Number(row.invoiceCount) > 0)
+    .map((row) => {
+      const sales = Number(row.sales);
+      const previousSales = Number(previousById.get(row.sellerId)?.sales || 0);
+      return {
+        sellerId: row.sellerId,
+        name: row.name,
+        sales,
+        previousSales,
+        changePercent: previousSales ? round(((sales - previousSales) / previousSales) * 100) : null,
+        invoiceCount: Number(row.invoiceCount),
+        lastSale: row.lastSale,
+        daysInactive: row.daysInactive == null ? null : Number(row.daysInactive),
+        avgTicket: Number(row.avgTicket),
+        sharePercent: totalSales ? round((sales / totalSales) * 100) : 0,
+        ...(financial ? { profit: Number(row.profit), marginPercent: Number(row.marginPercent) } : {}),
+      };
+    });
+  const inactiveSellers = current.data
+    .filter((row) => !Number(row.invoiceCount))
+    .map((row) => ({
+      sellerId: row.sellerId,
+      name: row.name,
+      ...(Object.hasOwn(row, "phone") ? { phone: row.phone } : {}),
+    }));
+  const { base, invoice } = salesBase(transaction, access, query);
+  if (!scope.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
+  const trend = await base
+    .select({
+      month: transaction.raw("CAST(DATE_FORMAT(mf.Fecha, '%Y-%m') AS CHAR)"),
+      sales: transaction.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)"),
+      invoiceCount: transaction.raw("COUNT(DISTINCT ??)", [`mf.${invoice}`]),
+    })
+    .groupByRaw("DATE_FORMAT(mf.Fecha, '%Y-%m')")
+    .orderBy("month");
+  return {
+    kpis: {
+      totalSellers: current.total,
+      activeSellers: ranking.length,
+      inactiveSellers: inactiveSellers.length,
+      coveragePercent: current.total ? round((ranking.length / current.total) * 100) : 0,
+      totalSales,
+      totalInvoices,
+      avgSalesPerSeller: ranking.length ? round(totalSales / ranking.length) : 0,
+      avgInvoicesPerSeller: ranking.length ? round(totalInvoices / ranking.length) : 0,
+      compareSales: Number(previous.totals.sales),
+      improvedSellers: ranking.filter((row) => row.sales > row.previousSales).length,
+      staleSellers: ranking.filter((row) => row.daysInactive > 30).length,
+      ...(financial
+        ? { marginPercent, lowMarginSellers: ranking.filter((row) => row.marginPercent < marginPercent).length }
+        : {}),
+    },
+    ranking,
+    monthlyTrend: trend.map((row) => ({
+      month: row.month,
+      sales: Number(row.sales),
+      invoiceCount: Number(row.invoiceCount),
+    })),
+    inactiveSellers,
+  };
+}
+
 function createPartyReports({ sessions }) {
   const router = express.Router();
   const handle = (work, options) => async (req, res, next) => {
@@ -340,6 +430,7 @@ function createPartyReports({ sessions }) {
     }),
   );
   const summaryKeys = ["from", "to", "showNoe"];
+  router.get("/sellers/dashboard", handle(sellerDashboard, { keys: [...summaryKeys, "employeeId"] }));
   router.get(
     "/clients/:clientId/summary",
     handle((transaction, access, query, params) => clientSummary(transaction, access, query, params.clientId), {
