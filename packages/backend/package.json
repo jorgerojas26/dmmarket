@@ -12,7 +12,8 @@
     "build:prepare": "bun --filter @dmmarket/frontend build && mkdir -p client && rm -rf client/build && cp -R ../frontend/build client/build && node scripts/generate-assets.js && node scripts/generate-version.js && node scripts/generate-google-client.js",
     "build": "bun run build:prepare && bun build --compile main.js --minify --external mysql --outfile dmmarket-app",
     "build:windows": "bun run build:prepare && bun build --compile --target=bun-windows-x64 main.js --minify --external mysql --outfile dmmarket-app.exe",
-    "build:linux": "bun run build:prepare && bun build --compile --target=bun-linux-x64-baseline main.js --minify --external mysql --outfile dmmarket-app-linux"
+    "build:linux": "bun run build:prepare && bun build --compile --target=bun-linux-x64-baseline main.js --minify --external mysql --outfile dmmarket-app-linux",
+    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --config integration/jest.config.cjs --runInBand"
   },
   "jest": {
     "cache": false
@@ -20,11 +21,17 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@casl/ability": "7.0.2",
+    "@otplib/plugin-crypto-node": "13.5.0",
+    "csrf-sync": "4.2.1",
     "decimal.js": "^10.6.0",
     "dotenv": "^10.0.0",
     "express": "^4.17.1",
+    "express-mysql-session": "3.0.3",
+    "express-session": "1.19.0",
     "knex": "^0.95.11",
     "mysql2": "^2.3.0",
+    "otplib": "13.5.0",
     "pug": "^3.0.2",
     "xlsx": "^0.18.5"
   },

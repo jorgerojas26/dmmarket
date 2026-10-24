@@ -24,3 +24,6 @@ bdsolser_md_nieto.dump
 # Local Pi runtime state
 .atl/
 /.lazysql.toml
+
+test-results/
+playwright-report/

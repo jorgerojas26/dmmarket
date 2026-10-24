@@ -52,15 +52,35 @@ const drive_backups_routes = require("./routes/drive-backups");
 const { driveBackupService } = require("./drive-backups");
 const { bcvRateService } = require("./bcv");
 
-//app.use(express.static(path.join(__dirname, "public")));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
+let authRuntime = null;
+const { createAuthRuntime, validateAuthConfig } = require("./auth/runtime");
+const { trustLocalProxy } = require("./auth/http-security");
+app.set("trust proxy", trustLocalProxy);
+app.get("/api/health", (_req, res) =>
+  res
+    .set("Cache-Control", "no-store")
+    .status(authRuntime ? 200 : 503)
+    .json({ ok: Boolean(authRuntime) }),
+);
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  if (!authRuntime) return res.status(503).json({ error: { message: "El servicio de acceso no está disponible." } });
+  return authRuntime.middleware(req, res, next);
+});
 const { reportCache } = require("./middlewares/report-cache");
-app.use("/api", reportCache.middleware);
-// External accounting imports do not pass through this server. Operators can
-// invalidate every report immediately instead of waiting for the one-hour TTL.
+
+async function initializeAuth(env = process.env) {
+  if (authRuntime) throw new Error("El servicio de acceso ya está iniciado.");
+  authRuntime = await createAuthRuntime({ db: require("./database"), env });
+  return authRuntime;
+}
+
+async function closeAuth() {
+  const current = authRuntime;
+  authRuntime = null;
+  if (current) await current.close();
+}
+
 app.post("/api/cache/clear", (_req, res) => {
   reportCache.clear();
   res.json({ cleared: true });
@@ -94,7 +114,7 @@ app.use("/api/*", (req, res) => {
 // En dev se sirven desde disco como siempre.
 app.use((req, res, next) => {
   if (!ASSETS) return next();
-  const rel = "./client/build/" + req.path.replace(/^\/+/, "");
+  const rel = `./client/build/${req.path.replace(/^\/+/, "")}`;
   const file = ASSETS[rel];
   if (!file) return next();
   const type = EXT_MIME[path.extname(file)] || "application/octet-stream";
@@ -155,14 +175,19 @@ if (require.main === module) {
 // el server con la DB medio migrada), y después el server. En dev estos pasos no hacen nada.
 async function bootstrap() {
   const options = serverOptions();
+  validateAuthConfig(process.env);
   cleanupStartup();
   await runEmbeddedMigrations();
+  await initializeAuth();
   const server = await startServer(app, options, () => {
-    if (IS_STANDALONE && !options.service) openBrowser(`http://localhost:${options.port}`);
+    if (IS_STANDALONE && !options.service) openBrowser(authRuntime.publicOrigin);
   });
   backupService.start();
   driveBackupService.start();
   bcvRateService.start();
+  server.once("close", () => {
+    void closeAuth();
+  });
   server.once("close", backupService.stop);
   server.once("close", driveBackupService.stop);
   server.once("close", bcvRateService.stop);
@@ -185,3 +210,6 @@ function openBrowser(url) {
 module.exports = app;
 module.exports.bootstrap = bootstrap;
 module.exports.failStartup = failStartup;
+
+module.exports.initializeAuth = initializeAuth;
+module.exports.closeAuth = closeAuth;

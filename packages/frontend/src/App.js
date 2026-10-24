@@ -12,6 +12,7 @@ import Container from 'react-bootstrap/Container';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Link, Redirect, Route, Switch, useLocation } from 'react-router-dom';
+import SessionWorkspace from './auth/workspace';
 import { CurrencyRateContext } from './context/currency_rate';
 import ConfiguracionPage from './pages/configuracion';
 import ProveedoresPage from './pages/proveedores';
@@ -145,12 +146,16 @@ function AppContent() {
     );
 }
 
-function App() {
+export function ReportApp() {
     return (
         <UpdateProvider>
             <AppContent />
         </UpdateProvider>
     );
+}
+
+function App() {
+    return <SessionWorkspace />;
 }
 
 export default App;

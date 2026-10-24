@@ -24,12 +24,14 @@ export function useSWR(key, fetcher, config) {
     }, [swr.data]);
 
     // If SWR has data, use it. Otherwise fall back to previous key's data.
-    const data = swr.data !== undefined ? swr.data : prevDataRef.current;
+    const denied = [401, 403].includes(swr.error?.status);
+    const data = denied ? undefined : swr.data !== undefined ? swr.data : prevDataRef.current;
 
     // Fetch in flight for a key with no resolved data yet (initial or key change).
     // On key change SWR v1 resets `data` to undefined, so `!swr.data` alone
     // already distinguishes key-change fetches from background revalidations.
     const isLoading = swr.isValidating && !swr.data;
+    if (denied) prevDataRef.current = undefined;
 
     return {
         ...swr,

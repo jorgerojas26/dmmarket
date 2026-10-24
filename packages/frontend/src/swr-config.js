@@ -11,7 +11,7 @@ export const swrConfig = {
     revalidateOnFocus: true,
     revalidateOnReconnect: true,
     dedupingInterval: DEFAULT_DEDUPING_INTERVAL,
-    shouldRetryOnError: true,
+    shouldRetryOnError: false,
 };
 
 /**
@@ -21,8 +21,10 @@ export const swrConfig = {
 export async function fetcher(url, init) {
     const res = await fetch(url, init);
     if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status} ${res.statusText}${body ? `: ${body}` : ''}`);
+        const body = await res.json().catch(() => null);
+        const error = new Error(body?.error?.message || `HTTP ${res.status}`);
+        error.status = res.status;
+        throw error;
     }
     return res.json();
 }

@@ -1,6 +1,18 @@
 const command = process.argv[2];
 
-if (["--install-service", "--uninstall-service", "--setup"].includes(command)) {
+if (["--bootstrap-access", "--recover-access"].includes(command)) {
+  Promise.resolve()
+    .then(() =>
+      require("./auth/recovery-command").runAccessCommand(
+        command === "--bootstrap-access" ? "bootstrap" : "recover",
+        process.argv.slice(3),
+      ),
+    )
+    .catch((error) => {
+      console.error(error.message);
+      process.exitCode = 1;
+    });
+} else if (["--install-service", "--uninstall-service", "--setup"].includes(command)) {
   Promise.resolve()
     .then(() => {
       if (typeof Bun === "undefined" || Bun.embeddedFiles.length === 0) {
