@@ -138,3 +138,10 @@ test("identificadores insensibles no amplían histórico, ranking ni utilidad pr
   expect(Number(product.body[0].utilidad)).toBe(39);
   expect(Number(product.body[0].total_USD)).toBe(100);
 });
+
+test("último mes de cuatro dígitos termina sin extender el rango", async () => {
+  const client = await reader([grant("clients.read"), grant("sales.read", "assigned")]);
+  const result = await client.request("/api/clients/average/month/C?from=9999-12-01&to=9999-12-31");
+  expect(result.status).toBe(200);
+  expect(result.body.data).toEqual([{ x: "9999-12", y: null, invoiceCount: 0 }]);
+});

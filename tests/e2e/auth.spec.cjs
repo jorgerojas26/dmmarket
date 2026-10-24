@@ -409,3 +409,51 @@ test("clientes globales no convierten ventas propias en ventas globales ni permi
   await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
   await expect(customer.getByRole("cell", { name: "200.00", exact: true })).toBeVisible();
 });
+
+test("histórico mensual y ranking por producto conservan alcance y año en ambos sistemas", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/party-fixtures.cjs").seedParties(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "clients.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  const directory = page.getByRole("region", { name: "Directorio de clientes y vendedores" });
+  await directory.getByLabel("Incluir ventas autorizadas", { exact: true }).check();
+  await directory.getByLabel("Ruta del directorio", { exact: true }).selectOption("R");
+  await directory.getByLabel("Directorio ventas desde", { exact: true }).fill("2025-12-01");
+  await directory.getByLabel("Directorio ventas hasta", { exact: true }).fill("2026-02-28");
+  for (const [system, amount, rankingAmount] of [
+    ["false", "100", "110.00"],
+    ["true", "200", "210.00"],
+  ]) {
+    await directory.getByLabel("Sistema del directorio", { exact: true }).selectOption(system);
+    await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
+    await directory.getByRole("button", { name: "Ver resumen de C", exact: true }).click();
+    const history = page.getByRole("region", { name: "Histórico mensual autorizado" });
+    const december = history.getByRole("row").filter({ has: page.getByRole("cell", { name: "2025-12", exact: true }) });
+    await expect(december.getByRole("cell", { name: "10", exact: true })).toBeVisible();
+    const january = history.getByRole("row").filter({ has: page.getByRole("cell", { name: "2026-01", exact: true }) });
+    await expect(january.getByRole("cell", { name: amount, exact: true })).toBeVisible();
+    await expect(history.getByRole("cell", { name: "Sin documentos autorizados", exact: true })).toBeVisible();
+    const ranking = page.getByRole("region", { name: "Clientes por producto autorizado" });
+    await ranking.getByLabel("Producto del ranking", { exact: true }).fill("P");
+    await ranking.getByRole("button", { name: "Consultar ranking del producto", exact: true }).click();
+    await expect(ranking.getByRole("cell", { name: rankingAmount, exact: true })).toBeVisible();
+    await expect(ranking.getByRole("cell", { name: "Cliente exclusivo de B", exact: true })).toHaveCount(0);
+    await expect(ranking.getByRole("columnheader", { name: "Utilidad autorizada", exact: true })).toHaveCount(0);
+    const observed = await page.evaluate(async () => ({
+      monthly: await (await fetch("/api/clients/average/month/C?from=2026-01-01&to=2026-01-31")).json(),
+      ranking: await (await fetch("/api/clients/best/product/P?from=2026-01-01&to=2026-01-31")).json(),
+    }));
+    expect(observed.monthly.data[0].y).toBe(100);
+    expect(observed.ranking).toHaveLength(1);
+    expect(observed.ranking[0]).not.toHaveProperty("utilidad");
+  }
+});

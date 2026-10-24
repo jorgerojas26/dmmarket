@@ -29,8 +29,9 @@ async function monthly(transaction, access, query, id) {
   const client = await catalog.first("Empresa");
   const amounts = new Map(rows.map((row) => [row.month, row]));
   const cursor = new Date(`${query.from.slice(0, 7)}-01T00:00:00Z`);
+  const lastMonth = Date.parse(`${query.to.slice(0, 7)}-01T00:00:00Z`);
   const data = [];
-  while (cursor.toISOString().slice(0, 7) <= query.to.slice(0, 7)) {
+  while (cursor.getTime() <= lastMonth) {
     const month = cursor.toISOString().slice(0, 7);
     const row = amounts.get(month);
     data.push({
