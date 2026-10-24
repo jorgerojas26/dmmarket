@@ -465,7 +465,7 @@ function createSalesReports({ sessions }) {
       const result = await sessions.withSession(req.sessionID, {}, async ({ transaction, access }) => {
         if (Object.keys(req.query).length) fail(400);
         if (
-          !["sales.read", "inventory.read", "commissions.read"].some((capability) => {
+          !["sales.read", "purchases.read", "inventory.read", "commissions.read"].some((capability) => {
             const scope = access.scopeFor(capability);
             return scope.global || scope.sellerIds.length;
           })

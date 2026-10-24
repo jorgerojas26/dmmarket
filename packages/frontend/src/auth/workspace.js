@@ -9,6 +9,7 @@ import InactiveClients from './inactive-clients';
 import Inventory from './inventory';
 import Pareto from './pareto';
 import Parties from './parties';
+import Purchases from './purchases';
 import Sales from './sales';
 import SellerDashboard from './seller-dashboard';
 import { authRequest } from './transport';
@@ -269,6 +270,7 @@ export default function SessionWorkspace() {
             </p>
             {can('rates.read') && <Rates />}
             {can('inventory.read') && <Inventory />}
+            {can('purchases.read') && <Purchases />}
             {session.permissions.some((grant) => grant.capability === 'sales.read') && <Sales />}
             {can('purchases.read') && session.permissions.some((grant) => grant.capability === 'sales.read') && (
                 <Pareto />
@@ -294,6 +296,7 @@ export default function SessionWorkspace() {
                 [
                     'rates.read',
                     'inventory.read',
+                    'purchases.read',
                     'sales.read',
                     'clients.read',
                     'sellers.read',

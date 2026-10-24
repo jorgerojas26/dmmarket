@@ -787,3 +787,62 @@ test("inventario monetario mantiene totales filtrados y omite datos personales d
   await expect(inventory.getByText("Productos autorizados: 1", { exact: true })).toBeVisible();
   await expect(table.getByRole("cell", { name: "Proveedor inventario B", exact: true })).toHaveCount(0);
 });
+
+test("compras básicas conservan documentos y productos sin importes ni proveedores implícitos", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  const user = await environment.seedUser({ permissions: [{ capability: "purchases.read", scope: "global" }] });
+  await login(page, environment, user);
+  const report = page.getByRole("region", { name: "Consulta autorizada de compras", exact: true });
+  await report.getByLabel("Compras desde", { exact: true }).fill("2026-08-01");
+  await report.getByLabel("Compras hasta", { exact: true }).fill("2026-08-31");
+  await report.getByRole("button", { name: "Consultar compras", exact: true }).click();
+  await expect(report.getByText("Registros de compras autorizados: 3", { exact: true })).toBeVisible();
+  const table = report.getByRole("table", { name: "Compras autorizadas", exact: true });
+  await expect(table.getByRole("cell", { name: "purchase-august-empty", exact: true })).toBeVisible();
+  await expect(table.getByRole("columnheader", { name: "Total Compras autorizado", exact: true })).toHaveCount(0);
+  await expect(table.getByRole("columnheader", { name: "Proveedor autorizado", exact: true })).toHaveCount(0);
+  await report.getByLabel("Vista de compras", { exact: true }).selectOption("products");
+  await report.getByRole("button", { name: "Consultar compras", exact: true }).click();
+  await expect(report.getByText("Registros de compras autorizados: 2", { exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "Producto histórico comprado", exact: true })).toBeVisible();
+  await expect(
+    table.getByRole("columnheader", { name: "Costo unitario promedio autorizado", exact: true }),
+  ).toHaveCount(0);
+  const result = await page.evaluate(
+    async () => await (await fetch("/api/purchases/products?from=2026-08-01&to=2026-08-31")).json(),
+  );
+  expect(result.totals).toEqual({ quantity: "6.000" });
+  expect(result.data.every((row) => !Object.hasOwn(row, "monto"))).toBe(true);
+});
+
+test("compras financieras muestran sólo importes autorizados y filtros coherentes", async ({ page, environment }) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "purchases.read", scope: "global" },
+      { capability: "purchases.costs", scope: "global" },
+      { capability: "providers.read", scope: "global" },
+    ],
+  });
+  await login(page, environment, user);
+  const report = page.getByRole("region", { name: "Consulta autorizada de compras", exact: true });
+  await report.getByLabel("Compras desde", { exact: true }).fill("2026-08-01");
+  await report.getByLabel("Compras hasta", { exact: true }).fill("2026-08-31");
+  await report.getByRole("button", { name: "Consultar compras", exact: true }).click();
+  await expect(report.getByText("Total Compras autorizado del filtro: 130.00", { exact: true })).toBeVisible();
+  const table = report.getByRole("table", { name: "Compras autorizadas", exact: true });
+  await expect(table.getByRole("cell", { name: "Proveedor compras B", exact: true })).toBeVisible();
+  await expect(report.getByText("PRIVATE-PUR", { exact: false })).toHaveCount(0);
+  await report.getByLabel("Proveedor de compras", { exact: true }).fill("PUR-A");
+  await report.getByLabel("Grupo de compras", { exact: true }).selectOption("G");
+  await report.getByLabel("Vista de compras", { exact: true }).selectOption("products");
+  await report.getByRole("button", { name: "Consultar compras", exact: true }).click();
+  await expect(report.getByText("Registros de compras autorizados: 1", { exact: true })).toBeVisible();
+  await expect(report.getByText("Total Compras autorizado del filtro: 80.00", { exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "16.00", exact: true })).toBeVisible();
+});
