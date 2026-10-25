@@ -1,18 +1,23 @@
-import { fetchProviderClients, fetchProviderSales } from 'api/providers';
-import Table from 'components/Table';
+import { fetchProviderExport } from 'api/providers';
+import { useAuth } from 'auth/context';
 import InvoiceDetailModal from 'components/InvoiceDetailModal';
+import Modal from 'components/Modal';
+import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
+import usePrivateState from 'hooks/usePrivateState';
 import { useProviderClients, useProviderSales } from 'hooks/useProviders';
 import { DateTime } from 'luxon';
-import { useCallback, useContext, useState } from 'react';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import Modal from 'components/Modal';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { Alert, Button } from 'react-bootstrap';
-import { formatCurrency, formatMoney } from 'utils/format';
+import { useSWRConfig } from 'swr';
+import { formatCurrency as formatCurrencyValue, formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
+
+const formatCurrency = (value) => (value == null ? 'No disponible' : formatCurrencyValue(value));
 
 const LIMIT = 20;
 const DEFAULT_CLIENT_SORT = [{ id: 'totalVentas', desc: true }];
@@ -21,13 +26,17 @@ const moneyColumn = (Header, accessor) => ({
     Header,
     accessor,
     Cell: ({ value }) => formatCurrency(value),
-    Footer: ({ summary }) => formatCurrency(summary ?? 0),
+    Footer: ({ summary }) => (summary === null ? 'No disponible' : formatCurrency(summary ?? 0)),
 });
 const CLIENT_COLUMNS = [
     { Header: 'Cliente', accessor: 'cliente' },
     moneyColumn('Total Ventas', 'totalVentas'),
     moneyColumn('Utilidad', 'utilidad'),
-    { Header: 'Unidades', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString() },
+    {
+        Header: 'Unidades',
+        accessor: 'cantidad',
+        Cell: ({ value }) => (value == null ? 'No disponible' : Number(value).toLocaleString()),
+    },
     { Header: '# Ventas', accessor: 'numVentas' },
 ];
 const SALES_COLUMNS = [
@@ -38,15 +47,36 @@ const SALES_COLUMNS = [
 ];
 
 const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe }) => {
+    const prefix = `provider-seller:${provider.IdProveedor}:${seller.sellerId}:`;
+    const { mutate: mutateCache } = useSWRConfig();
+    const close = useCallback(() => {
+        mutateCache(
+            (key) =>
+                Array.isArray(key) &&
+                key[0] === 'private-ui' &&
+                typeof key[1] === 'string' &&
+                key[1].startsWith(prefix),
+            undefined,
+            { revalidate: false },
+        );
+        onClose();
+    }, [prefix, mutateCache, onClose]);
+    useEffect(
+        () => () => {
+            if (window.location.pathname !== '/proveedores') close();
+        },
+        [close],
+    );
+    const { can } = useAuth();
     const { currencyRate } = useContext(CurrencyRateContext);
-    const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
+    const [selectedInvoiceId, setSelectedInvoiceId] = usePrivateState(`${prefix}selectedInvoiceId`, null);
     const [printError, setPrintError] = useState('');
-    const [clientPage, setClientPage] = useState(1);
-    const [clientSearch, setClientSearch] = useState('');
-    const [clientSort, setClientSort] = useState(DEFAULT_CLIENT_SORT);
-    const [selectedClient, setSelectedClient] = useState(null);
-    const [salesPage, setSalesPage] = useState(1);
-    const [salesSort, setSalesSort] = useState(DEFAULT_SALES_SORT);
+    const [clientPage, setClientPage] = usePrivateState(`${prefix}clientPage`, 1);
+    const [clientSearch, setClientSearch] = usePrivateState(`${prefix}clientSearch`, '');
+    const [clientSort, setClientSort] = usePrivateState(`${prefix}clientSort`, DEFAULT_CLIENT_SORT);
+    const [selectedClient, setSelectedClient] = usePrivateState(`${prefix}selectedClient`, null);
+    const [salesPage, setSalesPage] = usePrivateState(`${prefix}salesPage`, 1);
+    const [salesSort, setSalesSort] = usePrivateState(`${prefix}salesSort`, DEFAULT_SALES_SORT);
     const params = { ...dateRange, showNoe, sellerId: seller.sellerId ?? '__none__', limit: LIMIT };
     const {
         data: clients,
@@ -61,7 +91,7 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
             sortBy: clientSort[0]?.id,
             sortDir: clientSort[0]?.desc ? 'desc' : 'asc',
         },
-        show,
+        show && can('clients.read'),
     );
     const {
         data: sales,
@@ -108,23 +138,30 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
         setPrintError('');
         try {
             const isClients = type === 'clients';
-            const fetchRows = isClients ? fetchProviderClients : fetchProviderSales;
-            const result = await fetchRows(provider.IdProveedor, {
+            const result = await fetchProviderExport(provider.IdProveedor, isClients ? 'clients' : 'sales', {
                 ...params,
-                page: 1,
-                limit: (isClients ? clients?.total : sales?.total) || LIMIT,
-                search: isClients ? clientSearch || undefined : undefined,
+                search: config.search ?? (isClients ? clientSearch || undefined : undefined),
                 clientId: isClients ? undefined : selectedClient?.clientId,
                 sortBy: (isClients ? clientSort : salesSort)[0]?.id,
                 sortDir: (isClients ? clientSort : salesSort)[0]?.desc ? 'desc' : 'asc',
             });
             const rows = sortRows(result.data || [], config?.sortBy);
-            const columns = config?.columns?.length ? config.columns : isClients ? CLIENT_COLUMNS : SALES_COLUMNS;
+            if (
+                config.currency === 'BsS' &&
+                !(Number(currencyRate?.Cambio) > 0 && Number.isFinite(Number(currencyRate?.Cambio)))
+            )
+                throw new Error('Tasa no disponible.');
+            const columns = (config.columns || []).filter((column) =>
+                result.columns.some((server) => server.key === column.accessor),
+            );
+            if (!columns.length) throw new Error('Selecciona columnas autorizadas.');
             const moneyKeys = ['totalVentas', 'monto', 'utilidad'];
             const formatValue = (key, value) => {
-                if (moneyKeys.includes(key)) return formatMoney(value, config?.currency, currencyRate?.Cambio);
+                if (moneyKeys.includes(key))
+                    return value == null ? 'No disponible' : formatMoney(value, config?.currency, currencyRate?.Cambio);
                 if (key === 'fecha') return DateTime.fromISO(value).toFormat('dd/MM/yyyy');
-                if (key === 'cantidad' || key === 'numVentas') return Number(value).toLocaleString();
+                if (key === 'cantidad' || key === 'numVentas')
+                    return value == null ? 'No disponible' : Number(value).toLocaleString();
                 return String(value ?? '');
             };
             const body = [
@@ -174,15 +211,14 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
                     pageOrientation: config?.orientation || 'portrait',
                 })
                 .open();
-        } catch (error) {
-            console.error('Failed to print seller detail:', error);
+        } catch {
             setPrintError('No se pudo generar la impresión. Intenta nuevamente.');
         }
     };
 
     return (
         <>
-            <Modal show={show} onHide={onClose} size="xl" scrollable className="provider-dashboard-modal">
+            <Modal show={show} onHide={close} size="xl" scrollable className="provider-dashboard-modal">
                 <Modal.Header closeButton>
                     <div>
                         <Modal.Title>{seller.vendedor}</Modal.Title>
@@ -201,7 +237,10 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
                     <h5>Clientes</h5>
                     <p>Selecciona un cliente para consultar sus ventas con este vendedor.</p>
                     <Table
-                        columns={CLIENT_COLUMNS}
+                        columns={CLIENT_COLUMNS.filter(
+                            (column) =>
+                                column.accessor !== 'utilidad' || Object.hasOwn(clients?.totals || {}, 'utilidad'),
+                        )}
                         data={clients?.data || []}
                         loading={clientsLoading}
                         showFooter={!!clients?.totals}
@@ -209,7 +248,7 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
                         emptyMessage={clientsError ? 'Error al cargar clientes' : 'Sin clientes en este período'}
                         onRowClick={handleClientClick}
                         print={{
-                            enabled: true,
+                            enabled: clients?.exportAllowed === true,
                             onGlobalPrint: (config) => handlePrint('clients', config),
                             storageKey: 'proveedor-vendedor-clientes',
                         }}
@@ -230,12 +269,16 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
                             )}
                             <Table
                                 print={{
-                                    enabled: true,
+                                    enabled: sales?.exportAllowed === true,
                                     onGlobalPrint: (config) => handlePrint('sales', config),
                                     storageKey: 'proveedor-vendedor-cliente-ventas',
                                 }}
                                 onRowClick={(sale) => setSelectedInvoiceId(sale.idFactura)}
-                                columns={SALES_COLUMNS}
+                                columns={SALES_COLUMNS.filter(
+                                    (column) =>
+                                        column.accessor !== 'utilidad' ||
+                                        Object.hasOwn(sales?.totals || {}, 'utilidad'),
+                                )}
                                 data={sales?.data || []}
                                 loading={salesLoading}
                                 showFooter={!!sales?.totals}

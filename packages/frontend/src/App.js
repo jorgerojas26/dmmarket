@@ -10,13 +10,12 @@ import Audit from './auth/audit';
 import Commissions from './auth/commissions';
 import { useAuth } from './auth/context';
 import Operations from './auth/operations';
-import ProviderRanking from './auth/provider-ranking';
-import Providers from './auth/providers';
 import RateHistory from './auth/rate-history';
 import AccessWorkspace, { Account, Rates } from './auth/workspace';
 import Clients from './pages/clientes';
 import Purchases from './pages/compras';
 import Inventory from './pages/inventario';
+import Providers from './pages/proveedores';
 import Sellers from './pages/vendedores';
 import Sales from './pages/ventas';
 
@@ -53,12 +52,6 @@ export default function App({ onLogout, logoutError }) {
         { path: '/ventas', label: 'Desglose', allowed: has('sales.read'), content: <Sales /> },
         { path: '/compras', label: 'Desglose', allowed: can('purchases.read'), content: <Purchases /> },
         { path: '/proveedores', label: 'Directorio', allowed: can('providers.read'), content: <Providers /> },
-        {
-            path: '/proveedores/comparativo',
-            label: 'Comparativo',
-            allowed: can('providers.read') && (has('sales.read') || (can('purchases.read') && can('purchases.costs'))),
-            content: <ProviderRanking />,
-        },
         {
             path: '/clientes',
             label: 'Clientes',
@@ -184,7 +177,10 @@ export default function App({ onLogout, logoutError }) {
                 <Container fluid className="d-flex flex-column flex-grow-1 overflow-hidden p-0">
                     {path === '/' ? (
                         <Redirect to={modules[0]?.path || '/cuenta'} />
-                    ) : view && ['/inventario', '/compras', '/ventas', '/clientes', '/vendedores'].includes(path) ? (
+                    ) : view &&
+                      ['/inventario', '/compras', '/ventas', '/clientes', '/vendedores', '/proveedores'].includes(
+                          path,
+                      ) ? (
                         view.content
                     ) : view ? (
                         <section

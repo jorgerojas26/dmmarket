@@ -157,3 +157,89 @@ test("colación insensible no mezcla la asociación de productos con otro provee
   expect(result.body.sales.totalRawProfit).toBe(100);
   expect((await client.request("/api/providers/PUR-A/sales/provider-sale-A")).body.productos).toHaveLength(1);
 });
+
+test("tabla original agrega sólo ventas propias y conserva compras sin revelar importes no autorizados", async () => {
+  const own = await reader([grant("providers.read"), grant("sales.read", "assigned"), grant("purchases.read")]);
+  const result = await own.request(`/api/providers/list?${range}&sortBy=total_ventas`);
+  expect(result.status).toBe(200);
+  const a = result.body.data.find((row) => row.IdProveedor === "PUR-A");
+  expect(a).toMatchObject({ total_ventas: 100, num_ventas: 1, num_compras: 1 });
+  expect(a).not.toHaveProperty("utilidad");
+  expect(a).not.toHaveProperty("total_compras");
+  expect(result.body.totals.total_ventas).toBe(1189);
+  expect((await own.request(`/api/providers/list?${range}&sortBy=utilidad`)).status).toBe(403);
+  const catalog = await reader([grant("providers.read")]);
+  const rows = await catalog.request(`/api/providers/list?${range}`);
+  expect(rows.status).toBe(200);
+  expect(rows.body.totals).toEqual({});
+  expect(rows.body.data.every((row) => Object.keys(row).sort().join(",") === "Empresa,IdProveedor")).toBe(true);
+});
+
+test("tabla original global no obtiene utilidad propia ni convierte costos incompletos en cero", async () => {
+  const global = await reader([
+    grant("providers.read"),
+    grant("sales.read"),
+    grant("sales.costs", "assigned"),
+    grant("sales.profit", "assigned"),
+  ]);
+  const result = await global.request(`/api/providers/list?${range}`);
+  expect(result.status).toBe(200);
+  expect(result.body.totals).not.toHaveProperty("utilidad");
+  const own = await reader([
+    grant("providers.read"),
+    grant("sales.read", "assigned"),
+    grant("sales.costs", "assigned"),
+    grant("sales.profit", "assigned"),
+  ]);
+  await environment
+    .db("slavefact")
+    .where("IdFactura", "provider-sale-A")
+    .where("IdProducto", "PROV-P")
+    .update({ Costo: null });
+  try {
+    const missing = await own.request(`/api/providers/list?${range}`);
+    expect(missing.status).toBe(200);
+    expect(missing.body.data.find((row) => row.IdProveedor === "PUR-A").utilidad).toBeNull();
+    expect(missing.body.totals.utilidad).toBeNull();
+    const summary = await own.request(`/api/providers/PUR-A/summary?${range}`);
+    expect(summary.status).toBe(200);
+    expect(summary.body.sales.totalNetProfit).toBeNull();
+    const document = await own.request("/api/providers/PUR-A/sales/provider-sale-A");
+    expect(document.status).toBe(200);
+    expect(document.body.utilidad).toBeNull();
+    expect(document.body.productos[0].costo).toBeNull();
+    const rows = await own.request(`/api/providers/PUR-A/sales?${range}`);
+    expect(rows.status).toBe(200);
+    expect(rows.body.data[0].utilidad).toBeNull();
+  } finally {
+    await environment
+      .db("slavefact")
+      .where("IdFactura", "provider-sale-A")
+      .where("IdProducto", "PROV-P")
+      .update({ Costo: 60 });
+  }
+});
+
+test("tabla original rechaza universos excesivos sin truncar y permite búsquedas acotadas", async () => {
+  const rows = Array.from({ length: 5000 }, (_, index) => ({
+    IdProveedor: `BOUND-${String(index).padStart(5, "0")}`,
+    Empresa: `Proveedor límite ${index}`,
+  }));
+  try {
+    for (let offset = 0; offset < rows.length; offset += 200)
+      await environment.db("proveedores").insert(rows.slice(offset, offset + 200));
+    const client = await reader([grant("providers.read"), grant("sales.read")]);
+    expect((await client.request(`/api/providers/list?${range}`)).status).toBe(413);
+    const search = await client.request(
+      `/api/providers/list?${range}&search=${encodeURIComponent("Proveedor compras A")}`,
+    );
+    expect(search.status).toBe(200);
+    expect(search.body.total).toBe(1);
+    expect(search.body.data[0].IdProveedor).toBe("PUR-A");
+    const catalog = await client.request("/api/providers/list?limit=1");
+    expect(catalog.status).toBe(200);
+    expect(catalog.body.total).toBeGreaterThan(5000);
+  } finally {
+    await environment.db("proveedores").where("IdProveedor", "like", "BOUND-%").del();
+  }
+});

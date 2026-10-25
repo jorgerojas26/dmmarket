@@ -1,30 +1,35 @@
-import { fetchProviderClients, fetchProviderSales, fetchProviderSellers } from 'api/providers';
-import Table from 'components/Table';
+import { fetchProviderExport } from 'api/providers';
+import { useAuth } from 'auth/context';
 import InvoiceDetailModal from 'components/InvoiceDetailModal';
+import Modal from 'components/Modal';
+import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
+import usePrivateState from 'hooks/usePrivateState';
 import { useProviderClients, useProviderSales, useProviderSellers } from 'hooks/useProviders';
 import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useState } from 'react';
-import Modal from 'components/Modal';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { Alert, Button } from 'react-bootstrap';
-import { formatCurrency, formatMoney } from 'utils/format';
+import { useSWRConfig } from 'swr';
+import { formatCurrency as formatCurrencyValue, formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
+
+const formatCurrency = (value) => (value == null ? 'No disponible' : formatCurrencyValue(value));
 
 const LIMIT = 20;
 const moneyColumn = (Header, accessor) => ({
     Header,
     accessor,
     Cell: ({ value }) => formatCurrency(value),
-    Footer: ({ summary }) => formatCurrency(summary ?? 0),
+    Footer: ({ summary }) => (summary === null ? 'No disponible' : formatCurrency(summary ?? 0)),
 });
 const quantityColumn = {
     Header: 'Unidades',
     accessor: 'cantidad',
-    Cell: ({ value }) => Number(value).toLocaleString(),
+    Cell: ({ value }) => (value == null ? 'No disponible' : Number(value).toLocaleString()),
     Footer: ({ summary }) => Number(summary ?? 0).toLocaleString(),
 };
 const SELLER_COLUMNS = [
@@ -51,10 +56,10 @@ const SALES_COLUMNS = [
     moneyColumn('Utilidad', 'utilidad'),
 ];
 
-const useTableQuery = (defaultSort) => {
-    const [page, setPage] = useState(1);
-    const [search, setSearch] = useState('');
-    const [sort, setSort] = useState([{ id: defaultSort, desc: true }]);
+const useTableQuery = (defaultSort, prefix) => {
+    const [page, setPage] = usePrivateState(`${prefix}page`, 1);
+    const [search, setSearch] = usePrivateState(`${prefix}search`, '');
+    const [sort, setSort] = usePrivateState(`${prefix}sort`, [{ id: defaultSort, desc: true }]);
     const onSearch = useCallback((term) => {
         setSearch(term || '');
         setPage(1);
@@ -90,15 +95,38 @@ const useTableQuery = (defaultSort) => {
 };
 
 const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showNoe }) => {
+    const prefix = `provider-product:${provider.IdProveedor}:${product.productId}:`;
+    const { mutate: mutateCache } = useSWRConfig();
+    const close = useCallback(() => {
+        mutateCache(
+            (key) =>
+                Array.isArray(key) &&
+                key[0] === 'private-ui' &&
+                typeof key[1] === 'string' &&
+                key[1].startsWith(prefix),
+            undefined,
+            { revalidate: false },
+        );
+        onClose();
+    }, [prefix, mutateCache, onClose]);
+    useEffect(
+        () => () => {
+            if (window.location.pathname !== '/proveedores') close();
+        },
+        [close],
+    );
+    const { session, can } = useAuth();
+    const canSellers = session.permissions.some((grant) => grant.capability === 'sellers.read');
+    const canClients = can('clients.read');
     const { currencyRate } = useContext(CurrencyRateContext) || {};
-    const [activeTab, setActiveTab] = useState('vendedores');
-    const [selectedSeller, setSelectedSeller] = useState(null);
-    const [selectedClient, setSelectedClient] = useState(null);
-    const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
+    const [activeTab, setActiveTab] = usePrivateState(`${prefix}activeTab`, canSellers ? 'vendedores' : 'clientes');
+    const [selectedSeller, setSelectedSeller] = usePrivateState(`${prefix}selectedSeller`, null);
+    const [selectedClient, setSelectedClient] = usePrivateState(`${prefix}selectedClient`, null);
+    const [selectedInvoiceId, setSelectedInvoiceId] = usePrivateState(`${prefix}selectedInvoiceId`, null);
     const [printError, setPrintError] = useState('');
-    const sellersQuery = useTableQuery('totalVentas');
-    const clientsQuery = useTableQuery('totalVentas');
-    const salesQuery = useTableQuery('fecha');
+    const sellersQuery = useTableQuery('totalVentas', `${prefix}sellers-`);
+    const clientsQuery = useTableQuery('totalVentas', `${prefix}clients-`);
+    const salesQuery = useTableQuery('fecha', `${prefix}sales-`);
     const params = { ...dateRange, showNoe, productId: product.productId };
     const sellerId = selectedSeller ? (selectedSeller.sellerId ?? '__none__') : undefined;
     const clientSellerId = selectedClient ? (selectedClient.sellerId ?? '__none__') : undefined;
@@ -106,7 +134,7 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
     const sellers = useProviderSellers(
         provider.IdProveedor,
         { ...params, ...sellersQuery.params },
-        show && activeTab === 'vendedores',
+        show && canSellers && activeTab === 'vendedores',
     );
     const clients = useProviderClients(
         provider.IdProveedor,
@@ -115,7 +143,7 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
             ...clientsQuery.params,
             sellerId,
         },
-        show && activeTab === 'clientes',
+        show && canClients && activeTab === 'clientes',
     );
     const sales = useProviderSales(
         provider.IdProveedor,
@@ -125,7 +153,7 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
             sellerId: clientSellerId,
             clientId,
         },
-        show && activeTab === 'clientes' && !!selectedClient,
+        show && canClients && activeTab === 'clientes' && !!selectedClient,
     );
 
     const handleSellerClick = (seller) => {
@@ -152,16 +180,14 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
             result: sellers,
             query: sellersQuery,
             columns: SELLER_COLUMNS,
-            fetchRows: fetchProviderSellers,
             title: 'Vendedores',
-            onRowClick: handleSellerClick,
+            onRowClick: canClients ? handleSellerClick : undefined,
             placeholder: 'Buscar por vendedor...',
         },
         clientes: {
             result: clients,
             query: clientsQuery,
             columns: CLIENT_COLUMNS,
-            fetchRows: fetchProviderClients,
             title: 'Clientes',
             onRowClick: handleClientClick,
             placeholder: 'Buscar por cliente o vendedor...',
@@ -170,7 +196,6 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
             result: sales,
             query: salesQuery,
             columns: SALES_COLUMNS,
-            fetchRows: fetchProviderSales,
             title: `Documentos de ${selectedClient?.cliente || ''}`,
             onRowClick: (sale) => setSelectedInvoiceId(sale.idFactura),
             placeholder: 'Buscar por documento o vendedor...',
@@ -186,16 +211,25 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
                 sellerId: type === 'clientes' ? sellerId : type === 'documentos' ? clientSellerId : undefined,
                 clientId: type === 'documentos' ? clientId : undefined,
             };
-            const result = await table.fetchRows(provider.IdProveedor, {
-                ...filters,
-                page: 1,
-                limit: table.result.data?.total || 9999,
-            });
-            const columns = config?.columns?.length ? config.columns : table.columns;
+            const result = await fetchProviderExport(
+                provider.IdProveedor,
+                type === 'vendedores' ? 'sellers' : type === 'clientes' ? 'clients' : 'sales',
+                { ...filters, search: config.search ?? filters.search },
+            );
+            if (
+                config.currency === 'BsS' &&
+                !(Number(currencyRate?.Cambio) > 0 && Number.isFinite(Number(currencyRate?.Cambio)))
+            )
+                throw new Error('Tasa no disponible.');
+            const columns = (config.columns || []).filter((column) =>
+                result.columns.some((server) => server.key === column.accessor),
+            );
+            if (!columns.length) throw new Error('Selecciona columnas autorizadas.');
             const rows = sortRows(result.data || [], config?.sortBy);
             const moneyKeys = ['totalVentas', 'monto', 'utilidad'];
             const formatValue = (key, value) => {
-                if (moneyKeys.includes(key)) return formatMoney(value, config?.currency, currencyRate?.Cambio);
+                if (moneyKeys.includes(key))
+                    return value == null ? 'No disponible' : formatMoney(value, config?.currency, currencyRate?.Cambio);
                 if (key === 'fecha') return DateTime.fromISO(value).toFormat('dd/MM/yyyy');
                 if (['cantidad', 'numVentas', 'numClientes'].includes(key)) return Number(value ?? 0).toLocaleString();
                 return String(value ?? '');
@@ -248,8 +282,7 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
                     pageOrientation: config?.orientation || 'portrait',
                 })
                 .open();
-        } catch (error) {
-            console.error('Failed to print product detail:', error);
+        } catch {
             setPrintError('No se pudo generar la impresión. Intenta nuevamente.');
         }
     };
@@ -268,7 +301,9 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
                               : type
                     }
                     data={error || isLoading ? [] : data?.data || []}
-                    columns={table.columns}
+                    columns={table.columns.filter(
+                        (column) => column.accessor !== 'utilidad' || Object.hasOwn(data?.totals || {}, 'utilidad'),
+                    )}
                     loading={isLoading}
                     summaries={data?.totals}
                     showFooter={!!data?.totals}
@@ -277,7 +312,7 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
                     search={{ enabled: true, onSearch: table.query.onSearch, placeholder: table.placeholder }}
                     sorting={{ enabled: true, sortBy: table.query.sort, onSort: table.query.onSort }}
                     print={{
-                        enabled: true,
+                        enabled: data?.exportAllowed === true,
                         onGlobalPrint: (config) => handlePrint(type, config),
                         storageKey: `proveedor-producto-${type}`,
                     }}
@@ -296,7 +331,7 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
 
     return (
         <>
-            <Modal show={show} onHide={onClose} size="xl" scrollable className="provider-dashboard-modal">
+            <Modal show={show} onHide={close} size="xl" scrollable className="provider-dashboard-modal">
                 <Modal.Header closeButton>
                     <div>
                         <Modal.Title>{product.producto}</Modal.Title>
@@ -310,20 +345,22 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
                 <Modal.Body>
                     {printError && <Alert variant="danger">{printError}</Alert>}
                     <div className="provider-tab-nav" role="tablist" aria-label="Detalle del producto">
-                        {['vendedores', 'clientes'].map((tab) => (
-                            <button
-                                key={tab}
-                                type="button"
-                                id={`product-detail-${tab}-tab`}
-                                role="tab"
-                                aria-selected={activeTab === tab}
-                                aria-controls={`product-detail-${tab}-panel`}
-                                className={`provider-tab-button${activeTab === tab ? ' active' : ''}`}
-                                onClick={() => setActiveTab(tab)}
-                            >
-                                {tables[tab].title}
-                            </button>
-                        ))}
+                        {['vendedores', 'clientes']
+                            .filter((tab) => (tab === 'vendedores' ? canSellers : canClients))
+                            .map((tab) => (
+                                <button
+                                    key={tab}
+                                    type="button"
+                                    id={`product-detail-${tab}-tab`}
+                                    role="tab"
+                                    aria-selected={activeTab === tab}
+                                    aria-controls={`product-detail-${tab}-panel`}
+                                    className={`provider-tab-button${activeTab === tab ? ' active' : ''}`}
+                                    onClick={() => setActiveTab(tab)}
+                                >
+                                    {tables[tab].title}
+                                </button>
+                            ))}
                     </div>
                     <div
                         role="tabpanel"

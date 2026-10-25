@@ -73,4 +73,14 @@ async function setNoe(page, value) {
   if ((await toggle.isChecked()) !== value) await toggle.locator("..").click();
   await expect(toggle).toBeChecked({ checked: value });
 }
-module.exports = { test, expect, login, openModule, setNoe };
+async function setCalendarMonth(page, scope, year, month) {
+  await scope.locator(".date-range-trigger").click();
+  await scope.locator(".rdrYearPicker select").selectOption(String(year));
+  await scope.locator(".rdrMonthPicker select").selectOption(String(month - 1));
+  const days = scope.locator("button.rdrDay:not(.rdrDayPassive)");
+  await days.filter({ has: page.getByText("1", { exact: true }) }).click();
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  await days.filter({ has: page.getByText(String(last), { exact: true }) }).click();
+  await scope.locator(".date-range-footer").getByRole("button", { name: "Listo", exact: true }).click();
+}
+module.exports = { test, expect, login, openModule, setNoe, setCalendarMonth };

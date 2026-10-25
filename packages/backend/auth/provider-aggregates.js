@@ -14,11 +14,15 @@ async function parties(transaction, access, query, id, sellers) {
   if (!scope.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
   const financial = financialFields(access, filtered, scope);
   const identity = sellers ? "mf.IdVend" : "mf.IdCliente";
-  const name = transaction.raw("COALESCE(NULLIF(??, ''), CONCAT(?, COALESCE(??, 'sin ID'), ')'))", [
+  const split = !sellers && !!query.productId;
+  const name = transaction.raw("COALESCE(NULLIF(??,''),CONCAT(?,COALESCE(??,'sin ID'),')'))", [
     sellers ? "v.Empresa" : "c.Empresa",
     sellers ? "Vendedor no registrado (" : "Cliente no registrado (",
     identity,
   ]);
+  const sellerName = transaction.raw(
+    "COALESCE(NULLIF(v.Empresa,''),CONCAT('Vendedor no registrado (',COALESCE(mf.IdVend,'sin ID'),')'))",
+  );
   if (query.search)
     base.where(function () {
       this.where(sellers ? "v.Empresa" : "c.Empresa", "like", `%${query.search}%`).orWhere(
@@ -26,32 +30,66 @@ async function parties(transaction, access, query, id, sellers) {
         "like",
         `%${query.search}%`,
       );
+      if (split) this.orWhere("v.Empresa", "like", `%${query.search}%`);
     });
+  const amount = transaction.raw(
+    "CASE WHEN COUNT(*)=COUNT(sf.Precio*sf.Cantidad) THEN ROUND(SUM(sf.Precio*sf.Cantidad),2) END",
+  );
+  const profit = transaction.raw(
+    "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)*sf.Cantidad) THEN ROUND(SUM((sf.Precio-sf.Costo)*sf.Cantidad),2) END",
+  );
+  const count = transaction.raw("COUNT(DISTINCT BINARY ??)", [`mf.${invoice}`]);
+  const quantity = transaction.raw("CASE WHEN COUNT(*)=COUNT(sf.Cantidad) THEN ROUND(SUM(sf.Cantidad),3) END");
+  const grouped = base.clone().groupByRaw("BINARY ??", [identity]);
+  if (split) grouped.groupByRaw("BINARY mf.IdVend");
   const sortBy = query.sortBy || "amount";
   if (sortBy === "profit" && !financial) fail(403);
-  if (!["name", "amount", "invoiceCount", ...(financial ? ["profit"] : [])].includes(sortBy)) fail(400);
-  const [{ total }] = await transaction
-    .from(base.clone().select(identity).groupByRaw("BINARY ??", [identity]).as("i"))
-    .count("* as total");
-  const data = await base
+  const sort = {
+    name,
+    amount,
+    invoiceCount: count,
+    quantity,
+    ...(sellers ? { clientCount: transaction.raw("COUNT(DISTINCT BINARY mf.IdCliente)") } : {}),
+    ...(split ? { sellerName } : {}),
+    ...(financial ? { profit } : {}),
+  };
+  if (!Object.hasOwn(sort, sortBy)) fail(400);
+  const [{ total }] = await transaction.from(grouped.clone().select(identity).as("i")).count("* as total");
+  const totals = await base
     .clone()
+    .select({ amount, invoiceCount: count, quantity, ...(financial ? { profit } : {}) })
+    .first();
+  const data = await grouped
     .select({
       [sellers ? "sellerId" : "clientId"]: identity,
       name,
-      amount: transaction.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)"),
-      invoiceCount: transaction.raw("COUNT(DISTINCT BINARY ??)", [`mf.${invoice}`]),
-      ...(financial ? { profit: transaction.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2)") } : {}),
+      amount,
+      invoiceCount: count,
+      quantity,
+      ...(sellers ? { clientCount: sort.clientCount } : {}),
+      ...(split ? { sellerId: "mf.IdVend", sellerName } : {}),
+      ...(financial ? { profit } : {}),
     })
-    .groupByRaw("BINARY ??", [identity])
-    .orderBy(sortBy, query.sortDir)
-    .orderBy(identity)
+    .orderBy(sort[sortBy], query.sortDir)
+    .orderByRaw("BINARY ??", [identity])
+    .modify((q) => {
+      if (split) q.orderByRaw("BINARY mf.IdVend");
+    })
     .limit(query.limit)
     .offset((query.page - 1) * query.limit);
   return {
     data: data.map((row) => ({
       ...row,
       [sellers ? "sellerId" : "clientId"]: reportId(row[sellers ? "sellerId" : "clientId"]),
+      ...(split ? { sellerId: reportId(row.sellerId) } : {}),
     })),
+    totals,
+    exportAllowed: sellers
+      ? access.hasGlobal("sellers.export") ||
+        (query.employeeId
+          ? access.canRecord("sellers.export", query.employeeId)
+          : !scope.global && access.covers("sellers.export", scope.sellerIds))
+      : access.hasGlobal("clients.export"),
     pagination: { total: Number(total), page: query.page, limit: query.limit },
   };
 }

@@ -23,6 +23,7 @@ function parameters(query, { range = true, compare = false, keys = null } = {}) 
     "employeeId",
     "ruta",
     "proveedorId",
+    "productId",
   ];
   if (
     keys &&
@@ -70,6 +71,7 @@ function financialFields(access, query, read = access.scopeFor("sales.read")) {
 function salesBase(transaction, access, query) {
   const read = access.scopeFor("sales.read");
   if (!read.global && !read.sellerIds.length) fail(403);
+  if (query.proveedorId && !access.hasGlobal("providers.read")) fail(403);
   const noe = query.showNoe === "true";
   const master = noe ? "masternoe" : "masterfact";
   const slave = noe ? "slavenoe" : "slavefact";
@@ -95,9 +97,10 @@ function salesBase(transaction, access, query) {
     employeeId: "mf.IdVend",
     ruta: "c.Ruta",
     proveedorId: "p.Proveedor",
+    productId: "sf.IdProducto",
   }))
     if (query[parameter]) {
-      if (["clientId", "employeeId"].includes(parameter))
+      if (["clientId", "employeeId", "productId", "proveedorId"].includes(parameter))
         filterIdentity(base, transaction.raw("BINARY ??", [column]), query[parameter]);
       else base.whereRaw("BINARY ?? = ?", [column, query[parameter]]);
     }
@@ -122,10 +125,16 @@ async function listSales(transaction, access, query, kind) {
           .orWhere("sf.IdProducto", "like", `%${query.search}%`);
     });
   const raw = (sql, values) => transaction.raw(sql, values);
-  const amount = raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)");
-  const profit = raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2)");
-  const percent = raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2)");
-  const quantity = raw("ROUND(SUM(sf.Cantidad), 3)");
+  const amount = raw(
+    "CASE WHEN COUNT(*)=COUNT(sf.Precio*sf.Cantidad) THEN ROUND(COALESCE(SUM(sf.Precio*sf.Cantidad),0),2) END",
+  );
+  const profit = raw(
+    "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)*sf.Cantidad) THEN ROUND(COALESCE(SUM((sf.Precio-sf.Costo)*sf.Cantidad),0),2) END",
+  );
+  const percent = raw(
+    "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)/NULLIF(sf.Precio,0)) THEN ROUND(AVG((sf.Precio-sf.Costo)/NULLIF(sf.Precio,0)*100),2) END",
+  );
+  const quantity = raw("CASE WHEN COUNT(*)=COUNT(sf.Cantidad) THEN ROUND(COALESCE(SUM(sf.Cantidad),0),3) END");
   const weight = raw("CASE WHEN COUNT(p.Peso) = COUNT(*) THEN ROUND(SUM(sf.Cantidad * p.Peso), 3) END");
   const sort = products
     ? {
@@ -146,11 +155,14 @@ async function listSales(transaction, access, query, kind) {
         utilidad: profit,
         promedio: percent,
       };
+  if (!products && query.productId) sort.quantity = quantity;
   const sortBy = query.sortBy || (products ? "rawProfit" : "fecha");
   if (sortBy === "rif" && !access.hasGlobal("clients.personal")) fail(403);
   if (!Object.hasOwn(sort, sortBy)) fail(400);
   if (!financial && ["netProfit", "averageProfitPercent", "utilidad", "promedio"].includes(sortBy)) fail(403);
-  const metrics = products ? { quantity, peso: weight, rawProfit: amount } : { monto: amount };
+  const metrics = products
+    ? { quantity, peso: weight, rawProfit: amount }
+    : { monto: amount, ...(query.productId ? { quantity } : {}) };
   if (financial)
     Object.assign(
       metrics,
@@ -284,8 +296,15 @@ async function invoiceDetail(transaction, access, query, id) {
       sellers.map((row) => row.id),
     ),
   );
-  const metrics = { total: transaction.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)") };
-  if (financial) metrics.utilidad = transaction.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2)");
+  const metrics = {
+    total: transaction.raw(
+      "CASE WHEN COUNT(*)=COUNT(sf.Precio*sf.Cantidad) THEN ROUND(SUM(sf.Precio*sf.Cantidad),2) END",
+    ),
+  };
+  if (financial)
+    metrics.utilidad = transaction.raw(
+      "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)*sf.Cantidad) THEN ROUND(SUM((sf.Precio-sf.Costo)*sf.Cantidad),2) END",
+    );
   const totals = await base.clone().select(metrics).first();
   const lines = await base
     .clone()
@@ -305,15 +324,20 @@ async function invoiceDetail(transaction, access, query, id) {
     fecha: header.fecha,
     cliente: header.cliente,
     vendedor: header.vendedor,
-    total: rowNumber(totals.total),
-    ...(financial ? { utilidad: rowNumber(totals.utilidad) } : {}),
+    total: totals.total == null ? null : rowNumber(totals.total),
+    ...(financial ? { utilidad: totals.utilidad == null ? null : rowNumber(totals.utilidad) } : {}),
     ...(personal ? { rif: header.rif } : {}),
     productos: lines.map((line) => ({
       descripcion: line.descripcion,
-      cantidad: rowNumber(line.cantidad),
-      precio: rowNumber(line.precio),
-      subtotal: rowNumber(line.subtotal),
-      ...(financial ? { costo: rowNumber(line.costo), utilidad: rowNumber(line.utilidad) } : {}),
+      cantidad: line.cantidad == null ? null : rowNumber(line.cantidad),
+      precio: line.precio == null ? null : rowNumber(line.precio),
+      subtotal: line.subtotal == null ? null : rowNumber(line.subtotal),
+      ...(financial
+        ? {
+            costo: line.costo == null ? null : rowNumber(line.costo),
+            utilidad: line.utilidad == null ? null : rowNumber(line.utilidad),
+          }
+        : {}),
     })),
   };
 }

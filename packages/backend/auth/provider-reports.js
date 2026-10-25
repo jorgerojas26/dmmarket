@@ -1,3 +1,4 @@
+const { providerList } = require("./provider-list");
 const express = require("express");
 const { parties, best } = require("./provider-aggregates");
 const { parameters, listSales, salesBase, kpis, invoiceDetail } = require("./sales-reports");
@@ -55,13 +56,55 @@ async function provider(transaction, access, query, id) {
 async function summary(transaction, access, query, id) {
   const identity = await provider(transaction, access, query, id);
   const sales = access.scopeFor("sales.read");
+  const selling = sales.global || sales.sellerIds.length > 0;
+  const sellers = access.scopeFor("sellers.read");
+  const sellerAvailable =
+    selling &&
+    (sellers.global || sellers.sellerIds.length > 0) &&
+    (sellers.global || sales.global || sellers.sellerIds.some((seller) => sales.sellerIds.includes(seller)));
+  const salesKpis = selling ? await kpis(transaction, access, { ...query, proveedorId: id }) : null;
+  let complete = true;
+  if (salesKpis) {
+    const { base } = salesBase(transaction, access, { ...query, proveedorId: id });
+    const financial = Object.hasOwn(salesKpis, "totalNetProfit");
+    const missing = await base
+      .select({
+        prices: transaction.raw("COUNT(*)-COUNT(sf.Precio*sf.Cantidad)"),
+        quantities: transaction.raw("COUNT(*)-COUNT(sf.Cantidad)"),
+        ...(financial ? { costs: transaction.raw("COUNT(*)-COUNT((sf.Precio-sf.Costo)*sf.Cantidad)") } : {}),
+      })
+      .first();
+    if (Number(missing.prices) > 0) {
+      complete = false;
+      salesKpis.totalRawProfit = null;
+      salesKpis.avgTicket = null;
+    }
+    if (Number(missing.quantities) > 0) salesKpis.totalQuantity = null;
+    if (financial && (Number(missing.costs) > 0 || !complete)) {
+      salesKpis.totalNetProfit = null;
+      salesKpis.avgMarginPercent = null;
+    }
+  }
   return {
     provider: identity,
-    ...(sales.global || sales.sellerIds.length
-      ? { sales: await kpis(transaction, access, { ...query, proveedorId: id }) }
-      : {}),
+    ...(selling ? { sales: salesKpis } : {}),
     ...(access.hasGlobal("purchases.read")
       ? { purchases: await purchaseKpis(transaction, access, { ...query, proveedorId: id }) }
+      : {}),
+    ...(sellerAvailable
+      ? {
+          bestSeller: !complete
+            ? null
+            : (
+                await parties(
+                  transaction,
+                  access,
+                  { ...query, page: 1, limit: 1, sortBy: "amount", sortDir: "desc" },
+                  id,
+                  true,
+                )
+              ).data[0]?.name || null,
+        }
       : {}),
   };
 }
@@ -116,9 +159,9 @@ function createProviderReports({ sessions }) {
   );
   router.get(
     "/providers/list",
-    handle((tx, _access, query) => directory(tx, query, false), {
+    handle((tx, access, query) => providerList(tx, access, query), {
       range: false,
-      keys: ["search", "page", "limit", "sortBy", "sortDir"],
+      keys: ["from", "to", "showNoe", "search", "page", "limit", "sortBy", "sortDir"],
     }),
   );
   router.get("/providers/best", async (req, res, next) => {
@@ -143,7 +186,7 @@ function createProviderReports({ sessions }) {
     router.get(
       `/providers/:providerId/${path}`,
       handle((tx, access, query, id) => parties(tx, access, query, id, sellers), {
-        keys: ["from", "to", "showNoe", "employeeId", "page", "limit", "search", "sortBy", "sortDir"],
+        keys: ["from", "to", "showNoe", "employeeId", "productId", "page", "limit", "search", "sortBy", "sortDir"],
       }),
     );
   router.get("/providers/:providerId/summary", handle(summary, { keys: ["from", "to", "showNoe", "employeeId"] }));
@@ -154,14 +197,32 @@ function createProviderReports({ sessions }) {
     router.get(
       `/providers/:providerId/${path}`,
       handle((tx, access, query, id) => listSales(tx, access, { ...query, proveedorId: id }, kind), {
-        keys: ["from", "to", "showNoe", "employeeId", "page", "limit", "search", "sortBy", "sortDir"],
+        keys: [
+          "from",
+          "to",
+          "showNoe",
+          "employeeId",
+          "clientId",
+          "productId",
+          "page",
+          "limit",
+          "search",
+          "sortBy",
+          "sortDir",
+        ],
       }),
     );
   router.get(
     "/providers/:providerId/purchases",
-    handle((tx, access, query, id) => purchases(tx, access, { ...query, proveedorId: id }, false), {
-      keys: ["from", "to", "page", "limit", "search", "sortBy", "sortDir"],
-    }),
+    handle(
+      async (tx, access, query, id) => ({
+        ...(await purchases(tx, access, { ...query, proveedorId: id }, false)),
+        exportAllowed: access.hasGlobal("purchases.export"),
+      }),
+      {
+        keys: ["from", "to", "page", "limit", "search", "sortBy", "sortDir"],
+      },
+    ),
   );
   router.get(
     "/providers/:providerId/purchases/:invoiceId",
@@ -181,4 +242,4 @@ function createProviderReports({ sessions }) {
   return router;
 }
 
-module.exports = { createProviderReports, directory };
+module.exports = { createProviderReports, directory, purchaseDetail };

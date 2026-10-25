@@ -1,4 +1,5 @@
-import { fetchProvidersList } from 'api/providers';
+import { fetchProvidersExport } from 'api/providers';
+import { useAuth } from 'auth/context';
 import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
@@ -7,7 +8,7 @@ import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatCurrency, formatMoney, formatReportId, formatNumber } from 'utils/format';
+import { formatCurrency, formatMoney, formatNumber, formatReportId } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import './styles.css';
 
@@ -16,11 +17,28 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 const LIMIT = 20;
 
 const ProvidersTable = ({ onRowSelect, dateRange }) => {
+    const { session, can } = useAuth();
+    const has = (cap) => session.permissions.some((grant) => grant.capability === cap);
+    const financial =
+        has('sales.read') &&
+        has('sales.costs') &&
+        has('sales.profit') &&
+        (!can('sales.read') || (can('sales.costs') && can('sales.profit')));
+    const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [sort, setSort] = useState({ sortBy: 'utilidad', sortDir: 'desc' });
+    const [sort, setSort] = useState({
+        sortBy: financial
+            ? 'utilidad'
+            : has('sales.read')
+              ? 'total_ventas'
+              : can('purchases.read')
+                ? 'num_compras'
+                : 'Empresa',
+        sortDir: 'desc',
+    });
 
     const { data: result, isLoading } = useProvidersList({
         search,
@@ -51,12 +69,10 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
     const handlePrintAll = useCallback(
         async (config) => {
             try {
-                const allResult = await fetchProvidersList({
-                    search,
+                const allResult = await fetchProvidersExport({
+                    search: config.search ?? search,
                     from: dateRange?.from,
                     to: dateRange?.to,
-                    page: 1,
-                    limit: total || 9999,
                     sortBy: sort.sortBy,
                     sortDir: sort.sortDir,
                     showNoe,
@@ -64,6 +80,8 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
                 const pdfColumns = [
                     {
                         accessor: 'IdProveedor',
@@ -76,7 +94,8 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                         accessor: 'total_compras',
                         Header: 'Total Compras',
                         width: 'auto',
-                        render: (p) => formatMoney(p.total_compras ?? 0, currency, rate),
+                        render: (p) =>
+                            p.total_compras == null ? 'No disponible' : formatMoney(p.total_compras, currency, rate),
                     },
                     {
                         accessor: 'num_compras',
@@ -88,13 +107,14 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                         accessor: 'total_ventas',
                         Header: 'Total Ventas',
                         width: 'auto',
-                        render: (p) => formatMoney(p.total_ventas ?? 0, currency, rate),
+                        render: (p) =>
+                            p.total_ventas == null ? 'No disponible' : formatMoney(p.total_ventas, currency, rate),
                     },
                     {
                         accessor: 'utilidad',
                         Header: 'Utilidad',
                         width: 'auto',
-                        render: (p) => formatMoney(p.utilidad ?? 0, currency, rate),
+                        render: (p) => (p.utilidad == null ? 'No disponible' : formatMoney(p.utilidad, currency, rate)),
                     },
                     {
                         accessor: 'num_ventas',
@@ -104,10 +124,12 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                     },
                 ];
                 const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
-                const selected =
-                    selectedAccessors.size > 0
-                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
-                        : pdfColumns;
+                const selected = pdfColumns.filter(
+                    (column) =>
+                        selectedAccessors.has(column.accessor) &&
+                        allResult.columns.some((server) => server.key === column.accessor),
+                );
+                if (!selected.length) throw new Error('Selecciona columnas autorizadas.');
                 const rows = sortRows(allResult.data || [], config?.sortBy).map((p) =>
                     selected.map((col) => col.render(p)),
                 );
@@ -157,7 +179,8 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
 
                 pdfMake.createPdf(docDef).open();
             } catch (err) {
-                console.error('Failed to print providers list:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo imprimir el reporte autorizado de proveedores.');
             }
         },
         [search, total, sort, showNoe, currencyRate, dateRange],
@@ -169,45 +192,52 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
     // calculados en el backend; se muestran en el pie de la tabla.
     const summaries = useMemo(
         () =>
-            result?.totals
-                ? {
-                      total_compras: formatCurrency(result.totals.total_compras),
-                      num_compras: formatNumber(result.totals.num_compras || 0),
-                      total_ventas: formatCurrency(result.totals.total_ventas),
-                      utilidad: formatCurrency(result.totals.utilidad),
-                      num_ventas: formatNumber(result.totals.num_ventas || 0),
-                  }
-                : null,
+            Object.fromEntries(
+                Object.entries(result?.totals || {}).map(([key, value]) => [
+                    key,
+                    value == null
+                        ? 'No disponible'
+                        : key.startsWith('num_')
+                          ? formatNumber(value)
+                          : formatCurrency(value),
+                ]),
+            ),
         [result],
     );
 
     const columns = useMemo(
-        () => [
-            { Header: 'IdProveedor', accessor: 'IdProveedor', Cell: ({ value }) => formatReportId(value) },
-            { Header: 'Empresa', accessor: 'Empresa' },
-            {
-                Header: 'Total Compras',
-                accessor: 'total_compras',
-                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
-            },
-            { Header: '# Compras', accessor: 'num_compras' },
-            {
-                Header: 'Total Ventas',
-                accessor: 'total_ventas',
-                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
-            },
-            {
-                Header: 'Utilidad',
-                accessor: 'utilidad',
-                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
-            },
-            { Header: '# Ventas', accessor: 'num_ventas' },
-        ],
-        [],
+        () =>
+            [
+                { Header: 'IdProveedor', accessor: 'IdProveedor', Cell: ({ value }) => formatReportId(value) },
+                { Header: 'Empresa', accessor: 'Empresa' },
+                {
+                    Header: 'Total Compras',
+                    accessor: 'total_compras',
+                    Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
+                },
+                { Header: '# Compras', accessor: 'num_compras' },
+                {
+                    Header: 'Total Ventas',
+                    accessor: 'total_ventas',
+                    Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
+                },
+                {
+                    Header: 'Utilidad',
+                    accessor: 'utilidad',
+                    Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
+                },
+                { Header: '# Ventas', accessor: 'num_ventas' },
+            ].filter(
+                (column) =>
+                    ['IdProveedor', 'Empresa'].includes(column.accessor) ||
+                    Object.hasOwn(result?.totals || {}, column.accessor),
+            ),
+        [result],
     );
 
     return (
         <section className="providers-table-panel">
+            {printError && <p role="alert">{printError}</p>}
             <div className="providers-table__body">
                 <Table
                     data={dataArr}
@@ -241,7 +271,7 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                         onPageChange: setPage,
                     }}
                     print={{
-                        enabled: true,
+                        enabled: can('providers.export') && Boolean(result),
                         onGlobalPrint: handlePrintAll,
                         storageKey: 'proveedores',
                     }}

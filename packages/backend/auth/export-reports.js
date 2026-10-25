@@ -4,7 +4,7 @@ const { canExportSales } = require("./sales-export");
 const { pareto: salesPareto, options: paretoOptions } = require("./pareto-reports");
 const { purchases, pareto: purchasePareto, options: purchaseOptions } = require("./purchase-reports");
 const { inventory, options: inventoryOptions } = require("./inventory-reports");
-const { directory } = require("./provider-reports");
+const { providerList } = require("./provider-list");
 const { dispatchExport } = require("./dispatch-export");
 const { partyList, canExportSellers } = require("./party-reports");
 const { inactiveClients } = require("./client-reports");
@@ -228,12 +228,17 @@ async function dataset(resource, tx, access, input) {
     ];
   } else if (resource === "providers") {
     if (!access.hasGlobal("providers.read") || !access.hasGlobal("providers.export")) fail(403);
-    const query = parameters(input, { range: false, keys: ["search", "sortBy", "sortDir"] });
-    result = await directory(tx, { ...query, page: 1, limit: 5001 }, false);
+    const query = parameters(input, { range: false, keys: ["from", "to", "showNoe", "search", "sortBy", "sortDir"] });
+    result = await providerList(tx, access, { ...query, page: 1, limit: 5001 });
     title = "Proveedores autorizados";
     candidates = [
       ["IdProveedor", "ID"],
       ["Empresa", "Proveedor"],
+      ["total_compras", "Total Compras"],
+      ["num_compras", "Compras"],
+      ["total_ventas", "Total Ventas"],
+      ["num_ventas", "Ventas"],
+      ["utilidad", "Utilidad"],
     ];
   } else fail(404);
   const total = result.pagination?.total ?? result.total;
@@ -256,6 +261,7 @@ async function dataset(resource, tx, access, input) {
 
 function createExportReports({ sessions, security }) {
   const router = express.Router();
+  router.use(require("./provider-exports").createProviderExports({ sessions }));
   router.get("/exports/receivables/:clientId", async (req, res, next) => {
     try {
       if (
@@ -312,7 +318,7 @@ function createExportReports({ sessions, security }) {
   });
   router.get("/exports/sales/:invoiceId", async (req, res, next) => {
     try {
-      const query = parameters(req.query, { range: false, keys: ["showNoe"] });
+      const query = parameters(req.query, { range: false, keys: ["showNoe", "proveedorId"] });
       res.json(
         await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
           const scope = access.scopeFor("sales.export");

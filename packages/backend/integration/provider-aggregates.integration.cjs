@@ -59,7 +59,15 @@ test("vendedores propios intersectan ventas globales antes de agregar utilidad",
   const result = await client.request(`/api/providers/PUR-A/sellers?${range}`);
   expect(result.status).toBe(200);
   expect(result.body.data).toEqual([
-    { sellerId: "A", name: "Vendedor A", amount: "100.00", invoiceCount: 1, profit: "40.00" },
+    {
+      sellerId: "A",
+      name: "Vendedor A",
+      amount: "100.00",
+      invoiceCount: 1,
+      profit: "40.00",
+      quantity: "1.000",
+      clientCount: 1,
+    },
   ]);
   const global = await reader([
     grant("providers.read"),
@@ -92,3 +100,30 @@ test("búsqueda y filtros preceden conteo, no se admiten ordenaciones de campos 
   expect(result.body.data).toEqual([]);
   expect((await client.request(`/api/providers/PUR-A/clients?${range}&sortBy=rif`)).status).toBe(400);
 });
+
+test.each(["false", "true"])(
+  "detalle original de producto distingue clientes por vendedor y mantiene filtros antes de paginar showNoe=%s",
+  async (showNoe) => {
+    const client = await reader([grant("providers.read"), grant("clients.read"), grant("sales.read")]);
+    const result = await client.request(`/api/providers/PUR-A/clients?${range}&showNoe=${showNoe}&productId=PROV-P`);
+    expect(result.status).toBe(200);
+    expect(result.body.pagination.total).toBe(2);
+    expect(result.body.data.map((row) => [row.clientId, row.sellerId, Number(row.amount)]).sort()).toEqual([
+      ["C", "A", 100],
+      ["C", "B", 200],
+    ]);
+    expect(result.body.data.every((row) => !Object.hasOwn(row, "profit"))).toBe(true);
+    const own = await client.request(
+      `/api/providers/PUR-A/clients?${range}&showNoe=${showNoe}&productId=PROV-P&employeeId=A`,
+    );
+    expect(own.status).toBe(200);
+    expect(own.body.pagination.total).toBe(1);
+    expect(Number(own.body.data[0].amount)).toBe(100);
+    const rows = await client.request(
+      `/api/providers/PUR-A/sales?${range}&showNoe=${showNoe}&productId=PROV-P&employeeId=A&clientId=C`,
+    );
+    expect(rows.status).toBe(200);
+    expect(rows.body.data.map((row) => row.invoiceId)).toEqual(["provider-sale-A"]);
+    expect(Number(rows.body.data[0].quantity)).toBe(1);
+  },
+);

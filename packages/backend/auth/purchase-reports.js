@@ -1,6 +1,6 @@
 const express = require("express");
 const { parameters } = require("./sales-reports");
-const { reportId } = require("../utils/report-identity");
+const { reportId, filterIdentity } = require("../utils/report-identity");
 const { classify } = require("./pareto-reports");
 
 function fail(status) {
@@ -48,7 +48,7 @@ function purchaseBase(transaction, access, query, products) {
     });
   if (products) base.whereNotNull("sc.IdFactura");
   if (query.categoryId) base.whereRaw("BINARY p.Grupo = ?", [query.categoryId]);
-  if (query.proveedorId) base.whereRaw("BINARY mc.IdProveedor = ?", [query.proveedorId]);
+  if (query.proveedorId) filterIdentity(base, transaction.raw("BINARY mc.IdProveedor"), query.proveedorId);
   if (query.search)
     base.where(function () {
       if (products)
