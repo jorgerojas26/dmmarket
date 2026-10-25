@@ -3,11 +3,13 @@ const MAX_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRIES = 500;
 const PENDING_TTL_MS = 30_000;
 
-// The app is a single-business, read-mostly report server. Exchange rates and
-// auto-update progress must stay live; dashboards, modals and drill-downs share
-// the same one-hour policy. Never cache unknown routes or authenticated traffic.
-const isReportPath = (path) =>
-  /^\/(dashboard|clients|providers|purchases|sales|groups|products|invoices|employees|sellers)(\/|$)/.test(path);
+const isBusinessPath = (path) =>
+  /^\/(dashboard|clients|providers|purchases|sales|groups|products|invoices|employees|sellers)(\/|$)/i.test(path);
+
+const isDashboardPath = (path) =>
+  /^\/(dashboard\/(sales|pareto)|clients\/(dashboard|sin-facturar)|purchases\/(dashboard|pareto)|sellers\/dashboard)\/?$/i.test(
+    path,
+  );
 
 function createReportCache({
   ttlMs = TTL_MS,
@@ -54,14 +56,15 @@ function createReportCache({
 
   const middleware = async (req, res, next) => {
     if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
-      if (isReportPath(req.path)) {
+      if (isBusinessPath(req.path)) {
         res.once("finish", () => {
           if (res.statusCode >= 200 && res.statusCode < 300) clear();
         });
       }
       return next();
     }
-    if (req.method !== "GET" || !isReportPath(req.path) || req.headers.authorization || req.headers.cookie)
+    if (req.method === "GET" && isBusinessPath(req.path)) res.set("Cache-Control", "no-store");
+    if (req.method !== "GET" || !isDashboardPath(req.path) || req.headers.authorization || req.headers.cookie)
       return next();
 
     const url = new URL(req.originalUrl, "http://localhost");
@@ -139,4 +142,4 @@ function createReportCache({
 }
 
 const reportCache = createReportCache();
-module.exports = { createReportCache, isReportPath, reportCache };
+module.exports = { createReportCache, reportCache };
