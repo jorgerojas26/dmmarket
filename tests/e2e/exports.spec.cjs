@@ -71,7 +71,11 @@ test("cambiar de consulta no conserva columnas financieras propias mientras la c
   await sales.getByLabel("Ventas hasta", { exact: true }).fill("2026-01-31");
   await sales.getByLabel("Filtrar vendedor", { exact: true }).fill("A");
   await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toBeVisible();
+  await expect(
+    sales
+      .getByRole("table", { name: "Desglose autorizado de ventas", exact: true })
+      .getByRole("columnheader", { name: "Utilidad", exact: true }),
+  ).toBeVisible();
   const connection = await environment.db.client.acquireConnection();
   let locked = false;
   try {

@@ -8,11 +8,13 @@ import Commissions from './auth/commissions';
 import { useAuth } from './auth/context';
 import InactiveClients from './auth/inactive-clients';
 import Inventory from './auth/inventory';
+import Operations from './auth/operations';
 import Pareto from './auth/pareto';
 import Parties from './auth/parties';
 import Providers from './auth/providers';
 import PurchaseOverview from './auth/purchase-overview';
 import Purchases from './auth/purchases';
+import RateHistory from './auth/rate-history';
 import Receivables from './auth/receivables';
 import Sales from './auth/sales';
 import SellerDashboard from './auth/seller-dashboard';
@@ -34,6 +36,7 @@ export default function App() {
         { path: '/comisiones', label: 'Comisiones', allowed: has('commissions.read') },
         { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
         { path: '/tasas', label: 'Tasas', allowed: can('rates.read') },
+        { path: '/operacion', label: 'Operación', allowed: ['cache.clear', 'backups.read', 'updates.read'].some(can) },
         { path: '/auditoria', label: 'Auditoría', allowed: can('audit.read') },
         { path: '/acceso', label: 'Acceso', allowed: access },
     ].filter((module) => module.allowed);
@@ -88,6 +91,13 @@ export default function App() {
         { path: '/comisiones', label: 'Consulta', allowed: has('commissions.read'), content: <Commissions /> },
         { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
         { path: '/tasas', label: 'Referencia', allowed: can('rates.read'), content: <Rates /> },
+        { path: '/tasas/historial', label: 'Historial BCV', allowed: can('rates.read'), content: <RateHistory /> },
+        {
+            path: '/operacion',
+            label: 'Sistema',
+            allowed: ['cache.clear', 'backups.read', 'updates.read'].some(can),
+            content: <Operations />,
+        },
         { path: '/auditoria', label: 'Historial', allowed: can('audit.read'), content: <Audit /> },
         { path: '/acceso', label: 'Administración', allowed: access, content: <AccessWorkspace /> },
         { path: '/cuenta', label: 'Mi cuenta', allowed: true, content: <Account /> },

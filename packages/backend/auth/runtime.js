@@ -21,6 +21,7 @@ const { createCommissionReports } = require("./commission-reports");
 const { createCommissionUpdates } = require("./commission-updates");
 const { createReceivablesReports } = require("./receivables-reports");
 const { createExportReports } = require("./export-reports");
+const { createOperationReports } = require("./operation-reports");
 const { createHttpSecurity, sessionOptions, authErrorHandler } = require("./http-security");
 const { createAuthRouter, forbidden } = require("./router");
 
@@ -86,6 +87,7 @@ async function createAuthRuntime({ db, env = process.env }) {
     router.use(createProviderReports({ sessions }));
     router.use(createAuditReports({ sessions }));
     router.use(createExportReports({ sessions }));
+    router.use(createOperationReports({ sessions, security, db }));
     router.use(createCommissionReports({ sessions }));
     router.use(
       createCommissionUpdates({ sessions, security, writesEnabled: env.AUTH_COMMISSION_WRITES_ENABLED === "true" }),

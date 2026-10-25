@@ -133,7 +133,7 @@ export default function Sales() {
                 )}
             {data && !error && (
                 <>
-                    <table className="table table-dark">
+                    <table aria-label="Desglose autorizado de ventas" className="table table-dark">
                         <thead>
                             <tr>
                                 {visibleColumns.map(([field, label]) => (

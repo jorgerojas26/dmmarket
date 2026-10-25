@@ -175,6 +175,7 @@ async function startEnvironment({ web = false, receivablesWrites = false, commis
       DATABASE_NAME: "dmmarket_auth_test",
       DATABASE_USER: "root",
       DATABASE_PASSWORD: password,
+      BACKUP_DIRECTORY: path.join(directory, "backups"),
       AUTH_SESSION_SECRET: randomBytes(32).toString("base64"),
       AUTH_MFA_KEY: randomBytes(32).toString("base64"),
       AUTH_RECEIVABLES_WRITES_ENABLED: String(receivablesWrites),
