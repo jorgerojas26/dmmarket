@@ -22,9 +22,9 @@
     "build:installer:linux": "bun run build:linux && bun run package:installers linux",
     "build:installer:windows": "bun run build:windows && bun run package:installers windows",
     "release": "bun scripts/release.mjs",
-    "test:backend": "bun --filter @dmmarket/backend test",
-    "test:frontend": "CI=true bun --filter @dmmarket/frontend test",
-    "test": "bun run --parallel test:backend test:frontend",
+    "test:backend": "bun --elide-lines=0 --filter @dmmarket/backend test",
+    "test:frontend": "CI=true bun --elide-lines=0 --filter @dmmarket/frontend test",
+    "test": "bun run test:backend && bun run test:frontend",
     "postinstall": "bun run scripts/dedupe-nivo.mjs",
     "check": "biome check",
     "check:write": "biome check --write",
@@ -32,8 +32,8 @@
     "format": "biome format --write",
     "lint": "biome lint",
     "lint:write": "biome lint --write",
-    "test:integration": "bun run test:prepare && bun --elide-lines=0 --filter @dmmarket/backend test:integration",
-    "test:e2e": "bun run test:prepare && playwright test",
+    "test:integration": "bun run test:backend",
+    "test:e2e": "bun run test:frontend",
     "test:prepare": "bun tests/support/prepare.cjs"
   },
   "overrides": {

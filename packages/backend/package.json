@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "nodemon index.js",
-    "test": "jest",
+    "test": "bun ../../tests/support/prepare.cjs && bun run test:integration",
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
@@ -16,7 +16,14 @@
     "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --config integration/jest.config.cjs --runInBand"
   },
   "jest": {
-    "cache": false
+    "cache": false,
+    "testEnvironment": "node",
+    "testMatch": [
+      "<rootDir>/integration/*.integration.cjs"
+    ],
+    "testTimeout": 60000,
+    "maxWorkers": 1,
+    "watchman": false
   },
   "author": "",
   "license": "ISC",

@@ -1,7 +1,9 @@
+const path = require("node:path");
 const { defineConfig } = require("@playwright/test");
 
 module.exports = defineConfig({
   testDir: "./tests/e2e",
+  outputDir: path.join(__dirname, "test-results"),
   testMatch: "**/*.spec.cjs",
   workers: 1,
   retries: 0,
