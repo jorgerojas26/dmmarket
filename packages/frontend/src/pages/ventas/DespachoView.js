@@ -35,7 +35,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
 
     // Pagination / sorting / search state
     const [page, setPage] = useState(1);
-    const [sortBy, setSortBy] = useState('createdAt');
+    const [sortBy, setSortBy] = useState('invoiceId');
     const [sortDir, setSortDir] = useState('desc');
     const [search, setSearch] = useState('');
     const [selectedRuta, setSelectedRuta] = useState(null);
