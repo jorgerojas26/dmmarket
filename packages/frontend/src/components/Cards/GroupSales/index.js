@@ -18,8 +18,16 @@ const GroupSales = ({ chartData = [], compact = false, title, help }) => {
                     <ChartTooltip title={datum.label} color={datum.color}>
                         <span>Bruto</span>
                         <strong>{formatCurrency(datum.value)}</strong>
-                        <span>Utilidad</span>
-                        <strong>{formatCurrency(datum.data.netProfit)}</strong>
+                        {Object.hasOwn(datum.data, 'netProfit') && (
+                            <>
+                                <span>Utilidad</span>
+                                <strong>
+                                    {datum.data.netProfit === null
+                                        ? 'No disponible'
+                                        : formatCurrency(datum.data.netProfit)}
+                                </strong>
+                            </>
+                        )}
                     </ChartTooltip>
                 )}
             />
@@ -41,7 +49,11 @@ const GroupSales = ({ chartData = [], compact = false, title, help }) => {
                 padAngle={0.7}
                 cornerRadius={3}
                 activeOuterRadiusOffset={8}
-                arcLabel={(e) => `${e.value} (${e.data.netProfit})`}
+                arcLabel={(e) =>
+                    Object.hasOwn(e.data, 'netProfit')
+                        ? `${e.value} (${e.data.netProfit ?? 'No disponible'})`
+                        : String(e.value)
+                }
                 enableArcLabels
                 enableArcLinkLabels
                 borderWidth={1}
@@ -55,8 +67,16 @@ const GroupSales = ({ chartData = [], compact = false, title, help }) => {
                     <ChartTooltip title={datum.label} color={datum.color}>
                         <span>Bruto</span>
                         <strong>{formatCurrency(datum.value)}</strong>
-                        <span>Utilidad</span>
-                        <strong>{formatCurrency(datum.data.netProfit)}</strong>
+                        {Object.hasOwn(datum.data, 'netProfit') && (
+                            <>
+                                <span>Utilidad</span>
+                                <strong>
+                                    {datum.data.netProfit === null
+                                        ? 'No disponible'
+                                        : formatCurrency(datum.data.netProfit)}
+                                </strong>
+                            </>
+                        )}
                     </ChartTooltip>
                 )}
             />

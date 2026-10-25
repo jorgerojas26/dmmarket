@@ -324,7 +324,9 @@ test("documento y resumen comparativo no exponen costos, identificación ni vent
   await sales.getByLabel("Comparar ventas hasta", { exact: true }).fill("2025-12-31");
   await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
   const summary = page.getByRole("region", { name: "Resumen de ventas" });
-  await expect(summary.getByText("Total ventas: 100", { exact: true })).toBeVisible();
+  await expect(
+    summary.getByRole("group", { name: "Total ventas", exact: true }).getByText("$100,00", { exact: true }),
+  ).toBeVisible();
   await expect(summary.getByText("Ventas del período comparado: 10", { exact: true })).toBeVisible();
   await expect(summary.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
   await sales.getByRole("button", { name: "Ver documento 1", exact: true }).click();
@@ -338,7 +340,9 @@ test("documento y resumen comparativo no exponen costos, identificación ni vent
   await expect(detail).toHaveCount(0);
   await sales.getByLabel("Sistema de ventas", { exact: true }).selectOption("true");
   await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(summary.getByText("Total ventas: 200", { exact: true })).toBeVisible();
+  await expect(
+    summary.getByRole("group", { name: "Total ventas", exact: true }).getByText("$200,00", { exact: true }),
+  ).toBeVisible();
   await sales.getByRole("button", { name: "Ver documento 2", exact: true }).click();
   await expect(detail.getByText("Total del documento: 200", { exact: true })).toBeVisible();
 });
