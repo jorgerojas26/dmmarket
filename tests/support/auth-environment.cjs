@@ -107,6 +107,7 @@ async function startEnvironment({
   receivablesWrites = false,
   commissionWrites = false,
   rateSource = false,
+  updateSource = false,
   authKeys = null,
 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-auth-test-"));
@@ -138,6 +139,7 @@ async function startEnvironment({
           if (child.exitCode === null && !child.signalCode) child.kill("SIGKILL");
         }
         if (environment.rateSource) await environment.rateSource.close();
+        if (environment.updateSource) await environment.updateSource.close();
         if (db) await db.destroy();
       } finally {
         try {
@@ -172,6 +174,7 @@ async function startEnvironment({
       "dmmarket/mysql:5.0.24",
     );
     environment.container = container;
+    if (updateSource) environment.updateSource = await require("./update-source.cjs").startUpdateSource();
     if (rateSource) {
       environment.rateSource = await require("./rate-source.cjs").startRateSource();
     }
@@ -282,6 +285,7 @@ async function startEnvironment({
       AUTH_PUBLIC_ORIGIN: environment.origin,
     });
     if (environment.rateSource) configuration.RATE_FIXTURE_SOURCE = environment.rateSource.origin;
+    if (environment.updateSource) configuration.UPDATE_FIXTURE_SOURCE = environment.updateSource.origin;
     const configurationFile = path.join(directory, "configuration.json");
     fs.writeFileSync(configurationFile, JSON.stringify(configuration), { mode: 0o600 });
     fs.writeFileSync(path.join(directory, "Caddyfile"), caddyFile(configuration), { mode: 0o600 });

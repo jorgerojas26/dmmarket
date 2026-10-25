@@ -31,6 +31,14 @@ async function main() {
       },
     });
   }
+  if (configuration.UPDATE_FIXTURE_SOURCE) {
+    const origin = new URL(configuration.UPDATE_FIXTURE_SOURCE);
+    if (origin.hostname !== "127.0.0.1" || origin.protocol !== "http:")
+      throw new Error("El origen de releases requiere el laboratorio local.");
+    services.updateReader = require("../../packages/backend/controllers/update").createUpdateReader((url, options) =>
+      fetch(`${origin.origin}${new URL(url).pathname}${new URL(url).search}`, options),
+    );
+  }
   await app.initializeAuth(configuration, services);
   const server = app.listen(Number(configuration.PORT), "127.0.0.1");
   process.once("SIGTERM", async () => {

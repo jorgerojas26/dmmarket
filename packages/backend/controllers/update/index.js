@@ -55,91 +55,96 @@ const requireStandalone = (res) => {
 
 // Consulta GitHub Releases y compara semver contra la versión actual.
 // El fetch lo hace el server (no el browser) — mismo origin, sin CORS.
-const POST_CHECK = async (_req, res) => {
-  try {
-    const response = await fetchWithTimeout(GITHUB_API, {
-      headers: {
-        "User-Agent": "dmmarket-updater",
-        Accept: "application/vnd.github+json",
-      },
-    });
-
-    if (response.status === 404) {
-      return res.status(404).json({ error: { message: "No hay nuevas actualizaciones" } });
-    }
-    if (response.status === 403 || response.status === 429) {
-      return res.status(429).json({
-        error: { message: "Hubo un error. Intente de nuevo más tarde" },
-      });
-    }
-    if (!response.ok) {
-      return res.status(502).json({ error: { message: `HTTP error: ${response.status}` } });
-    }
-
-    const release = await response.json();
-    const assetsFor = ASSETS_BY_PLATFORM[process.platform];
-    if (!assetsFor) {
-      return res.status(400).json({
-        error: { message: "El auto-update no está disponible en esta plataforma" },
-      });
-    }
-    const binary = release.assets?.find((asset) => asset.name === assetsFor.binary);
-    const sha256 = release.assets?.find((asset) => asset.name === assetsFor.sha);
-    if (!binary || !sha256) {
-      return res.status(502).json({
-        error: {
-          message: "Release inválida. Por favor contacte a su administrador",
+function createUpdateReader(request = fetchWithTimeout) {
+  const POST_CHECK = async (_req, res) => {
+    try {
+      const response = await request(GITHUB_API, {
+        headers: {
+          "User-Agent": "dmmarket-updater",
+          Accept: "application/vnd.github+json",
         },
       });
+
+      if (response.status === 404) {
+        return res.status(404).json({ error: { message: "No hay nuevas actualizaciones" } });
+      }
+      if (response.status === 403 || response.status === 429) {
+        return res.status(429).json({
+          error: { message: "Hubo un error. Intente de nuevo más tarde" },
+        });
+      }
+      if (!response.ok) {
+        return res.status(502).json({ error: { message: `HTTP error: ${response.status}` } });
+      }
+
+      const release = await response.json();
+      const assetsFor = ASSETS_BY_PLATFORM[process.platform];
+      if (!assetsFor) {
+        return res.status(400).json({
+          error: { message: "El auto-update no está disponible en esta plataforma" },
+        });
+      }
+      const binary = release.assets?.find((asset) => asset.name === assetsFor.binary);
+      const sha256 = release.assets?.find((asset) => asset.name === assetsFor.sha);
+      if (!binary || !sha256) {
+        return res.status(502).json({
+          error: {
+            message: "Release inválida. Por favor contacte a su administrador",
+          },
+        });
+      }
+
+      const latestVersion = String(release.tag_name || "").replace(/^v/, "");
+      const comparison = compareSemver(latestVersion, version);
+      if (Number.isNaN(comparison)) {
+        return res.status(502).json({ error: { message: `Versión de la release inválida: ${release.tag_name}` } });
+      }
+
+      res.status(200).json({
+        updateAvailable: comparison > 0,
+        latestVersion,
+        notes: release.body || "",
+        publishedAt: release.published_at || null,
+        assetUrl: binary.browser_download_url,
+        sha256AssetUrl: sha256.browser_download_url,
+      });
+    } catch (_error) {
+      res.status(502).json({ error: { message: "No se pudo contactar al servidor. Revisá tu conexión a internet." } });
     }
+  };
 
-    const latestVersion = String(release.tag_name || "").replace(/^v/, "");
-    const comparison = compareSemver(latestVersion, version);
-    if (Number.isNaN(comparison)) {
-      return res.status(502).json({ error: { message: `Versión de la release inválida: ${release.tag_name}` } });
+  // Historial de versiones: las últimas releases publicadas (sin drafts ni
+  // prereleases) con sus notas. Para el panel "Acerca de" de Configuración.
+  const GET_HISTORY = async (_req, res) => {
+    try {
+      const response = await request(GITHUB_RELEASES_API, {
+        headers: {
+          "User-Agent": "dmmarket-updater",
+          Accept: "application/vnd.github+json",
+        },
+      });
+      if (!response.ok) {
+        return res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
+      }
+
+      const releases = await response.json();
+      const history = releases
+        .filter((r) => !r.draft && !r.prerelease)
+        .map((r) => ({
+          version: String(r.tag_name || "").replace(/^v/, ""),
+          publishedAt: r.published_at || null,
+          notes: r.body || "",
+        }));
+
+      res.status(200).json(history);
+    } catch (_error) {
+      res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
     }
+  };
 
-    res.status(200).json({
-      updateAvailable: comparison > 0,
-      latestVersion,
-      notes: release.body || "",
-      publishedAt: release.published_at || null,
-      assetUrl: binary.browser_download_url,
-      sha256AssetUrl: sha256.browser_download_url,
-    });
-  } catch (_error) {
-    res.status(502).json({ error: { message: "No se pudo contactar al servidor. Revisá tu conexión a internet." } });
-  }
-};
-
-// Historial de versiones: las últimas releases publicadas (sin drafts ni
-// prereleases) con sus notas. Para el panel "Acerca de" de Configuración.
-const GET_HISTORY = async (_req, res) => {
-  try {
-    const response = await fetchWithTimeout(GITHUB_RELEASES_API, {
-      headers: {
-        "User-Agent": "dmmarket-updater",
-        Accept: "application/vnd.github+json",
-      },
-    });
-    if (!response.ok) {
-      return res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
-    }
-
-    const releases = await response.json();
-    const history = releases
-      .filter((r) => !r.draft && !r.prerelease)
-      .map((r) => ({
-        version: String(r.tag_name || "").replace(/^v/, ""),
-        publishedAt: r.published_at || null,
-        notes: r.body || "",
-      }));
-
-    res.status(200).json(history);
-  } catch (_error) {
-    res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
-  }
-};
+  return { POST_CHECK, GET_HISTORY };
+}
+const { POST_CHECK, GET_HISTORY } = createUpdateReader();
 
 // Descarga el binario a .dmmarket-update/new.exe y verifica sha256 contra el asset de la release.
 // Con hash que no coincide se borra todo y se responde error: nunca se aplica un binario corrupto.
@@ -327,6 +332,7 @@ const POST_APPLY = (_req, res) => {
 
 module.exports = {
   GET_STATUS,
+  createUpdateReader,
   POST_CHECK,
   GET_HISTORY,
   POST_DOWNLOAD,

@@ -5,6 +5,7 @@ const { appendEvent } = require("./identity");
 const { fechaEnCaracas, bcvRateService } = require("../bcv");
 const { backupService } = require("../backups");
 const updates = require("../controllers/update");
+const { allowedReleaseAssets } = require("../utils/update-assets");
 const { reportCache } = require("../middlewares/report-cache");
 
 function fail(status) {
@@ -22,6 +23,7 @@ const dateColumn = (tx) => tx.raw("CAST(DATE_FORMAT(Fecha, '%Y-%m-%d') AS CHAR)"
 
 function createOperationReports({ sessions, security, db, services = {} }) {
   const rateService = services.rates || bcvRateService;
+  const updateReader = services.updateReader || updates;
   let lastBackup = null;
   let lastSync = null;
   const router = express.Router();
@@ -139,6 +141,69 @@ function createOperationReports({ sessions, security, db, services = {} }) {
           empty(req.query);
         });
         controller(req, res);
+      } catch (error) {
+        next(error);
+      }
+    });
+  for (const [method, path, controller] of [
+    ["post", "/update/check", updateReader.POST_CHECK],
+    ["get", "/update/history", updateReader.GET_HISTORY],
+  ])
+    router[method](path, ...(method === "post" ? [security.csrfProtection] : []), async (req, res, next) => {
+      try {
+        await sessions.withSession(req.sessionID, {}, ({ access }) => {
+          if (!access.hasGlobal("updates.read")) fail(403);
+          empty(req.query);
+          if (method === "post") {
+            if (!req.is("application/json")) fail(415);
+            empty(req.body || {});
+          }
+        });
+        await controller(req, res);
+      } catch (error) {
+        next(error);
+      }
+    });
+  for (const [path, action, controller] of [
+    ["/update/download", "download", updates.POST_DOWNLOAD],
+    ["/update/apply", "apply", updates.POST_APPLY],
+  ])
+    router.post(path, security.csrfProtection, async (req, res, next) => {
+      try {
+        if (!req.is("application/json")) fail(415);
+        const operationId = randomUUID();
+        const actorId = await sessions.withSession(
+          req.sessionID,
+          { recent: true },
+          async ({ transaction, access, user }) => {
+            if (!access.hasGlobal("updates.read") || !access.hasGlobal("updates.execute")) fail(403);
+            empty(req.query);
+            const keys = action === "download" ? ["confirmed", "assetUrl", "sha256AssetUrl"] : ["confirmed"];
+            if (req.body?.confirmed !== true || Object.keys(req.body).some((key) => !keys.includes(key))) fail(400);
+            if (action === "download" && !allowedReleaseAssets(req.body.assetUrl, req.body.sha256AssetUrl)) fail(400);
+            await appendEvent(transaction, {
+              actorId: user.id,
+              action: `updates.${action}_requested`,
+              reason: operationId,
+              occurredMs: Date.now(),
+            });
+            return user.id;
+          },
+        );
+        res.once("finish", () => {
+          void db
+            .transaction((transaction) =>
+              appendEvent(transaction, {
+                actorId,
+                action: `updates.${action}_completed`,
+                outcome: res.statusCode >= 200 && res.statusCode < 300 ? "success" : "failure",
+                reason: operationId,
+                occurredMs: Date.now(),
+              }),
+            )
+            .catch(() => console.error("No se pudo registrar el resultado de la actualización autorizada."));
+        });
+        await controller(req, res);
       } catch (error) {
         next(error);
       }

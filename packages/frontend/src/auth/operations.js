@@ -3,6 +3,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { fetcher } from 'swr-config';
 import { useAuth } from './context';
 import { AccessForm, ReauthenticationForm } from './forms';
+import UpdatePanel from './update-panel';
 
 export default function Operations() {
     const { can } = useAuth();
@@ -17,7 +18,6 @@ export default function Operations() {
         refreshInterval: 1000,
         dedupingInterval: 0,
     });
-    const { data: update, error: updateError } = useSWR(can('updates.read') ? '/api/update/status' : null, fetcher);
     const { data: rates, error: ratesError } = useSWR(
         can('rates.read') && can('rates.sync') ? '/api/currency_rates/bcv/status' : null,
         fetcher,
@@ -177,19 +177,7 @@ export default function Operations() {
                     )}
                 </section>
             )}
-            {can('updates.read') && (
-                <section aria-label="Estado autorizado de actualización">
-                    <h3 className="h5">Actualización</h3>
-                    {updateError && <p role="alert">No se pudo consultar el estado de actualización.</p>}
-                    {update && !updateError && (
-                        <>
-                            <p>Versión actual: {update.currentVersion}</p>
-                            <p>Plataforma: {update.platform}</p>
-                            <p>{update.standalone ? 'Ejecutable compilado' : 'Ejecución desde código fuente'}</p>
-                        </>
-                    )}
-                </section>
-            )}
+            {can('updates.read') && <UpdatePanel />}
         </section>
     );
 }
