@@ -91,7 +91,7 @@ const DesgloseView = ({ isActive }) => {
 
     // ---- Facturas table state ----
     const [facturasPage, setFacturasPage] = useState(1);
-    const [facturasSort, setFacturasSort] = useState({ sortBy: 'fecha', sortDir: 'desc' });
+    const [facturasSort, setFacturasSort] = useState({ sortBy: 'invoiceId', sortDir: 'desc' });
     const [facturasSearch, setFacturasSearch] = useState('');
 
     // ---- Productos table state ----

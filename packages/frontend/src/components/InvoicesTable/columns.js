@@ -3,8 +3,15 @@ import { formatCurrency } from 'utils/format';
 
 const columns = [
     {
-        Header: 'ID',
+        Header: 'Factura',
         accessor: 'invoiceId',
+    },
+    {
+        Header: 'Fecha',
+        accessor: 'createdAt',
+        Cell: ({ value }) => {
+            return dayjs(value).format('MMM DD, YYYY');
+        },
     },
     {
         Header: 'Cliente',
@@ -33,13 +40,6 @@ const columns = [
             const total =
                 summary != null ? Number(summary) : data.reduce((sum, row) => sum + Number(row.utilidad || 0), 0);
             return formatCurrency(total);
-        },
-    },
-    {
-        Header: 'Fecha',
-        accessor: 'createdAt',
-        Cell: ({ value }) => {
-            return dayjs(value).format('MMM DD, YYYY');
         },
     },
 ];

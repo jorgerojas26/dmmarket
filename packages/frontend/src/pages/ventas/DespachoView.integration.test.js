@@ -48,6 +48,11 @@ it('selecciona todas las facturas aunque el total de la tabla haya quedado desac
         userEvent.click(await screen.findByText('Valle de la pascua (VP)'));
         await waitFor(() => expect(requests.some((params) => params.get('ruta') === 'VP')).toBe(true));
         await screen.findByText('Mostrando 1–50 de 68 resultados');
+        expect(
+            within(container.querySelector('table'))
+                .getAllByRole('columnheader')
+                .map((header) => header.textContent.trim()),
+        ).toEqual(['', 'Factura', 'Fecha', 'Cliente', 'RIF', 'TOTAL', 'UTILIDAD']);
         expect(requests[0].get('sortBy')).toBe('invoiceId');
         expect(requests[0].get('sortDir')).toBe('desc');
         userEvent.click(screen.getByRole('button', { name: 'Página siguiente' }));
