@@ -151,7 +151,7 @@ exports.GET_INVOICES = async ({
     );
   });
 
-  const invoicesArray = Object.keys(invoices).map((key) => invoices[key]);
+  const invoicesArray = invoiceIds.map((invoiceId) => invoices[invoiceId]);
 
   return {
     data: invoicesArray,
