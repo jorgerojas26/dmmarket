@@ -1,4 +1,5 @@
 const express = require("express");
+const { canExportSales } = require("./sales-export");
 const { filterIdentity } = require("../utils/report-identity");
 
 function fail(status) {
@@ -75,11 +76,17 @@ function salesBase(transaction, access, query) {
   const invoice = noe ? "IdNoe" : "IdFactura";
   const base = transaction(`${slave} as sf`)
     .join(`${master} as mf`, function () {
-      this.on(`mf.${invoice}`, `sf.${invoice}`).andOn("mf.Anulada", 0);
+      this.on(transaction.raw("BINARY ?? = BINARY ??", [`mf.${invoice}`, `sf.${invoice}`])).andOn("mf.Anulada", 0);
     })
-    .leftJoin("clientes as c", "c.IdCliente", "mf.IdCliente")
-    .leftJoin("vendedores as v", "v.idVend", "mf.IdVend")
-    .leftJoin("productos as p", "p.IdProducto", "sf.IdProducto");
+    .leftJoin("clientes as c", function () {
+      this.on(transaction.raw("BINARY c.IdCliente = BINARY mf.IdCliente"));
+    })
+    .leftJoin("vendedores as v", function () {
+      this.on(transaction.raw("BINARY v.idVend = BINARY mf.IdVend"));
+    })
+    .leftJoin("productos as p", function () {
+      this.on(transaction.raw("BINARY p.IdProducto = BINARY sf.IdProducto"));
+    });
   if (query.from) base.whereBetween("mf.Fecha", [query.from, query.to]);
   if (!read.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), read.sellerIds);
   for (const [parameter, column] of Object.entries({
@@ -100,6 +107,7 @@ function salesBase(transaction, access, query) {
 async function listSales(transaction, access, query, kind) {
   const financial = financialFields(access, query);
   const { base, invoice } = salesBase(transaction, access, query);
+  if (query.invoiceIds) base.whereIn(transaction.raw("BINARY ??", [`mf.${invoice}`]), query.invoiceIds);
   const products = kind === "products";
   const group = products ? "sf.IdProducto" : `mf.${invoice}`;
   if (query.search)
@@ -158,6 +166,8 @@ async function listSales(transaction, access, query, kind) {
         fecha: "mf.Fecha",
         cliente: raw("COALESCE(c.Empresa, 'Cliente no registrado')"),
         vendedor: raw("COALESCE(v.Empresa, 'Vendedor no registrado')"),
+        sellerId: "mf.IdVend",
+        sellerCount: raw("COUNT(DISTINCT BINARY mf.IdVend)"),
       };
   const count = await transaction
     .from(base.clone().select({ id: group }).groupByRaw("BINARY ??", [group]).as("i"))
@@ -171,7 +181,19 @@ async function listSales(transaction, access, query, kind) {
     .limit(query.limit)
     .offset((query.page - 1) * query.limit);
   const totals = await base.clone().select(metrics).first();
-  return { data, pagination: { page: query.page, limit: query.limit, total: Number(count.total) }, totals };
+  return {
+    data: products
+      ? data
+      : data.map(({ sellerId, sellerCount, ...row }) => ({
+          ...row,
+          exportAllowed:
+            access.hasGlobal("sales.export") ||
+            (Number(sellerCount) === 1 && access.canRecord("sales.export", sellerId)),
+        })),
+    pagination: { page: query.page, limit: query.limit, total: Number(count.total) },
+    totals,
+    exportAllowed: canExportSales(access, query),
+  };
 }
 
 function rowNumber(value) {
@@ -190,6 +212,9 @@ async function invoiceList(transaction, access, query) {
       this.where("c.Empresa", "like", `%${query.search}%`).orWhere(`mf.${invoice}`, "like", `%${query.search}%`);
     });
   const ids = summary.data.map((row) => row.invoiceId);
+  base.leftJoin("grupos as dispatchGroup", function () {
+    this.on(transaction.raw("BINARY dispatchGroup.IdGrupo = BINARY p.Grupo"));
+  });
   const lines = ids.length
     ? await base
         .whereIn(`mf.${invoice}`, ids)
@@ -197,6 +222,7 @@ async function invoiceList(transaction, access, query) {
           invoiceId: `mf.${invoice}`,
           productId: "sf.IdProducto",
           product: "sf.Descripcion",
+          group: "dispatchGroup.Descripcion",
           quantity: "sf.Cantidad",
           price: "sf.Precio",
           peso: "p.Peso",
@@ -211,6 +237,7 @@ async function invoiceList(transaction, access, query) {
       const own = lines.filter((line) => String(line.invoiceId) === String(row.invoiceId));
       return {
         invoiceId: row.invoiceId,
+        exportAllowed: row.exportAllowed,
         client: row.cliente,
         createdAt: row.fecha,
         total: rowNumber(row.monto),
@@ -219,14 +246,16 @@ async function invoiceList(transaction, access, query) {
         products: own.map((line) => ({
           productId: line.productId,
           product: line.product,
-          quantity: rowNumber(line.quantity),
-          price: rowNumber(line.price),
+          group: line.group,
+          quantity: line.quantity == null ? null : Number(line.quantity),
+          price: line.price == null ? null : Number(line.price),
           peso: line.peso === null ? null : rowNumber(line.peso),
-          ...(financial ? { cost: rowNumber(line.cost) } : {}),
+          ...(financial ? { cost: line.cost == null ? null : Number(line.cost) } : {}),
         })),
       };
     }),
     pagination: summary.pagination,
+    exportAllowed: summary.exportAllowed,
     totals: {
       total: rowNumber(summary.totals.monto),
       ...(financial ? { utilidad: rowNumber(summary.totals.utilidad) } : {}),
@@ -237,7 +266,7 @@ async function invoiceList(transaction, access, query) {
 async function invoiceDetail(transaction, access, query, id) {
   if (typeof id !== "string" || !id || id.length > 128 || /[\p{Cc}\p{Cs}]/u.test(id)) fail(400);
   const { base, invoice } = salesBase(transaction, access, query);
-  base.where(`mf.${invoice}`, id);
+  base.whereRaw("BINARY ?? = ?", [`mf.${invoice}`, id]);
   const personal = access.hasGlobal("clients.personal");
   const header = await base.clone().first({
     idFactura: `mf.${invoice}`,
@@ -248,7 +277,13 @@ async function invoiceDetail(transaction, access, query, id) {
     ...(personal ? { rif: "mf.Rif" } : {}),
   });
   if (!header) fail(404);
-  const financial = financialFields(access, { ...query, employeeId: header.sellerId });
+  const sellers = await base.clone().select({ id: "mf.IdVend" }).groupByRaw("BINARY mf.IdVend");
+  const financial = ["sales.costs", "sales.profit"].every((capability) =>
+    access.covers(
+      capability,
+      sellers.map((row) => row.id),
+    ),
+  );
   const metrics = { total: transaction.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)") };
   if (financial) metrics.utilidad = transaction.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2)");
   const totals = await base.clone().select(metrics).first();
@@ -383,6 +418,7 @@ async function dashboard(transaction, access, query) {
   );
   return {
     kpis: summary,
+    exportAllowed: canExportSales(access, query),
     bestEmployee: best ? { ...best, totalSales: rowNumber(best.totalSales) } : null,
     topProducts: products.data,
     topClients: clients,
@@ -411,6 +447,15 @@ function createSalesReports({ sessions }) {
     handle((transaction, access, query) => listSales(transaction, access, query, "products")),
   );
   router.get("/invoices", handle(invoiceList));
+  router.get(
+    "/invoices/selection",
+    handle(async (transaction, access, query) => {
+      if (Object.hasOwn(query, "search") && typeof query.search !== "string") fail(400);
+      const result = await invoiceList(transaction, access, { ...query, page: 1, limit: 5001 });
+      if (result.pagination.total > 5000) fail(413);
+      return result;
+    }),
+  );
   router.get(
     "/invoices/sales",
     handle(async (transaction, access, query) => {
@@ -495,6 +540,7 @@ module.exports = {
   salesBase,
   financialFields,
   listSales,
+  invoiceList,
   invoiceDetail,
   dashboard,
   kpis,

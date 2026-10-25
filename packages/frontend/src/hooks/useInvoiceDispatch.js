@@ -7,47 +7,38 @@ import { useMemo } from 'react';
  * @returns {{ productsSummary: Array, invoicesTotalSummary: number }}
  */
 export const useInvoiceDispatch = (selectedRows) => {
-    const productsSummary = useMemo(() => {
-        if (!selectedRows || selectedRows.length === 0) return [];
-
-        const products = {};
-
-        selectedRows.forEach((row) => {
-            row.products.forEach((product) => {
-                if (!products[product.productId]) {
-                    products[product.productId] = {
-                        ...product,
-                        quantity: 0,
-                        peso: 0,
-                        utilidad: 0,
-                    };
+    const { productsSummary, invoicesTotalSummary } = useMemo(() => {
+        const invoices = selectedRows || [];
+        const financial = invoices.length > 0 && invoices.every((row) => Object.hasOwn(row, 'utilidad'));
+        const grouped = new Map();
+        const add = (left, right) => (left == null || right == null ? null : left + right);
+        for (const invoice of invoices)
+            for (const product of invoice.products) {
+                let row = grouped.get(product.productId);
+                if (!row) {
+                    row = { ...product, quantity: 0, peso: 0, total: 0, ...(financial ? { utilidad: 0 } : {}) };
+                    grouped.set(product.productId, row);
                 }
-                products[product.productId].quantity += product.quantity;
-                products[product.productId].peso = Number(
-                    (products[product.productId].peso + product.quantity * (product.peso || 0)).toFixed(3),
+                row.quantity = add(row.quantity, product.quantity);
+                row.peso = add(
+                    row.peso,
+                    product.quantity == null || product.peso == null ? null : product.quantity * product.peso,
                 );
-                products[product.productId].utilidad = Number(
-                    (
-                        products[product.productId].utilidad +
-                        (product.price - (product.cost || 0)) * product.quantity
-                    ).toFixed(2),
+                row.total = add(
+                    row.total,
+                    product.quantity == null || product.price == null ? null : product.quantity * product.price,
                 );
-                products[product.productId].total = Number(
-                    (products[product.productId].quantity * products[product.productId].price).toFixed(2),
-                );
-            });
-        });
-
-        return Object.values(products);
+                if (financial)
+                    row.utilidad = add(
+                        row.utilidad,
+                        product.quantity == null || product.price == null || product.cost == null
+                            ? null
+                            : (product.price - product.cost) * product.quantity,
+                    );
+            }
+        const productsSummary = [...grouped.values()];
+        return { productsSummary, invoicesTotalSummary: productsSummary.reduce((sum, row) => add(sum, row.total), 0) };
     }, [selectedRows]);
-
-    const invoicesTotalSummary = useMemo(
-        () =>
-            selectedRows && selectedRows.length > 0
-                ? selectedRows.reduce((total, inv) => total + (inv?.total || 0), 0)
-                : 0,
-        [selectedRows],
-    );
 
     return { productsSummary, invoicesTotalSummary };
 };

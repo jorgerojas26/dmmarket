@@ -21,16 +21,16 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
-  await expect(page).toHaveURL(`${environment.origin}/ventas`);
+  await expect(page).toHaveURL(/\/ventas\?/);
   for (const name of ["Ventas", "Compras", "Clientes", "Vendedores", "Inventario", "Tasas", "Mi cuenta"])
     await expect(navigation.getByRole("link", { name, exact: true })).toBeVisible();
   for (const name of ["Acceso", "Proveedores", "Configuración", "Cartera", "Comisiones"])
     await expect(navigation.getByRole("link", { name, exact: true })).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Consulta de ventas", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard de Ventas", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Inventario", exact: true })).toHaveCount(0);
   await openModule(page, "Compras");
   await expect(page.getByRole("heading", { name: "Dashboard de Compras", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Consulta de ventas", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Ventas", exact: true })).toHaveCount(0);
   await openModule(page, "Clientes");
   await expect(page.getByLabel("Directorio", { exact: true })).toHaveValue("clients");
   await expect(
@@ -39,9 +39,9 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
   await openModule(page, "Vendedores", "Resumen");
   await expect(page).toHaveURL(`${environment.origin}/vendedores/panel`);
   await expect(page.getByRole("region", { name: "Panel de vendedores", exact: true })).toBeVisible();
-  await openModule(page, "Ventas", "Pareto");
-  await expect(page).toHaveURL(`${environment.origin}/ventas/pareto`);
-  await expect(page.getByRole("region", { name: "Pareto autorizado", exact: true })).toBeVisible();
+  await openModule(page, "Ventas", "Desglose");
+  await expect(page).toHaveURL(/view=desglose/);
+  await expect(page.getByRole("heading", { name: "Desglose de Ventas", exact: true })).toBeVisible();
 });
 
 test("URL directa y rutas pendientes no montan formularios ni consultas protegidas", async ({ page, environment }) => {

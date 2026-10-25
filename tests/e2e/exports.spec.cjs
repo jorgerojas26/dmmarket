@@ -56,7 +56,7 @@ test("sólo lectura no muestra impresión original ni permite preparar exportaci
   expect(await page.evaluate(async () => (await fetch("/api/exports/inventory")).status)).toBe(403);
 });
 
-test("cambiar de consulta no conserva columnas financieras propias mientras la consulta global está bloqueada", async ({
+test("cambiar filtros originales no conserva columnas financieras propias mientras la consulta global está bloqueada", async ({
   page,
   environment,
 }) => {
@@ -64,6 +64,7 @@ test("cambiar de consulta no conserva columnas financieras propias mientras la c
   const user = await environment.seedUser({
     permissions: [
       grant("sales.read"),
+      grant("sellers.read"),
       grant("sales.export"),
       grant("sales.costs", "assigned"),
       grant("sales.profit", "assigned"),
@@ -71,29 +72,22 @@ test("cambiar de consulta no conserva columnas financieras propias mientras la c
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  const sales = page.getByRole("region", { name: "Consulta de ventas", exact: true });
-  await sales.getByLabel("Ventas desde", { exact: true }).fill("2026-01-01");
-  await sales.getByLabel("Ventas hasta", { exact: true }).fill("2026-01-31");
-  await sales.getByLabel("Filtrar vendedor", { exact: true }).fill("A");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(
-    sales
-      .getByRole("table", { name: "Desglose autorizado de ventas", exact: true })
-      .getByRole("columnheader", { name: "Utilidad", exact: true }),
-  ).toBeVisible();
+  await page.goto(
+    `${environment.origin}/ventas?view=desglose&dFrom=2026-01-01&dTo=2026-01-31&employeeId=A&employeeName=Vendedor+A`,
+  );
+  const sales = page.getByRole("region", { name: "Ventas", exact: true });
+  await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toBeVisible();
   const connection = await environment.db.client.acquireConnection();
   let locked = false;
   try {
     await environment.db.raw("LOCK TABLES masterfact WRITE").connection(connection);
     locked = true;
-    await sales.getByLabel("Filtrar vendedor", { exact: true }).fill("");
-    await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-    await expect(sales.getByText("Consultando ventas…", { exact: true })).toBeVisible();
+    await sales.getByRole("button", { name: "Quitar filtro Vendedor", exact: true }).click();
     await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
-    await expect(sales.getByRole("button", { name: "Exportar PDF autorizado", exact: true })).toHaveCount(0);
+    await expect(sales.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
     await environment.db.raw("UNLOCK TABLES").connection(connection);
     locked = false;
-    await expect(sales.getByRole("cell", { name: "Vendedor B", exact: true }).first()).toBeVisible();
+    await expect(sales.getByRole("cell", { name: "Producto sintético", exact: true })).toBeVisible();
     await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
     const response = await page.evaluate(
       async () => await (await fetch("/api/exports/sales?from=2026-01-01&to=2026-01-31")).json(),
@@ -103,4 +97,50 @@ test("cambiar de consulta no conserva columnas financieras propias mientras la c
     if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
     await environment.db.client.releaseConnection(connection);
   }
+});
+
+test("despacho original conserva selección al imprimir y sólo exporta documentos permitidos", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  const user = await environment.seedUser({ permissions: [grant("sales.read"), grant("sales.export", "assigned")] });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await page.goto(`${environment.origin}/ventas?view=despacho&from=2026-01-01&to=2026-01-31`);
+  const report = page.getByRole("region", { name: "Ventas", exact: true });
+  await expect(report.getByRole("columnheader", { name: "RIF", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("columnheader", { name: "UTILIDAD", exact: true })).toHaveCount(0);
+  await report
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "1", exact: true }) })
+    .click();
+  await report.getByRole("button", { name: "Productos", exact: true }).click();
+  await expect(report.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+  await report.getByRole("button", { name: "Imprimir", exact: true }).click();
+  const prepared = page.waitForResponse((r) => r.url().includes("/api/exports/sales/dispatch"));
+  const opening = page.waitForEvent("popup");
+  await page.getByRole("dialog").getByRole("button", { name: "Imprimir", exact: true }).click();
+  const response = await prepared;
+  expect(response.status()).toBe(200);
+  expect((await response.json()).products[0]).not.toHaveProperty("utilidad");
+  const popup = await opening;
+  await popup.waitForURL(/^blob:/);
+  expect(
+    await page.evaluate(
+      async (url) => new TextDecoder().decode((await (await fetch(url)).arrayBuffer()).slice(0, 4)),
+      popup.url(),
+    ),
+  ).toBe("%PDF");
+  await popup.close();
+  await page.bringToFront();
+  await expect(report.getByRole("cell", { name: "Línea sintética", exact: true })).toBeVisible();
+  await report.getByRole("button", { name: "Facturas", exact: true }).click();
+  await report
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "2", exact: true }) })
+    .click();
+  await report.getByRole("button", { name: "Productos", exact: true }).click();
+  await expect(report.getByRole("cell", { name: "300", exact: true })).toBeVisible();
+  await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
 });

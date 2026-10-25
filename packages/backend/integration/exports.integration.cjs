@@ -166,3 +166,82 @@ test("Pareto de compras conserva clasificación canónica y exige lectura, costo
   expect(result.body.data.map((row) => row.abcClass)).toEqual(["A", "C"]);
   expect(JSON.stringify(result.body)).not.toMatch(/PRIVATE|Proveedor|avgUnitCost/);
 });
+
+test("documento exportado exige alcance del vendedor exacto y no conserva utilidad de un alcance mayor", async () => {
+  const { client } = await reader([
+    grant("sales.read"),
+    grant("sales.export", "assigned"),
+    grant("sales.costs", "assigned"),
+    grant("sales.profit", "assigned"),
+  ]);
+  const permitted = await client.request("/api/exports/sales/1?showNoe=false");
+  expect(permitted.status).toBe(200);
+  expect(permitted.body.utilidad).toBe(39);
+  expect((await client.request("/api/exports/sales/2?showNoe=false")).status).toBe(403);
+  const basic = await reader([grant("sales.read"), grant("sales.export")]);
+  const omitted = await basic.client.request("/api/exports/sales/1?showNoe=false");
+  expect(omitted.status).toBe(200);
+  expect(omitted.body).not.toHaveProperty("utilidad");
+  expect(omitted.body.productos[0]).not.toHaveProperty("costo");
+});
+
+test("despacho exporta selección completa autorizada sin reconstruir costos ni mezclar vendedores", async () => {
+  const basic = await reader([grant("sales.read"), grant("sales.export")]);
+  expect(
+    (
+      await basic.client.request("/api/exports/sales/dispatch", {
+        method: "POST",
+        csrf: "",
+        body: { invoiceIds: ["1"], showNoe: false },
+      })
+    ).status,
+  ).toBe(403);
+  const result = await basic.client.request("/api/exports/sales/dispatch", {
+    method: "POST",
+    body: { invoiceIds: ["1", "2"], showNoe: false },
+  });
+  expect(result.status).toBe(200);
+  expect(result.body.total).toBe(300);
+  expect(result.body.products).toHaveLength(1);
+  expect(result.body.products[0].quantity).toBe(2);
+  expect(result.body.products[0].total).toBe(300);
+  expect(result.body.products[0]).not.toHaveProperty("utilidad");
+  expect(result.body.products[0]).not.toHaveProperty("cost");
+  const own = await reader([
+    grant("sales.read"),
+    grant("sales.export", "assigned"),
+    grant("sales.costs", "assigned"),
+    grant("sales.profit", "assigned"),
+  ]);
+  expect(
+    (
+      await own.client.request("/api/exports/sales/dispatch", {
+        method: "POST",
+        body: { invoiceIds: ["1", "2"], showNoe: false },
+      })
+    ).status,
+  ).toBe(403);
+  const permitted = await own.client.request("/api/exports/sales/dispatch", {
+    method: "POST",
+    body: { invoiceIds: ["1"], showNoe: false },
+  });
+  expect(permitted.status).toBe(200);
+  expect(permitted.body.products[0].utilidad).toBe(39);
+  expect(
+    (
+      await own.client.request("/api/exports/sales/dispatch", {
+        method: "POST",
+        body: { invoiceIds: ["missing"], showNoe: false },
+      })
+    ).status,
+  ).toBe(404);
+  const readOnly = await reader([grant("sales.read")]);
+  expect(
+    (
+      await readOnly.client.request("/api/exports/sales/dispatch", {
+        method: "POST",
+        body: { invoiceIds: ["1"], showNoe: false },
+      })
+    ).status,
+  ).toBe(403);
+});

@@ -9,7 +9,7 @@ import App from '../App';
 import { AuthProvider, useAuth } from './context';
 import { EnrollmentForm, LoginForm, MfaForm, PasswordForm } from './forms';
 
-function Boundary() {
+function BoundaryContent() {
     const { session, checking, failure, epoch, action, check } = useAuth();
     const [logoutError, setLogoutError] = useState('');
     const cache = useMemo(() => new Map(), [epoch]);
@@ -25,11 +25,9 @@ function Boundary() {
         return (
             <SWRConfig key={`${epoch}:ready`} value={{ ...swrConfig, fetcher, provider: () => cache }}>
                 <CurrencyRateProvider>
-                    <ShowNoesProvider>
-                        <SidebarProvider>
-                            <App onLogout={signOut} logoutError={logoutError} />
-                        </SidebarProvider>
-                    </ShowNoesProvider>
+                    <SidebarProvider>
+                        <App onLogout={signOut} logoutError={logoutError} />
+                    </SidebarProvider>
                 </CurrencyRateProvider>
             </SWRConfig>
         );
@@ -79,6 +77,15 @@ function Boundary() {
                 )}
             </div>
         </main>
+    );
+}
+
+function Boundary() {
+    const { epoch } = useAuth();
+    return (
+        <ShowNoesProvider key={epoch}>
+            <BoundaryContent />
+        </ShowNoesProvider>
     );
 }
 

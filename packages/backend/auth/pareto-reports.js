@@ -265,4 +265,4 @@ function createParetoReports({ sessions }) {
   return router;
 }
 
-module.exports = { createParetoReports, classify };
+module.exports = { createParetoReports, classify, pareto, options };

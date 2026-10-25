@@ -11,7 +11,8 @@ import { useAuth } from 'auth/context';
 import Modal from 'components/Modal';
 import { darkSelectStyles } from 'components/selectStyles';
 import useLocalStorage from 'hooks/useLocalStorage';
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { Button, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
 import Select from 'react-select';
 import './PrintConfigModal.css';
@@ -268,6 +269,9 @@ const PrintConfigModal = ({
     onPrint,
 }) => {
     const { can } = useAuth();
+    const { currencyRate } = useContext(CurrencyRateContext);
+    const canUseBs =
+        can('rates.read') && Number.isFinite(Number(currencyRate?.Cambio)) && Number(currencyRate.Cambio) > 0;
     // Configuración guardada de ESTA tabla (per-table, keyed por `storageKey`).
     // Sin storageKey → no persiste nada. El modal se REMONTA en cada apertura
     // (Table le cambia el `key`), así que el estado inicial se lee de
@@ -290,7 +294,7 @@ const PrintConfigModal = ({
     );
 
     const { columns: selectedKeys, orientation, sortRules, extra } = config;
-    const currency = can('rates.read') ? config.currency : 'USD';
+    const currency = canUseBs ? config.currency : 'USD';
 
     const toggleColumn = (key) => {
         if (selectedKeys.has(key)) {
@@ -533,7 +537,7 @@ const PrintConfigModal = ({
                                             id="print-currency-bs"
                                             value="Bs"
                                             variant="outline-secondary"
-                                            disabled={!can('rates.read')}
+                                            disabled={!canUseBs}
                                         >
                                             Bs
                                         </ToggleButton>

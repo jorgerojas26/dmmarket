@@ -66,6 +66,7 @@ async function createAuthRuntime({ db, env = process.env, services = {} }) {
       next();
     });
     router.use(security.transport);
+    router.use("/exports/sales/dispatch", express.json({ limit: "128kb", strict: true }));
     router.use(express.json({ limit: "8kb", strict: true }));
     router.use(session(options));
     router.use("/auth", createAuthRouter({ sessions, accounts, administration, security }));
@@ -77,7 +78,7 @@ async function createAuthRuntime({ db, env = process.env, services = {} }) {
     router.use(createPurchaseReports({ sessions }));
     router.use(createProviderReports({ sessions }));
     router.use(createAuditReports({ sessions }));
-    router.use(createExportReports({ sessions }));
+    router.use(createExportReports({ sessions, security }));
     router.use(createOperationReports({ sessions, security, db, services }));
     router.use(createCommissionReports({ sessions }));
     router.use(createCommissionUpdates({ sessions, security }));

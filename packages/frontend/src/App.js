@@ -1,4 +1,5 @@
 import { CurrencyRateContext } from 'context/currency_rate';
+import { ShowNoeContext } from 'context/show_noe';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import { useContext, useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
@@ -11,21 +12,21 @@ import Commissions from './auth/commissions';
 import { useAuth } from './auth/context';
 import InactiveClients from './auth/inactive-clients';
 import Operations from './auth/operations';
-import Pareto from './auth/pareto';
 import Parties from './auth/parties';
 import ProviderRanking from './auth/provider-ranking';
 import Providers from './auth/providers';
 import RateHistory from './auth/rate-history';
 import Receivables from './auth/receivables';
-import Sales from './auth/sales';
 import SellerDashboard from './auth/seller-dashboard';
 import AccessWorkspace, { Account, Rates } from './auth/workspace';
 import Purchases from './pages/compras';
 import Inventory from './pages/inventario';
+import Sales from './pages/ventas';
 
 export default function App({ onLogout, logoutError }) {
     const { session, can } = useAuth();
     const { pathname } = useLocation();
+    const { showNoe, setShowNoe } = useContext(ShowNoeContext);
     const { currencyRate, setCurrencyRate } = useContext(CurrencyRateContext);
     const { data: currencies } = useCurrencyRates(can('rates.read'));
     useEffect(() => {
@@ -54,12 +55,6 @@ export default function App({ onLogout, logoutError }) {
     ].filter((module) => module.allowed);
     const views = [
         { path: '/ventas', label: 'Desglose', allowed: has('sales.read'), content: <Sales /> },
-        {
-            path: '/ventas/pareto',
-            label: 'Pareto',
-            allowed: has('sales.read') && can('purchases.read'),
-            content: <Pareto />,
-        },
         { path: '/compras', label: 'Desglose', allowed: can('purchases.read'), content: <Purchases /> },
         { path: '/proveedores', label: 'Directorio', allowed: can('providers.read'), content: <Providers /> },
         {
@@ -162,6 +157,23 @@ export default function App({ onLogout, logoutError }) {
                                 ))}
                             </Nav>
                             <div className="app-navbar-actions">
+                                {has('sales.read') && (
+                                    <div className="app-navbar-switch">
+                                        <span className="text-light">Facturas</span>
+                                        <div>
+                                            <label className="switch">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label="Notas de entrega"
+                                                    checked={showNoe}
+                                                    onChange={(event) => setShowNoe(event.target.checked)}
+                                                />
+                                                <span className="slider round"></span>
+                                            </label>
+                                        </div>
+                                        <span className="text-light">Notas de entrega</span>
+                                    </div>
+                                )}
                                 {can('rates.read') && (
                                     <div className="text-light app-navbar-ref">
                                         <span>
@@ -200,7 +212,7 @@ export default function App({ onLogout, logoutError }) {
                 <Container fluid className="d-flex flex-column flex-grow-1 overflow-hidden p-0">
                     {path === '/' ? (
                         <Redirect to={modules[0]?.path || '/cuenta'} />
-                    ) : view && ['/inventario', '/compras'].includes(path) ? (
+                    ) : view && ['/inventario', '/compras', '/ventas'].includes(path) ? (
                         view.content
                     ) : view ? (
                         <section

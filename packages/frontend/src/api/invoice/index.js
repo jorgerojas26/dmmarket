@@ -1,3 +1,5 @@
+import { fetcher } from 'swr-config';
+
 const BASE_URL = '/api/invoices';
 
 export const fetchInvoiceReport = async ({
@@ -45,9 +47,7 @@ export const fetchInvoiceList = async ({
     if (search) params.append('search', search);
     if (ruta) params.append('ruta', ruta);
 
-    const response = await fetch(`${BASE_URL}?${params.toString()}`);
-    const invoices = await response.json();
-    return invoices;
+    return fetcher(`${BASE_URL}?${params.toString()}`);
 };
 
 export const fetchInvoiceDetail = async (invoiceId, showNoe) => {
@@ -62,3 +62,14 @@ export const fetchInvoiceDetail = async (invoiceId, showNoe) => {
     }
     return response.json();
 };
+
+export const fetchInvoiceSelection = (parameters) =>
+    fetcher(
+        `/api/invoices/selection?${new URLSearchParams(Object.entries(parameters).filter(([, value]) => value !== undefined && value !== null && value !== ''))}`,
+    );
+export const exportInvoiceSelection = (invoiceIds, showNoe) =>
+    fetcher('/api/exports/sales/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoiceIds: invoiceIds.map(String), showNoe }),
+    });

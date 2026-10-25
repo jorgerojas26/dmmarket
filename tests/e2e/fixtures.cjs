@@ -52,7 +52,7 @@ async function openModule(page, name, view) {
   if (!(await link.isVisible()))
     await navigation.getByRole("button", { name: "Abrir navegación", exact: true }).click();
   await link.click();
-  if (view && name === "Compras") {
+  if (view && ["Compras", "Ventas"].includes(name)) {
     await page
       .locator(".clients-sidebar")
       .getByRole("button", { name: new RegExp(view) })
@@ -64,4 +64,9 @@ async function openModule(page, name, view) {
       .click();
 }
 
-module.exports = { test, expect, login, openModule };
+async function setNoe(page, value) {
+  const toggle = page.getByRole("checkbox", { name: "Notas de entrega", exact: true });
+  if ((await toggle.isChecked()) !== value) await toggle.locator("..").click();
+  await expect(toggle).toBeChecked({ checked: value });
+}
+module.exports = { test, expect, login, openModule, setNoe };

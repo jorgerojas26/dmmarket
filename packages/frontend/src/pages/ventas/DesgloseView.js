@@ -1,5 +1,6 @@
 import { fetchInvoiceDetail } from 'api/invoice';
-import { fetchFacturas, fetchProductos } from 'api/sales';
+import { fetchSalesExport, fetchInvoiceExport } from 'api/sales';
+import { useAuth } from 'auth/context';
 import ClientSearch from 'components/ClientSearch';
 import DateRangePicker from 'components/DateRangePicker';
 import FacturaDetailModal from 'components/FacturaDetailModal';
@@ -34,6 +35,9 @@ const formatCurrency = (value) => {
 };
 
 const DesgloseView = ({ isActive }) => {
+    const { session, can } = useAuth();
+    const has = (capability) => session.permissions.some((grant) => grant.capability === capability);
+    const [reportError, setReportError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const history = useHistory();
@@ -61,11 +65,14 @@ const DesgloseView = ({ isActive }) => {
         to: urlDTo || today,
     };
 
-    const initialClient = urlClientId ? { IdCliente: urlClientId, name: urlClientName || '' } : null;
+    const initialClient =
+        can('clients.read') && urlClientId ? { IdCliente: urlClientId, name: urlClientName || '' } : null;
     const initialGroup = urlGroupId ? { groupId: urlGroupId, name: urlGroupName || '' } : null;
-    const initialEmployee = urlEmployeeId ? { id: urlEmployeeId, name: urlEmployeeName || '' } : null;
-    const initialRuta = urlRutaId ? { value: urlRutaId, label: urlRutaName || urlRutaId } : null;
-    const initialProveedor = urlProveedorId ? { IdProveedor: urlProveedorId, name: urlProveedorName || '' } : null;
+    const initialEmployee =
+        has('sellers.read') && urlEmployeeId ? { id: urlEmployeeId, name: urlEmployeeName || '' } : null;
+    const initialRuta = can('clients.read') && urlRutaId ? { value: urlRutaId, label: urlRutaName || urlRutaId } : null;
+    const initialProveedor =
+        can('providers.read') && urlProveedorId ? { IdProveedor: urlProveedorId, name: urlProveedorName || '' } : null;
 
     // Date range — defaults to today
     const [dateRange, setDateRange] = useState(initialDateRange);
@@ -158,7 +165,11 @@ const DesgloseView = ({ isActive }) => {
     }, [dateRange, selectedClient, selectedGroup, selectedEmployee, selectedRuta, selectedProveedor, history]);
 
     // --- SWR hooks ---
-    const { data: facturasRes, isLoading: facturasLoading } = useFacturas(
+    const {
+        data: facturasRes,
+        isLoading: facturasLoading,
+        error: facturasError,
+    } = useFacturas(
         {
             from: dateRange.from,
             to: dateRange.to,
@@ -177,7 +188,11 @@ const DesgloseView = ({ isActive }) => {
         isActive,
     );
 
-    const { data: productosRes, isLoading: productosLoading } = useProductos(
+    const {
+        data: productosRes,
+        isLoading: productosLoading,
+        error: productosError,
+    } = useProductos(
         {
             from: dateRange.from,
             to: dateRange.to,
@@ -352,7 +367,8 @@ const DesgloseView = ({ isActive }) => {
     const handlePrintAllFacturas = useCallback(
         async (config) => {
             try {
-                const result = await fetchFacturas({
+                const result = await fetchSalesExport({
+                    kind: 'documents',
                     from: dateRange.from,
                     to: dateRange.to,
                     clientId: selectedClient?.IdCliente,
@@ -360,11 +376,9 @@ const DesgloseView = ({ isActive }) => {
                     employeeId: selectedEmployee?.id,
                     ruta: selectedRuta?.value,
                     proveedorId: selectedProveedor?.IdProveedor,
-                    page: 1,
-                    limit: facturasTotal || 9999,
                     sortBy: facturasSort.sortBy,
                     sortDir: facturasSort.sortDir,
-                    search: facturasSearch || undefined,
+                    search: config.search ?? facturasSearch,
                     showNoe,
                 });
                 const data = sortRows(result?.data || [], config?.sortBy);
@@ -402,10 +416,12 @@ const DesgloseView = ({ isActive }) => {
                     },
                 ];
                 const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
-                const selected =
-                    selectedAccessors.size > 0
-                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
-                        : pdfColumns;
+                const selected = pdfColumns.filter(
+                    (col) =>
+                        selectedAccessors.has(col.accessor) &&
+                        (data.length === 0 || data.every((row) => Object.hasOwn(row, col.accessor))),
+                );
+                if (!selected.length) throw new Error('No hay columnas autorizadas.');
                 const allColumnsSelected = selected.length === pdfColumns.length;
                 const body = [
                     selected.map((col) => ({ text: col.Header, style: 'th' })),
@@ -470,7 +486,7 @@ const DesgloseView = ({ isActive }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Error printing all facturas:', err);
+                if (err.name !== 'AbortError') setReportError('No se pudieron imprimir las facturas autorizadas.');
             }
         },
         [
@@ -491,7 +507,8 @@ const DesgloseView = ({ isActive }) => {
     const handlePrintAllProductos = useCallback(
         async (config) => {
             try {
-                const result = await fetchProductos({
+                const result = await fetchSalesExport({
+                    kind: 'products',
                     from: dateRange.from,
                     to: dateRange.to,
                     clientId: selectedClient?.IdCliente,
@@ -499,11 +516,9 @@ const DesgloseView = ({ isActive }) => {
                     employeeId: selectedEmployee?.id,
                     ruta: selectedRuta?.value,
                     proveedorId: selectedProveedor?.IdProveedor,
-                    page: 1,
-                    limit: productosTotal || 9999,
                     sortBy: productosSort.sortBy,
                     sortDir: productosSort.sortDir,
-                    search: productosSearch || undefined,
+                    search: config.search ?? productosSearch,
                     showNoe,
                 });
                 const data = sortRows(result?.data || [], config?.sortBy);
@@ -548,10 +563,12 @@ const DesgloseView = ({ isActive }) => {
                     },
                 ];
                 const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
-                const selected =
-                    selectedAccessors.size > 0
-                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
-                        : pdfColumns;
+                const selected = pdfColumns.filter(
+                    (col) =>
+                        selectedAccessors.has(col.accessor) &&
+                        (data.length === 0 || data.every((row) => Object.hasOwn(row, col.accessor))),
+                );
+                if (!selected.length) throw new Error('No hay columnas autorizadas.');
                 const allColumnsSelected = selected.length === pdfColumns.length;
                 const body = [
                     selected.map((col) => ({ text: col.Header, style: 'th' })),
@@ -611,7 +628,7 @@ const DesgloseView = ({ isActive }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Error printing all productos:', err);
+                if (err.name !== 'AbortError') setReportError('No se pudieron imprimir los productos autorizados.');
             }
         },
         [
@@ -632,14 +649,15 @@ const DesgloseView = ({ isActive }) => {
     const handlePrintFacturaRow = useCallback(
         async (factura) => {
             try {
-                const detail = await fetchInvoiceDetail(factura.invoiceId, showNoe);
+                const detail = await fetchInvoiceExport(factura.invoiceId, showNoe);
+                const financial = Object.hasOwn(detail, 'utilidad');
                 const productos = detail?.productos || [];
                 const rows = productos.map((p) => [
                     p.descripcion || p.product || '',
                     String(Number(p.cantidad || p.quantity || 0)),
                     formatCurrency(p.precio || p.price || 0),
                     formatCurrency(p.subtotal || (p.precio || p.price || 0) * (p.cantidad || p.quantity || 0)),
-                    formatCurrency(p.utilidad || 0),
+                    ...(financial ? [formatCurrency(p.utilidad)] : []),
                 ]);
 
                 pdfMake
@@ -660,16 +678,24 @@ const DesgloseView = ({ isActive }) => {
                             {
                                 style: 'table',
                                 table: {
-                                    widths: ['*', 'auto', 'auto', 'auto', 'auto'],
+                                    widths: ['*', 'auto', 'auto', 'auto', ...(financial ? ['auto'] : [])],
                                     body: [
-                                        ['Descripción', 'Cantidad', 'Precio', 'Subtotal', 'Utilidad'],
+                                        [
+                                            'Descripción',
+                                            'Cantidad',
+                                            'Precio',
+                                            'Subtotal',
+                                            ...(financial ? ['Utilidad'] : []),
+                                        ],
                                         ...rows,
                                         [
                                             '',
                                             '',
                                             { text: 'Total', bold: true },
                                             { text: formatCurrency(detail.total || factura.monto || 0), bold: true },
-                                            { text: formatCurrency(detail.utilidad || 0), bold: true },
+                                            ...(financial
+                                                ? [{ text: formatCurrency(detail.utilidad), bold: true }]
+                                                : []),
                                         ],
                                     ],
                                 },
@@ -685,7 +711,7 @@ const DesgloseView = ({ isActive }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Error printing factura:', err);
+                if (err.name !== 'AbortError') setReportError('No se pudo imprimir la factura autorizada.');
             }
         },
         [showNoe],
@@ -699,7 +725,7 @@ const DesgloseView = ({ isActive }) => {
                 setSelectedInvoice(detail);
                 setDetailModalShow(true);
             } catch (err) {
-                console.error('Failed to fetch invoice detail:', err);
+                if (err.name !== 'AbortError') setReportError('No se pudo consultar la factura autorizada.');
             }
         },
         [showNoe],
@@ -740,7 +766,11 @@ const DesgloseView = ({ isActive }) => {
         <SaleReportTable
             data={facturasData}
             loading={facturasLoading}
-            columns={facturasColumns}
+            columns={facturasColumns.filter(
+                (col) =>
+                    !['utilidad', 'promedio'].includes(col.accessor) ||
+                    Object.hasOwn(facturasRes?.totals || {}, 'utilidad'),
+            )}
             fillHeight
             summaries={facturasSummaries}
             onRowClick={handleFacturaRowClick}
@@ -763,9 +793,11 @@ const DesgloseView = ({ isActive }) => {
                 onSearch: handleFacturasSearch,
             }}
             print={{
-                enabled: true,
+                enabled: has('sales.export') && Boolean(facturasRes),
+                globalEnabled: facturasRes?.exportAllowed === true,
                 onGlobalPrint: handlePrintAllFacturas,
-                perRowPrint: true,
+                perRowPrint: facturasRes?.data.some((row) => row.exportAllowed),
+                canPrintRow: (row) => row.exportAllowed === true,
                 onRowPrint: handlePrintFacturaRow,
                 storageKey: 'ventas-facturas',
             }}
@@ -776,7 +808,11 @@ const DesgloseView = ({ isActive }) => {
         <SaleReportTable
             data={productosData}
             loading={productosLoading}
-            columns={productosColumns}
+            columns={productosColumns.filter(
+                (col) =>
+                    !['netProfit', 'averageProfitPercent'].includes(col.accessor) ||
+                    Object.hasOwn(productosRes?.totals || {}, 'netProfit'),
+            )}
             fillHeight
             summaries={productosSummaries}
             sorting={{
@@ -798,7 +834,7 @@ const DesgloseView = ({ isActive }) => {
                 onSearch: handleProductosSearch,
             }}
             print={{
-                enabled: true,
+                enabled: productosRes?.exportAllowed === true,
                 onGlobalPrint: handlePrintAllProductos,
                 storageKey: 'ventas-productos',
             }}
@@ -859,10 +895,21 @@ const DesgloseView = ({ isActive }) => {
             valueLabel: selectedProveedor?.Empresa || selectedProveedor?.name,
             render: () => <ProveedorSearch onSelect={handleProveedorSelect} defaultValue={proveedorDefaultValue} />,
         },
-    ];
+    ].filter(
+        (filter) =>
+            filter.key === 'group' ||
+            (['client', 'ruta'].includes(filter.key)
+                ? can('clients.read')
+                : filter.key === 'employee'
+                  ? has('sellers.read')
+                  : can('providers.read')),
+    );
 
     return (
         <div className="report-page">
+            {(reportError || facturasError || productosError) && (
+                <p role="alert">{reportError || 'No se pudo consultar el desglose autorizado.'}</p>
+            )}
             {/* Header row: heading + date range */}
             <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
                 <h4 className="m-0 p-0 bg-red text-light">Desglose de Ventas</h4>

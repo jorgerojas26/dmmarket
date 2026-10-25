@@ -18,7 +18,15 @@ const InvoicesTable = ({
     clearSelectionSignal,
     deselectSignal,
 }) => {
-    const memoizedColumns = useMemo(() => columns, []);
+    const memoizedColumns = useMemo(
+        () =>
+            columns.filter(
+                (column) =>
+                    !['rif', 'utilidad'].includes(column.accessor) ||
+                    data?.some((row) => Object.hasOwn(row, column.accessor)),
+            ),
+        [data],
+    );
 
     return (
         <Card className="h-100 mb-0 noselect">

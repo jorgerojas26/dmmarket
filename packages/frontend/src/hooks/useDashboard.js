@@ -1,8 +1,8 @@
-import { fetchDashboardSales, fetchDashboardPareto } from 'api/dashboard';
+import { fetchDashboardPareto, fetchDashboardSales } from 'api/dashboard';
 import useSWR from 'hooks/swr-wrapper';
-import { fetcher } from 'swr-config';
 import { DateTime } from 'luxon';
 import { useMemo } from 'react';
+import { fetcher } from 'swr-config';
 
 function buildCompareRange(dateRange) {
     const fromDt = DateTime.fromISO(dateRange.from);
@@ -65,21 +65,55 @@ export function useDashboardSalesRaw(dateRange, showNoe) {
     );
 }
 
-export function useDashboardParetoRaw(dateRange, showNoe, modo = 'ventas', sortBy = null, sortDir = 'desc', newTable = {}) {
-    const { search = '', sortBy: newSortBy = 'firstPurchaseDate', sortDir: newSortDir = 'desc', page = 1, limit } = newTable;
+export function useDashboardParetoRaw(
+    dateRange,
+    showNoe,
+    modo = 'ventas',
+    sortBy = null,
+    sortDir = 'desc',
+    newTable = {},
+    enabled = true,
+) {
+    const {
+        search = '',
+        sortBy: newSortBy = 'firstPurchaseDate',
+        sortDir: newSortDir = 'desc',
+        page = 1,
+        limit,
+    } = newTable;
     const key =
-        dateRange?.from && dateRange?.to
+        enabled && dateRange?.from && dateRange?.to
             ? [
-                  'dashboard-pareto', dateRange.from, dateRange.to, showNoe, modo, sortBy || 'default', sortDir,
-                  search, newSortBy, newSortDir, page, limit,
+                  'dashboard-pareto',
+                  dateRange.from,
+                  dateRange.to,
+                  showNoe,
+                  modo,
+                  sortBy || 'default',
+                  sortDir,
+                  search,
+                  newSortBy,
+                  newSortDir,
+                  page,
+                  limit,
               ]
             : null;
     return useSWR(
         key,
-        () => fetchDashboardPareto({
-            from: dateRange.from, to: dateRange.to, showNoe, modo, sortBy, sortDir,
-            newSearch: search, newSortBy, newSortDir, newPage: page, newLimit: limit,
-        }),
+        () =>
+            fetchDashboardPareto({
+                from: dateRange.from,
+                to: dateRange.to,
+                showNoe,
+                modo,
+                sortBy,
+                sortDir,
+                newSearch: search,
+                newSortBy,
+                newSortDir,
+                newPage: page,
+                newLimit: limit,
+            }),
         {
             keepPreviousData: true,
         },

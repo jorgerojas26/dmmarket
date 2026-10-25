@@ -1,8 +1,11 @@
 const express = require("express");
-const { parameters, listSales } = require("./sales-reports");
+const { parameters, listSales, invoiceDetail, salesBase } = require("./sales-reports");
+const { canExportSales } = require("./sales-export");
+const { pareto: salesPareto, options: paretoOptions } = require("./pareto-reports");
 const { purchases, pareto: purchasePareto, options: purchaseOptions } = require("./purchase-reports");
 const { inventory, options: inventoryOptions } = require("./inventory-reports");
 const { directory } = require("./provider-reports");
+const { dispatchExport } = require("./dispatch-export");
 const { appendEvent } = require("./identity");
 
 function fail(status) {
@@ -10,15 +13,7 @@ function fail(status) {
 }
 
 function salesCoverage(access, query) {
-  const read = access.scopeFor("sales.read");
-  const exporting = access.scopeFor("sales.export");
-  if (!read.global && !read.sellerIds.length) fail(403);
-  if (exporting.global) return;
-  if (!exporting.sellerIds.length) fail(403);
-  if (query.employeeId) {
-    if (["__none__", "__empty__"].includes(query.employeeId) || !access.canRecord("sales.export", query.employeeId))
-      fail(403);
-  } else if (read.global || !access.covers("sales.export", read.sellerIds)) fail(403);
+  if (!canExportSales(access, query)) fail(403);
 }
 
 async function dataset(resource, tx, access, input) {
@@ -28,50 +23,77 @@ async function dataset(resource, tx, access, input) {
   let title;
   if (resource === "sales") {
     const { kind = "documents", ...filters } = input;
-    if (!["documents", "products"].includes(kind)) fail(400);
-    const query = parameters(filters, {
-      keys: [
-        "from",
-        "to",
-        "showNoe",
-        "employeeId",
-        "clientId",
-        "categoryId",
-        "ruta",
-        "proveedorId",
-        "search",
-        "sortBy",
-        "sortDir",
-      ],
-    });
+    if (!["documents", "products", "pareto"].includes(kind)) fail(400);
+    const query =
+      kind === "pareto"
+        ? paretoOptions(filters)
+        : parameters(filters, {
+            keys: [
+              "from",
+              "to",
+              "showNoe",
+              "employeeId",
+              "clientId",
+              "categoryId",
+              "ruta",
+              "proveedorId",
+              "search",
+              "sortBy",
+              "sortDir",
+            ],
+          });
     salesCoverage(access, query);
-    result = await listSales(
-      tx,
-      access,
-      { ...query, page: 1, limit: 5001 },
-      kind === "products" ? "products" : "invoices",
-    );
+    if (kind === "pareto") {
+      if (Object.hasOwn(filters, "newPage") || Object.hasOwn(filters, "newLimit")) fail(400);
+      const report = await salesPareto(tx, access, query);
+      const rows = [
+        ...report.products.map((row) => ({ ...row, isNew: false })),
+        ...report.newProducts.map((row) => ({ ...row, isNew: true })),
+      ];
+      result = { data: rows, total: rows.length };
+    } else
+      result = await listSales(
+        tx,
+        access,
+        { ...query, page: 1, limit: 5001 },
+        kind === "products" ? "products" : "invoices",
+      );
     title = "Ventas autorizadas";
     candidates =
-      kind === "products"
+      kind === "pareto"
         ? [
             ["productId", "ID"],
             ["product", "Producto"],
-            ["quantity", "Cantidad"],
-            ["peso", "Peso"],
-            ["rawProfit", "Total Ventas"],
-            ["netProfit", "Utilidad"],
-            ["averageProfitPercent", "Margen (%)"],
+            ["quantity", "Unidades"],
+            ["netProfit", "Ganancia"],
+            ["rawProfit", "Ventas"],
+            ["totalPurchased", "Compras"],
+            ["cumulativePercent", "Acumulado (%)"],
+            ["abcClass", "Clase"],
+            ["rank", "Posición"],
+            ["inventoryValue", "Valor inventario"],
+            ["firstPurchaseDate", "Primera compra"],
+            ["isNew", "Nuevo"],
           ]
-        : [
-            ["invoiceId", "Documento"],
-            ["fecha", "Fecha"],
-            ["cliente", "Cliente"],
-            ["vendedor", "Vendedor"],
-            ["monto", "Total Ventas"],
-            ["utilidad", "Utilidad"],
-            ["promedio", "Margen (%)"],
-          ];
+        : kind === "products"
+          ? [
+              ["productId", "ID"],
+              ["product", "Producto"],
+              ["quantity", "Cantidad"],
+              ["peso", "Peso"],
+              ["rawProfit", "Total Ventas"],
+              ["netProfit", "Utilidad"],
+              ["averageProfitPercent", "Margen (%)"],
+            ]
+          : [
+              ["invoiceId", "Documento"],
+              ["fecha", "Fecha"],
+              ["cliente", "Cliente"],
+              ["vendedor", "Vendedor"],
+              ["monto", "Total Ventas"],
+              ["utilidad", "Utilidad"],
+              ["promedio", "Margen (%)"],
+            ];
   } else if (resource === "purchases") {
     if (!access.hasGlobal("purchases.export")) fail(403);
     const { kind = "documents", ...filters } = input;
@@ -151,8 +173,55 @@ async function dataset(resource, tx, access, input) {
   };
 }
 
-function createExportReports({ sessions }) {
+function createExportReports({ sessions, security }) {
   const router = express.Router();
+  router.post("/exports/sales/dispatch", security.csrfProtection, async (req, res, next) => {
+    try {
+      if (!req.is("application/json")) fail(415);
+      res.json(
+        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+          const result = await dispatchExport(transaction, access, req.body);
+          await appendEvent(transaction, {
+            actorId: user.id,
+            action: "reports.export_prepared",
+            reason: `sales:dispatch:${result.invoices.length}`,
+            occurredMs: Date.now(),
+          });
+          return result;
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.get("/exports/sales/:invoiceId", async (req, res, next) => {
+    try {
+      const query = parameters(req.query, { range: false, keys: ["showNoe"] });
+      res.json(
+        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+          const scope = access.scopeFor("sales.export");
+          if (!scope.global && !scope.sellerIds.length) fail(403);
+          const { base, invoice } = salesBase(transaction, access, query);
+          const headers = await base
+            .whereRaw("BINARY ?? = ?", [`mf.${invoice}`, req.params.invoiceId])
+            .select({ sellerId: "mf.IdVend" })
+            .groupByRaw("BINARY mf.IdVend");
+          if (!headers.length) fail(404);
+          if (!headers.every((header) => access.canRecord("sales.export", header.sellerId))) fail(403);
+          const result = await invoiceDetail(transaction, access, query, req.params.invoiceId);
+          await appendEvent(transaction, {
+            actorId: user.id,
+            action: "reports.export_prepared",
+            reason: "sales:document",
+            occurredMs: Date.now(),
+          });
+          return result;
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  });
   router.get("/exports/:resource", async (req, res, next) => {
     try {
       res.json(

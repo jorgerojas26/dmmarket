@@ -256,7 +256,7 @@ const NewProductsTable = ({ products, cfg, table, loading }) => {
     const handlePrint = useCallback(
         async (config) => {
             try {
-                const allProducts = await table.fetchAll();
+                const allProducts = await table.fetchAll(config?.search);
                 const sorted = sortRows(allProducts, config?.sortBy);
                 pdfMake
                     .createPdf(buildNewProductsPdf(sorted, cfg, config, currencyRate?.Cambio, table.rangeLabel))
@@ -322,7 +322,7 @@ const NewProductsTable = ({ products, cfg, table, loading }) => {
                         : undefined
                 }
                 print={{
-                    enabled: true,
+                    enabled: table.exportAllowed === true,
                     onGlobalPrint: handlePrint,
                     storageKey: `pareto-new-${cfg.valueKey}`,
                     defaultOrientation: 'landscape',

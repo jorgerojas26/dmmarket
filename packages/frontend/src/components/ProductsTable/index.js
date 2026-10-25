@@ -1,7 +1,8 @@
+import { useAuth } from 'auth/context';
 import Table from 'components/Table';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { Card } from 'react-bootstrap';
 import { formatCurrency, formatQuantity } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
@@ -25,7 +26,12 @@ const normalizeSearch = (value) =>
         .toLowerCase()
         .trim();
 
-const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, printStorageKey }) => {
+const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, printStorageKey, exportData }) => {
+    const { can } = useAuth();
+    const financial = products?.length
+        ? products.every((row) => Object.hasOwn(row, 'utilidad'))
+        : can('sales.costs') && can('sales.profit');
+    const [printError, setPrintError] = useState('');
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const searchTerm = normalizeSearch(search);
@@ -42,12 +48,6 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
         [data, searchTerm, invoicesTotalSummary],
     );
 
-    // Rows in the table's current sort order (for PDF export).
-    const sortedRowsRef = useRef([]);
-    const handleSortedRowsChange = useCallback((rows) => {
-        sortedRowsRef.current = rows;
-    }, []);
-
     const quantityTotal = useMemo(() => {
         if (!data) return 0;
         return data.reduce((acc, item) => acc + item.quantity, 0);
@@ -55,12 +55,12 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
 
     const pesoTotal = useMemo(() => {
         if (!data) return 0;
-        return data.reduce((acc, item) => acc + (item.peso || 0), 0);
+        return data.some((item) => item.peso == null) ? null : data.reduce((acc, item) => acc + item.peso, 0);
     }, [data]);
 
     const utilidadTotal = useMemo(() => {
         if (!data) return 0;
-        return data.reduce((acc, item) => acc + (item.utilidad || 0), 0);
+        return data.some((item) => item.utilidad == null) ? null : data.reduce((acc, item) => acc + item.utilidad, 0);
     }, [data]);
 
     const memoizedColumns = useMemo(
@@ -75,56 +75,81 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                 Cell: ({ value }) => formatQuantity(value),
             },
             { Header: 'Total', accessor: 'total' },
-            {
-                Header: 'Utilidad',
-                accessor: 'utilidad',
-                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
-            },
+            ...(financial
+                ? [
+                      {
+                          Header: 'Utilidad',
+                          accessor: 'utilidad',
+                          Cell: ({ value }) => (value != null ? formatCurrency(value) : 'No disponible'),
+                      },
+                  ]
+                : []),
         ],
-        [],
+        [financial],
     );
 
     const summaries = useMemo(
         () => ({
             quantity: quantityTotal ? formatQuantity(quantityTotal) : '',
-            peso: formatQuantity(pesoTotal),
+            peso: pesoTotal == null ? 'No disponible' : formatQuantity(pesoTotal),
             total: totalSummary != null ? formatCurrency(totalSummary) : '',
-            utilidad: utilidadTotal ? formatCurrency(utilidadTotal) : '',
+            ...(financial ? { utilidad: utilidadTotal == null ? 'No disponible' : formatCurrency(utilidadTotal) } : {}),
         }),
-        [quantityTotal, pesoTotal, totalSummary, utilidadTotal],
+        [quantityTotal, pesoTotal, totalSummary, utilidadTotal, financial],
     );
 
-    // Print: convert totals to the currency chosen in the print config dialog.
     const handlePrint = useCallback(
-        (config) => {
-            let productsData = sortedRowsRef.current;
-            const rate = currencyRate?.Cambio;
-            const currency = config?.currency;
-            let utilidadTotalPdf = utilidadTotal;
-
-            if (currency === 'Bs' && rate) {
-                productsData = productsData.map((item) => ({
-                    ...item,
-                    total: Number(item.price * item.quantity * rate).toFixed(2),
-                    utilidad: Number((item.utilidad || 0) * rate).toFixed(2),
-                }));
-                utilidadTotalPdf = Number(utilidadTotal * rate).toFixed(2);
+        async (config) => {
+            if (!exportData) return;
+            setPrintError('');
+            try {
+                const report = await exportData();
+                const term = normalizeSearch(config.search ?? search);
+                let productsData = report.products.filter(
+                    (item) =>
+                        !term ||
+                        [item.product, item.productId, item.group].some((value) =>
+                            normalizeSearch(value).includes(term),
+                        ),
+                );
+                const sum = (key) =>
+                    productsData.some((item) => item[key] == null)
+                        ? null
+                        : productsData.reduce((total, item) => total + Number(item[key]), 0);
+                const quantityTotal = sum('quantity');
+                const pesoTotal = sum('peso');
+                let totalSummary = sum('total');
+                let utilidadTotalPdf = sum('utilidad');
+                const rate = currencyRate?.Cambio;
+                const currency = config.currency;
+                if (currency === 'Bs') {
+                    productsData = productsData.map((item) => ({
+                        ...item,
+                        total: item.total == null ? null : item.total * rate,
+                        ...(Object.hasOwn(item, 'utilidad')
+                            ? { utilidad: item.utilidad == null ? null : item.utilidad * rate }
+                            : {}),
+                    }));
+                    totalSummary = totalSummary == null ? null : totalSummary * rate;
+                    utilidadTotalPdf = utilidadTotalPdf == null ? null : utilidadTotalPdf * rate;
+                }
+                productsData = sortRows(productsData, config.sortBy);
+                const columns = config.columns.filter(
+                    (column) =>
+                        column.accessor !== 'utilidad' || productsData.every((row) => Object.hasOwn(row, 'utilidad')),
+                );
+                if (!columns.length) throw new Error('No hay columnas autorizadas.');
+                const pdfData = pdf(
+                    productsData,
+                    { quantityTotal, totalSummary, pesoTotal, currency, utilidadTotal: utilidadTotalPdf },
+                    { ...config, columns },
+                );
+                pdfMake.createPdf(pdfData).open();
+            } catch (error) {
+                if (error.name !== 'AbortError') setPrintError('No se pudo imprimir la selección autorizada.');
             }
-
-            productsData = sortRows(productsData, config?.sortBy);
-
-            const convertedSummary =
-                currency === 'Bs' && rate && totalSummary != null ? Number(totalSummary) * rate : totalSummary;
-
-            const pdfData = pdf(
-                productsData,
-                { quantityTotal, totalSummary: convertedSummary, pesoTotal, currency, utilidadTotal: utilidadTotalPdf },
-                config,
-            );
-
-            pdfMake.createPdf(pdfData).open();
         },
-        [currencyRate?.Cambio, quantityTotal, pesoTotal, totalSummary, utilidadTotal],
+        [exportData, search, currencyRate?.Cambio],
     );
 
     return (
@@ -133,6 +158,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                 <h3>Productos</h3>
             </Card.Header>
             <Card.Body style={{ minHeight: 0 }}>
+                {printError && <p role="alert">{printError}</p>}
                 <Table
                     data={data}
                     columns={memoizedColumns}
@@ -144,9 +170,8 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                         placeholder: 'Buscar por producto, ID o categoría...',
                         onSearch: setSearch,
                     }}
-                    onSortedRowsChange={handleSortedRowsChange}
                     print={{
-                        enabled: true,
+                        enabled: Boolean(exportData),
                         onGlobalPrint: handlePrint,
                         storageKey: printStorageKey,
                     }}

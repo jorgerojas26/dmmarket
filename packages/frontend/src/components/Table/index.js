@@ -449,7 +449,12 @@ const Table = ({
                     </td>
                 ))}
                 {hasPerRowPrint && (
-                    <RowActionCell onPrint={print.onRowPrint} rowData={row.original} isSelected={isSel} />
+                    <RowActionCell
+                        allowed={!print.canPrintRow || print.canPrintRow(row.original)}
+                        onPrint={print.onRowPrint}
+                        rowData={row.original}
+                        isSelected={isSel}
+                    />
                 )}
             </tr>
         );
@@ -463,7 +468,13 @@ const Table = ({
                         {cell.render('Cell')}
                     </td>
                 ))}
-                {hasPerRowPrint && <RowActionCell onPrint={print.onRowPrint} rowData={row.original} />}
+                {hasPerRowPrint && (
+                    <RowActionCell
+                        allowed={!print.canPrintRow || print.canPrintRow(row.original)}
+                        onPrint={print.onRowPrint}
+                        rowData={row.original}
+                    />
+                )}
             </tr>
         );
     });
@@ -476,7 +487,13 @@ const Table = ({
                         {cell.render('Cell')}
                     </td>
                 ))}
-                {hasPerRowPrint && <RowActionCell onPrint={print.onRowPrint} rowData={row.original} />}
+                {hasPerRowPrint && (
+                    <RowActionCell
+                        allowed={!print.canPrintRow || print.canPrintRow(row.original)}
+                        onPrint={print.onRowPrint}
+                        rowData={row.original}
+                    />
+                )}
             </tr>
         );
     });
@@ -722,7 +739,7 @@ const Table = ({
 
     /* ── Toolbar (search + print) ── */
     const hasSearchBar = search?.enabled && search?.onSearch;
-    const hasPrintBtn = print?.enabled && print?.onGlobalPrint;
+    const hasPrintBtn = print?.enabled && print?.globalEnabled !== false && print?.onGlobalPrint;
 
     const tableToolbar = (hasSearchBar || hasPrintBtn) && (
         <div className="table-toolbar">
@@ -972,12 +989,13 @@ const EmptyIcon = () => (
     </svg>
 );
 
-const RowActionCell = React.memo(({ onPrint, rowData, isSelected }) => {
+const RowActionCell = React.memo(({ onPrint, rowData, isSelected, allowed = true }) => {
     const handleClick = (e) => {
         e.stopPropagation();
         onPrint(rowData);
     };
 
+    if (!allowed) return <td />;
     return (
         <td
             onClick={handleClick}

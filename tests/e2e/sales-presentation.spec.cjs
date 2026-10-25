@@ -16,94 +16,69 @@ const test = base.extend({
     { scope: "worker" },
   ],
 });
-async function enter(page, environment, permissions) {
-  await seedSales(environment.db);
+async function enter(page, environment, permissions, view = "dashboard") {
   const user = await environment.seedUser({ permissions });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  const sales = page.getByRole("region", { name: "Consulta de ventas", exact: true });
-  await sales.getByLabel("Ventas desde", { exact: true }).fill("2026-01-01");
-  await sales.getByLabel("Ventas hasta", { exact: true }).fill("2026-01-31");
-  return sales;
+  await page.goto(
+    `${environment.origin}/ventas?view=${view}&from=2026-01-01&to=2026-01-31&dFrom=2026-01-01&dTo=2026-01-31`,
+  );
+  return page.getByRole("region", { name: "Ventas", exact: true });
 }
 const grant = (capability, scope = "global") => ({ capability, scope });
+const card = (report, label) => report.locator(".dashboard-kpi-card").filter({ hasText: label });
 
-test("tarjetas, rankings y categorías muestran sólo ventas propias, sin utilidad ni llamadas de otros módulos", async ({
+test("dashboard original conserva tarjetas y categorías propias, ocultando rankings de utilidad y consultas no autorizadas", async ({
   page,
   environment,
 }) => {
-  const forbiddenRequests = [];
-  page.on("request", (request) => {
-    if (/\/api\/(purchases|dashboard\/pareto|providers|auth\/exports)/.test(request.url()))
-      forbiddenRequests.push(request.url());
+  const forbidden = [];
+  page.on("request", (r) => {
+    if (/\/api\/(purchases|dashboard\/pareto|providers|exports)/.test(r.url())) forbidden.push(r.url());
   });
-  const sales = await enter(page, environment, [grant("sales.read", "assigned")]);
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  const summary = page.getByRole("region", { name: "Resumen de ventas", exact: true });
-  await expect(
-    summary.getByRole("group", { name: "Total ventas", exact: true }).getByText("$100,00", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByRole("group", { name: "Utilidad total", exact: true })).toHaveCount(0);
-  await expect(summary.getByRole("group", { name: "Margen promedio", exact: true })).toHaveCount(0);
-  const products = summary.getByRole("region", { name: "Ranking autorizado de productos vendidos", exact: true });
-  await expect(products.getByText("Producto sintético", { exact: true })).toBeVisible();
-  await expect(products.getByText("$100,00", { exact: true })).toBeVisible();
-  const clients = summary.getByRole("region", { name: "Ranking autorizado de clientes compradores", exact: true });
-  await expect(clients.getByText("Cliente sintético", { exact: true })).toBeVisible();
-  await expect(clients.getByText("$100,00", { exact: true })).toBeVisible();
-  await expect(
-    summary
-      .getByRole("region", { name: "Vendedor destacado en ventas autorizadas", exact: true })
-      .getByText("Vendedor A", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByText("Vendedor B", { exact: true })).toHaveCount(0);
-  await expect(summary.getByRole("list", { name: "Categorías de ventas", exact: true })).toBeVisible();
-  const arc = summary.locator(".donut-overview-chart svg path").first();
+  const report = await enter(page, environment, [grant("sales.read", "assigned")]);
+  await expect(card(report, "Venta Bruta")).toContainText("$100,00");
+  await expect(card(report, "Ganancia Neta")).toHaveCount(0);
+  await expect(card(report, "Margen Prom.")).toHaveCount(0);
+  await expect(report.locator(".dashboard-inline-title").filter({ hasText: /^Top Productos/ })).toHaveCount(0);
+  await expect(report.locator(".dashboard-best-employee-name")).toHaveText("Vendedor A");
+  await expect(report.getByText("Vendedor B", { exact: true })).toHaveCount(0);
+  const arc = report.locator(".donut-overview-chart svg path").first();
   const box = await arc.boundingBox();
   await arc.hover({ position: { x: 8, y: box.height / 2 }, timeout: 5000 });
   await expect(page.getByText("Bruto", { exact: true })).toBeVisible();
   await expect(page.getByText("Utilidad", { exact: true })).toHaveCount(0);
-  await expect(summary.getByText(/NaN|PRIVATE-/)).toHaveCount(0);
-  expect(forbiddenRequests).toEqual([]);
+  expect(forbidden).toEqual([]);
 });
 
-test("indicadores y rankings financieros desaparecen al ampliar de vendedor propio a ventas globales", async ({
+test("columnas financieras originales sólo aparecen para el conjunto cubierto y no se reutilizan en el dashboard global", async ({
   page,
   environment,
 }) => {
-  const sales = await enter(page, environment, [
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
-  await sales.getByLabel("Filtrar vendedor", { exact: true }).fill("A");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  const summary = page.getByRole("region", { name: "Resumen de ventas", exact: true });
-  await expect(
-    summary.getByRole("group", { name: "Utilidad total", exact: true }).getByText("$39,00", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByRole("heading", { name: "Productos por utilidad autorizada", exact: true })).toBeVisible();
-  await sales.getByLabel("Filtrar vendedor", { exact: true }).fill("");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(summary.getByRole("group", { name: "Utilidad total", exact: true })).toHaveCount(0);
-  await expect(summary.getByRole("heading", { name: "Productos por utilidad autorizada", exact: true })).toHaveCount(0);
-  await expect(
-    summary.getByRole("group", { name: "Total ventas", exact: true }).getByText("$300,00", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByRole("heading", { name: "Productos por ventas autorizadas", exact: true })).toBeVisible();
-  await expect(
-    summary
-      .getByRole("region", { name: "Vendedor destacado en ventas autorizadas", exact: true })
-      .getByText("Vendedor B", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByText("$39,00", { exact: true })).toHaveCount(0);
+  const report = await enter(
+    page,
+    environment,
+    [grant("sales.read"), grant("sellers.read"), grant("sales.costs", "assigned"), grant("sales.profit", "assigned")],
+    "desglose",
+  );
+  await page.goto(
+    `${environment.origin}/ventas?view=desglose&dFrom=2026-01-01&dTo=2026-01-31&employeeId=A&employeeName=Vendedor+A`,
+  );
+  await expect(report.getByRole("columnheader", { name: "Utilidad", exact: true })).toBeVisible();
+  await expect(report.getByRole("cell", { name: "$39,00", exact: true }).first()).toBeVisible();
+  await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-01-01&to=2026-01-31`);
+  await expect(card(report, "Venta Bruta")).toContainText("$300,00");
+  await expect(card(report, "Ganancia Neta")).toHaveCount(0);
+  await expect(report.locator(".dashboard-inline-title").filter({ hasText: /^Top Productos/ })).toHaveCount(0);
+  await expect(report.locator(".dashboard-best-employee-name")).toHaveText("Vendedor B");
+  await expect(report.getByText("$39,00", { exact: true })).toHaveCount(0);
 });
 
-test("ventas negativas y períodos vacíos no inventan una distribución circular válida", async ({
+test("ventas negativas y períodos vacíos conservan el dashboard original sin inventar participaciones", async ({
   page,
   environment,
 }) => {
-  const sales = await enter(page, environment, [grant("sales.read", "assigned")]);
+  const report = await enter(page, environment, [grant("sales.read", "assigned")]);
   await environment
     .db("masterfact")
     .insert({ IdFactura: "NEG-UI", IdVend: "A", IdCliente: "C", Fecha: "2027-01-01", Anulada: false });
@@ -115,26 +90,10 @@ test("ventas negativas y períodos vacíos no inventan una distribución circula
     Costo: 1,
     Cantidad: 1,
   });
-  await sales.getByLabel("Ventas desde", { exact: true }).fill("2027-01-01");
-  await sales.getByLabel("Ventas hasta", { exact: true }).fill("2027-01-31");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  const summary = page.getByRole("region", { name: "Resumen de ventas", exact: true });
-  await expect(
-    summary.getByRole("group", { name: "Total ventas", exact: true }).getByText("$-10,00", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByRole("list", { name: "Categorías de ventas", exact: true })).toHaveCount(0);
-  await expect(
-    summary.getByText(
-      "No se muestra un gráfico de participación sin una base completa, no negativa y mayor que cero.",
-      { exact: true },
-    ),
-  ).toBeVisible();
-  await sales.getByLabel("Ventas desde", { exact: true }).fill("2000-01-01");
-  await sales.getByLabel("Ventas hasta", { exact: true }).fill("2000-01-02");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(summary.getByText("Sin ventas autorizadas en el período.", { exact: true })).toBeVisible();
-  await expect(
-    summary.getByRole("group", { name: "Total ventas", exact: true }).getByText("$0,00", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByRole("list", { name: "Categorías de ventas", exact: true })).toHaveCount(0);
+  await page.goto(`${environment.origin}/ventas?view=dashboard&from=2027-01-01&to=2027-01-31`);
+  await expect(card(report, "Venta Bruta")).toContainText("$-10,00");
+  await expect(report.locator(".donut-overview-chart svg")).toHaveCount(0);
+  await page.goto(`${environment.origin}/ventas?view=dashboard&from=2000-01-01&to=2000-01-02`);
+  await expect(card(report, "Venta Bruta")).toContainText("$0,00");
+  await expect(report.locator(".donut-overview-chart svg")).toHaveCount(0);
 });

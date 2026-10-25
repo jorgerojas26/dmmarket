@@ -1,5 +1,5 @@
 const { randomBytes } = require("node:crypto");
-const { test, expect, login, openModule } = require("./fixtures.cjs");
+const { test, expect, login, openModule, setNoe } = require("./fixtures.cjs");
 const { docker } = require("../support/auth-environment.cjs");
 const ownerPermissions = ["access.users", "access.roles", "access.links", "access.recover"].map((capability) => ({
   capability,
@@ -283,68 +283,63 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   }
 });
 
-test("vendedor consulta solo sus ventas en ambos sistemas sin campos financieros ocultos", async ({
+test("ventas originales muestran únicamente documentos propios en ambos sistemas y ocultan datos financieros", async ({
   page,
   environment,
 }) => {
-  const { seedSales } = require("../support/sales-fixtures.cjs");
-  await seedSales(environment.db);
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  const sales = page.getByRole("region", { name: "Consulta de ventas" });
-  await sales.getByLabel("Ventas desde", { exact: true }).fill("2026-01-01");
-  await sales.getByLabel("Ventas hasta", { exact: true }).fill("2026-01-31");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(sales.getByRole("cell", { name: "Vendedor A", exact: true })).toBeVisible();
-  await expect(sales.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
-  await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
-  await expect(sales.getByText("Documentos o productos autorizados: 1", { exact: true })).toBeVisible();
-  await expect(sales.getByRole("cell", { name: "1", exact: true })).toBeVisible();
-  await sales.getByLabel("Sistema de ventas", { exact: true }).selectOption("true");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(sales.getByRole("cell", { name: "2", exact: true })).toBeVisible();
-  await expect(sales.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
-  await sales.getByLabel("Filtrar vendedor", { exact: true }).fill("B");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(sales.getByText("Documentos o productos autorizados: 0", { exact: true })).toBeVisible();
+  await openModule(page, "Ventas", "Desglose");
+  await page.goto(`${environment.origin}/ventas?view=desglose&dFrom=2026-01-01&dTo=2026-01-31`);
+  const report = page.getByRole("region", { name: "Ventas", exact: true });
+  await report.getByRole("button", { name: "Facturas", exact: true }).click();
+  await expect(report.getByRole("cell", { name: "Vendedor A", exact: true })).toBeVisible();
+  await expect(report.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("cell", { name: "1", exact: true })).toBeVisible();
+  await setNoe(page, true);
+  await expect(report.getByRole("cell", { name: "2", exact: true })).toBeVisible();
+  await expect(report.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
+  const result = await page.evaluate(
+    async () => await (await fetch("/api/sales/facturas?from=2026-01-01&to=2026-01-31&employeeId=B")).json(),
+  );
+  expect(result.data).toEqual([]);
 });
 
-test("documento y resumen comparativo no exponen costos, identificación ni ventas ajenas", async ({
+test("detalle y dashboard originales preservan comparación y no exponen costos, identificación ni ventas ajenas", async ({
   page,
   environment,
 }) => {
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  const sales = page.getByRole("region", { name: "Consulta de ventas" });
-  await sales.getByLabel("Ventas desde", { exact: true }).fill("2026-01-01");
-  await sales.getByLabel("Ventas hasta", { exact: true }).fill("2026-01-31");
-  await sales.getByLabel("Comparar ventas desde", { exact: true }).fill("2025-12-01");
-  await sales.getByLabel("Comparar ventas hasta", { exact: true }).fill("2025-12-31");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  const summary = page.getByRole("region", { name: "Resumen de ventas" });
-  await expect(
-    summary.getByRole("group", { name: "Total ventas", exact: true }).getByText("$100,00", { exact: true }),
-  ).toBeVisible();
-  await expect(summary.getByText("Ventas del período comparado: 10", { exact: true })).toBeVisible();
-  await expect(summary.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
-  await sales.getByRole("button", { name: "Ver documento 1", exact: true }).click();
-  const detail = page.getByRole("region", { name: "Detalle de documento" });
-  await expect(detail.getByText("Vendedor: Vendedor A", { exact: true })).toBeVisible();
+  await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-01-01&to=2026-01-31`);
+  const report = page.getByRole("region", { name: "Ventas", exact: true });
+  await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" })).toContainText("$100,00");
+  await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" })).toContainText("900.0%");
+  await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Ganancia Neta" })).toHaveCount(0);
+  await page.goto(`${environment.origin}/ventas?view=desglose&dFrom=2026-01-01&dTo=2026-01-31`);
+  await report.getByRole("button", { name: "Facturas", exact: true }).click();
+  await report
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "1", exact: true }) })
+    .click();
+  const detail = page.getByRole("dialog");
+  await expect(detail.getByText("Factura #1", { exact: true })).toBeVisible();
   await expect(detail.getByRole("cell", { name: "Línea sintética", exact: true })).toBeVisible();
-  await expect(detail.getByRole("columnheader", { name: "Costo", exact: true })).toHaveCount(0);
-  await expect(detail.getByText("PRIVATE-SNAPSHOT-RIF", { exact: false })).toHaveCount(0);
+  await expect(detail.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+  await expect(detail.getByText(/PRIVATE/)).toHaveCount(0);
   expect(await page.evaluate(async () => (await fetch("/api/invoices/2/detail")).status)).toBe(404);
-  await detail.getByRole("button", { name: "Cerrar documento", exact: true }).click();
-  await expect(detail).toHaveCount(0);
-  await sales.getByLabel("Sistema de ventas", { exact: true }).selectOption("true");
-  await sales.getByRole("button", { name: "Consultar ventas", exact: true }).click();
-  await expect(
-    summary.getByRole("group", { name: "Total ventas", exact: true }).getByText("$200,00", { exact: true }),
-  ).toBeVisible();
-  await sales.getByRole("button", { name: "Ver documento 2", exact: true }).click();
-  await expect(detail.getByText("Total del documento: 200", { exact: true })).toBeVisible();
+  await detail.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await setNoe(page, true);
+  await report
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "2", exact: true }) })
+    .click();
+  await expect(detail.getByText("Factura #2", { exact: true })).toBeVisible();
+  await expect(detail.locator(".document-detail-total")).toContainText("$200.00");
 });
 
 test("directorio de vendedores no expone contactos ajenos y sus ventas respetan ambos permisos", async ({
@@ -670,77 +665,78 @@ test("panel global no clasifica por utilidad propia hasta acotar el conjunto al 
   expect(JSON.stringify(payload)).not.toContain("utilidad");
 });
 
-test("Pareto propio conserva población comprada, maduración y privacidad en ambos sistemas", async ({
+test("Pareto original mantiene población, maduración y privacidad y no ofrece ganancia sin permiso", async ({
   page,
   environment,
 }) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/pareto-fixtures.cjs").seedPareto(environment.db);
-  const user = await environment.seedUser({
+  const basic = await environment.seedUser({
     permissions: [
       { capability: "sales.read", scope: "assigned" },
       { capability: "purchases.read", scope: "global" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
-  await login(page, environment, user);
-  await openModule(page, "Ventas", "Pareto");
-  const panel = page.getByRole("region", { name: "Pareto autorizado", exact: true });
-  await panel.getByLabel("Pareto desde", { exact: true }).fill("2026-06-01");
-  await panel.getByLabel("Pareto hasta", { exact: true }).fill("2026-07-01");
-  for (const system of ["false", "true"]) {
-    await panel.getByLabel("Sistema de ventas del Pareto", { exact: true }).selectOption(system);
-    await panel.getByRole("button", { name: "Consultar Pareto", exact: true }).click();
-    const mature = panel.getByRole("table", { name: "Productos maduros del Pareto", exact: true });
-    const recent = panel.getByRole("table", { name: "Productos nuevos del Pareto", exact: true });
-    await expect(mature.getByRole("cell", { name: "80", exact: true })).toBeVisible();
-    await expect(mature.getByRole("cell", { name: "Producto reciente", exact: true })).toHaveCount(0);
-    await expect(recent.getByRole("cell", { name: "Producto reciente", exact: true })).toBeVisible();
-    await expect(recent.getByRole("cell", { name: "2026-06-02", exact: true })).toBeVisible();
-    await expect(mature.getByRole("columnheader", { name: "Inventario actual a precio A", exact: true })).toHaveCount(
-      0,
-    );
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: basic.id, seller_id: "A" });
+  await login(page, environment, basic);
+  await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-06-01&to=2026-07-01`);
+  await expect(page.getByRole("heading", { name: "Dashboard de Ventas", exact: true })).toBeVisible();
+  await expect(page.getByText("Modos del Pareto", { exact: true })).toHaveCount(0);
+  for (const showNoe of ["false", "true"]) {
     const payload = await page.evaluate(
       async (showNoe) =>
         await (
           await fetch(`/api/dashboard/pareto?from=2026-06-01&to=2026-07-01&metric=rawProfit&showNoe=${showNoe}`)
         ).json(),
-      system,
+      showNoe,
     );
     expect(payload.products.map((row) => row.rawProfit)).toEqual([100, 80]);
     expect(JSON.stringify(payload)).not.toMatch(/netProfit|inventoryValue|cumulativeProfit|profitPercent/);
   }
-  await panel.getByLabel("Buscar entre productos nuevos", { exact: true }).fill("no-match");
-  await panel.getByRole("button", { name: "Consultar Pareto", exact: true }).click();
+  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  const user = await environment.seedUser({
+    permissions: ["sales.read", "sales.costs", "sales.profit"]
+      .map((capability) => ({ capability, scope: "assigned" }))
+      .concat([{ capability: "purchases.read", scope: "global" }]),
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-06-01&to=2026-07-01`);
+  const panel = page
+    .locator(".dashboard-panel")
+    .filter({ has: page.locator(".dashboard-inline-title").filter({ hasText: /^Análisis Pareto/ }) });
+  for (const noe of [false, true]) {
+    await setNoe(page, noe);
+    await expect(panel.getByRole("cell", { name: "Producto reciente", exact: true })).toBeVisible();
+    await expect(panel.getByRole("cell", { name: "2026-06-02", exact: true })).toBeVisible();
+    await expect(panel.getByRole("columnheader", { name: "Valor inventario", exact: true })).toHaveCount(0);
+    await expect(
+      panel.getByRole("table").first().getByRole("cell", { name: "Producto reciente", exact: true }),
+    ).toHaveCount(0);
+  }
+  await panel.getByRole("searchbox").fill("no-match");
   await expect(panel.getByRole("cell", { name: "Producto reciente", exact: true })).toHaveCount(0);
-  await expect(panel.getByText("Productos maduros: 2", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("table").first().getByRole("row")).toHaveCount(3);
 });
 
-test("Pareto compras sin vender exige ventas globales y omite inventario no autorizado", async ({
+test("Pareto original de compras sin vender exige lectura global y oculta inventario no autorizado", async ({
   page,
   environment,
 }) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/pareto-fixtures.cjs").seedPareto(environment.db);
   const user = await environment.seedUser({
-    permissions: [
-      { capability: "sales.read", scope: "global" },
-      { capability: "purchases.read", scope: "global" },
-      { capability: "purchases.costs", scope: "global" },
-    ],
+    permissions: ["sales.read", "purchases.read", "purchases.costs"].map((capability) => ({
+      capability,
+      scope: "global",
+    })),
   });
   await login(page, environment, user);
-  await openModule(page, "Ventas", "Pareto");
-  const panel = page.getByRole("region", { name: "Pareto autorizado", exact: true });
-  await panel.getByLabel("Pareto desde", { exact: true }).fill("2026-06-01");
-  await panel.getByLabel("Pareto hasta", { exact: true }).fill("2026-07-01");
-  await panel.getByLabel("Modo del Pareto", { exact: true }).selectOption("compras-sin-vender");
-  await panel.getByRole("button", { name: "Consultar Pareto", exact: true }).click();
-  const mature = panel.getByRole("table", { name: "Productos maduros del Pareto", exact: true });
-  await expect(mature.getByRole("cell", { name: "Producto sin vender", exact: true })).toBeVisible();
-  await expect(mature.getByRole("cell", { name: "200", exact: true })).toBeVisible();
-  await expect(mature.getByRole("columnheader", { name: "Inventario actual a precio A", exact: true })).toHaveCount(0);
-  await expect(mature.getByRole("cell", { name: "Producto maduro", exact: true })).toHaveCount(0);
+  await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-06-01&to=2026-07-01`);
+  await expect(page.getByRole("cell", { name: "Producto sin vender", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "$200,00", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Valor inventario", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "Producto maduro", exact: true })).toHaveCount(0);
 });
 
 test("inventario original básico conserva búsqueda y tabla sin precio, proveedor ni impresión implícitos", async ({
