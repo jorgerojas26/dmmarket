@@ -1,6 +1,8 @@
 const express = require("express");
 const { createReceivablesService } = require("../receivables");
-const { requireReceivables } = require("./receivables-policy");
+const { requireReceivables, requireReceivablesOperation, OPERATION_CAPABILITIES } = require("./receivables-policy");
+const { assertWritableReceivables } = require("../receivables-storage");
+const { appendEvent } = require("./identity");
 
 function options(input, keys) {
   if (
@@ -22,7 +24,7 @@ function clientId(value) {
   return value;
 }
 
-function createReceivablesReports({ sessions }) {
+function createReceivablesReports({ sessions, security, writesEnabled = false }) {
   const router = express.Router();
   const handle = (work, keys) => async (req, res, next) => {
     try {
@@ -35,7 +37,7 @@ function createReceivablesReports({ sessions }) {
             personal: access.hasGlobal("clients.personal"),
             referenceRate: access.hasGlobal("rates.read"),
           });
-          return work(service, req, query);
+          return work(service, req, query, transaction);
         }),
       );
     } catch (error) {
@@ -44,7 +46,18 @@ function createReceivablesReports({ sessions }) {
   };
   router.get(
     "/receivables/status",
-    handle((service) => service.readiness(), []),
+    handle(async (service, _req, _query, transaction) => {
+      let writesAvailable = false;
+      if (writesEnabled) {
+        try {
+          await assertWritableReceivables(transaction);
+          writesAvailable = true;
+        } catch (error) {
+          if (error.status !== 503) throw error;
+        }
+      }
+      return { ...(await service.readiness()), writesEnabled, writesAvailable };
+    }, []),
   );
   router.get(
     "/receivables/banks",
@@ -64,6 +77,56 @@ function createReceivablesReports({ sessions }) {
       ["page", "timelinePage", "documents"],
     ),
   );
+  router.use("/receivables", security.csrfProtection);
+  for (const [endpoint, commit] of [
+    ["preview", false],
+    ["operations", true],
+  ])
+    router.post(`/receivables/:clientId/${endpoint}`, async (req, res, next) => {
+      try {
+        if (!req.is("application/json")) throw Object.assign(new Error("Envía JSON."), { status: 415 });
+        res.json(
+          await sessions.withSession(req.sessionID, { recent: commit }, async ({ transaction, access, user }) => {
+            const body = req.body;
+            const type = body?.type;
+            requireReceivablesOperation(access, type);
+            if (!writesEnabled)
+              throw Object.assign(new Error("Escrituras de cobranza deshabilitadas."), { status: 503 });
+            await assertWritableReceivables(transaction);
+            const fields =
+              type === "payment"
+                ? ["type", "amount", "currency", "date", "method", "reference", "bank", "notes", "rate"]
+                : ["type", "id", "reason"];
+            if (commit) fields.push("requestId", "snapshot");
+            if (
+              !body ||
+              Array.isArray(body) ||
+              Object.keys(body).some((key) => !fields.includes(key)) ||
+              Object.keys(req.query).length
+            )
+              throw Object.assign(new Error("Operación no válida."), { status: 400 });
+            const service = createReceivablesService({
+              db: transaction,
+              actorId: user.id,
+              personal: access.hasGlobal("clients.personal"),
+              referenceRate: access.hasGlobal("rates.read"),
+              onOperation: async (connection, result) => {
+                await appendEvent(connection, {
+                  actorId: user.id,
+                  action: OPERATION_CAPABILITIES[type],
+                  reason: result.operationId,
+                  occurredMs: Date.now(),
+                });
+              },
+            });
+            const id = clientId(req.params.clientId);
+            return commit ? service.execute(id, body) : service.preview(id, body);
+          }),
+        );
+      } catch (error) {
+        next(error);
+      }
+    });
   return router;
 }
 

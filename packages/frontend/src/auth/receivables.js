@@ -1,26 +1,52 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
-import { AccessForm, Field } from './forms';
+import { useAuth } from './context';
+import { AccessForm, Field, ReauthenticationForm } from './forms';
+import ReceivableOperation from './receivable-operation';
 
-function Account({ client, onClose }) {
+function Account({ client, onClose, onChanged, writable }) {
+    const { can } = useAuth();
+    const [operation, setOperation] = useState(null);
+    const [receipt, setReceipt] = useState(null);
+    const [operationBusy, setOperationBusy] = useState(false);
     const [page, setPage] = useState(1);
     const [timelinePage, setTimelinePage] = useState(1);
     const [documents, setDocuments] = useState('pending');
-    const { data, error } = useSWR(
+    const { data, error, mutate } = useSWR(
         `/api/receivables/${encodeURIComponent(client.id)}?${new URLSearchParams({ page, timelinePage, documents })}`,
         fetcher,
     );
     return (
         <section aria-label="Cuenta de cobranza autorizada" className="card bg-dark border-secondary p-3 my-3">
             <h3 className="h5">{client.name}</h3>
-            <button type="button" className="btn btn-outline-light" onClick={onClose}>
+            <button type="button" className="btn btn-outline-light" onClick={onClose} disabled={operationBusy}>
                 Cerrar cuenta de cobranza
             </button>
             {error && <p role="alert">No se pudo consultar la cuenta autorizada.</p>}
             {!data && !error && <p role="status">Consultando cuenta de cobranza…</p>}
             {data && !error && (
                 <>
+                    {writable &&
+                        !data.client.unregistered &&
+                        ['receivables.payment', 'receivables.void', 'receivables.close', 'receivables.reopen'].some(
+                            can,
+                        ) && <ReauthenticationForm />}
+                    {writable &&
+                        !data.client.unregistered &&
+                        can('receivables.payment') &&
+                        Number(data.summary.balance) > 0 && (
+                            <button
+                                type="button"
+                                className="btn btn-primary my-3"
+                                onClick={() => {
+                                    setReceipt(null);
+                                    setOperation({ type: 'payment' });
+                                }}
+                            >
+                                Registrar abono
+                            </button>
+                        )}
                     <p>Saldo completo del cliente (USD): {data.summary.balance}</p>
                     <p>Saldo vencido (USD): {data.summary.overdue}</p>
                     {Object.hasOwn(data.client, 'rif') && <p>Identificación autorizada: {data.client.rif}</p>}
@@ -54,6 +80,7 @@ function Account({ client, onClose }) {
                                     <th>Abonado USD</th>
                                     <th>Cierre USD</th>
                                     <th>Estado</th>
+                                    {writable && <th>Operación autorizada</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -66,6 +93,40 @@ function Account({ client, onClose }) {
                                         <td>{row.applied}</td>
                                         <td>{row.closed}</td>
                                         <td>{row.status}</td>
+                                        {writable && (
+                                            <td>
+                                                {!data.client.unregistered && row.eligible && (
+                                                    <>
+                                                        {can('receivables.close') && Number(row.balance) > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-light"
+                                                                disabled={operationBusy}
+                                                                onClick={() => {
+                                                                    setReceipt(null);
+                                                                    setOperation({ type: 'close', id: row.id });
+                                                                }}
+                                                            >
+                                                                Cerrar deuda {row.id}
+                                                            </button>
+                                                        )}
+                                                        {can('receivables.reopen') && Number(row.closed) > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-outline-light"
+                                                                disabled={operationBusy}
+                                                                onClick={() => {
+                                                                    setReceipt(null);
+                                                                    setOperation({ type: 'reopen', id: row.id });
+                                                                }}
+                                                            >
+                                                                Reabrir deuda {row.id}
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -98,6 +159,7 @@ function Account({ client, onClose }) {
                                     <th>Moneda</th>
                                     <th>Equivalente USD</th>
                                     <th>Motivo</th>
+                                    {writable && <th>Operación autorizada</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -109,6 +171,25 @@ function Account({ client, onClose }) {
                                         <td>{row.currency ?? 'USD'}</td>
                                         <td>{row.base ?? row.data?.base ?? 'No aplica'}</td>
                                         <td>{row.voidReason || row.reason || 'Sin motivo registrado'}</td>
+                                        {writable && (
+                                            <td>
+                                                {can('receivables.void') &&
+                                                    row.type === 'payment' &&
+                                                    !row.voidReason && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-outline-light"
+                                                            disabled={operationBusy}
+                                                            onClick={() => {
+                                                                setReceipt(null);
+                                                                setOperation({ type: 'void', id: row.movementId });
+                                                            }}
+                                                        >
+                                                            Anular abono {row.movementId}
+                                                        </button>
+                                                    )}
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -132,6 +213,25 @@ function Account({ client, onClose }) {
                     </button>
                 </>
             )}
+            {receipt && data && !error && (
+                <p role="status">
+                    Operación registrada: {receipt.operationId}; usuario responsable: {receipt.actorId}
+                </p>
+            )}
+            {operation && writable && data && !error && (
+                <ReceivableOperation
+                    key={`${operation.type}:${operation.id || 'client'}`}
+                    clientId={client.id}
+                    operation={operation}
+                    onBusyChange={setOperationBusy}
+                    onClose={() => setOperation(null)}
+                    onSaved={async (result) => {
+                        setOperation(null);
+                        setReceipt(result);
+                        await Promise.all([mutate(), onChanged()]);
+                    }}
+                />
+            )}
         </section>
     );
 }
@@ -144,7 +244,11 @@ export default function Receivables() {
     const [query, setQuery] = useState({ state: 'debt', due: 'all' });
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState(null);
-    const { data, error } = useSWR(`/api/receivables?${new URLSearchParams({ ...query, page, limit: 20 })}`, fetcher);
+    const { data: readiness, error: readinessError } = useSWR('/api/receivables/status', fetcher);
+    const { data, error, mutate } = useSWR(
+        `/api/receivables?${new URLSearchParams({ ...query, page, limit: 20 })}`,
+        fetcher,
+    );
     return (
         <section aria-label="Cartera de cobranza autorizada">
             <AccessForm
@@ -191,10 +295,12 @@ export default function Receivables() {
                 Acceso global exclusivo de cobranza autorizada. La cuenta incluye la deuda completa del cliente, aunque
                 sus ventas pertenezcan a distintos vendedores. Los permisos de ventas no recortan esta cartera.
             </p>
-            <p>
-                Las operaciones financieras permanecen deshabilitadas hasta validar su preparación transaccional y
-                habilitación explícita.
-            </p>
+            {!readiness?.writesAvailable && (
+                <p>
+                    Las operaciones financieras permanecen deshabilitadas hasta validar su preparación transaccional y
+                    habilitación explícita.
+                </p>
+            )}
             {!data && !error && <p role="status">Consultando cartera…</p>}
             {error && (
                 <p role="alert">No se pudo consultar la cartera autorizada. No se mostrarán saldos sin validación.</p>
@@ -259,7 +365,15 @@ export default function Receivables() {
                     </button>
                 </>
             )}
-            {selected && <Account key={selected.id} client={selected} onClose={() => setSelected(null)} />}
+            {selected && (
+                <Account
+                    key={selected.id}
+                    client={selected}
+                    writable={Boolean(readiness?.writesAvailable) && !readinessError}
+                    onChanged={() => mutate()}
+                    onClose={() => setSelected(null)}
+                />
+            )}
         </section>
     );
 }

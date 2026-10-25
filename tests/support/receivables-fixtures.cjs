@@ -149,3 +149,10 @@ async function seedReceivables(db) {
 }
 
 module.exports = { seedReceivables };
+
+async function prepareReceivablesWrites(db) {
+  await require("../../packages/backend/migrations/20261026_add_receivables_actor").up(db);
+  for (const table of ["cxc_operaciones", "cxc_cierres"]) await db.raw("ALTER TABLE ?? ENGINE=InnoDB", [table]);
+}
+
+module.exports.prepareReceivablesWrites = prepareReceivablesWrites;

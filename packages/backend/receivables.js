@@ -1,5 +1,6 @@
 const { reportId, missingName } = require("./utils/report-identity");
 const { createHash } = require("node:crypto");
+const { assertWritableReceivables } = require("./receivables-storage");
 const { Money, fail, decimal, fixed, total, allocate } = require("./utils/receivables-money");
 
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -100,7 +101,14 @@ const eligible = (d) =>
   d.IdCliente != null &&
   d.saleClient === d.IdCliente;
 
-function createReceivablesService({ db, now = () => new Date(), personal = true, referenceRate = true }) {
+function createReceivablesService({
+  db,
+  now = () => new Date(),
+  personal = true,
+  referenceRate = true,
+  actorId = null,
+  onOperation = async () => {},
+}) {
   async function readiness() {
     const tables = await Promise.all(
       ["cxc_documentos", "cxc_movimientos", "cxc_cruces", "cxc_operaciones", "cxc_cierres"].map((table) =>
@@ -235,7 +243,8 @@ function createReceivablesService({ db, now = () => new Date(), personal = true,
       };
     } else {
       const movement = await connection("cxc_movimientos")
-        .where({ IdMov: payload.id, IdCliente: state.client.IdCliente })
+        .where("IdMov", payload.id)
+        .whereRaw("BINARY IdCliente = ?", [state.client.IdCliente])
         .first();
       const reversed = await connection("cxc_operaciones").where({ Tipo: "ANULACION", Referencia: payload.id }).first();
       if (!movement || reversed) fail("El abono no existe o ya fue anulado.", 409);
@@ -261,6 +270,7 @@ function createReceivablesService({ db, now = () => new Date(), personal = true,
         balanceAfter: fixed(balance.plus(restored)),
       };
     }
+    if (actorId) result.actorId = actorId;
     result.snapshot = hash({
       documents: state.docs.map((d) => [
         d.IdDocumento,
@@ -288,6 +298,9 @@ function createReceivablesService({ db, now = () => new Date(), personal = true,
   }
 
   async function execute(clientId, body) {
+    if (typeof actorId !== "string" || !/^[a-f0-9-]{36}$/i.test(actorId))
+      fail("La operación requiere una cuenta autenticada atribuible.", 503);
+    const storage = await assertWritableReceivables(db);
     await requireSchema();
     if (
       typeof body.requestId !== "string" ||
@@ -297,8 +310,14 @@ function createReceivablesService({ db, now = () => new Date(), personal = true,
     if (typeof body.snapshot !== "string" || !/^[a-f0-9]{64}$/.test(body.snapshot))
       fail("Revisa la previsualización antes de confirmar.");
     const payload = input(body, localDate(now()));
-    const fingerprint = hash({ clientId, payload, snapshot: body.snapshot });
+    const fingerprint = hash({ clientId, actorId, payload, snapshot: body.snapshot });
     return db.transaction(async (connection) => {
+      const lockKey = hash(clientId);
+      await connection.raw(
+        "INSERT INTO dmmarket_receivables_locks (ClientKey) VALUES (?) ON DUPLICATE KEY UPDATE ClientKey = VALUES(ClientKey)",
+        [lockKey],
+      );
+      await connection("dmmarket_receivables_locks").where("ClientKey", lockKey).forUpdate().first();
       const state = await context(connection, clientId, true);
       const previous = await connection("cxc_operaciones").where("IdOperacion", body.requestId).first();
       if (previous) {
@@ -311,9 +330,10 @@ function createReceivablesService({ db, now = () => new Date(), personal = true,
         fail("La deuda o la tasa cambió. Vuelve a revisar la previsualización antes de confirmar.", 409);
       result.operationId = body.requestId;
       result.registeredAt = timestamp(now());
+      const registeredAt = storage.fractional ? result.registeredAt : result.registeredAt.slice(0, 19);
       if (payload.type === "payment") {
         const [movementId] = await connection("cxc_movimientos").insert({
-          Fecha: payload.date === localDate(now()) ? result.registeredAt.slice(0, 19) : `${payload.date} 00:00:00`,
+          Fecha: payload.date === localDate(now()) ? registeredAt.slice(0, 19) : `${payload.date} 00:00:00`,
           IdCliente: clientId,
           MonedaPago: payload.currency,
           TasaCambio: result.rate,
@@ -331,19 +351,20 @@ function createReceivablesService({ db, now = () => new Date(), personal = true,
               IdMovimiento: movementId,
               IdDocumento: a.id,
               MontoAplicado: a.amount,
-              FechaCruce: result.registeredAt,
+              FechaCruce: registeredAt,
             })),
           );
       }
       await connection("cxc_operaciones").insert({
         IdOperacion: body.requestId,
+        ActorId: actorId,
         IdCliente: clientId,
         Tipo: types[payload.type],
         Referencia: result.movementId || payload.id || null,
         Huella: fingerprint,
         Motivo: payload.reason || null,
         Datos: JSON.stringify(result),
-        FechaRegistro: result.registeredAt,
+        FechaRegistro: registeredAt,
       });
       if (payload.type === "close") {
         await connection("cxc_cierres").insert(
@@ -367,6 +388,7 @@ function createReceivablesService({ db, now = () => new Date(), personal = true,
           .where("IdDocumento", application.id)
           .update({ SaldoActual: fixed(balanceAfter), Estatus: status });
       }
+      await onOperation(connection, result);
       return result;
     });
   }
