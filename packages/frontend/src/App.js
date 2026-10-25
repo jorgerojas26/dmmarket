@@ -4,6 +4,7 @@ import Navbar from 'react-bootstrap/Navbar';
 import { Link, NavLink, Redirect, useLocation } from 'react-router-dom';
 import Audit from './auth/audit';
 import ClientDashboard from './auth/client-dashboard';
+import Commissions from './auth/commissions';
 import { useAuth } from './auth/context';
 import InactiveClients from './auth/inactive-clients';
 import Inventory from './auth/inventory';
@@ -28,6 +29,7 @@ export default function App() {
         { path: '/proveedores', label: 'Proveedores', allowed: can('providers.read') },
         { path: '/clientes', label: 'Clientes', allowed: can('clients.read') },
         { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read') },
+        { path: '/comisiones', label: 'Comisiones', allowed: has('commissions.read') },
         { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
         { path: '/tasas', label: 'Tasas', allowed: can('rates.read') },
         { path: '/auditoria', label: 'Auditoría', allowed: can('audit.read') },
@@ -80,6 +82,7 @@ export default function App() {
             allowed: has('sellers.read') && has('sales.read'),
             content: <SellerDashboard />,
         },
+        { path: '/comisiones', label: 'Consulta', allowed: has('commissions.read'), content: <Commissions /> },
         { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
         { path: '/tasas', label: 'Referencia', allowed: can('rates.read'), content: <Rates /> },
         { path: '/auditoria', label: 'Historial', allowed: can('audit.read'), content: <Audit /> },

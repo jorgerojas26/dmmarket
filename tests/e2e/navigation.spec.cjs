@@ -53,7 +53,15 @@ test("URL directa y rutas pendientes no montan formularios ni consultas protegid
     const path = new URL(request.url()).pathname;
     if (path.startsWith("/api/")) requested.push(path);
   });
-  for (const path of ["/acceso", "/clientes", "/ventas/pareto", "/proveedores", "/auditoria", "/configuracion"]) {
+  for (const path of [
+    "/acceso",
+    "/clientes",
+    "/ventas/pareto",
+    "/proveedores",
+    "/auditoria",
+    "/comisiones",
+    "/configuracion",
+  ]) {
     await page.goto(`${environment.origin}${path}`);
     await expect(page.getByRole("heading", { name: "Página no disponible", exact: true })).toBeVisible();
     await expect(page.getByRole("table")).toHaveCount(0);

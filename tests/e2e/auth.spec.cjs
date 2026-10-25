@@ -1048,3 +1048,60 @@ test("auditoría permite consultar login real sin dar administración de cuentas
   expect(JSON.stringify(data)).not.toContain(user.password);
   expect(JSON.stringify(data)).not.toContain(user.passwordHash);
 });
+
+test("porcentajes de comisiones son sólo lectura y no conceden ventas ni otros vendedores", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/commission-fixtures.cjs").seedCommissions(environment.db);
+  const user = await environment.seedUser({ permissions: [{ capability: "commissions.read", scope: "assigned" }] });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await openModule(page, "Comisiones");
+  const report = page.getByRole("region", { name: "Consulta autorizada de comisiones", exact: true });
+  await report.getByLabel("ID del vendedor para comisiones", { exact: true }).fill("A");
+  await report.getByRole("button", { name: "Consultar comisiones", exact: true }).click();
+  await expect(report.getByRole("cell", { name: "10", exact: true })).toBeVisible();
+  await expect(report.getByRole("cell", { name: "Grupo comisión secundario", exact: true })).toBeVisible();
+  await expect(report.getByRole("option", { name: "Ventas e histórico capturado", exact: true })).toHaveCount(0);
+  expect(await page.evaluate(async () => (await fetch("/api/employees/commissionInfo/B")).status)).toBe(403);
+});
+
+test("histórico de comisiones no duplica ventas y no muestra como cero capturas faltantes", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/commission-fixtures.cjs").seedCommissions(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "commissions.read", scope: "assigned" },
+      { capability: "sales.read", scope: "global" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await openModule(page, "Comisiones");
+  const report = page.getByRole("region", { name: "Consulta autorizada de comisiones", exact: true });
+  await report.getByLabel("ID del vendedor para comisiones", { exact: true }).fill("A");
+  await report.getByLabel("Vista de comisiones", { exact: true }).selectOption("sales");
+  await report.getByLabel("Comisiones desde", { exact: true }).fill("2026-12-01");
+  await report.getByLabel("Comisiones hasta", { exact: true }).fill("2026-12-31");
+  await report.getByRole("button", { name: "Consultar comisiones", exact: true }).click();
+  await expect(report.getByText("Ventas autorizadas con comisiones: 5", { exact: true })).toBeVisible();
+  const table = report.getByRole("table", { name: "Histórico autorizado de comisiones", exact: true });
+  const valid = table.getByRole("row").filter({ has: page.getByRole("cell", { name: "COM-A", exact: true }) });
+  await expect(valid.getByRole("cell", { name: "10", exact: true })).toBeVisible();
+  const duplicate = table.getByRole("row").filter({ has: page.getByRole("cell", { name: "COM-DUP", exact: true }) });
+  await expect(duplicate.getByRole("cell", { name: "100.00", exact: true })).toBeVisible();
+  await expect(duplicate.getByRole("cell", { name: "No disponible", exact: true })).toBeVisible();
+  await expect(table.getByRole("columnheader", { name: "Utilidad autorizada", exact: true })).toHaveCount(0);
+  await expect(table.getByRole("cell", { name: "COM-B", exact: true })).toHaveCount(0);
+  await expect(report.getByText("PRIVATE-COMMISSION", { exact: false })).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      async () => (await fetch("/api/employees/sales/A?from=2026-12-01&to=2026-12-31&showNoe=true")).status,
+    ),
+  ).toBe(403);
+});
