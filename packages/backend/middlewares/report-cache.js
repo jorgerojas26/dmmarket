@@ -142,4 +142,4 @@ function createReportCache({
 }
 
 const reportCache = createReportCache();
-module.exports = { createReportCache, reportCache };
+module.exports = { createReportCache, isReportPath: isDashboardPath, reportCache };
