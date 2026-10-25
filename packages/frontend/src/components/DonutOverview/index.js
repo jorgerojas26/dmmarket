@@ -20,6 +20,7 @@ const DonutOverview = ({
     detailsTitle,
     detailsSubtitle,
     tooltip,
+    valueFormat = formatCurrency,
     onSliceClick,
     emptyMessage = 'Sin datos para el periodo seleccionado',
 }) => {
@@ -79,7 +80,7 @@ const DonutOverview = ({
                     </div>
                     <ul className="donut-overview-legend" aria-label={ariaLabel}>
                         {legend.map((item) => (
-                            <li key={item.id} title={`${item.label}: ${formatCurrency(item.value)}`}>
+                            <li key={item.id} title={`${item.label}: ${valueFormat(item.value)}`}>
                                 <span className="donut-overview-swatch" style={{ background: item.color }} />
                                 <span className="donut-overview-label">{item.label}</span>
                                 <strong>{share(item.value)}</strong>
@@ -106,7 +107,7 @@ const DonutOverview = ({
                             <li key={item.id}>
                                 <span className="donut-overview-swatch" style={{ background: item.color }} />
                                 <span>{item.label}</span>
-                                <strong>{formatCurrency(item.value)}</strong>
+                                <strong>{valueFormat(item.value)}</strong>
                                 <span className="text-muted">{share(item.value)}</span>
                             </li>
                         ))}

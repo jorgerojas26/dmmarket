@@ -879,7 +879,9 @@ test("resumen de compras básico sólo muestra cantidades y comparación no fina
   await report.getByLabel("Comparar compras desde", { exact: true }).fill("2026-07-01");
   await report.getByLabel("Comparar compras hasta", { exact: true }).fill("2026-07-31");
   await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
-  await expect(report.getByText("Documentos de compras: 3", { exact: true })).toBeVisible();
+  await expect(
+    report.getByRole("group", { name: "Documentos de compras", exact: true }).getByText("3", { exact: true }),
+  ).toBeVisible();
   await expect(report.getByText("Unidades del período comparado: 2", { exact: true })).toBeVisible();
   await expect(report.getByRole("table", { name: "Proveedores del resumen de compras", exact: true })).toHaveCount(0);
   await expect(report.getByRole("columnheader", { name: "Total Compras autorizado", exact: true })).toHaveCount(0);
@@ -911,7 +913,9 @@ test("resumen y Pareto de compras financieros respetan filtro y no requieren lec
   await report.getByLabel("Comparar compras desde", { exact: true }).fill("2026-07-01");
   await report.getByLabel("Comparar compras hasta", { exact: true }).fill("2026-07-31");
   await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
-  await expect(report.getByText("Total Compras autorizado: 130", { exact: true })).toBeVisible();
+  await expect(
+    report.getByRole("group", { name: "Total Compras autorizado", exact: true }).getByText("$130,00", { exact: true }),
+  ).toBeVisible();
   await expect(report.getByText("Total Compras autorizado del período comparado: 16", { exact: true })).toBeVisible();
   await expect(
     report
@@ -924,7 +928,7 @@ test("resumen y Pareto de compras financieros respetan filtro y no requieren lec
   await pareto.getByLabel("Resumen de compras desde", { exact: true }).fill("2026-08-01");
   await pareto.getByLabel("Resumen de compras hasta", { exact: true }).fill("2026-08-31");
   await pareto.getByRole("button", { name: "Consultar Pareto de compras", exact: true }).click();
-  await expect(pareto.getByText("Productos clasificados en compras: 2", { exact: true })).toBeVisible();
+  await expect(pareto.getByText("Productos analizados en compras: 2", { exact: true })).toBeVisible();
   await expect(pareto.getByRole("cell", { name: "61.54", exact: true })).toBeVisible();
   await expect(
     page

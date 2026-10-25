@@ -3,6 +3,8 @@ import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { useAuth } from './context';
 import { AccessForm, Field } from './forms';
+import PurchasePanels from './purchase-panels';
+import PurchasePareto from './purchase-pareto';
 
 export default function PurchaseOverview({ pareto = false }) {
     const { can } = useAuth();
@@ -91,44 +93,10 @@ export default function PurchaseOverview({ pareto = false }) {
             {data &&
                 !error &&
                 (pareto ? (
-                    <>
-                        <p>Productos clasificados en compras: {data.summary.totalProducts}</p>
-                        <div className="table-responsive">
-                            <table aria-label="Clasificación autorizada de compras" className="table table-dark">
-                                <thead>
-                                    <tr>
-                                        <th>Producto</th>
-                                        <th>Unidades</th>
-                                        <th>Total Compras autorizado</th>
-                                        <th>Acumulado (%)</th>
-                                        <th>Clase ABC</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.products.map((row) => (
-                                        <tr key={row.productId}>
-                                            <td>{row.product}</td>
-                                            <td>{row.quantity ?? 'No disponible'}</td>
-                                            <td>{row.totalPurchased ?? 'No disponible'}</td>
-                                            <td>{row.cumulativePercent ?? 'Sin base válida'}</td>
-                                            <td>{row.abcClass ?? 'Sin clasificación válida'}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
+                    <PurchasePareto key={JSON.stringify(query)} data={data} />
                 ) : (
                     <>
-                        <p>Documentos de compras: {data.kpis.totalInvoices}</p>
-                        <p>Unidades compradas: {data.kpis.totalQuantity ?? 'No disponible'}</p>
-                        {costs && (
-                            <>
-                                <p>Total Compras autorizado: {data.kpis.totalPurchased ?? 'No disponible'}</p>
-                                <p>Promedio autorizado por documento: {data.kpis.avgTicket ?? 'No disponible'}</p>
-                                <p>Costo unitario promedio autorizado: {data.kpis.avgUnitCost ?? 'No disponible'}</p>
-                            </>
-                        )}
+                        <PurchasePanels data={data} costs={costs} />
                         {data.kpis.compareInvoices !== null && (
                             <>
                                 <p>Documentos de compras del período comparado: {data.kpis.compareInvoices}</p>
@@ -177,47 +145,51 @@ export default function PurchaseOverview({ pareto = false }) {
                         {Object.hasOwn(data, 'topProviders') && (
                             <>
                                 <h3 className="h5">Principales proveedores autorizados</h3>
-                                <table aria-label="Proveedores del resumen de compras" className="table table-dark">
-                                    <thead>
-                                        <tr>
-                                            <th>Proveedor</th>
-                                            <th>Unidades</th>
-                                            <th>Documentos</th>
-                                            {costs && <th>Total Compras autorizado</th>}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {data.topProviders.map((row) => (
-                                            <tr key={row.id}>
-                                                <td>{row.name}</td>
-                                                <td>{row.quantity ?? 'No disponible'}</td>
-                                                <td>{row.invoiceCount}</td>
-                                                {costs && <td>{row.totalPurchased ?? 'No disponible'}</td>}
+                                <div className="table-responsive">
+                                    <table aria-label="Proveedores del resumen de compras" className="table table-dark">
+                                        <thead>
+                                            <tr>
+                                                <th>Proveedor</th>
+                                                <th>Unidades</th>
+                                                <th>Documentos</th>
+                                                {costs && <th>Total Compras autorizado</th>}
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {data.topProviders.map((row) => (
+                                                <tr key={row.id}>
+                                                    <td>{row.name}</td>
+                                                    <td>{row.quantity ?? 'No disponible'}</td>
+                                                    <td>{row.invoiceCount}</td>
+                                                    {costs && <td>{row.totalPurchased ?? 'No disponible'}</td>}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </>
                         )}
                         <h3 className="h5">Compras por grupo</h3>
-                        <table aria-label="Grupos del resumen de compras" className="table table-dark">
-                            <thead>
-                                <tr>
-                                    <th>Grupo</th>
-                                    <th>Unidades</th>
-                                    {costs && <th>Total Compras autorizado</th>}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.groupPurchasesChart.map((row) => (
-                                    <tr key={JSON.stringify(row.groupId)}>
-                                        <td>{row.categoria}</td>
-                                        <td>{row.quantity ?? 'No disponible'}</td>
-                                        {costs && <td>{row.totalPurchased ?? 'No disponible'}</td>}
+                        <div className="table-responsive">
+                            <table aria-label="Grupos del resumen de compras" className="table table-dark">
+                                <thead>
+                                    <tr>
+                                        <th>Grupo</th>
+                                        <th>Unidades</th>
+                                        {costs && <th>Total Compras autorizado</th>}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {data.groupPurchasesChart.map((row) => (
+                                        <tr key={JSON.stringify(row.groupId)}>
+                                            <td>{row.categoria}</td>
+                                            <td>{row.quantity ?? 'No disponible'}</td>
+                                            {costs && <td>{row.totalPurchased ?? 'No disponible'}</td>}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </>
                 ))}
         </section>
