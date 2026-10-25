@@ -30,8 +30,13 @@ try {
         `${masterTable}: ID ${sortDir}`,
       );
     }
+    const paginated = await model.GET_INVOICES({ from, to, showNoe, limit: 1 });
+    const all = await model.GET_INVOICES({ from, to, showNoe, limit: 1, all: true });
+    assert.ok(paginated.pagination.total > 1);
+    assert.equal(all.data.length, paginated.pagination.total, `${masterTable}: selección sin límite obsoleto`);
+    assert.equal(new Set(all.data.map((row) => row.invoiceId)).size, all.pagination.total);
   }
-  console.log("Orden de facturas y notas de entrega: OK");
+  console.log("Orden y selección completa de facturas y notas de entrega: OK");
 } finally {
   await database.destroy();
 }

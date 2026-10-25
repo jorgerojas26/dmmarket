@@ -33,6 +33,7 @@ export const fetchInvoiceList = async ({
     sortDir = 'desc',
     search,
     ruta,
+    all = false,
 }) => {
     const params = new URLSearchParams();
     params.append('from', from);
@@ -44,10 +45,11 @@ export const fetchInvoiceList = async ({
     params.append('sortDir', sortDir);
     if (search) params.append('search', search);
     if (ruta) params.append('ruta', ruta);
+    if (all) params.append('all', 'true');
 
     const response = await fetch(`${BASE_URL}?${params.toString()}`);
-    const invoices = await response.json();
-    return invoices;
+    if (!response.ok) throw new Error(`No se pudieron cargar las facturas (HTTP ${response.status})`);
+    return response.json();
 };
 
 export const fetchInvoiceDetail = async (invoiceId, showNoe) => {

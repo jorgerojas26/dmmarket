@@ -1,8 +1,8 @@
+import { fetchInvoiceList } from 'api/invoice';
 import InvoicesTable from 'components/InvoicesTable';
 import SelectedInvoicesModal from 'components/Modals/SelectedInvoicesModal';
 import ProductsTable from 'components/ProductsTable';
 import RouteFilter from 'components/RouteFilter';
-import { fetchInvoiceList } from 'api/invoice';
 import { useInvoiceList } from 'hooks/useInvoice';
 import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
 import useMediaQuery from 'hooks/useMediaQuery';
@@ -57,7 +57,11 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     }, [dateRange.from, dateRange.to, selectedRuta]);
 
     // ── SWR hook ──
-    const { data: invoiceRes, isLoading } = useInvoiceList(
+    const {
+        data: invoiceRes,
+        isLoading,
+        mutate,
+    } = useInvoiceList(
         {
             from: dateRange.from,
             to: dateRange.to,
@@ -108,8 +112,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                 from: dateRange.from,
                 to: dateRange.to,
                 showNoe,
-                page: 1,
-                limit: total,
+                all: true,
                 sortBy,
                 sortDir,
                 search: search || undefined,
@@ -117,12 +120,13 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
             });
             const rows = res.data || [];
             setSelectedRows((prev) => unionSelection(prev, rows, (inv) => inv.invoiceId));
+            await mutate();
         } catch (error) {
             console.error('Error al seleccionar todas las facturas:', error);
         } finally {
             setSelectAllLoading(false);
         }
-    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading]);
+    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading, mutate]);
 
     // "Deseleccionar todo": resta TODAS las facturas del filtro actual (todas las
     // páginas) de la selección acumulada; conserva las de otros filtros.
@@ -134,8 +138,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
                 from: dateRange.from,
                 to: dateRange.to,
                 showNoe,
-                page: 1,
-                limit: total,
+                all: true,
                 sortBy,
                 sortDir,
                 search: search || undefined,
@@ -143,12 +146,13 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
             });
             const rows = res.data || [];
             setSelectedRows((prev) => diffSelection(prev, rows, (inv) => inv.invoiceId));
+            await mutate();
         } catch (error) {
             console.error('Error al deseleccionar las facturas:', error);
         } finally {
             setSelectAllLoading(false);
         }
-    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading]);
+    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading, mutate]);
 
     const handleRemoveSelectedInvoice = useCallback((invoiceId) => {
         setSelectedRows((prev) => prev.filter((inv) => inv.invoiceId !== invoiceId));

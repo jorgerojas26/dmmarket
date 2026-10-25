@@ -15,6 +15,7 @@ const GET_INVOICES = async (req, res) => {
       sortDir,
       search,
       ruta,
+      all: req.query.all === "true",
     });
 
     res.status(200).json(response);
