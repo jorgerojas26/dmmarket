@@ -1,5 +1,5 @@
-import useSWR from 'hooks/swr-wrapper';
 import { useState } from 'react';
+import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { AccessForm, Field } from './forms';
 
@@ -21,7 +21,7 @@ export default function ClientHistory({ selection }) {
                 <h3 className="h6">Ventas mensuales autorizadas</h3>
                 {error && <p role="alert">No se pudo consultar el histórico mensual autorizado.</p>}
                 {!data && !error && <p role="status">Consultando histórico mensual…</p>}
-                {data && (
+                {data && !error && (
                     <table className="table table-dark">
                         <thead>
                             <tr>

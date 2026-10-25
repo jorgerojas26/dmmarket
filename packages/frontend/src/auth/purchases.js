@@ -2,6 +2,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { useAuth } from './context';
+import ExportButton from './export-button';
 import { AccessForm, Field } from './forms';
 
 export default function Purchases() {
@@ -130,6 +131,12 @@ export default function Purchases() {
             </p>
             {query && !data && !error && <p role="status">Consultando compras…</p>}
             {error && <p role="alert">No se pudieron consultar las compras autorizadas.</p>}
+            {query && data && !error && can('purchases.export') && (
+                <ExportButton
+                    resource="purchases"
+                    parameters={{ ...query.parameters, kind: query.view === 'products' ? 'products' : 'documents' }}
+                />
+            )}
             {data && !error && (
                 <>
                     <p role="status">Registros de compras autorizados: {data.pagination.total}</p>

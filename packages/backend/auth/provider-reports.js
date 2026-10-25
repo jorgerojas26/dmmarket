@@ -155,4 +155,4 @@ function createProviderReports({ sessions }) {
   return router;
 }
 
-module.exports = { createProviderReports };
+module.exports = { createProviderReports, directory };

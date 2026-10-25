@@ -1,5 +1,5 @@
-import useSWR from 'hooks/swr-wrapper';
 import { useEffect, useState } from 'react';
+import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { useAuth } from './context';
 import { AccessForm, Field } from './forms';

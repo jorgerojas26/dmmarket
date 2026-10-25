@@ -1,11 +1,16 @@
-import useSWR from 'hooks/swr-wrapper';
 import { useState } from 'react';
+import useSWR from 'swr';
 import { fetcher } from 'swr-config';
+import { useAuth } from './context';
+import ExportButton from './export-button';
 import { AccessForm, Field } from './forms';
 import SalesDetail from './sales-detail';
 import SalesSummary from './sales-summary';
 
 export default function Sales() {
+    const { session } = useAuth();
+    const exportGrant = session.permissions.find((grant) => grant.capability === 'sales.export');
+    const readGrant = session.permissions.find((grant) => grant.capability === 'sales.read');
     const today = new Date().toISOString().slice(0, 10);
     const [from, setFrom] = useState(`${today.slice(0, 7)}-01`);
     const [to, setTo] = useState(today);
@@ -113,7 +118,20 @@ export default function Sales() {
             {error && <p role="alert">No se pudo completar la consulta de ventas autorizada.</p>}
             {query && <SalesSummary query={query} />}
             {detail && <SalesDetail selection={detail} onClose={() => setDetail(null)} />}
-            {data && (
+            {query &&
+                data &&
+                !error &&
+                exportGrant &&
+                (exportGrant.scope === 'global' || readGrant?.scope === 'assigned' || query.parameters.employeeId) && (
+                    <ExportButton
+                        resource="sales"
+                        parameters={{
+                            ...query.parameters,
+                            kind: query.kind === 'productos' ? 'products' : 'documents',
+                        }}
+                    />
+                )}
+            {data && !error && (
                 <>
                     <table className="table table-dark">
                         <thead>

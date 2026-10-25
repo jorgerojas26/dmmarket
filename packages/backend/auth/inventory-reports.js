@@ -108,4 +108,4 @@ function createInventoryReports({ sessions }) {
   return router;
 }
 
-module.exports = { createInventoryReports };
+module.exports = { createInventoryReports, inventory, options };

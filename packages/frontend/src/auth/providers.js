@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { useAuth } from './context';
+import ExportButton from './export-button';
 import { AccessForm, Field } from './forms';
 
 function Document({ selection, onClose }) {
@@ -239,6 +240,7 @@ function Provider({ provider, onClose }) {
 }
 
 export default function Providers() {
+    const { can } = useAuth();
     const [search, setSearch] = useState('');
     const [requested, setRequested] = useState('');
     const [page, setPage] = useState(1);
@@ -266,6 +268,12 @@ export default function Providers() {
             </p>
             {!data && !error && <p role="status">Consultando proveedores…</p>}
             {error && <p role="alert">No se pudo consultar el directorio autorizado.</p>}
+            {data && !error && can('providers.export') && (
+                <ExportButton
+                    resource="providers"
+                    parameters={{ search: requested, sortBy: 'Empresa', sortDir: 'asc' }}
+                />
+            )}
             {data && !error && (
                 <>
                     <p role="status">Proveedores autorizados: {data.total}</p>

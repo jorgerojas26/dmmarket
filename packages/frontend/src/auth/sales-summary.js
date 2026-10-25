@@ -1,4 +1,4 @@
-import useSWR from 'hooks/swr-wrapper';
+import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 
 export default function SalesSummary({ query }) {
@@ -12,7 +12,7 @@ export default function SalesSummary({ query }) {
             <h2 className="h4">Resumen autorizado de ventas</h2>
             {error && <p role="alert">No se pudo consultar el resumen autorizado.</p>}
             {!data && !error && <p role="status">Consultando resumen…</p>}
-            {data && (
+            {data && !error && (
                 <>
                     <p>Total ventas: {data.kpis.totalRawProfit}</p>
                     <p>Documentos: {data.kpis.totalInvoices}</p>

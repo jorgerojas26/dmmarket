@@ -2,6 +2,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { useAuth } from './context';
+import ExportButton from './export-button';
 import { AccessForm, Field } from './forms';
 
 export default function Inventory() {
@@ -120,6 +121,9 @@ export default function Inventory() {
             </p>
             {query && !data && !error && <p role="status">Consultando inventario…</p>}
             {error && <p role="alert">No se pudo consultar el inventario autorizado.</p>}
+            {query && data && !error && can('inventory.export') && (
+                <ExportButton resource="inventory" parameters={query} />
+            )}
             {data && !error && (
                 <>
                     <p role="status">Productos autorizados: {data.total}</p>

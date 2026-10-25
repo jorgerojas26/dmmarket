@@ -1,5 +1,5 @@
-import useSWR from 'hooks/swr-wrapper';
 import { useState } from 'react';
+import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import AccessEditor from './access-editor';
 import { useAuth } from './context';
@@ -13,7 +13,7 @@ export function Rates() {
             <h2 className="h4">Tasas de referencia</h2>
             {error && <p role="alert">No se pudieron consultar las tasas autorizadas.</p>}
             {!data && !error && <p role="status">Cargando tasas…</p>}
-            {data && (
+            {data && !error && (
                 <table className="table table-dark">
                     <thead>
                         <tr>
@@ -53,7 +53,7 @@ function Users() {
         <section aria-label="Administración de usuarios">
             <h2 className="h4 mt-4">Administración de usuarios</h2>
             {error && <p role="alert">No se pudo consultar el directorio autorizado.</p>}
-            {data && (
+            {data && !error && (
                 <>
                     <table className="table table-dark">
                         <thead>

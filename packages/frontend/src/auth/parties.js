@@ -1,5 +1,5 @@
-import useSWR from 'hooks/swr-wrapper';
 import { useState } from 'react';
+import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import ClientHistory from './client-history';
 import { useAuth } from './context';
@@ -10,7 +10,7 @@ function Summary({ selection }) {
         `/api/${selection.kind}/${encodeURIComponent(selection.id)}/summary?${new URLSearchParams(selection.parameters)}`,
         fetcher,
     );
-    const totals = selection.kind === 'clients' ? data : data?.totals;
+    const totals = error ? undefined : selection.kind === 'clients' ? data : data?.totals;
     return (
         <section aria-label="Resumen de cliente o vendedor" className="card bg-dark border-secondary p-3 my-3">
             <h2 className="h5">Resumen autorizado: {selection.name}</h2>
@@ -55,7 +55,7 @@ export default function Parties({ kind: fixedKind }) {
     const parameters = query?.stats ? { ...query.parameters, page, limit: 20 } : query?.parameters;
     const path = query?.stats ? `${query.kind}/list` : query?.kind === 'clients' ? 'clients' : 'employees';
     const { data, error } = useSWR(query ? `/api/${path}?${new URLSearchParams(parameters)}` : null, fetcher);
-    const rows = Array.isArray(data) ? data : data?.data;
+    const rows = error ? undefined : Array.isArray(data) ? data : data?.data;
     const fields =
         query?.kind === 'clients'
             ? [

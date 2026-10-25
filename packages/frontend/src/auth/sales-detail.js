@@ -1,5 +1,5 @@
-import useSWR from 'hooks/swr-wrapper';
 import { useMemo } from 'react';
+import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 
 export default function SalesDetail({ selection, onClose }) {
@@ -17,7 +17,7 @@ export default function SalesDetail({ selection, onClose }) {
             </button>
             {error && <p role="alert">El documento no está disponible para esta sesión.</p>}
             {!data && !error && <p role="status">Consultando documento…</p>}
-            {data && (
+            {data && !error && (
                 <>
                     <p>Cliente: {data.cliente}</p>
                     <p>Vendedor: {data.vendedor}</p>

@@ -159,11 +159,14 @@ async function listSales(transaction, access, query, kind) {
         cliente: raw("COALESCE(c.Empresa, 'Cliente no registrado')"),
         vendedor: raw("COALESCE(v.Empresa, 'Vendedor no registrado')"),
       };
-  const count = await base.clone().countDistinct({ total: group }).first();
+  const count = await transaction
+    .from(base.clone().select({ id: group }).groupByRaw("BINARY ??", [group]).as("i"))
+    .count("* as total")
+    .first();
   const data = await base
     .clone()
     .select({ ...columns, ...metrics })
-    .groupBy(group)
+    .groupByRaw("BINARY ??", [group])
     .orderBy(sort[sortBy], query.sortDir)
     .limit(query.limit)
     .offset((query.page - 1) * query.limit);
