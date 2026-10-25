@@ -862,3 +862,69 @@ test("compras financieras muestran sólo importes autorizados y filtros coherent
   await expect(report.getByText("Total Compras autorizado del filtro: 80.00", { exact: true })).toBeVisible();
   await expect(table.getByRole("cell", { name: "16.00", exact: true })).toBeVisible();
 });
+
+test("resumen de compras básico sólo muestra cantidades y comparación no financiera", async ({ page, environment }) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  const user = await environment.seedUser({ permissions: [{ capability: "purchases.read", scope: "global" }] });
+  await login(page, environment, user);
+  await openModule(page, "Compras", "Resumen");
+  const report = page.getByRole("region", { name: "Resumen de compras", exact: true });
+  await report.getByLabel("Resumen de compras desde", { exact: true }).fill("2026-08-01");
+  await report.getByLabel("Resumen de compras hasta", { exact: true }).fill("2026-08-31");
+  await report.getByLabel("Comparar compras desde", { exact: true }).fill("2026-07-01");
+  await report.getByLabel("Comparar compras hasta", { exact: true }).fill("2026-07-31");
+  await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
+  await expect(report.getByText("Documentos de compras: 3", { exact: true })).toBeVisible();
+  await expect(report.getByText("Unidades del período comparado: 2", { exact: true })).toBeVisible();
+  await expect(report.getByRole("table", { name: "Proveedores del resumen de compras", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("columnheader", { name: "Total Compras autorizado", exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Vistas de Compras", exact: true })
+      .getByRole("link", { name: "Pareto", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("resumen y Pareto de compras financieros respetan filtro y no requieren lectura de ventas", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "purchases.read", scope: "global" },
+      { capability: "purchases.costs", scope: "global" },
+      { capability: "providers.read", scope: "global" },
+    ],
+  });
+  await login(page, environment, user);
+  await openModule(page, "Compras", "Resumen");
+  const report = page.getByRole("region", { name: "Resumen de compras", exact: true });
+  await report.getByLabel("Resumen de compras desde", { exact: true }).fill("2026-08-01");
+  await report.getByLabel("Resumen de compras hasta", { exact: true }).fill("2026-08-31");
+  await report.getByLabel("Comparar compras desde", { exact: true }).fill("2026-07-01");
+  await report.getByLabel("Comparar compras hasta", { exact: true }).fill("2026-07-31");
+  await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
+  await expect(report.getByText("Total Compras autorizado: 130", { exact: true })).toBeVisible();
+  await expect(report.getByText("Total Compras autorizado del período comparado: 16", { exact: true })).toBeVisible();
+  await expect(
+    report
+      .getByRole("table", { name: "Proveedores del resumen de compras", exact: true })
+      .getByRole("cell", { name: "Proveedor compras A", exact: true }),
+  ).toBeVisible();
+  await expect(report.getByText("PRIVATE-PUR", { exact: false })).toHaveCount(0);
+  await openModule(page, "Compras", "Pareto");
+  const pareto = page.getByRole("region", { name: "Pareto de compras", exact: true });
+  await pareto.getByLabel("Resumen de compras desde", { exact: true }).fill("2026-08-01");
+  await pareto.getByLabel("Resumen de compras hasta", { exact: true }).fill("2026-08-31");
+  await pareto.getByRole("button", { name: "Consultar Pareto de compras", exact: true }).click();
+  await expect(pareto.getByText("Productos clasificados en compras: 2", { exact: true })).toBeVisible();
+  await expect(pareto.getByRole("cell", { name: "61.54", exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Módulos disponibles", exact: true })
+      .getByRole("link", { name: "Ventas", exact: true }),
+  ).toHaveCount(0);
+});

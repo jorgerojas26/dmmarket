@@ -257,4 +257,4 @@ function createParetoReports({ sessions }) {
   return router;
 }
 
-module.exports = { createParetoReports };
+module.exports = { createParetoReports, classify };

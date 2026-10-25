@@ -46,6 +46,7 @@ async function seedPurchases(db) {
     { IdProveedor: "PUR-B", Empresa: "Proveedor compras B", Rif: "PRIVATE-PUR-RIF-B" },
   ]);
   await db("mastercomp").insert([
+    { IdFactura: "purchase-july", Fecha: "2026-07-01", IdProveedor: "PUR-A", Anulada: false },
     {
       IdFactura: "purchase-august-A",
       IdProveedor: "PUR-A",
@@ -73,6 +74,7 @@ async function seedPurchases(db) {
     { IdFactura: "purchase-september", IdProveedor: "PUR-B", Fecha: "2026-09-01", Anulada: false },
   ]);
   await db("slavecomp").insert([
+    { IdFactura: "purchase-july", IdProducto: "P", Precio: 8, Cantidad: 2 },
     { IdFactura: "purchase-august-A", IdProducto: "P", Descripcion: "Producto compra P", Precio: 10, Cantidad: 2 },
     { IdFactura: "purchase-august-A", IdProducto: "P", Descripcion: "Producto compra P", Precio: 20, Cantidad: 3 },
     {
