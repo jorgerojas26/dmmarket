@@ -1,16 +1,17 @@
 import { ResponsiveLine } from '@nivo/line';
-import { fetchClientSales } from 'api/clients';
-import { CurrencyRateContext } from 'context/currency_rate';
-import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
-import DateRangePicker from 'components/DateRangePicker';
-import Table from 'components/Table';
 import { fetchInvoiceDetail } from 'api/invoice';
+import { fetchSalesExport } from 'api/sales';
+import { useAuth } from 'auth/context';
+import DateRangePicker from 'components/DateRangePicker';
+import Modal from 'components/Modal';
+import Table from 'components/Table';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { useClientSales, useClientSummary } from 'hooks/useClients';
 import { DateTime } from 'luxon';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import Modal from 'components/Modal';
 import { Alert, Badge, Spinner } from 'react-bootstrap';
 import { formatCurrency, formatMoney, formatReportId } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
@@ -21,7 +22,6 @@ pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
 
 const DEFAULT_SORT = [{ id: 'fecha', desc: true }];
 const LIMIT = 50;
-const CHART_LIMIT = 1000;
 
 const SALES_COLUMNS = [
     { Header: 'Documento', accessor: 'idFactura' },
@@ -143,6 +143,8 @@ const aggregateSalesByMonth = (sales) => {
 };
 
 const ClientDashboardModal = ({ show, onClose, client }) => {
+    const { session } = useAuth();
+    const exporting = session.permissions.some((grant) => grant.capability === 'sales.export');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext) || {};
     const [salesSearch, setSalesSearch] = useState('');
@@ -193,26 +195,11 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
         clientEnabled,
     );
 
-    // Chart: fetch all sales (up to CHART_LIMIT)
-    const chartEnabled = clientEnabled && (summary?.totalCount || 0) > 0;
-    const chartLimit = Math.min(summary?.totalCount || 0, CHART_LIMIT);
-    const { data: chartSalesData, isLoading: chartLoading } = useClientSales(
-        client?.IdCliente,
-        {
-            from: dateRange.from,
-            to: dateRange.to,
-            page: 1,
-            limit: chartLimit || 1,
-            showNoe,
-        },
-        chartEnabled,
+    const chartLoading = summaryLoading;
+    const chartData = useMemo(
+        () => (summary?.dailySales?.length ? [{ id: 'Ventas', data: aggregateSalesByMonth(summary.dailySales) }] : []),
+        [summary],
     );
-
-    const chartData = useMemo(() => {
-        if (!chartSalesData?.data?.length) return [];
-        const aggregated = aggregateSalesByMonth(chartSalesData.data);
-        return [{ id: 'Ventas', data: aggregated }];
-    }, [chartSalesData]);
 
     const handleDateRangeChange = ({ from, to }) => {
         setDateRange({ from, to });
@@ -232,20 +219,32 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
     const handlePrintSales = async (config) => {
         setPrintError('');
         try {
-            const result = await fetchClientSales(client.IdCliente, {
+            const result = await fetchSalesExport({
                 ...dateRange,
-                page: 1,
-                limit: salesData?.total || LIMIT,
-                search: salesSearch || undefined,
+                clientId: client.IdCliente,
+                search: config.search ?? salesSearch,
                 sortBy: salesSort[0]?.id,
                 sortDir: salesSort[0]?.desc ? 'desc' : 'asc',
                 showNoe,
             });
-            const rows = sortRows(result.data || [], config?.sortBy);
-            const columns = config?.columns?.length ? config.columns : SALES_COLUMNS;
+            if (
+                config.currency === 'BsS' &&
+                !(Number(currencyRate?.Cambio) > 0 && Number.isFinite(Number(currencyRate?.Cambio)))
+            )
+                throw new Error('Tasa no disponible.');
+            const serverColumns = new Set(
+                result.columns.map((column) => (column.key === 'invoiceId' ? 'idFactura' : column.key)),
+            );
+            const rows = sortRows(
+                (result.data || []).map((row) => ({ ...row, idFactura: row.invoiceId })),
+                config?.sortBy,
+            );
+            const columns = (config.columns || []).filter((column) => serverColumns.has(column.accessor));
+            if (!columns.length) throw new Error('Selecciona columnas autorizadas.');
             const moneyKeys = ['monto', 'utilidad'];
             const formatValue = (key, value) => {
-                if (moneyKeys.includes(key)) return formatMoney(value, config?.currency, currencyRate?.Cambio);
+                if (moneyKeys.includes(key))
+                    return value == null ? 'No disponible' : formatMoney(value, config?.currency, currencyRate?.Cambio);
                 if (key === 'fecha') return DateTime.fromISO(value).toFormat('dd/MM/yyyy');
                 return String(value ?? '');
             };
@@ -273,7 +272,15 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                                     ),
                                     columns.map((column) => ({
                                         text: moneyKeys.includes(column.accessor)
-                                            ? formatValue(column.accessor, result.totals?.[column.accessor] ?? 0)
+                                            ? formatValue(
+                                                  column.accessor,
+                                                  rows.some((row) => row[column.accessor] == null)
+                                                      ? null
+                                                      : rows.reduce(
+                                                            (sum, row) => sum + Number(row[column.accessor]),
+                                                            0,
+                                                        ),
+                                              )
                                             : '',
                                         bold: true,
                                     })),
@@ -491,7 +498,10 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
             <div className="card-body">
                 <Table
                     data={salesData?.data || []}
-                    columns={SALES_COLUMNS}
+                    columns={SALES_COLUMNS.filter(
+                        (column) =>
+                            column.accessor !== 'utilidad' || Object.hasOwn(salesData?.totals || {}, 'utilidad'),
+                    )}
                     loading={salesLoading}
                     showFooter={!!salesData?.totals}
                     summaries={salesData?.totals}
@@ -504,7 +514,11 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                         placeholder: 'Buscar por documento o vendedor...',
                     }}
                     sorting={{ enabled: true, sortBy: salesSort, onSort: handleSalesSort }}
-                    print={{ enabled: true, onGlobalPrint: handlePrintSales, storageKey: 'cliente-ventas' }}
+                    print={{
+                        enabled: exporting && salesData?.exportAllowed === true,
+                        onGlobalPrint: handlePrintSales,
+                        storageKey: 'cliente-ventas',
+                    }}
                     pagination={{
                         enabled: true,
                         page: salesPage,

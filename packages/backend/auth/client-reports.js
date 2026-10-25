@@ -96,6 +96,7 @@ async function inactiveClients(transaction, access, query) {
   const selected = {
     IdCliente: "c.IdCliente",
     Empresa: "c.Empresa",
+    ruta: "c.Ruta",
     ruta_nombre: transaction.raw("COALESCE(r.Nombre, c.Ruta)"),
     last_factura: transaction.raw("CAST(DATE_FORMAT(h.lastSale, '%Y-%m-%d') AS CHAR)"),
     dias_inactivo: transaction.raw("DATEDIFF(?, h.lastSale)", [query.to]),
@@ -174,4 +175,4 @@ function createClientReports({ sessions }) {
   return router;
 }
 
-module.exports = { createClientReports };
+module.exports = { createClientReports, inactiveClients };

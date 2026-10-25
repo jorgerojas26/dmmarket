@@ -107,6 +107,7 @@ function createReceivablesService({
   personal = true,
   referenceRate = true,
   actorId = null,
+  canReadSale = () => false,
   onOperation = async () => {},
 }) {
   async function readiness() {
@@ -136,7 +137,13 @@ function createReceivablesService({
       .whereRaw("BINARY d.IdCliente <=> BINARY ?", [clientId])
       .where("d.TipoDoc", "FAC")
       .where("d.MonedaOriginal", "USD")
-      .select("d.*", "f.Anulada as saleCancelled", "f.IdCliente as saleClient")
+      .select(
+        "d.*",
+        "f.Anulada as saleCancelled",
+        "f.IdCliente as saleClient",
+        "f.IdVend as saleSeller",
+        "f.IdFactura as saleIdentity",
+      )
       .orderByRaw("CASE WHEN d.FechaVencimiento IS NULL OR d.FechaVencimiento = '0000-00-00' THEN 1 ELSE 0 END")
       .orderBy("d.FechaVencimiento")
       .orderBy("d.FechaEmision")
@@ -443,10 +450,10 @@ function createReceivablesService({
       );
   }
 
-  async function list(filters = {}) {
+  async function list(filters = {}, reportLimit) {
     const status = await requireSchema();
     const page = integer(filters.page, 1);
-    const limit = integer(filters.limit, 20, 100);
+    const limit = reportLimit || integer(filters.limit, 20, 100);
     const search = text(filters.search, 100);
     const ruta = text(filters.ruta, 10);
     const state = filters.state || "debt";
@@ -531,12 +538,12 @@ function createReceivablesService({
     };
   }
 
-  async function detail(clientId, filters = {}) {
+  async function detail(clientId, filters = {}, reportLimit) {
     clientId = clientId === "__none__" ? null : clientId === "__empty__" ? "" : clientId;
     const status = await requireSchema();
     const page = integer(filters.page, 1);
     const timelinePage = integer(filters.timelinePage, 1);
-    const limit = 20;
+    const limit = reportLimit || 20;
     return db.transaction(async (connection) => {
       const state = await context(connection, clientId, false, true);
       const applied = await connection("cxc_cruces as x")
@@ -556,6 +563,7 @@ function createReceivablesService({
           return {
             id: d.IdDocumento,
             sale: d.IdFactura,
+            canReadSale: d.saleIdentity != null && canReadSale(d.saleSeller),
             issued: dateOnly(d.FechaEmision),
             due: dateOnly(d.FechaVencimiento),
             original: fixed(d.MontoOriginal),
@@ -660,7 +668,15 @@ function createReceivablesService({
               registeredAt:
                 event.registeredAt instanceof Date ? dateOnly(event.registeredAt) : String(event.registeredAt),
               data,
-              applications: allocations,
+              applications: allocations.map((application) => ({
+                ...application,
+                canReadSale: state.docs.some(
+                  (document) =>
+                    String(document.IdFactura) === String(application.sale) &&
+                    document.saleIdentity != null &&
+                    canReadSale(document.saleSeller),
+                ),
+              })),
               excess: event.movementId
                 ? fixed(Money.max(new Money(event.base).minus(total(allocations.map((a) => a.amount))), 0))
                 : null,

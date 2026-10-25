@@ -1,4 +1,5 @@
-import { fetchReceivables } from 'api/receivables';
+import { fetchReceivableExport } from 'api/receivables';
+import { useAuth } from 'auth/context';
 import RouteFilter from 'components/RouteFilter';
 import { darkSelectStyles } from 'components/selectStyles';
 import Table from 'components/Table';
@@ -13,6 +14,7 @@ import Form from 'react-bootstrap/Form';
 import Select from 'react-select';
 import { formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
+import { useReceivablesAccess } from './access';
 import ClientModal from './ClientModal';
 import { dateLabel, money } from './format';
 import PaymentDrawer from './PaymentDrawer';
@@ -36,6 +38,8 @@ const stateOptions = [
 const accountState = (client) => (Number(client.balance) > 0 ? 'Con deuda' : 'Sin deuda pendiente');
 
 export default function Receivables() {
+    const { can } = useAuth();
+    const { canOperate, canExport } = useReceivablesAccess();
     const [view, setView] = useState('debt');
     const [state, setState] = useState('all');
     const [search, setSearch] = useState('');
@@ -154,7 +158,13 @@ export default function Receivables() {
                             variant="outline-primary"
                             id={`cxc-pay-${encodeURIComponent(row.original.id)}`}
                             aria-label={`Abonar a ${row.original.name || row.original.id}`}
-                            disabled={!data || !!error || isValidating || Number(row.original.balance) <= 0}
+                            disabled={
+                                !canOperate('payment') ||
+                                !data ||
+                                !!error ||
+                                isValidating ||
+                                Number(row.original.balance) <= 0
+                            }
                             onClick={(event) => {
                                 event.stopPropagation();
                                 openPayment(row.original, event.currentTarget.id);
@@ -165,7 +175,7 @@ export default function Receivables() {
                     ),
             },
         ],
-        [isHistory, openAccount, openPayment, data, error, isValidating],
+        [isHistory, openAccount, openPayment, data, error, isValidating, canOperate],
     );
     const handlePrint = useCallback(
         async (config) => {
@@ -179,13 +189,10 @@ export default function Receivables() {
                     sortDir: sort.sortDir,
                     limit: 100,
                 };
-                const firstPage = await fetchReceivables({ ...filters, page: 1 });
-                const rows = [...(firstPage.data || [])];
-                for (let currentPage = 2; rows.length < firstPage.total; currentPage += 1) {
-                    const result = await fetchReceivables({ ...filters, page: currentPage });
-                    if (!result.data?.length) break;
-                    rows.push(...result.data);
-                }
+                delete filters.limit;
+                filters.search = config.search ?? search;
+                const report = await fetchReceivableExport(filters);
+                const rows = report.data;
                 const columnsByAccessor = {
                     name: { width: '*', render: (row) => row.name || row.id },
                     accountState: { width: 110, render: accountState },
@@ -270,7 +277,11 @@ export default function Receivables() {
                 <div>
                     <h4 className="m-0 text-light">Cuentas por cobrar</h4>
                 </div>
-                <Button ref={paymentTrigger} disabled={!data || !!error} onClick={() => openPayment(null, null)}>
+                <Button
+                    ref={paymentTrigger}
+                    disabled={!canOperate('payment') || !data || !!error}
+                    onClick={() => openPayment(null, null)}
+                >
                     Registrar abono
                 </Button>
             </header>
@@ -288,6 +299,7 @@ export default function Receivables() {
             <div className="cxc-filters clients-content-wrapper">
                 <Form.Group className="cxc-filter cxc-route-filter">
                     <RouteFilter
+                        enabled={can('clients.read')}
                         inputId="cxc-route"
                         value={ruta ? { value: ruta, label: ruta } : null}
                         onChange={changeFilter(setRuta, '')}
@@ -410,7 +422,7 @@ export default function Receivables() {
                             },
                         }}
                         print={{
-                            enabled: true,
+                            enabled: canExport && Boolean(data) && !error,
                             onGlobalPrint: handlePrint,
                             columns: columns.filter((column) => column.id !== 'actions'),
                             storageKey: isHistory ? 'cuentas-por-cobrar-historial' : 'cuentas-por-cobrar',

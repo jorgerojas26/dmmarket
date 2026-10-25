@@ -3,6 +3,10 @@ let generation = 0;
 let csrfToken = null;
 const pending = new Set();
 
+export function authTransportGeneration() {
+    return generation;
+}
+
 export function clearAuthTransport() {
     generation += 1;
     csrfToken = null;

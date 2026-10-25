@@ -36,6 +36,7 @@ function createReceivablesReports({ sessions, security }) {
             db: transaction,
             personal: access.hasGlobal("clients.personal"),
             referenceRate: access.hasGlobal("rates.read"),
+            canReadSale: (sellerId) => access.canRecord("sales.read", sellerId),
           });
           return work(service, req, query, transaction);
         }),

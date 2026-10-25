@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
-import { authRequest, clearAuthTransport, setCsrfToken } from './transport';
+import { authRequest, authTransportGeneration, clearAuthTransport, setCsrfToken } from './transport';
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -17,6 +17,39 @@ export function AuthProvider({ children }) {
     const sequence = useRef(0);
     const channel = useRef(null);
     const busy = useRef(false);
+    const pendingReauthentication = useRef(null);
+    const [reauthenticationRequired, setReauthenticationRequired] = useState(false);
+    const finishReauthentication = useCallback(() => {
+        pendingReauthentication.current?.resolve();
+        pendingReauthentication.current = null;
+        setReauthenticationRequired(false);
+    }, []);
+    const cancelReauthentication = useCallback(() => {
+        pendingReauthentication.current?.reject(new DOMException('Confirmación cancelada.', 'AbortError'));
+        pendingReauthentication.current = null;
+        setReauthenticationRequired(false);
+    }, []);
+    useEffect(() => cancelReauthentication, [epoch, cancelReauthentication]);
+    const runPrivileged = useCallback(async (work) => {
+        const generation = authTransportGeneration();
+        try {
+            return await work();
+        } catch (error) {
+            if (error.code !== 'RECENT_AUTH_REQUIRED') throw error;
+            if (!pendingReauthentication.current) {
+                const pending = {};
+                pending.promise = new Promise((resolve, reject) => {
+                    pending.resolve = resolve;
+                    pending.reject = reject;
+                });
+                pendingReauthentication.current = pending;
+                setReauthenticationRequired(true);
+            }
+            await pendingReauthentication.current.promise;
+            if (authTransportGeneration() !== generation) throw new DOMException('La sesión cambió.', 'AbortError');
+            return work();
+        }
+    }, []);
 
     const notify = useCallback(() => {
         channel.current?.postMessage({ type: 'changed' });
@@ -192,7 +225,21 @@ export function AuthProvider({ children }) {
     const can = (capability) =>
         session?.permissions?.some((grant) => grant.capability === capability && grant.scope === 'global');
     return (
-        <AuthContext.Provider value={{ session, checking, failure, epoch, action, check, can }}>
+        <AuthContext.Provider
+            value={{
+                session,
+                checking,
+                failure,
+                epoch,
+                action,
+                check,
+                can,
+                runPrivileged,
+                reauthenticationRequired,
+                finishReauthentication,
+                cancelReauthentication,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     );

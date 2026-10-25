@@ -26,7 +26,7 @@ async function enter(page, environment, permissions) {
   await page.getByLabel("Código MFA", { exact: true }).fill(await environment.token(user.secret));
   await page.getByRole("button", { name: "Verificar código", exact: true }).click();
   await openModule(page, "Cartera");
-  await page.getByRole("button", { name: "Abrir cuenta C", exact: true }).click();
+  await page.getByRole("button", { name: "Cliente sintético", exact: true }).click();
   return user;
 }
 test.beforeEach(async ({ environment }) => {
@@ -37,7 +37,34 @@ test.beforeEach(async ({ environment }) => {
     .update({ SaldoActual: environment.db.raw("MontoOriginal"), Estatus: "PENDIENTE" });
 });
 
-test("cobranza registra, cierra, reabre y anula con usuario real y distribución completa", async ({
+async function payment(page, amount) {
+  await page.getByRole("dialog").getByRole("button", { name: "Registrar abono", exact: true }).click();
+  const operation = page.getByRole("form", { name: "Registrar abono", exact: true });
+  await operation.getByRole("button", { name: "USD", exact: true }).click();
+  await operation.getByLabel("Importe recibido", { exact: true }).fill(amount);
+  await operation.getByLabel("Método", { exact: true }).selectOption("EFECTIVO");
+  await operation.getByRole("button", { name: "Revisar abono", exact: true }).click();
+  await expect(operation.getByRole("button", { name: "Confirmar abono", exact: true })).toBeVisible();
+  return operation;
+}
+async function balance(environment, amount) {
+  await expect
+    .poll(async () =>
+      Number(
+        (
+          await environment
+            .db("cxc_documentos")
+            .where("IdCliente", "C")
+            .whereIn("IdDocumento", [1, 2])
+            .sum("SaldoActual as total")
+            .first()
+        ).total,
+      ),
+    )
+    .toBe(amount);
+}
+
+test("cartera original registra, cierra, reabre y anula con actor real y distribución completa", async ({
   page,
   environment,
 }) => {
@@ -48,14 +75,11 @@ test("cobranza registra, cierra, reabre y anula con usuario real y distribución
     grant("receivables.reopen"),
     grant("receivables.void"),
   ]);
-  const account = page.getByRole("region", { name: "Cuenta de cobranza autorizada", exact: true });
-  await account.getByRole("button", { name: "Registrar abono", exact: true }).click();
-  const operation = page.getByRole("region", { name: "Operación autorizada de cobranza", exact: true });
-  await operation.getByLabel("Importe del abono", { exact: true }).fill("150");
-  await operation.getByRole("button", { name: "Previsualizar abono", exact: true }).click();
-  await expect(operation.getByText("Saldo después de confirmar (USD): 150.0000", { exact: true })).toBeVisible();
+  const operation = await payment(page, "150");
   await operation.getByRole("button", { name: "Confirmar abono", exact: true }).click();
-  await expect(account.getByText("Saldo completo del cliente (USD): 150.0000", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Abono registrado", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Listo", exact: true }).click();
+  await balance(environment, 150);
   const row = await environment.db("cxc_operaciones").where("Tipo", "ABONO").first();
   expect(row.ActorId).toBe(user.id);
   expect(
@@ -64,25 +88,34 @@ test("cobranza registra, cierra, reabre y anula con usuario real y distribución
     [1, "100.0000"],
     [2, "50.0000"],
   ]);
-  await account.getByRole("button", { name: "Cerrar deuda 2", exact: true }).click();
-  await operation
-    .getByLabel("Motivo de la operación de cobranza", { exact: true })
-    .fill("Cierre manual E2E autorizado");
-  await operation.getByRole("button", { name: "Previsualizar cierre", exact: true }).click();
-  await operation.getByRole("button", { name: "Confirmar cierre", exact: true }).click();
-  await expect(account.getByText("Saldo completo del cliente (USD): 0.0000", { exact: true })).toBeVisible();
-  await account.getByLabel("Documentos de cobranza", { exact: true }).selectOption("all");
-  await account.getByRole("button", { name: "Reabrir deuda 2", exact: true }).click();
-  await operation.getByLabel("Motivo de la operación de cobranza", { exact: true }).fill("Reapertura E2E autorizada");
-  await operation.getByRole("button", { name: "Previsualizar reapertura", exact: true }).click();
-  await operation.getByRole("button", { name: "Confirmar reapertura", exact: true }).click();
-  await expect(account.getByText("Saldo completo del cliente (USD): 150.0000", { exact: true })).toBeVisible();
-  const movement = JSON.parse(row.Datos).movementId;
-  await account.getByRole("button", { name: `Anular abono ${movement}`, exact: true }).click();
-  await operation.getByLabel("Motivo de la operación de cobranza", { exact: true }).fill("Anulación E2E autorizada");
-  await operation.getByRole("button", { name: "Previsualizar anulación", exact: true }).click();
-  await operation.getByRole("button", { name: "Confirmar anulación", exact: true }).click();
-  await expect(account.getByText("Saldo completo del cliente (USD): 300.0000", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Ver desglose de factura 2", exact: true }).click();
+  await page.getByRole("button", { name: "Cerrar deuda de factura 2", exact: true }).click();
+  const closure = page.getByRole("form", { name: "Cierre de deuda", exact: true });
+  await closure.getByLabel("Motivo del cierre", { exact: true }).fill("Cierre manual E2E autorizado");
+  await closure.getByRole("button", { name: "Revisar cierre", exact: true }).click();
+  await closure.getByRole("button", { name: "Confirmar cierre", exact: true }).click();
+  await balance(environment, 0);
+  await page
+    .getByRole("group", { name: "Facturas de la cuenta", exact: true })
+    .getByRole("button", { name: "Todas", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Ver desglose de factura 2", exact: true }).click();
+  await page.getByRole("button", { name: "Reabrir cierre de factura 2", exact: true }).click();
+  const reopen = page.getByRole("form", { name: "Reabrir cierre", exact: true });
+  await reopen.getByLabel("Motivo", { exact: true }).pressSequentially("Reapertura E2E autorizada");
+  await expect(reopen.getByLabel("Motivo", { exact: true })).toHaveValue("Reapertura E2E autorizada");
+  const reviewed = page.waitForResponse((response) => response.url().includes("/api/receivables/C/preview"));
+  await reopen.getByRole("button", { name: "Revisar operación", exact: true }).click();
+  expect((await reviewed).status()).toBe(200);
+  await reopen.getByRole("button", { name: "Confirmar reapertura", exact: true }).click();
+  await balance(environment, 150);
+  await page.getByRole("button", { name: /Ver detalles: Abono,/ }).click();
+  await page.getByRole("button", { name: "Anular abono", exact: true }).click();
+  const reversal = page.getByRole("form", { name: "Anulación de abono", exact: true });
+  await reversal.getByLabel("Motivo de anulación", { exact: true }).fill("Anulación E2E autorizada");
+  await reversal.getByRole("button", { name: "Revisar anulación", exact: true }).click();
+  await reversal.getByRole("button", { name: "Confirmar anulación", exact: true }).click();
+  await balance(environment, 300);
   expect(
     Number(
       (
@@ -97,30 +130,52 @@ test("cobranza registra, cierra, reabre y anula con usuario real y distribución
   ).toBe(4);
 });
 
-test("permiso exclusivo de abono no muestra cierres y bloquea cancelación mientras confirma", async ({
+test("permiso exclusivo de abono deshabilita cierres y bloquea cancelación mientras confirma", async ({
   page,
   environment,
 }) => {
   await enter(page, environment, [grant("receivables.read"), grant("receivables.payment")]);
-  const account = page.getByRole("region", { name: "Cuenta de cobranza autorizada", exact: true });
-  await expect(account.getByRole("button", { name: "Cerrar deuda 1", exact: true })).toHaveCount(0);
-  await account.getByRole("button", { name: "Registrar abono", exact: true }).click();
-  const operation = page.getByRole("region", { name: "Operación autorizada de cobranza", exact: true });
-  await operation.getByLabel("Importe del abono", { exact: true }).fill("5");
-  await operation.getByRole("button", { name: "Previsualizar abono", exact: true }).click();
-  await expect(operation.getByRole("button", { name: "Confirmar abono", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Ver desglose de factura 1", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Cerrar deuda de factura 1", exact: true })).toBeDisabled();
+  const operation = await payment(page, "5");
   const connection = await environment.db.client.acquireConnection();
   let locked = false;
   try {
     await environment.db.raw("LOCK TABLES cxc_documentos WRITE").connection(connection);
     locked = true;
     await operation.getByRole("button", { name: "Confirmar abono", exact: true }).click();
-    await expect(operation.getByRole("button", { name: "Cancelar operación de cobranza", exact: true })).toBeDisabled();
+    await expect(operation.getByRole("button", { name: "Cancelar", exact: true })).toBeDisabled();
     await environment.db.raw("UNLOCK TABLES").connection(connection);
     locked = false;
-    await expect(account.getByText("Saldo completo del cliente (USD): 295.0000", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Abono registrado", exact: true })).toBeVisible();
+    await balance(environment, 295);
   } finally {
     if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
     await environment.db.client.releaseConnection(connection);
   }
+});
+
+test("abono original confirma identidad reciente sin perder formulario ni duplicar la operación", async ({
+  page,
+  environment,
+}) => {
+  const user = await enter(page, environment, [grant("receivables.read"), grant("receivables.payment")]);
+  const used = await environment.token(user.secret);
+  const operation = await payment(page, "5");
+  await environment
+    .db("dmmarket_auth_session_state")
+    .where("user_id", user.id)
+    .update({ password_ms: Date.now() - 301000, mfa_ms: Date.now() - 301000 });
+  await operation.getByRole("button", { name: "Confirmar abono", exact: true }).click();
+  const confirmation = page.getByRole("dialog", { name: "Confirmar identidad", exact: true });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByLabel("Contraseña de reautenticación", { exact: true }).fill(user.password);
+  await expect.poll(async () => await environment.token(user.secret), { timeout: 35000 }).not.toBe(used);
+  await confirmation
+    .getByLabel("Código MFA de reautenticación", { exact: true })
+    .fill(await environment.token(user.secret));
+  await confirmation.getByRole("button", { name: "Confirmar identidad", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Abono registrado", exact: true })).toBeVisible();
+  await balance(environment, 295);
+  expect(Number((await environment.db("cxc_operaciones").where("ActorId", user.id).count("* as n").first()).n)).toBe(1);
 });

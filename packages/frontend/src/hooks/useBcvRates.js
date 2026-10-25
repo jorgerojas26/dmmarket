@@ -19,8 +19,8 @@ export function useBcvStatus(enabled = true) {
 }
 
 // La tasa de una fecha es un dato cerrado: no se revalida al enfocar.
-export function useBcvRateByDate(fecha) {
-    return useSWR(fecha ? ['bcv-rate', fecha] : null, () => fetchBcvRateByDate(fecha), {
+export function useBcvRateByDate(fecha, enabled = true) {
+    return useSWR(enabled && fecha ? ['bcv-rate', fecha] : null, () => fetchBcvRateByDate(fecha), {
         dedupingInterval: 300_000,
         revalidateOnFocus: false,
     });

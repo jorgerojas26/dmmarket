@@ -1,34 +1,40 @@
+import { useAuth } from 'auth/context';
 import ClientDashboardModal from 'components/ClientDashboardModal';
 import ClientsTable from 'components/ClientsTable';
 import ClientsDashboard from 'components/Dashboard/ClientsDashboard';
 import DateRangePicker from 'components/DateRangePicker';
 import Receivables from 'components/Receivables';
-import Sidebar from 'components/Sidebar';
 import RouteFilter from 'components/RouteFilter';
+import Sidebar from 'components/Sidebar';
 import { ShowNoeContext } from 'context/show_noe';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import { useHistory, useLocation } from 'react-router-dom';
 
-const VALID_VIEWS = ['dashboard', 'clients', 'receivables'];
-
 const ClientesPage = () => {
+    const { session, can } = useAuth();
+    const analytics = can('clients.read') && session.permissions.some((grant) => grant.capability === 'sales.read');
+    const availableViews = [
+        ...(analytics ? ['dashboard'] : []),
+        ...(can('clients.read') ? ['clients'] : []),
+        ...(can('receivables.read') ? ['receivables'] : []),
+    ];
     const history = useHistory();
     const location = useLocation();
 
     // --- Parse active view from URL query params ---
     const searchParams = new URLSearchParams(location.search);
     const urlView = searchParams.get('view');
-    const initialView = VALID_VIEWS.includes(urlView) ? urlView : 'dashboard';
+    const initialView = availableViews.includes(urlView) ? urlView : availableViews[0];
 
     const [dateRange, setDateRange] = useState({
-        from: DateTime.now().startOf('month').toISODate(),
-        to: DateTime.now().toISODate(),
+        from: searchParams.get('from') || DateTime.now().startOf('month').toISODate(),
+        to: searchParams.get('to') || DateTime.now().toISODate(),
     });
     const [desgloseDateRange, setDesgloseDateRange] = useState({
-        from: DateTime.now().startOf('year').toISODate(),
-        to: DateTime.now().toISODate(),
+        from: searchParams.get('dFrom') || DateTime.now().startOf('year').toISODate(),
+        to: searchParams.get('dTo') || DateTime.now().toISODate(),
     });
     const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
     const [selectedClient, setSelectedClient] = useState(null);
@@ -43,8 +49,12 @@ const ClientesPage = () => {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         params.set('view', activeView);
+        params.set('from', dateRange.from);
+        params.set('to', dateRange.to);
+        params.set('dFrom', desgloseDateRange.from);
+        params.set('dTo', desgloseDateRange.to);
         history.replace({ search: params.toString() });
-    }, [activeView, history]);
+    }, [activeView, dateRange, desgloseDateRange, history]);
 
     const handleRutaChange = useCallback((option) => {
         setSelectedRuta(option);
@@ -123,9 +133,13 @@ const ClientesPage = () => {
     );
 
     return (
-        <Container fluid className="clientes-layout p-0">
+        <Container as="section" aria-label="Clientes" fluid className="clientes-layout p-0">
             <div className="clientes-row">
-                <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
+                <Sidebar
+                    activeKey={activeView}
+                    onSelect={setActiveView}
+                    items={sidebarItems.filter((item) => availableViews.includes(item.eventKey))}
+                />
                 <div className="clientes-content p-4">
                     {activeView === 'receivables' && <Receivables />}
                     {activeView === 'clients' && (
@@ -141,11 +155,13 @@ const ClientesPage = () => {
                                             showNoe={showNoe}
                                         />
                                     </div>
-                                    <DateRangePicker
-                                        initialFrom={desgloseDateRange.from}
-                                        initialTo={desgloseDateRange.to}
-                                        onChange={handleDesgloseDateRangeChange}
-                                    />
+                                    {analytics && (
+                                        <DateRangePicker
+                                            initialFrom={desgloseDateRange.from}
+                                            initialTo={desgloseDateRange.to}
+                                            onChange={handleDesgloseDateRangeChange}
+                                        />
+                                    )}
                                 </div>
                             </div>
                             {/* La tabla absorbe el alto restante (flex) y scrollea

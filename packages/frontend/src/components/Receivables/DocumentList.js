@@ -8,6 +8,7 @@ export default function DocumentList({
     locked,
     onInvoice,
     onAction,
+    canOperate,
     closeDocumentId,
     closeForm,
     closedIds = [],
@@ -60,7 +61,7 @@ export default function DocumentList({
                                 id={`cxc-document-${document.id}`}
                                 variant="link"
                                 className="cxc-invoice-link"
-                                disabled={locked}
+                                disabled={locked || !document.canReadSale}
                                 onClick={() => onInvoice(document.sale, `cxc-document-${document.id}`)}
                                 aria-label={`Ver factura ${document.sale}`}
                             >
@@ -111,7 +112,7 @@ export default function DocumentList({
                                             !closedIds.includes(document.id) && (
                                                 <Button
                                                     variant="link"
-                                                    disabled={!allowed || locked}
+                                                    disabled={!allowed || locked || !canOperate('close')}
                                                     id={`cxc-close-${document.id}`}
                                                     onClick={(event) =>
                                                         onAction(
@@ -131,7 +132,12 @@ export default function DocumentList({
                                         {document.eligible && Number(document.closed) > 0 && (
                                             <Button
                                                 variant="link"
-                                                disabled={!allowed || locked || closedIds.includes(document.id)}
+                                                disabled={
+                                                    !allowed ||
+                                                    locked ||
+                                                    !canOperate('reopen') ||
+                                                    closedIds.includes(document.id)
+                                                }
                                                 id={`cxc-reopen-${document.id}`}
                                                 onClick={(event) =>
                                                     onAction(

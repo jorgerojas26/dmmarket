@@ -7,18 +7,16 @@ import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Link, NavLink, Redirect, useLocation } from 'react-router-dom';
 import Audit from './auth/audit';
-import ClientDashboard from './auth/client-dashboard';
 import Commissions from './auth/commissions';
 import { useAuth } from './auth/context';
-import InactiveClients from './auth/inactive-clients';
 import Operations from './auth/operations';
 import Parties from './auth/parties';
 import ProviderRanking from './auth/provider-ranking';
 import Providers from './auth/providers';
 import RateHistory from './auth/rate-history';
-import Receivables from './auth/receivables';
 import SellerDashboard from './auth/seller-dashboard';
 import AccessWorkspace, { Account, Rates } from './auth/workspace';
+import Clients from './pages/clientes';
 import Purchases from './pages/compras';
 import Inventory from './pages/inventario';
 import Sales from './pages/ventas';
@@ -39,9 +37,8 @@ export default function App({ onLogout, logoutError }) {
         { path: '/ventas', label: 'Ventas', allowed: has('sales.read') },
         { path: '/compras', label: 'Compras', allowed: can('purchases.read') },
         { path: '/proveedores', label: 'Proveedores', allowed: can('providers.read') },
-        { path: '/clientes', label: 'Clientes', allowed: can('clients.read') },
+        { path: '/clientes', label: 'Clientes', allowed: can('clients.read') || can('receivables.read') },
         { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read') },
-        { path: '/cartera', label: 'Cartera', allowed: can('receivables.read') },
         { path: '/comisiones', label: 'Comisiones', allowed: has('commissions.read') },
         { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
         { path: '/tasas', label: 'Tasas', allowed: can('rates.read') },
@@ -65,21 +62,9 @@ export default function App({ onLogout, logoutError }) {
         },
         {
             path: '/clientes',
-            label: 'Directorio',
-            allowed: can('clients.read'),
-            content: <Parties key="clients" kind="clients" />,
-        },
-        {
-            path: '/clientes/panel',
-            label: 'Resumen',
-            allowed: can('clients.read') && has('sales.read'),
-            content: <ClientDashboard />,
-        },
-        {
-            path: '/clientes/sin-documentos',
-            label: 'Sin documentos autorizados',
-            allowed: can('clients.read') && has('sales.read'),
-            content: <InactiveClients />,
+            label: 'Clientes',
+            allowed: can('clients.read') || can('receivables.read'),
+            content: <Clients />,
         },
         {
             path: '/vendedores',
@@ -93,7 +78,6 @@ export default function App({ onLogout, logoutError }) {
             allowed: has('sellers.read') && has('sales.read'),
             content: <SellerDashboard />,
         },
-        { path: '/cartera', label: 'Consulta', allowed: can('receivables.read'), content: <Receivables /> },
         { path: '/comisiones', label: 'Consulta', allowed: has('commissions.read'), content: <Commissions /> },
         { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
         { path: '/tasas', label: 'Referencia', allowed: can('rates.read'), content: <Rates /> },
@@ -212,7 +196,7 @@ export default function App({ onLogout, logoutError }) {
                 <Container fluid className="d-flex flex-column flex-grow-1 overflow-hidden p-0">
                     {path === '/' ? (
                         <Redirect to={modules[0]?.path || '/cuenta'} />
-                    ) : view && ['/inventario', '/compras', '/ventas'].includes(path) ? (
+                    ) : view && ['/inventario', '/compras', '/ventas', '/clientes'].includes(path) ? (
                         view.content
                     ) : view ? (
                         <section

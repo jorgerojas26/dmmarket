@@ -35,7 +35,12 @@ test("directorios requieren capacidades explícitas, sin inferir clientes desde 
     expect((await client.request(url)).status).toBe(403);
   const catalog = await reader([grant("clients.read")]);
   expect((await catalog.request("/api/clients")).body).toHaveLength(3);
-  expect((await catalog.request(`/api/clients/list?${range}`)).status).toBe(403);
+  const rows = await catalog.request(`/api/clients/list?${range}`);
+  expect(rows.status).toBe(200);
+  expect(rows.body.data).toHaveLength(3);
+  expect(rows.body.data.every((row) => Object.keys(row).sort().join(",") === "Empresa,IdCliente")).toBe(true);
+  expect(rows.body.totals).toEqual({});
+  expect((await catalog.request(`/api/clients/list?${range}&sortBy=utilidad`)).status).toBe(403);
 });
 
 test("búsqueda de clientes enlazada a parámetros no permite SQL ni datos personales", async () => {

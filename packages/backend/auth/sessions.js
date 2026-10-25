@@ -12,10 +12,11 @@ function sessionHash(sid) {
   return createHash("sha256").update(sid).digest("hex");
 }
 
-function denied(status = 401) {
+function denied(status = 401, code) {
   return {
     error: {
       status,
+      ...(code ? { code } : {}),
       message: status === 401 ? "La sesión o las credenciales no son válidas." : "Acceso no permitido.",
     },
   };
@@ -25,6 +26,7 @@ function unwrap(result) {
   if (result.error) {
     const error = new Error(result.error.message);
     error.status = result.error.status;
+    if (result.error.code) error.code = result.error.code;
     throw error;
   }
   return result.value;
@@ -266,7 +268,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
               ((context.access.privileged || context.user.mfa_secret) &&
                 (context.state.mfa_ms === null || current - Number(context.state.mfa_ms) >= RECENT_AUTH_MS)))
           )
-            return denied(403);
+            return denied(403, "RECENT_AUTH_REQUIRED");
           if (activity) {
             await connection("dmmarket_auth_session_state")
               .where("sid_hash", context.state.sid_hash)
@@ -280,7 +282,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
               ((context.access.privileged || context.user.mfa_secret) &&
                 (context.state.mfa_ms === null || time() - Number(context.state.mfa_ms) >= RECENT_AUTH_MS)))
           )
-            return unwrap(denied(403));
+            return unwrap(denied(403, "RECENT_AUTH_REQUIRED"));
           return { value };
         },
         accessMutation,

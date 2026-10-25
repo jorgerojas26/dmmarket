@@ -29,6 +29,8 @@ test("lectura no concede exportación y exportación no concede lectura", async 
     ["purchases", "purchases", buyRange],
     ["inventory", "inventory", "search=Inventario"],
     ["providers", "providers", "search=Proveedor"],
+    ["clients", "clients", salesRange],
+    ["receivables", "receivables", "search=sintético"],
   ]) {
     for (const permission of ["read", "export"]) {
       const { client } = await reader([grant(`${capability}.${permission}`)]);
@@ -244,4 +246,37 @@ test("despacho exporta selección completa autorizada sin reconstruir costos ni 
       })
     ).status,
   ).toBe(403);
+});
+
+test("clientes originales exportan catálogo sin otorgar ventas y respetan el alcance de sus analíticas", async () => {
+  await require("../../../tests/support/party-fixtures.cjs").seedParties(environment.db);
+  const catalog = await reader([grant("clients.read"), grant("clients.export")]);
+  const result = await catalog.client.request(`/api/exports/clients?${salesRange}`);
+  expect(result.status).toBe(200);
+  expect(result.body.data[0]).toHaveProperty("Empresa");
+  expect(JSON.stringify(result.body)).not.toMatch(/total_ventas|num_ventas|utilidad|PRIVATE/);
+  const own = await reader([grant("clients.read"), grant("clients.export"), grant("sales.read", "assigned")]);
+  const rows = await own.client.request(`/api/exports/clients?${salesRange}`);
+  expect(rows.status).toBe(200);
+  expect(Number(rows.body.data.find((row) => row.IdCliente === "C").total_ventas)).toBe(100);
+  expect(JSON.stringify(rows.body)).not.toMatch(/utilidad|PRIVATE/);
+  const inactive = await own.client.request("/api/exports/clients?kind=inactive&from=2026-02-01&to=2026-02-28");
+  expect(inactive.status).toBe(200);
+  expect(inactive.body.columns.map((column) => column.key)).toEqual(
+    expect.arrayContaining(["last_factura", "dias_inactivo", "revenue_historico", "ruta"]),
+  );
+});
+
+test("PDF original de cartera requiere exportación propia y no concede lectura de facturas", async () => {
+  await require("../../../tests/support/receivables-fixtures.cjs").seedReceivables(environment.db);
+  const read = await reader([grant("receivables.read")]);
+  expect((await read.client.request("/api/exports/receivables/C")).status).toBe(403);
+  const full = await reader([grant("receivables.read"), grant("receivables.export")]);
+  const result = await full.client.request("/api/exports/receivables/C?documents=all");
+  expect(result.status).toBe(200);
+  expect(result.body.summary.balance).toBe("300.0000");
+  expect(result.body.documents.total).toBe(3);
+  expect(result.body.documents.data.every((row) => row.canReadSale === false)).toBe(true);
+  expect(JSON.stringify(result.body)).not.toContain("PRIVATE");
+  expect((await full.client.request("/api/sales/1")).status).toBe(403);
 });

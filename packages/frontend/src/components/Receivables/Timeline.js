@@ -23,6 +23,7 @@ export default function Timeline({
     allowed,
     onInvoice,
     onVoid,
+    canOperate,
     expandedId,
     onExpandedChange,
     locked = false,
@@ -181,7 +182,7 @@ export default function Timeline({
                                                                 id={invoiceTrigger}
                                                                 variant="link"
                                                                 className="cxc-invoice-link"
-                                                                disabled={locked}
+                                                                disabled={locked || !application.canReadSale}
                                                                 onClick={() =>
                                                                     onInvoice(application.sale, invoiceTrigger)
                                                                 }
@@ -206,7 +207,7 @@ export default function Timeline({
                                               size="sm"
                                               variant="outline-secondary"
                                               className="cxc-void-action"
-                                              disabled={!allowed || locked}
+                                              disabled={!allowed || locked || !canOperate('void')}
                                               onClick={() => onVoid(event, document.getElementById(triggerId))}
                                           >
                                               <svg

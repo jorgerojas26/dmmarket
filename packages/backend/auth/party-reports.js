@@ -57,7 +57,10 @@ async function directory(transaction, access, query, clients) {
     normalized.search = normalized.filter;
     delete normalized.filter;
   }
-  const options = parameters(normalized, { range: false, keys: ["search", "sortBy", "sortDir"] });
+  const options = parameters(normalized, {
+    range: false,
+    keys: ["search", "sortBy", "sortDir", ...(clients ? ["ruta"] : [])],
+  });
   const source = transaction(clients ? "clientes as c" : "vendedores as v");
   const idColumn = clients ? "c.IdCliente" : "v.idVend";
   const nameColumn = clients ? "c.Empresa" : "v.Empresa";
@@ -66,6 +69,7 @@ async function directory(transaction, access, query, clients) {
     source.where(function () {
       this.where(nameColumn, "like", `%${options.search}%`).orWhere(idColumn, "like", `%${options.search}%`);
     });
+  if (clients && options.ruta) source.whereRaw("BINARY c.Ruta = ?", [options.ruta]);
   const personal = clients
     ? access.hasGlobal("clients.personal")
     : access.hasGlobal("sellers.personal") || (!scope.global && access.covers("sellers.personal", scope.sellerIds));
@@ -94,6 +98,27 @@ async function directory(transaction, access, query, clients) {
 
 async function partyList(transaction, access, query, clients) {
   if (clients) requireCapability(access, "clients.read");
+  const salesRead = access.scopeFor("sales.read");
+  if (clients && !salesRead.global && !salesRead.sellerIds.length) {
+    const sort = { Empresa: "name", IdCliente: "id" };
+    const sortBy = query.sortBy || "Empresa";
+    if (!Object.hasOwn(sort, sortBy) || query.employeeId) fail(403);
+    const catalog = await directory(
+      transaction,
+      access,
+      { search: query.search || "", ruta: query.ruta || "", sortBy: sort[sortBy], sortDir: query.sortDir },
+      true,
+    );
+    return {
+      data: catalog
+        .slice((query.page - 1) * query.limit, query.page * query.limit)
+        .map(({ name, ...row }) => ({ ...row, Empresa: name })),
+      total: catalog.length,
+      page: query.page,
+      limit: query.limit,
+      totals: {},
+    };
+  }
   const scope = clients ? requireCapability(access, "sales.read") : sellerSalesScope(access);
   const { base, invoice } = salesBase(transaction, access, query);
   const idColumn = clients ? "mf.IdCliente" : "mf.IdVend";
@@ -229,6 +254,15 @@ async function clientSummary(transaction, access, query, id) {
     totalCount: summary.totalInvoices,
     avgTicket: summary.totalInvoices ? summary.avgTicket : null,
     avgDaysBetweenSales,
+    dailySales: await base
+      .clone()
+      .select({
+        fecha: transaction.raw("CAST(DATE_FORMAT(mf.Fecha, '%Y-%m-%d') AS CHAR)"),
+        monto: transaction.raw("ROUND(SUM(sf.Precio * sf.Cantidad),2)"),
+      })
+      .groupByRaw("DATE_FORMAT(mf.Fecha, '%Y-%m-%d')")
+      .orderBy("fecha")
+      .limit(368),
   };
 }
 
@@ -460,6 +494,7 @@ function createPartyReports({ sessions }) {
       return {
         data: result.data.map(({ invoiceId, ...row }) => ({ idFactura: invoiceId, ...row })),
         total: result.pagination.total,
+        exportAllowed: result.exportAllowed,
         page: query.page,
         limit: query.limit,
         totals: result.totals,
@@ -511,4 +546,4 @@ function createPartyReports({ sessions }) {
   return router;
 }
 
-module.exports = { createPartyReports, sellerSalesScope };
+module.exports = { createPartyReports, sellerSalesScope, partyList };

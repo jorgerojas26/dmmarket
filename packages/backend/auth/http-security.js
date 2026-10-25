@@ -108,9 +108,12 @@ function authErrorHandler(error, _req, res, next) {
       Number.isSafeInteger(error.retryAfterSeconds) && error.retryAfterSeconds > 0 ? error.retryAfterSeconds : 1;
     res.set("Retry-After", String(seconds));
   }
-  return res
-    .status(status)
-    .json({ error: { message: messages[status] || "El servicio de acceso no está disponible." } });
+  return res.status(status).json({
+    error: {
+      message: messages[status] || "El servicio de acceso no está disponible.",
+      ...(status === 403 && error.code === "RECENT_AUTH_REQUIRED" ? { code: error.code } : {}),
+    },
+  });
 }
 
 module.exports = {

@@ -1,6 +1,8 @@
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsiveLine } from '@nivo/line';
 import { ResponsivePie } from '@nivo/pie';
+import { fetchClientExport } from 'api/clients';
+import { useAuth } from 'auth/context';
 import ChartTooltip from 'components/ChartTooltip';
 import Table from 'components/Table';
 import { useClientsDashboard } from 'hooks/useClients';
@@ -158,8 +160,10 @@ const WaterfallBar = ({ bar, barHeight }) => {
 };
 
 const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
+    const { can } = useAuth();
     const { data, error, isLoading } = useClientsDashboard(dateRange, showNoe, ruta);
-    const [paretoMode, setParetoMode] = useState('utilidad');
+    const [requestedMode, setParetoMode] = useState('utilidad');
+    const paretoMode = requestedMode === 'utilidad' && data?.abcUtility ? 'utilidad' : 'ventas';
     const paretoConfig = paretoMode === 'utilidad' ? CLIENT_UTILITY_PARETO_CONFIG : CLIENT_PARETO_CONFIG;
     const paretoDataset = paretoMode === 'utilidad' ? data?.abcUtility : data?.abc;
 
@@ -412,36 +416,52 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                 <div className="row g-3 mb-4">
                     <div className="col-12">
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
-                            {CLIENT_PARETO_MODES.map(({ key, label, color }) => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    aria-pressed={paretoMode === key}
-                                    onClick={() => setParetoMode(key)}
-                                    style={{
-                                        padding: '6px 16px',
-                                        borderRadius: 6,
-                                        border:
-                                            paretoMode === key
-                                                ? `1.5px solid ${color}`
-                                                : '1px solid rgba(255,255,255,0.1)',
-                                        background: paretoMode === key ? `${color}18` : 'transparent',
-                                        color: paretoMode === key ? color : '#9ca3af',
-                                        fontSize: 12,
-                                        fontWeight: paretoMode === key ? 600 : 400,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s',
-                                    }}
-                                >
-                                    {label}
-                                </button>
-                            ))}
+                            {CLIENT_PARETO_MODES.filter((mode) => mode.key !== 'utilidad' || data?.abcUtility).map(
+                                ({ key, label, color }) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        aria-pressed={paretoMode === key}
+                                        onClick={() => setParetoMode(key)}
+                                        style={{
+                                            padding: '6px 16px',
+                                            borderRadius: 6,
+                                            border:
+                                                paretoMode === key
+                                                    ? `1.5px solid ${color}`
+                                                    : '1px solid rgba(255,255,255,0.1)',
+                                            background: paretoMode === key ? `${color}18` : 'transparent',
+                                            color: paretoMode === key ? color : '#9ca3af',
+                                            fontSize: 12,
+                                            fontWeight: paretoMode === key ? 600 : 400,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                ),
+                            )}
                         </div>
                         <ParetoChart
                             key={paretoMode}
                             products={paretoDataset.clients}
                             summary={paretoDataset.summary}
                             config={paretoConfig}
+                            exportData={
+                                can('clients.export')
+                                    ? async () =>
+                                          (
+                                              await fetchClientExport({
+                                                  ...dateRange,
+                                                  showNoe,
+                                                  ruta,
+                                                  kind: 'pareto',
+                                                  mode: paretoMode,
+                                              })
+                                          ).data
+                                    : null
+                            }
                         />
                     </div>
                 </div>

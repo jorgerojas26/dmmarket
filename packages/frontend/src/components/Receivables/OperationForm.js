@@ -1,4 +1,5 @@
 import { executeReceivableOperation, previewReceivableOperation } from 'api/receivables';
+import { useAuth } from 'auth/context';
 import { useBcvRateByDate } from 'hooks/useBcvRates';
 import { useEffect, useRef, useState } from 'react';
 import Alert from 'react-bootstrap/Alert';
@@ -6,6 +7,7 @@ import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import InputGroup from 'react-bootstrap/InputGroup';
 import Spinner from 'react-bootstrap/Spinner';
+import { useReceivablesAccess } from './access';
 import BankSelect from './BankSelect';
 import { dateLabel, money, rateLabel, requestId, shortDate, today } from './format';
 
@@ -50,8 +52,11 @@ export default function OperationForm({
     onBusyChange,
     onDirtyChange,
     compact = false,
-    disabled = false,
+    disabled: parentDisabled = false,
 }) {
+    const { can, runPrivileged } = useAuth();
+    const { canOperate } = useReceivablesAccess();
+    const disabled = parentDisabled || !canOperate(action.type);
     const [fields, setFields] = useState({
         amount: '',
         currency: 'BsS',
@@ -87,7 +92,7 @@ export default function OperationForm({
     const sameDay = fields.date === today();
     // Tasa oficial del día del pago: el backend la resuelve a la última publicada,
     // porque el BCV no publica fines de semana ni feriados.
-    const { data: bcv } = useBcvRateByDate(fields.date);
+    const { data: bcv } = useBcvRateByDate(fields.date, can('rates.read'));
     // La tasa se maneja con dos decimales, igual que se muestra en toda la app.
     const bcvRate = bcv && Number(bcv.tasa) > 0 ? Number(bcv.tasa).toFixed(2) : '';
     const pending = fields.rate === '' && !(sameDay && rateAvailable);
@@ -236,11 +241,13 @@ export default function OperationForm({
                 onDirtyChange(true);
                 setPreview(await previewReceivableOperation(client.id, payload));
             } else {
-                const result = await executeReceivableOperation(client.id, {
-                    ...payload,
-                    snapshot: preview.snapshot,
-                    requestId: id.current,
-                });
+                const result = await runPrivileged(() =>
+                    executeReceivableOperation(client.id, {
+                        ...payload,
+                        snapshot: preview.snapshot,
+                        requestId: id.current,
+                    }),
+                );
                 await onSuccess(result);
             }
         } catch (failure) {

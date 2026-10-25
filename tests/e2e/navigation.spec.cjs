@@ -32,10 +32,8 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
   await expect(page.getByRole("heading", { name: "Dashboard de Compras", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Ventas", exact: true })).toHaveCount(0);
   await openModule(page, "Clientes");
-  await expect(page.getByLabel("Directorio", { exact: true })).toHaveValue("clients");
-  await expect(
-    page.getByLabel("Directorio", { exact: true }).getByRole("option", { name: "Vendedores", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Dashboard de Clientes", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard de Vendedores", exact: true })).toHaveCount(0);
   await openModule(page, "Vendedores", "Resumen");
   await expect(page).toHaveURL(`${environment.origin}/vendedores/panel`);
   await expect(page.getByRole("region", { name: "Panel de vendedores", exact: true })).toBeVisible();

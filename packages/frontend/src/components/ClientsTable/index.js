@@ -1,4 +1,5 @@
-import { fetchClientsList } from 'api/clients';
+import { fetchClientExport } from 'api/clients';
+import { useAuth } from 'auth/context';
 import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
@@ -15,11 +16,14 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 const LIMIT = 20;
 
 const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
+    const { session, can } = useAuth();
+    const analytics = session.permissions.some((grant) => grant.capability === 'sales.read');
+    const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [sort, setSort] = useState({ sortBy: 'total_ventas', sortDir: 'desc' });
+    const [sort, setSort] = useState({ sortBy: analytics ? 'total_ventas' : 'Empresa', sortDir: 'desc' });
 
     const { data: result, isLoading } = useClientsList({
         search,
@@ -51,13 +55,11 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
     const handlePrintAll = useCallback(
         async (config) => {
             try {
-                const allResult = await fetchClientsList({
-                    search,
+                const allResult = await fetchClientExport({
+                    search: config.search ?? search,
                     ruta,
                     from: dateRange?.from,
                     to: dateRange?.to,
-                    page: 1,
-                    limit: total || 9999,
                     sortBy: sort.sortBy,
                     sortDir: sort.sortDir,
                     showNoe,
@@ -65,6 +67,8 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
                 const pdfColumns = [
                     {
                         accessor: 'IdCliente',
@@ -92,11 +96,12 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                         render: (c) => formatNumber(c.num_ventas ?? 0),
                     },
                 ];
+                const serverColumns = new Set(allResult.columns.map((column) => column.key));
                 const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
-                const selected =
-                    selectedAccessors.size > 0
-                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
-                        : pdfColumns;
+                const selected = pdfColumns.filter(
+                    (col) => selectedAccessors.has(col.accessor) && serverColumns.has(col.accessor),
+                );
+                if (!selected.length) throw new Error('Selecciona columnas autorizadas.');
                 const rows = sortRows(allResult.data || [], config?.sortBy).map((c) =>
                     selected.map((col) => col.render(c)),
                 );
@@ -148,7 +153,7 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
 
                 pdfMake.createPdf(docDef).open();
             } catch (err) {
-                console.error('Failed to print clients list:', err);
+                if (err.name !== 'AbortError') setPrintError('No se pudo imprimir el reporte autorizado de clientes.');
             }
         },
         [search, ruta, total, sort, showNoe, currencyRate, dateRange],
@@ -164,31 +169,40 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
         () => [
             { Header: 'IdCliente', accessor: 'IdCliente', Cell: ({ value }) => formatReportId(value) },
             { Header: 'Empresa', accessor: 'Empresa' },
-            {
-                Header: 'Total Ventas',
-                accessor: 'total_ventas',
-                Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
-            },
-            {
-                Header: 'Utilidad',
-                accessor: 'utilidad',
-                Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
-            },
-            { Header: '# Ventas', accessor: 'num_ventas' },
+            ...(analytics
+                ? [
+                      {
+                          Header: 'Total Ventas',
+                          accessor: 'total_ventas',
+                          Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
+                      },
+                  ]
+                : []),
+            ...(Object.hasOwn(result?.totals || {}, 'utilidad')
+                ? [
+                      {
+                          Header: 'Utilidad',
+                          accessor: 'utilidad',
+                          Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
+                      },
+                  ]
+                : []),
+            ...(analytics ? [{ Header: '# Ventas', accessor: 'num_ventas' }] : []),
         ],
-        [],
+        [analytics, result?.totals],
     );
 
     return (
         <div className="dashboard-panel h-100 d-flex flex-column">
             <div className="dashboard-panel-body flex-grow-1" style={{ minHeight: 0 }}>
+                {printError && <p role="alert">{printError}</p>}
                 <Table
                     data={dataArr}
                     columns={columns}
                     loading={isLoading}
                     showFooter={!!summaries}
                     summaries={summaries}
-                    onRowClick={onRowSelect}
+                    onRowClick={analytics ? onRowSelect : undefined}
                     emptyMessage="Sin datos"
                     fillHeight
                     sorting={{
@@ -210,7 +224,7 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                         onPageChange: setPage,
                     }}
                     print={{
-                        enabled: true,
+                        enabled: can('clients.export') && Boolean(result),
                         onGlobalPrint: handlePrintAll,
                         storageKey: 'clientes',
                     }}

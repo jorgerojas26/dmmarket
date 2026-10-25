@@ -7,7 +7,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { fetcher, swrConfig } from 'swr-config';
 import App from '../App';
 import { AuthProvider, useAuth } from './context';
-import { EnrollmentForm, LoginForm, MfaForm, PasswordForm } from './forms';
+import { EnrollmentForm, LoginForm, MfaForm, PasswordForm, ReauthenticationDialog } from './forms';
 
 function BoundaryContent() {
     const { session, checking, failure, epoch, action, check } = useAuth();
@@ -27,6 +27,7 @@ function BoundaryContent() {
                 <CurrencyRateProvider>
                     <SidebarProvider>
                         <App onLogout={signOut} logoutError={logoutError} />
+                        <ReauthenticationDialog />
                     </SidebarProvider>
                 </CurrencyRateProvider>
             </SWRConfig>

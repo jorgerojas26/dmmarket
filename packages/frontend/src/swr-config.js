@@ -24,6 +24,7 @@ export async function fetcher(url, init) {
         const body = await res.json().catch(() => null);
         const error = new Error(body?.error?.message || `HTTP ${res.status}`);
         error.status = res.status;
+        error.code = body?.error?.code;
         throw error;
     }
     return res.json();

@@ -1,29 +1,23 @@
+import { fetcher } from 'swr-config';
+
 const BASE_URL = '/api/clients';
 
 export const fetchClients = async ({ filter }) => {
     const filterParam = filter ? `?filter=${filter}` : '';
-    const response = await fetch(`${BASE_URL}${filterParam}`);
-    const clients = response.json();
-    return clients;
+    return fetcher(`${BASE_URL}${filterParam}`);
 };
 export const fetchBestClients = async (dateRange, showNoe) => {
-    const response = await fetch(`${BASE_URL}/best/?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}`);
-    const report = response.json();
-    return report;
+    return fetcher(`${BASE_URL}/best/?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}`);
 };
 
 export const fetchBestClientsPerProduct = async (productId, dateRange, showNoe) => {
-    const response = await fetch(
+    return fetcher(
         `${BASE_URL}/best/product/${productId}?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}`,
     );
-    const report = response.json();
-    return report;
 };
 
 export const fetchMonthlyAverage = async (clientId, showNoe) => {
-    const response = await fetch(`${BASE_URL}/average/month/${encodeURIComponent(clientId)}?showNoe=${showNoe}`);
-    const report = response.json();
-    return report;
+    return fetcher(`${BASE_URL}/average/month/${encodeURIComponent(clientId)}?showNoe=${showNoe}`);
 };
 
 export const fetchClientSales = async (
@@ -38,18 +32,12 @@ export const fetchClientSales = async (
 };
 
 export const fetchClientSummary = async (clientId, { from, to, showNoe }) => {
-    const response = await fetch(
-        `${BASE_URL}/${encodeURIComponent(clientId)}/summary?from=${from}&to=${to}&showNoe=${showNoe}`,
-    );
-    return response.json();
+    return fetcher(`${BASE_URL}/${encodeURIComponent(clientId)}/summary?from=${from}&to=${to}&showNoe=${showNoe}`);
 };
 
 export const fetchClientsDashboard = async (dateRange, showNoe, ruta) => {
     const rutaParam = ruta ? `&ruta=${encodeURIComponent(ruta)}` : '';
-    const response = await fetch(
-        `${BASE_URL}/dashboard?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}${rutaParam}`,
-    );
-    return response.json();
+    return fetcher(`${BASE_URL}/dashboard?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}${rutaParam}`);
 };
 
 export const fetchClientsList = async ({
@@ -73,13 +61,11 @@ export const fetchClientsList = async ({
     params.append('sortBy', sortBy);
     params.append('sortDir', sortDir);
     params.append('showNoe', showNoe);
-    const response = await fetch(`${BASE_URL}/list?${params.toString()}`);
-    return response.json();
+    return fetcher(`${BASE_URL}/list?${params.toString()}`);
 };
 
-export const fetchClientRoutes = async (showNoe) => {
-    const response = await fetch(`${BASE_URL}/routes?showNoe=${showNoe}`);
-    return response.json();
+export const fetchClientRoutes = async () => {
+    return fetcher(`${BASE_URL}/routes`);
 };
 
 export const fetchClientsSinFacturar = async ({
@@ -103,6 +89,10 @@ export const fetchClientsSinFacturar = async ({
     params.append('sortBy', sortBy);
     params.append('sortDir', sortDir);
     params.append('showNoe', showNoe);
-    const response = await fetch(`${BASE_URL}/sin-facturar?${params.toString()}`);
-    return response.json();
+    return fetcher(`${BASE_URL}/sin-facturar?${params.toString()}`);
 };
+
+export const fetchClientExport = (parameters) =>
+    fetcher(
+        `/api/exports/clients?${new URLSearchParams(Object.entries(parameters).filter(([, value]) => value !== undefined && value !== null && value !== ''))}`,
+    );

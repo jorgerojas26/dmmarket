@@ -6,6 +6,10 @@ const { purchases, pareto: purchasePareto, options: purchaseOptions } = require(
 const { inventory, options: inventoryOptions } = require("./inventory-reports");
 const { directory } = require("./provider-reports");
 const { dispatchExport } = require("./dispatch-export");
+const { partyList } = require("./party-reports");
+const { inactiveClients } = require("./client-reports");
+const { clientDashboard } = require("./client-dashboard");
+const { createReceivablesService } = require("../receivables");
 const { appendEvent } = require("./identity");
 
 function fail(status) {
@@ -130,6 +134,65 @@ async function dataset(resource, tx, access, input) {
               ["unidades", "Unidades"],
               ["monto", "Total Compras"],
             ];
+  } else if (resource === "clients") {
+    if (!access.hasGlobal("clients.export") || !access.hasGlobal("clients.read")) fail(403);
+    const { kind = "directory", mode = "ventas", ...filters } = input;
+    if (!["directory", "inactive", "pareto"].includes(kind) || !["ventas", "utilidad"].includes(mode)) fail(400);
+    const query = parameters(filters, {
+      keys: ["from", "to", "showNoe", "search", "ruta", "sortBy", "sortDir", "employeeId"],
+    });
+    if (kind === "pareto") {
+      const report = await clientDashboard(tx, access, query);
+      const selected = mode === "utilidad" ? report.abcUtility : report.abc;
+      if (!selected) fail(403);
+      result = { data: selected.clients, total: selected.clients.length };
+    } else
+      result =
+        kind === "inactive"
+          ? await inactiveClients(tx, access, { ...query, page: 1, limit: 5001 })
+          : await partyList(tx, access, { ...query, page: 1, limit: 5001 }, true);
+    title = "Clientes autorizados";
+    candidates =
+      kind === "pareto"
+        ? [
+            ["clientId", "ID"],
+            ["name", "Cliente"],
+            ["rank", "Posición"],
+            ["total_usd", "Venta total"],
+            ["utilidad", "Utilidad"],
+            ["cumulativePercent", "Acumulado (%)"],
+            ["abcClass", "Clase"],
+          ]
+        : [
+            ["IdCliente", "ID"],
+            ["Empresa", "Empresa"],
+            ["total_ventas", "Total Ventas"],
+            ["num_ventas", "Número de ventas"],
+            ["utilidad", "Utilidad"],
+            ["revenue_historico", "Histórico"],
+            ["dias_inactivo", "Días sin facturar"],
+            ["last_factura", "Última factura"],
+            ["ruta", "Ruta"],
+          ];
+  } else if (resource === "receivables") {
+    if (!access.hasGlobal("receivables.read") || !access.hasGlobal("receivables.export")) fail(403);
+    if (Object.keys(input).some((key) => !["search", "ruta", "state", "due", "sortBy", "sortDir"].includes(key)))
+      fail(400);
+    const service = createReceivablesService({
+      db: tx,
+      personal: access.hasGlobal("clients.personal"),
+      referenceRate: access.hasGlobal("rates.read"),
+    });
+    result = await service.list(input, 5001);
+    title = "Cuentas por cobrar";
+    candidates = [
+      ["id", "ID"],
+      ["name", "Cliente"],
+      ["balance", "Saldo"],
+      ["overdue", "Vencido"],
+      ["pendingCount", "Documentos pendientes"],
+      ["lastPayment", "Último abono"],
+    ];
   } else if (resource === "inventory") {
     if (!access.hasGlobal("inventory.export")) fail(403);
     const query = inventoryOptions(input);
@@ -175,6 +238,41 @@ async function dataset(resource, tx, access, input) {
 
 function createExportReports({ sessions, security }) {
   const router = express.Router();
+  router.get("/exports/receivables/:clientId", async (req, res, next) => {
+    try {
+      if (
+        Object.keys(req.query).some((key) => key !== "documents") ||
+        !/^[-\p{L}\p{N}._]{1,15}$/u.test(req.params.clientId)
+      )
+        fail(400);
+      if (req.query.documents !== undefined && !["all", "pending"].includes(req.query.documents)) fail(400);
+      res.json(
+        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+          if (!access.hasGlobal("receivables.read") || !access.hasGlobal("receivables.export")) fail(403);
+          const service = createReceivablesService({
+            db: transaction,
+            personal: access.hasGlobal("clients.personal"),
+            referenceRate: access.hasGlobal("rates.read"),
+          });
+          const result = await service.detail(
+            req.params.clientId,
+            { documents: req.query.documents || "pending" },
+            5001,
+          );
+          if (result.documents.total > 5000 || result.timeline.total > 5000) fail(413);
+          await appendEvent(transaction, {
+            actorId: user.id,
+            action: "reports.export_prepared",
+            reason: "receivables:client",
+            occurredMs: Date.now(),
+          });
+          return result;
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  });
   router.post("/exports/sales/dispatch", security.csrfProtection, async (req, res, next) => {
     try {
       if (!req.is("application/json")) fail(415);

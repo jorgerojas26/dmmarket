@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
-import ClientHistory from './client-history';
 import { useAuth } from './context';
 import { AccessForm, Field } from './forms';
 
@@ -32,7 +31,6 @@ function Summary({ selection }) {
                             ))}
                 </>
             )}
-            {selection.kind === 'clients' && <ClientHistory key={selection.id} selection={selection} />}
         </section>
     );
 }

@@ -46,13 +46,17 @@ async function login(page, environment, user) {
 }
 
 async function openModule(page, name, view) {
+  if (name === "Cartera") {
+    name = "Clientes";
+    view = "Cuentas por cobrar";
+  }
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
   await navigation.waitFor({ state: "visible" });
   const link = navigation.getByRole("link", { name, exact: true });
   if (!(await link.isVisible()))
     await navigation.getByRole("button", { name: "Abrir navegación", exact: true }).click();
   await link.click();
-  if (view && ["Compras", "Ventas"].includes(name)) {
+  if (view && ["Compras", "Ventas", "Clientes"].includes(name)) {
     await page
       .locator(".clients-sidebar")
       .getByRole("button", { name: new RegExp(view) })
