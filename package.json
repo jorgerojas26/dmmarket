@@ -9,9 +9,9 @@
   "scripts": {
     "backend": "bun --filter @dmmarket/backend",
     "frontend": "bun --filter @dmmarket/frontend",
-    "dev:backend": "bun --elide-lines=0 --filter @dmmarket/backend start",
-    "dev:frontend": "bun --elide-lines=0 --filter @dmmarket/frontend start",
-    "dev": "bun run --elide-lines=0 --parallel dev:backend dev:frontend",
+    "dev:backend": "bun scripts/dev.mjs backend",
+    "dev:frontend": "bun scripts/dev.mjs frontend",
+    "dev": "bun scripts/dev.mjs",
     "build:frontend": "bun --filter @dmmarket/frontend build",
     "build:backend": "bun --filter @dmmarket/backend build",
     "build:windows": "bun --filter @dmmarket/backend build:windows",
@@ -31,7 +31,12 @@
     "check:unsafe": "biome check --write --unsafe",
     "format": "biome format --write",
     "lint": "biome lint",
-    "lint:write": "biome lint --write"
+    "lint:write": "biome lint --write",
+    "dev:prepare": "bun scripts/dev.mjs prepare",
+    "dev:status": "bun scripts/dev.mjs status",
+    "dev:doctor": "bun scripts/dev.mjs doctor",
+    "dev:down": "bun scripts/dev.mjs down",
+    "dev:reset": "bun scripts/dev.mjs reset"
   },
   "overrides": {
     "react-error-overlay": "6.0.9",

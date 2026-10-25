@@ -37,7 +37,7 @@
         "web-vitals": "1.1.2"
     },
     "scripts": {
-        "start": "DANGEROUSLY_DISABLE_HOST_CHECK=true SKIP_PREFLIGHT_CHECK=true NODE_OPTIONS='--openssl-legacy-provider' portless run --name dmmarket react-scripts start",
+        "start": "DANGEROUSLY_DISABLE_HOST_CHECK=true SKIP_PREFLIGHT_CHECK=true NODE_OPTIONS='--openssl-legacy-provider' react-scripts start",
         "build": "SKIP_PREFLIGHT_CHECK=true NODE_OPTIONS='--openssl-legacy-provider' react-scripts build",
         "test": "SKIP_PREFLIGHT_CHECK=true react-scripts test",
         "eject": "react-scripts eject"
@@ -54,8 +54,8 @@
             "last 1 safari version"
         ]
     },
-    "proxy": "http://localhost:8000",
     "devDependencies": {
+        "http-proxy-middleware": "^2.0.9",
         "react-error-overlay": "6.0.9"
     }
 }
