@@ -220,6 +220,11 @@ async function main() {
       });
       break;
     }
+    case "test:backend":
+      await run(["bun", "--filter", "@dmmarket/backend", "test", "--runInBand", ...process.argv.slice(3)], {
+        env: databaseEnvironment(),
+      });
+      break;
     case "logs":
       await run(compose(["logs", "--follow", "--tail", "100", "mysql"]), { env: composeEnvironment() });
       break;
