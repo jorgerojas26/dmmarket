@@ -388,7 +388,7 @@ async function dashboard(transaction, access, query) {
     ...(financial ? { compareNetProfit: compare?.totalNetProfit ?? null } : {}),
   });
   const raw = (sql) => transaction.raw(sql);
-  const { base } = salesBase(transaction, access, query);
+  const { base, invoice } = salesBase(transaction, access, query);
   const best = await base
     .clone()
     .select({
@@ -403,6 +403,7 @@ async function dashboard(transaction, access, query) {
     .clone()
     .select({
       clientId: "mf.IdCliente",
+      invoiceCount: transaction.raw("COUNT(DISTINCT ??)", [`mf.${invoice}`]),
       client: raw("COALESCE(c.Empresa, 'Cliente no registrado')"),
       total_USD: raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)"),
       ...(financial ? { netProfit: raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2)") } : {}),

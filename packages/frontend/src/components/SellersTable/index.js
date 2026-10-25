@@ -1,4 +1,5 @@
-import { fetchSellersList } from 'api/sellers';
+import { fetchSellersExport } from 'api/sellers';
+import { useAuth } from 'auth/context';
 import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
@@ -31,11 +32,15 @@ const formatDate = (value) =>
     value && DateTime.fromISO(value).isValid ? DateTime.fromISO(value).toFormat('dd/MM/yyyy') : '—';
 
 const SellersTable = ({ onRowSelect, dateRange }) => {
+    const { session } = useAuth();
+    const analytics = session.permissions.some((grant) => grant.capability === 'sales.read');
+    const exporting = session.permissions.some((grant) => grant.capability === 'sellers.export');
+    const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [sort, setSort] = useState({ sortBy: 'sales', sortDir: 'desc' });
+    const [sort, setSort] = useState({ sortBy: analytics ? 'sales' : 'name', sortDir: 'desc' });
 
     const { data: result, isLoading } = useSellersList({
         search,
@@ -68,18 +73,18 @@ const SellersTable = ({ onRowSelect, dateRange }) => {
     const handlePrintAll = useCallback(
         async (config) => {
             try {
-                const allResult = await fetchSellersList({
-                    search,
+                const allResult = await fetchSellersExport({
+                    search: config.search ?? search,
                     from: dateRange?.from,
                     to: dateRange?.to,
-                    page: 1,
-                    limit: total || 9999,
                     sortBy: sort.sortBy,
                     sortDir: sort.sortDir,
                     showNoe,
                 });
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
                 const pdfColumns = [
                     { accessor: 'name', Header: 'Vendedor', width: '*', render: (row) => row.name ?? '' },
                     {
@@ -139,8 +144,11 @@ const SellersTable = ({ onRowSelect, dateRange }) => {
                 ];
                 const selectedAccessors = new Set((config?.columns || []).map((column) => column.accessor));
                 const selected = pdfColumns.filter(
-                    (column) => selectedAccessors.size === 0 || selectedAccessors.has(column.accessor),
+                    (column) =>
+                        selectedAccessors.has(column.accessor) &&
+                        allResult.columns.some((server) => server.key === column.accessor),
                 );
+                if (!selected.length) throw new Error('Selecciona columnas autorizadas.');
                 const rows = sortRows(allResult.data || [], config?.sortBy).map((row) =>
                     selected.map((column) => column.render(row)),
                 );
@@ -183,7 +191,8 @@ const SellersTable = ({ onRowSelect, dateRange }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Failed to print sellers list:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo imprimir el reporte autorizado de vendedores.');
             }
         },
         [search, total, sort, showNoe, currencyRate, dateRange],
@@ -196,7 +205,9 @@ const SellersTable = ({ onRowSelect, dateRange }) => {
             result?.totals
                 ? {
                       sales: formatCurrency(result.totals.sales),
-                      profit: formatCurrency(result.totals.profit),
+                      ...(Object.hasOwn(result.totals, 'profit')
+                          ? { profit: formatCurrency(result.totals.profit) }
+                          : {}),
                       invoiceCount: formatNumber(result.totals.invoiceCount || 0),
                   }
                 : null,
@@ -205,7 +216,13 @@ const SellersTable = ({ onRowSelect, dateRange }) => {
 
     const columns = useMemo(
         () =>
-            SELLER_COLUMNS.map((column) => {
+            SELLER_COLUMNS.filter(
+                (column) =>
+                    column.accessor === 'name' ||
+                    (analytics &&
+                        (!['profit', 'marginPercent'].includes(column.accessor) ||
+                            Object.hasOwn(result?.totals || {}, 'profit'))),
+            ).map((column) => {
                 switch (column.accessor) {
                     case 'sales':
                     case 'profit':
@@ -225,11 +242,12 @@ const SellersTable = ({ onRowSelect, dateRange }) => {
                         return column;
                 }
             }),
-        [],
+        [analytics, result],
     );
 
     return (
         <section className="providers-table-panel">
+            {printError && <p role="alert">{printError}</p>}
             <div className="providers-table__body">
                 <Table
                     data={dataArr}
@@ -259,7 +277,7 @@ const SellersTable = ({ onRowSelect, dateRange }) => {
                         onPageChange: setPage,
                     }}
                     print={{
-                        enabled: true,
+                        enabled: exporting && result?.exportAllowed === true,
                         onGlobalPrint: handlePrintAll,
                         storageKey: 'vendedores',
                     }}

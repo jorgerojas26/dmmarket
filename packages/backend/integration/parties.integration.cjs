@@ -216,3 +216,37 @@ test("collation compartida insensible no amplía vendedor ni datos financieros p
   expect(Number(own.body.totals.rawProfit)).toBe(100);
   expect(Number(own.body.totals.netProfit)).toBe(39);
 });
+
+test("directorios analíticos no fusionan identidades históricas por la colación de MySQL", async () => {
+  await environment
+    .db("masterfact")
+    .insert({ IdFactura: "lower-party", IdVend: "a", IdCliente: "c", Fecha: "2026-04-01", Anulada: false });
+  await environment.db("slavefact").insert({
+    IdFactura: "lower-party",
+    IdProducto: "P",
+    Descripcion: "Caso histórico",
+    Precio: 5,
+    Costo: 2,
+    Cantidad: 1,
+  });
+  try {
+    const all = await reader([
+      grant("sellers.read"),
+      grant("clients.read"),
+      grant("sales.read"),
+      grant("sellers.personal", "assigned"),
+    ]);
+    const sellers = await all.request("/api/sellers/list?from=2026-04-01&to=2026-04-30");
+    expect(sellers.status).toBe(200);
+    expect(Number(sellers.body.data.find((row) => row.sellerId === "A").sales)).toBe(0);
+    expect(Number(sellers.body.data.find((row) => row.sellerId === "a").sales)).toBe(5);
+    expect(sellers.body.data.find((row) => row.sellerId === "a")).not.toHaveProperty("phone");
+    const clients = await all.request("/api/clients/list?from=2026-04-01&to=2026-04-30");
+    expect(clients.status).toBe(200);
+    expect(Number(clients.body.data.find((row) => row.IdCliente === "C").total_ventas)).toBe(0);
+    expect(Number(clients.body.data.find((row) => row.IdCliente === "c").total_ventas)).toBe(5);
+  } finally {
+    await environment.db("slavefact").where("IdFactura", "lower-party").del();
+    await environment.db("masterfact").where("IdFactura", "lower-party").del();
+  }
+});

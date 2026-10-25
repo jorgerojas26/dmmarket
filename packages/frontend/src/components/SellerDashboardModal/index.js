@@ -1,5 +1,6 @@
 import { ResponsiveLine } from '@nivo/line';
-import { fetchSellerSales } from 'api/sellers';
+import { fetchSalesExport } from 'api/sales';
+import { useAuth } from 'auth/context';
 import ChartTooltip from 'components/ChartTooltip';
 import KpiCard from 'components/Dashboard/KpiCard';
 import PanelHelpTitle from 'components/Dashboard/PanelHelpTitle';
@@ -10,11 +11,12 @@ import Modal from 'components/Modal';
 import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
+import usePrivateState from 'hooks/usePrivateState';
 import { useSellerSales, useSellerSummary } from 'hooks/useSellers';
 import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Alert, Badge } from 'react-bootstrap';
 import {
     computeComparison,
@@ -85,21 +87,48 @@ const axisMoney = (value) =>
     Number(value) >= 1000 ? `$${(Number(value) / 1000).toFixed(0)}k` : `$${formatNumber(Number(value))}`;
 
 const SellerDashboardModal = ({ show, onClose, seller, initialDateRange }) => {
+    const { session } = useAuth();
+    const analytics = session.permissions.some((grant) => grant.capability === 'sales.read');
+    const exporting = session.permissions.some((grant) => grant.capability === 'sales.export');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
-    const [dateRange, setDateRange] = useState(
+    const [dateRange, setDateRange, resetDateRange] = usePrivateState(
+        `seller-profile-range:${seller.sellerId}`,
         initialDateRange || {
             from: DateTime.now().minus({ months: 3 }).toISODate(),
             to: DateTime.now().toISODate(),
         },
     );
-    const [salesPage, setSalesPage] = useState(1);
-    const [salesSearch, setSalesSearch] = useState('');
-    const [salesSort, setSalesSort] = useState(DEFAULT_SORT);
-    const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
+    const [salesPage, setSalesPage, resetSalesPage] = usePrivateState(`seller-profile-page:${seller.sellerId}`, 1);
+    const [salesSearch, setSalesSearch, resetSalesSearch] = usePrivateState(
+        `seller-profile-search:${seller.sellerId}`,
+        '',
+    );
+    const [salesSort, setSalesSort, resetSalesSort] = usePrivateState(
+        `seller-profile-sort:${seller.sellerId}`,
+        DEFAULT_SORT,
+    );
+    const [selectedInvoiceId, setSelectedInvoiceId, resetSelectedInvoice] = usePrivateState(
+        `seller-profile-invoice:${seller.sellerId}`,
+        null,
+    );
     const [printError, setPrintError] = useState('');
+    const close = useCallback(() => {
+        resetDateRange();
+        resetSalesPage();
+        resetSalesSearch();
+        resetSalesSort();
+        resetSelectedInvoice();
+        onClose();
+    }, [resetDateRange, resetSalesPage, resetSalesSearch, resetSalesSort, resetSelectedInvoice, onClose]);
+    useEffect(
+        () => () => {
+            if (window.location.pathname !== '/vendedores') close();
+        },
+        [close],
+    );
 
-    const enabled = show && !!seller?.sellerId;
+    const enabled = analytics && show && !!seller?.sellerId;
 
     const {
         data: summary,
@@ -128,6 +157,7 @@ const SellerDashboardModal = ({ show, onClose, seller, initialDateRange }) => {
 
     const totals = summary?.totals;
     const compare = summary?.compare;
+    const financial = Object.hasOwn(totals || {}, 'profit');
 
     const identity = summary?.seller || seller || {};
 
@@ -170,20 +200,36 @@ const SellerDashboardModal = ({ show, onClose, seller, initialDateRange }) => {
         async (config) => {
             setPrintError('');
             try {
-                const result = await fetchSellerSales(seller.sellerId, {
+                if (config.search !== undefined) await setSalesSearch(config.search);
+                const result = await fetchSalesExport({
+                    employeeId: seller.sellerId,
                     ...dateRange,
-                    page: 1,
-                    limit: salesData?.total || LIMIT,
-                    search: salesSearch || undefined,
+                    search: config.search ?? salesSearch,
                     sortBy: salesSort[0]?.id,
                     sortDir: salesSort[0]?.desc ? 'desc' : 'asc',
                     showNoe,
                 });
-                const rows = sortRows(result.data || [], config?.sortBy);
-                const columns = config?.columns?.length ? config.columns : SALES_COLUMNS;
+                if (
+                    config.currency === 'BsS' &&
+                    !(Number(currencyRate?.Cambio) > 0 && Number.isFinite(Number(currencyRate?.Cambio)))
+                )
+                    throw new Error('Tasa no disponible.');
+                const rows = sortRows(
+                    (result.data || []).map((row) => ({ ...row, client: row.cliente })),
+                    config?.sortBy,
+                );
+                const columns = (config.columns || []).filter((column) =>
+                    result.columns.some(
+                        (server) => (server.key === 'cliente' ? 'client' : server.key) === column.accessor,
+                    ),
+                );
+                if (!columns.length) throw new Error('Selecciona columnas autorizadas.');
                 const moneyKeys = ['monto', 'utilidad'];
                 const formatValue = (key, value) => {
-                    if (moneyKeys.includes(key)) return formatMoney(value, config?.currency, currencyRate?.Cambio);
+                    if (moneyKeys.includes(key))
+                        return value == null
+                            ? 'No disponible'
+                            : formatMoney(value, config?.currency, currencyRate?.Cambio);
                     if (key === 'fecha') return DateTime.fromISO(value).toFormat('dd/MM/yyyy');
                     return String(value ?? '');
                 };
@@ -242,14 +288,7 @@ const SellerDashboardModal = ({ show, onClose, seller, initialDateRange }) => {
 
     return (
         <>
-            <Modal
-                show={show}
-                size="xl"
-                onHide={onClose}
-                backdrop="static"
-                scrollable
-                className="seller-dashboard-modal"
-            >
+            <Modal show={show} size="xl" onHide={close} backdrop="static" scrollable className="seller-dashboard-modal">
                 <Modal.Header closeButton>
                     <div className="d-flex align-items-center gap-3">
                         <div className="seller-avatar">{avatarLetter}</div>
@@ -271,225 +310,235 @@ const SellerDashboardModal = ({ show, onClose, seller, initialDateRange }) => {
                     )}
                     {printError && <Alert variant="danger">{printError}</Alert>}
 
-                    <div className="date-picker-card">
-                        <div className="date-picker-label">Rango de fechas</div>
-                        <DateRangePicker
-                            key={seller?.sellerId || 'picker'}
-                            initialFrom={dateRange.from}
-                            initialTo={dateRange.to}
-                            onChange={handleDateRangeChange}
-                        />
-                    </div>
-
-                    <div className="dashboard-kpi-grid dashboard-kpi-grid-compact mb-3">
-                        <div>
-                            <KpiCard
-                                label="Ventas"
-                                value={formatCurrency(totals?.sales ?? 0)}
-                                comparison={computeComparison(totals?.sales, compare?.sales)}
-                                icon="money"
-                                accent="blue"
-                                loading={summaryLoading && !summary}
-                            />
-                        </div>
-                        <div>
-                            <KpiCard
-                                label="Utilidad"
-                                value={formatCurrency(totals?.profit ?? 0)}
-                                comparison={computeComparison(totals?.profit, compare?.profit)}
-                                icon="chart"
-                                accent="green"
-                                loading={summaryLoading && !summary}
-                            />
-                        </div>
-                        <div>
-                            <KpiCard
-                                label="Margen"
-                                value={formatPercent(totals?.marginPercent ?? 0)}
-                                icon="percent"
-                                accent="amber"
-                                loading={summaryLoading && !summary}
-                            />
-                        </div>
-                        <div>
-                            <KpiCard
-                                label="Facturas"
-                                value={formatNumber(totals?.invoices ?? 0)}
-                                comparison={computeComparison(totals?.invoices, compare?.invoices)}
-                                icon="receipt"
-                                accent="cyan"
-                                loading={summaryLoading && !summary}
-                            />
-                        </div>
-                        <div>
-                            <KpiCard
-                                label="Ticket Promedio"
-                                value={formatCurrency(totals?.avgTicket ?? 0)}
-                                icon="ticket"
-                                accent="purple"
-                                loading={summaryLoading && !summary}
-                            />
-                        </div>
-                        <div>
-                            <KpiCard
-                                label="Clientes Atendidos"
-                                value={formatNumber(totals?.clients ?? 0)}
-                                icon="user"
-                                accent="pink"
-                                loading={summaryLoading && !summary}
-                            />
-                        </div>
-                        <div>
-                            <KpiCard
-                                label="Días Sin Vender"
-                                value={daysInactive == null ? '—' : `${formatNumber(daysInactive)} días`}
-                                icon="chart"
-                                accent="orange"
-                                loading={summaryLoading && !summary}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="row g-3 mb-3">
-                        <div className="col-12">
-                            <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                                <PanelHelpTitle
-                                    title="Tendencia de Ventas por Mes"
-                                    help={{
-                                        que: 'Ventas del vendedor mes a mes dentro del rango elegido.',
-                                        leer: 'Cada punto es un mes; la altura es el monto vendido.',
-                                        servir: 'Ver si el vendedor sostiene el ritmo o tiene meses flojos.',
-                                    }}
+                    {analytics && (
+                        <>
+                            {' '}
+                            <div className="date-picker-card">
+                                <div className="date-picker-label">Rango de fechas</div>
+                                <DateRangePicker
+                                    key={seller?.sellerId || 'picker'}
+                                    initialFrom={dateRange.from}
+                                    initialTo={dateRange.to}
+                                    onChange={handleDateRangeChange}
                                 />
-                                <div style={{ height: 260 }}>
-                                    {monthlyChart.length > 0 && monthlyChart[0].data.length > 0 ? (
-                                        <ResponsiveLine
-                                            data={monthlyChart}
-                                            theme={nivoTheme}
-                                            margin={{ top: 10, right: 20, bottom: 35, left: 65 }}
-                                            xScale={{ type: 'point' }}
-                                            yScale={{ type: 'linear', min: 0, max: 'auto' }}
-                                            curve="monotoneX"
-                                            axisBottom={{ tickSize: 5, tickPadding: 5, tickRotation: -30 }}
-                                            axisLeft={{ tickSize: 5, tickPadding: 5, format: axisMoney }}
-                                            colors={['#3b82f6']}
-                                            pointSize={6}
-                                            pointColor="#3b82f6"
-                                            pointBorderWidth={2}
-                                            pointBorderColor="#1e2126"
-                                            enableArea
-                                            areaOpacity={0.12}
-                                            useMesh
-                                            enableGridX={false}
-                                            tooltip={({ point }) => (
-                                                <ChartTooltip title={String(point.data.x)} color="#3b82f6">
-                                                    <span>Ventas</span>
-                                                    <strong>{formatCurrency(point.data.y)}</strong>
-                                                </ChartTooltip>
-                                            )}
-                                        />
-                                    ) : (
-                                        <div className="d-flex align-items-center justify-content-center h-100 text-muted">
-                                            Sin ventas en este período
-                                        </div>
-                                    )}
-                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div className="row g-3 mb-3">
-                        <div className="col-12 col-lg-6">
-                            <div className="dashboard-panel" style={{ padding: '16px 20px', height: '100%' }}>
-                                <PanelHelpTitle
-                                    title="Top Clientes"
-                                    help={{
-                                        que: 'Los clientes que más le compraron a este vendedor en el periodo.',
-                                        leer: 'Se ordena por monto vendido; el texto secundario muestra facturas y margen.',
-                                        servir: 'Saber de quién depende la venta del vendedor.',
-                                    }}
-                                />
-                                <div style={{ height: 300, overflowY: 'auto' }}>
-                                    <RankedList
-                                        data={summary?.topClients || []}
-                                        nameKey="name"
-                                        valueKey="sales"
-                                        valueFormat={formatCurrency}
-                                        secondary={{
-                                            render: (item) =>
-                                                `${formatNumber(item.invoices)} facturas · ${formatPercent(
-                                                    item.sales > 0 ? (item.profit / item.sales) * 100 : 0,
-                                                )} margen`,
-                                        }}
-                                        emptyMessage="Sin clientes en este período"
+                            <div className="dashboard-kpi-grid dashboard-kpi-grid-compact mb-3">
+                                <div>
+                                    <KpiCard
+                                        label="Ventas"
+                                        value={formatCurrency(totals?.sales ?? 0)}
+                                        comparison={computeComparison(totals?.sales, compare?.sales)}
+                                        icon="money"
+                                        accent="blue"
+                                        loading={summaryLoading && !summary}
+                                    />
+                                </div>
+                                {financial && (
+                                    <div>
+                                        <KpiCard
+                                            label="Utilidad"
+                                            value={formatCurrency(totals?.profit ?? 0)}
+                                            comparison={computeComparison(totals?.profit, compare?.profit)}
+                                            icon="chart"
+                                            accent="green"
+                                            loading={summaryLoading && !summary}
+                                        />
+                                    </div>
+                                )}
+                                {financial && (
+                                    <div>
+                                        <KpiCard
+                                            label="Margen"
+                                            value={formatPercent(totals?.marginPercent ?? 0)}
+                                            icon="percent"
+                                            accent="amber"
+                                            loading={summaryLoading && !summary}
+                                        />
+                                    </div>
+                                )}
+                                <div>
+                                    <KpiCard
+                                        label="Facturas"
+                                        value={formatNumber(totals?.invoices ?? 0)}
+                                        comparison={computeComparison(totals?.invoices, compare?.invoices)}
+                                        icon="receipt"
+                                        accent="cyan"
+                                        loading={summaryLoading && !summary}
+                                    />
+                                </div>
+                                <div>
+                                    <KpiCard
+                                        label="Ticket Promedio"
+                                        value={formatCurrency(totals?.avgTicket ?? 0)}
+                                        icon="ticket"
+                                        accent="purple"
+                                        loading={summaryLoading && !summary}
+                                    />
+                                </div>
+                                <div>
+                                    <KpiCard
+                                        label="Clientes Atendidos"
+                                        value={formatNumber(totals?.clients ?? 0)}
+                                        icon="user"
+                                        accent="pink"
+                                        loading={summaryLoading && !summary}
+                                    />
+                                </div>
+                                <div>
+                                    <KpiCard
+                                        label="Días Sin Vender"
+                                        value={daysInactive == null ? '—' : `${formatNumber(daysInactive)} días`}
+                                        icon="chart"
+                                        accent="orange"
+                                        loading={summaryLoading && !summary}
                                     />
                                 </div>
                             </div>
-                        </div>
-                        <div className="col-12 col-lg-6">
-                            <div className="dashboard-panel" style={{ padding: '16px 20px', height: '100%' }}>
-                                <PanelHelpTitle
-                                    title="Top Productos"
-                                    help={{
-                                        que: 'Los productos que más vendió este vendedor en el periodo.',
-                                        leer: 'Se ordena por monto vendido; incluye unidades y utilidad.',
-                                        servir: 'Conocer en qué se apoya su venta.',
+                            <div className="row g-3 mb-3">
+                                <div className="col-12">
+                                    <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
+                                        <PanelHelpTitle
+                                            title="Tendencia de Ventas por Mes"
+                                            help={{
+                                                que: 'Ventas del vendedor mes a mes dentro del rango elegido.',
+                                                leer: 'Cada punto es un mes; la altura es el monto vendido.',
+                                                servir: 'Ver si el vendedor sostiene el ritmo o tiene meses flojos.',
+                                            }}
+                                        />
+                                        <div style={{ height: 260 }}>
+                                            {monthlyChart.length > 0 && monthlyChart[0].data.length > 0 ? (
+                                                <ResponsiveLine
+                                                    data={monthlyChart}
+                                                    theme={nivoTheme}
+                                                    margin={{ top: 10, right: 20, bottom: 35, left: 65 }}
+                                                    xScale={{ type: 'point' }}
+                                                    yScale={{ type: 'linear', min: 0, max: 'auto' }}
+                                                    curve="monotoneX"
+                                                    axisBottom={{ tickSize: 5, tickPadding: 5, tickRotation: -30 }}
+                                                    axisLeft={{ tickSize: 5, tickPadding: 5, format: axisMoney }}
+                                                    colors={['#3b82f6']}
+                                                    pointSize={6}
+                                                    pointColor="#3b82f6"
+                                                    pointBorderWidth={2}
+                                                    pointBorderColor="#1e2126"
+                                                    enableArea
+                                                    areaOpacity={0.12}
+                                                    useMesh
+                                                    enableGridX={false}
+                                                    tooltip={({ point }) => (
+                                                        <ChartTooltip title={String(point.data.x)} color="#3b82f6">
+                                                            <span>Ventas</span>
+                                                            <strong>{formatCurrency(point.data.y)}</strong>
+                                                        </ChartTooltip>
+                                                    )}
+                                                />
+                                            ) : (
+                                                <div className="d-flex align-items-center justify-content-center h-100 text-muted">
+                                                    Sin ventas en este período
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="row g-3 mb-3">
+                                <div className="col-12 col-lg-6">
+                                    <div className="dashboard-panel" style={{ padding: '16px 20px', height: '100%' }}>
+                                        <PanelHelpTitle
+                                            title="Top Clientes"
+                                            help={{
+                                                que: 'Los clientes que más le compraron a este vendedor en el periodo.',
+                                                leer: 'Se ordena por monto vendido; el texto secundario muestra facturas y margen.',
+                                                servir: 'Saber de quién depende la venta del vendedor.',
+                                            }}
+                                        />
+                                        <div style={{ height: 300, overflowY: 'auto' }}>
+                                            <RankedList
+                                                data={summary?.topClients || []}
+                                                nameKey="name"
+                                                valueKey="sales"
+                                                valueFormat={formatCurrency}
+                                                secondary={{
+                                                    render: (item) =>
+                                                        `${item.invoices == null ? 'No disponible' : formatNumber(item.invoices)} facturas${Object.hasOwn(item, 'profit') ? ` · ${item.profit == null || !(item.sales > 0) ? 'No disponible' : formatPercent((item.profit / item.sales) * 100)} margen` : ''}`,
+                                                }}
+                                                emptyMessage="Sin clientes en este período"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="col-12 col-lg-6">
+                                    <div className="dashboard-panel" style={{ padding: '16px 20px', height: '100%' }}>
+                                        <PanelHelpTitle
+                                            title="Top Productos"
+                                            help={{
+                                                que: 'Los productos que más vendió este vendedor en el periodo.',
+                                                leer: 'Se ordena por monto vendido; incluye unidades y utilidad.',
+                                                servir: 'Conocer en qué se apoya su venta.',
+                                            }}
+                                        />
+                                        <Table
+                                            data={summary?.topProducts || []}
+                                            columns={PRODUCT_COLUMNS.filter(
+                                                (column) => column.accessor !== 'profit' || financial,
+                                            )}
+                                            maxHeight={300}
+                                            emptyMessage="Sin productos en este período"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
+                                <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                                    <PanelHelpTitle
+                                        title="Historial de Ventas"
+                                        help={{
+                                            que: 'Todas las facturas emitidas por este vendedor en el periodo.',
+                                            leer: 'Puedes buscar por documento o cliente, ordenar por columna y hacer clic en una fila para ver el detalle.',
+                                            servir: 'Auditar la venta del vendedor factura por factura.',
+                                        }}
+                                    />
+                                    <Badge bg="secondary" pill>
+                                        {formatNumber(salesData?.total ?? 0)} registros
+                                    </Badge>
+                                </div>
+                                <Table
+                                    data={salesData?.data || []}
+                                    columns={SALES_COLUMNS.filter(
+                                        (column) =>
+                                            column.accessor !== 'utilidad' ||
+                                            Object.hasOwn(salesData?.totals || {}, 'utilidad'),
+                                    )}
+                                    loading={salesLoading}
+                                    showFooter={!!salesData?.totals}
+                                    summaries={salesData?.totals}
+                                    maxHeight={420}
+                                    emptyMessage="Sin ventas en este período"
+                                    onRowClick={(sale) => setSelectedInvoiceId(sale.invoiceId)}
+                                    search={{
+                                        enabled: true,
+                                        onSearch: handleSalesSearch,
+                                        initialValue: salesSearch,
+                                        placeholder: 'Buscar por documento o cliente...',
+                                    }}
+                                    sorting={{ enabled: true, sortBy: salesSort, onSort: handleSalesSort }}
+                                    print={{
+                                        enabled: exporting && salesData?.exportAllowed === true,
+                                        onGlobalPrint: handlePrintSales,
+                                        storageKey: 'vendedor-ventas',
+                                    }}
+                                    pagination={{
+                                        enabled: true,
+                                        page: salesPage,
+                                        totalPages,
+                                        totalRows: salesData?.total ?? 0,
+                                        pageSize: LIMIT,
+                                        onPageChange: setSalesPage,
                                     }}
                                 />
-                                <Table
-                                    data={summary?.topProducts || []}
-                                    columns={PRODUCT_COLUMNS}
-                                    maxHeight={300}
-                                    emptyMessage="Sin productos en este período"
-                                />
                             </div>
-                        </div>
-                    </div>
-
-                    <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                            <PanelHelpTitle
-                                title="Historial de Ventas"
-                                help={{
-                                    que: 'Todas las facturas emitidas por este vendedor en el periodo.',
-                                    leer: 'Puedes buscar por documento o cliente, ordenar por columna y hacer clic en una fila para ver el detalle.',
-                                    servir: 'Auditar la venta del vendedor factura por factura.',
-                                }}
-                            />
-                            <Badge bg="secondary" pill>
-                                {formatNumber(salesData?.total ?? 0)} registros
-                            </Badge>
-                        </div>
-                        <Table
-                            data={salesData?.data || []}
-                            columns={SALES_COLUMNS}
-                            loading={salesLoading}
-                            showFooter={!!salesData?.totals}
-                            summaries={salesData?.totals}
-                            maxHeight={420}
-                            emptyMessage="Sin ventas en este período"
-                            onRowClick={(sale) => setSelectedInvoiceId(sale.invoiceId)}
-                            search={{
-                                enabled: true,
-                                onSearch: handleSalesSearch,
-                                placeholder: 'Buscar por documento o cliente...',
-                            }}
-                            sorting={{ enabled: true, sortBy: salesSort, onSort: handleSalesSort }}
-                            print={{
-                                enabled: true,
-                                onGlobalPrint: handlePrintSales,
-                                storageKey: 'vendedor-ventas',
-                            }}
-                            pagination={{
-                                enabled: true,
-                                page: salesPage,
-                                totalPages,
-                                totalRows: salesData?.total ?? 0,
-                                pageSize: LIMIT,
-                                onPageChange: setSalesPage,
-                            }}
-                        />
-                    </div>
+                        </>
+                    )}
                 </Modal.Body>
             </Modal>
             {show && selectedInvoiceId != null && (

@@ -96,27 +96,44 @@ async function directory(transaction, access, query, clients) {
   return clients ? rows : rows.map((row) => sellerRow(access, row, "id"));
 }
 
+function canExportSellers(access, query) {
+  const read = access.scopeFor("sellers.read");
+  if (!read.global && !read.sellerIds.length) return false;
+  return (
+    access.hasGlobal("sellers.export") ||
+    (query.employeeId
+      ? access.canRecord("sellers.export", query.employeeId)
+      : !read.global && access.covers("sellers.export", read.sellerIds))
+  );
+}
+
 async function partyList(transaction, access, query, clients) {
   if (clients) requireCapability(access, "clients.read");
   const salesRead = access.scopeFor("sales.read");
-  if (clients && !salesRead.global && !salesRead.sellerIds.length) {
-    const sort = { Empresa: "name", IdCliente: "id" };
-    const sortBy = query.sortBy || "Empresa";
+  if (!salesRead.global && !salesRead.sellerIds.length) {
+    const sort = clients ? { Empresa: "name", IdCliente: "id" } : { name: "name", sellerId: "id" };
+    const sortBy = query.sortBy || (clients ? "Empresa" : "name");
     if (!Object.hasOwn(sort, sortBy) || query.employeeId) fail(403);
     const catalog = await directory(
       transaction,
       access,
-      { search: query.search || "", ruta: query.ruta || "", sortBy: sort[sortBy], sortDir: query.sortDir },
-      true,
+      {
+        search: query.search || "",
+        ...(clients ? { ruta: query.ruta || "" } : {}),
+        sortBy: sort[sortBy],
+        sortDir: query.sortDir,
+      },
+      clients,
     );
     return {
       data: catalog
         .slice((query.page - 1) * query.limit, query.page * query.limit)
-        .map(({ name, ...row }) => ({ ...row, Empresa: name })),
+        .map(({ name, id, ...row }) => (clients ? { ...row, Empresa: name } : { ...row, sellerId: id, name })),
       total: catalog.length,
       page: query.page,
       limit: query.limit,
       totals: {},
+      ...(!clients ? { exportAllowed: canExportSellers(access, query) } : {}),
     };
   }
   const scope = clients ? requireCapability(access, "sales.read") : sellerSalesScope(access);
@@ -129,26 +146,33 @@ async function partyList(transaction, access, query, clients) {
       partyId: idColumn,
       sales: transaction.raw("SUM(sf.Precio * sf.Cantidad)"),
       invoices: transaction.raw("COUNT(DISTINCT ??)", [`mf.${invoice}`]),
-      clients: transaction.raw("COUNT(DISTINCT mf.IdCliente)"),
+      clients: transaction.raw("COUNT(DISTINCT BINARY mf.IdCliente)"),
       lastSale: transaction.raw("MAX(mf.Fecha)"),
       ...(financial ? { profit: transaction.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)") } : {}),
     })
-    .groupBy(idColumn);
-  const catalog = transaction(clients ? "clientes" : "vendedores").select({ id: clients ? "IdCliente" : "idVend" });
+    .groupByRaw("BINARY ??", [idColumn]);
+  const catalog = transaction(clients ? "clientes" : "vendedores").select({
+    id: transaction.raw("BINARY ??", [clients ? "IdCliente" : "idVend"]),
+  });
   if (!clients && query.employeeId) filterIdentity(catalog, transaction.raw("BINARY idVend"), query.employeeId);
   const readScope = clients ? access.scopeFor("clients.read") : access.scopeFor("sellers.read");
   if (!readScope.global) catalog.whereIn(transaction.raw("BINARY idVend"), readScope.sellerIds);
   const { base: historical } = salesBase(transaction, access, query);
   if (!scope.global) historical.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
-  const identities = catalog.union(historical.distinct({ id: idColumn }));
+  const identities = catalog.union(historical.distinct({ id: transaction.raw("BINARY ??", [idColumn]) }));
   const source = transaction
     .from(identities.as("i"))
-    .leftJoin(clients ? "clientes as c" : "vendedores as v", clients ? "c.IdCliente" : "v.idVend", "i.id")
+    .leftJoin(clients ? "clientes as c" : "vendedores as v", function () {
+      const identity = clients ? "c.IdCliente" : "v.idVend";
+      this.on(identity, "=", transaction.raw("CAST(i.id AS CHAR)")).andOn(
+        transaction.raw("BINARY ?? = BINARY i.id", [identity]),
+      );
+    })
     .leftJoin(aggregate.as("a"), function () {
-      this.on(transaction.raw("a.partyId <=> i.id"));
+      this.on(transaction.raw("BINARY a.partyId <=> BINARY i.id"));
     });
   const nameColumn = clients ? "c.Empresa" : "v.Empresa";
-  const name = transaction.raw("COALESCE(NULLIF(??, ''), CONCAT(?, COALESCE(i.id, 'sin ID'), ')'))", [
+  const name = transaction.raw("CAST(COALESCE(NULLIF(??, ''), CONCAT(?, COALESCE(i.id, 'sin ID'), ')')) AS CHAR)", [
     nameColumn,
     clients ? "Cliente no registrado (" : "Vendedor no registrado (",
   ]);
@@ -156,14 +180,14 @@ async function partyList(transaction, access, query, clients) {
     source.where(function () {
       this.where(nameColumn, "like", `%${query.search}%`).orWhere("i.id", "like", `%${query.search}%`);
     });
-  if (clients && query.ruta) source.where("c.Ruta", query.ruta);
+  if (clients && query.ruta) source.whereRaw("BINARY c.Ruta = ?", [query.ruta]);
   const raw = (sql) => transaction.raw(sql);
   const amount = raw("ROUND(COALESCE(a.sales, 0), 2)");
   const profit = raw("ROUND(COALESCE(a.profit, 0), 2)");
   const count = raw("COALESCE(a.invoices, 0)");
   const sort = clients
     ? {
-        IdCliente: "i.id",
+        IdCliente: transaction.raw("CAST(i.id AS CHAR)"),
         Empresa: name,
         total_ventas: amount,
         num_ventas: count,
@@ -171,7 +195,7 @@ async function partyList(transaction, access, query, clients) {
         ...(financial ? { utilidad: profit } : {}),
       }
     : {
-        sellerId: "i.id",
+        sellerId: transaction.raw("CAST(i.id AS CHAR)"),
         name,
         sales: amount,
         invoiceCount: count,
@@ -185,7 +209,7 @@ async function partyList(transaction, access, query, clients) {
   const [{ total }] = await source.clone().count("* as total");
   const selected = clients
     ? {
-        IdCliente: "i.id",
+        IdCliente: transaction.raw("CAST(i.id AS CHAR)"),
         Empresa: name,
         total_ventas: amount,
         num_ventas: count,
@@ -194,7 +218,7 @@ async function partyList(transaction, access, query, clients) {
         ...(financial ? { utilidad: profit } : {}),
       }
     : {
-        sellerId: "i.id",
+        sellerId: transaction.raw("CAST(i.id AS CHAR)"),
         name,
         sales: amount,
         invoiceCount: count,
@@ -224,6 +248,12 @@ async function partyList(transaction, access, query, clients) {
     .first();
   const identified = rows.map((row) => ({
     ...row,
+    ...(!clients
+      ? {
+          sharePercent:
+            Number(totals.sales) > 0 ? Math.round((Number(row.sales) / Number(totals.sales)) * 10000) / 100 : null,
+        }
+      : {}),
     [clients ? "IdCliente" : "sellerId"]: reportId(row[clients ? "IdCliente" : "sellerId"]),
   }));
   return {
@@ -232,6 +262,7 @@ async function partyList(transaction, access, query, clients) {
     page: query.page,
     limit: query.limit,
     totals,
+    ...(!clients ? { exportAllowed: canExportSellers(access, query) } : {}),
   };
 }
 
@@ -326,6 +357,7 @@ async function sellerSummary(transaction, access, query, id) {
       clientId: row.clientId,
       name: row.client,
       sales: row.total_USD,
+      invoices: row.invoiceCount,
       ...(financial ? { profit: row.netProfit } : {}),
     })),
     topProducts: result.topProducts.map((row) => ({
@@ -515,6 +547,7 @@ function createPartyReports({ sessions }) {
       return {
         data: result.data.map(({ cliente, ...row }) => ({ ...row, client: cliente })),
         total: result.pagination.total,
+        exportAllowed: result.exportAllowed,
         page: query.page,
         limit: query.limit,
         totals: { ...result.totals, invoiceCount: result.pagination.total },
@@ -546,4 +579,4 @@ function createPartyReports({ sessions }) {
   return router;
 }
 
-module.exports = { createPartyReports, sellerSalesScope, partyList };
+module.exports = { createPartyReports, sellerSalesScope, partyList, canExportSellers };

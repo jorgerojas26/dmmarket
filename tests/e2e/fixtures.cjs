@@ -56,7 +56,7 @@ async function openModule(page, name, view) {
   if (!(await link.isVisible()))
     await navigation.getByRole("button", { name: "Abrir navegación", exact: true }).click();
   await link.click();
-  if (view && ["Compras", "Ventas", "Clientes"].includes(name)) {
+  if (view && ["Compras", "Ventas", "Clientes", "Vendedores"].includes(name)) {
     await page
       .locator(".clients-sidebar")
       .getByRole("button", { name: new RegExp(view) })

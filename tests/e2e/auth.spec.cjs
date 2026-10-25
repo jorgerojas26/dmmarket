@@ -342,13 +342,12 @@ test("detalle y dashboard originales preservan comparación y no exponen costos,
   await expect(detail.locator(".document-detail-total")).toContainText("$200.00");
 });
 
-test("directorio de vendedores no expone contactos ajenos y sus ventas respetan ambos permisos", async ({
+test("Vendedores original sólo muestra contactos propios y conserva resumen y comparación", async ({
   page,
   environment,
 }) => {
-  const { seedParties } = require("../support/party-fixtures.cjs");
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
-  await seedParties(environment.db);
+  await require("../support/party-fixtures.cjs").seedParties(environment.db);
   const user = await environment.seedUser({
     permissions: [
       { capability: "sellers.read", scope: "global" },
@@ -358,20 +357,17 @@ test("directorio de vendedores no expone contactos ajenos y sus ventas respetan 
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  await openModule(page, "Vendedores");
-  const directory = page.getByRole("region", { name: "Directorio de clientes y vendedores" });
-  await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
-  await expect(directory.getByRole("cell", { name: "PRIVATE-PHONE-A", exact: true })).toBeVisible();
-  await expect(directory.getByText("PRIVATE-PHONE-B", { exact: true })).toHaveCount(0);
-  await directory.getByLabel("Incluir ventas autorizadas", { exact: true }).check();
-  await directory.getByLabel("Directorio ventas desde", { exact: true }).fill("2026-01-01");
-  await directory.getByLabel("Directorio ventas hasta", { exact: true }).fill("2026-01-31");
-  await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
-  await directory.getByRole("button", { name: "Ver resumen de A", exact: true }).click();
-  const summary = page.getByRole("region", { name: "Resumen de cliente o vendedor" });
-  await expect(summary.getByText("Ventas autorizadas: 100", { exact: true })).toBeVisible();
-  await expect(summary.getByText("Ventas autorizadas del período anterior: 10", { exact: true })).toBeVisible();
-  await expect(directory.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+  await page.goto(`${environment.origin}/vendedores?view=sellers&dFrom=2026-01-01&dTo=2026-01-31`);
+  const report = page.getByRole("region", { name: "Vendedores", exact: true });
+  await report
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "Vendedor A", exact: true }) })
+    .click();
+  const modal = page.getByRole("dialog");
+  await expect(modal.getByText(/PRIVATE-PHONE-A/)).toBeVisible();
+  await expect(modal.getByText(/PRIVATE-PHONE-B/)).toHaveCount(0);
+  await expect(modal.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+  await expect(modal.locator(".dashboard-kpi-card").filter({ hasText: /^Ventas/ })).toContainText("$100,00");
   const body = await page.evaluate(
     async () => await (await fetch("/api/sellers/B/summary?from=2026-01-01&to=2026-01-31")).json(),
   );
@@ -466,7 +462,10 @@ test("modal original y consultas mensuales conservan alcance y año en ambos sis
   }
 });
 
-test("panel de vendedores intersecta lecturas antes de calcular ranking y margen", async ({ page, environment }) => {
+test("dashboard original de Vendedores intersecta lectura antes de ranking, margen y detalle en ambos sistemas", async ({
+  page,
+  environment,
+}) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/party-fixtures.cjs").seedParties(environment.db);
   const user = await environment.seedUser({
@@ -479,39 +478,46 @@ test("panel de vendedores intersecta lecturas antes de calcular ranking y margen
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  await openModule(page, "Vendedores", "Resumen");
-  const panel = page.getByRole("region", { name: "Panel de vendedores", exact: true });
-  await panel.getByLabel("Panel de vendedores desde", { exact: true }).fill("2026-01-01");
-  await panel.getByLabel("Panel de vendedores hasta", { exact: true }).fill("2026-01-31");
-  for (const [system, sales, margin] of [
-    ["false", "100", "39"],
-    ["true", "200", "53.5"],
+  await page.goto(
+    `${environment.origin}/vendedores?view=dashboard&from=2026-01-01&to=2026-01-31&dFrom=2026-01-01&dTo=2026-01-31`,
+  );
+  for (const [noe, sales, margin] of [
+    [false, 100, 39],
+    [true, 200, 53.5],
   ]) {
-    await panel.getByLabel("Sistema del panel de vendedores", { exact: true }).selectOption(system);
-    await panel.getByRole("button", { name: "Consultar panel de vendedores", exact: true }).click();
-    const ranking = panel.getByRole("table", { name: "Ranking autorizado de vendedores", exact: true });
-    await expect(ranking.getByRole("cell", { name: "Vendedor A", exact: true })).toBeVisible();
-    await expect(ranking.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
-    await expect(
-      ranking
-        .getByRole("row")
-        .filter({ has: page.getByRole("cell", { name: "Vendedor A", exact: true }) })
-        .getByRole("cell")
-        .nth(7),
-    ).toHaveText(margin);
-    const trend = panel.getByRole("table", { name: "Tendencia autorizada de vendedores", exact: true });
-    await expect(trend.getByRole("cell", { name: sales, exact: true })).toBeVisible();
+    await setNoe(page, noe);
+    const report = page.getByRole("region", { name: "Vendedores", exact: true });
+    await expect(report.getByRole("heading", { name: "Dashboard de Vendedores", exact: true })).toBeVisible();
+    await expect(report.getByText("Vendedor A", { exact: true }).first()).toBeVisible();
+    await expect(report.getByText("Vendedor B", { exact: true })).toHaveCount(0);
     const response = await page.evaluate(
-      async (showNoe) =>
-        await (await fetch(`/api/sellers/dashboard?from=2026-01-01&to=2026-01-31&showNoe=${showNoe}`)).json(),
-      system,
+      async (noe) => await (await fetch(`/api/sellers/dashboard?from=2026-01-01&to=2026-01-31&showNoe=${noe}`)).json(),
+      noe,
     );
     expect(response.kpis.compareSales).toBe(10);
     expect(response.ranking.map((row) => row.sellerId)).toEqual(["A"]);
+    expect(response.ranking[0].sales).toBe(sales);
+    expect(response.ranking[0].marginPercent).toBe(margin);
   }
+  await page
+    .locator(".clients-sidebar")
+    .getByRole("button", { name: /Desglose/ })
+    .click();
+  const row = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "Vendedor A", exact: true }) });
+  await expect(row.getByRole("cell", { name: /53[,.]5/ }).first()).toBeVisible();
+  await row.click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .locator(".dashboard-kpi-card")
+      .filter({ hasText: /^Utilidad/ }),
+  ).toContainText("$107,00");
 });
 
-test("panel global omite derivados financieros propios y contactos ajenos", async ({ page, environment }) => {
+test("dashboard original global oculta utilidad propia y contactos ajenos sin sustituir gráficas", async ({
+  page,
+  environment,
+}) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/party-fixtures.cjs").seedParties(environment.db);
   const user = await environment.seedUser({
@@ -525,23 +531,24 @@ test("panel global omite derivados financieros propios y contactos ajenos", asyn
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  await openModule(page, "Vendedores", "Resumen");
-  const panel = page.getByRole("region", { name: "Panel de vendedores", exact: true });
-  await panel.getByLabel("Panel de vendedores desde", { exact: true }).fill("2026-01-01");
-  await panel.getByLabel("Panel de vendedores hasta", { exact: true }).fill("2026-01-31");
-  await panel.getByRole("button", { name: "Consultar panel de vendedores", exact: true }).click();
-  const ranking = panel.getByRole("table", { name: "Ranking autorizado de vendedores", exact: true });
-  await expect(ranking.getByRole("cell", { name: "Vendedor B", exact: true })).toBeVisible();
-  await expect(ranking.getByRole("columnheader", { name: "Margen autorizado (%)", exact: true })).toHaveCount(0);
-  await expect(panel.getByText("Vendedores por debajo del margen autorizado del equipo", { exact: true })).toHaveCount(
-    0,
+  await page.goto(
+    `${environment.origin}/vendedores?view=dashboard&from=2026-01-01&to=2026-01-31&dFrom=2026-01-01&dTo=2026-01-31`,
   );
-  await panel.getByLabel("Panel de vendedores desde", { exact: true }).fill("2026-02-01");
-  await panel.getByLabel("Panel de vendedores hasta", { exact: true }).fill("2026-02-28");
-  await panel.getByRole("button", { name: "Consultar panel de vendedores", exact: true }).click();
-  const inactive = panel.getByRole("table", { name: "Vendedores sin documentos autorizados", exact: true });
-  await expect(inactive.getByRole("cell", { name: "PRIVATE-PHONE-A", exact: true })).toBeVisible();
-  await expect(inactive.getByRole("cell", { name: "PRIVATE-PHONE-B", exact: true })).toHaveCount(0);
+  const report = page.getByRole("region", { name: "Vendedores", exact: true });
+  await expect(report.getByText("Vendedor B", { exact: true }).first()).toBeVisible();
+  await expect(report.getByText("Utilidad", { exact: true })).toHaveCount(0);
+  await page
+    .locator(".clients-sidebar")
+    .getByRole("button", { name: /Desglose/ })
+    .click();
+  await expect(report.getByRole("columnheader", { name: "Margen", exact: true })).toHaveCount(0);
+  await page
+    .locator(".clients-sidebar")
+    .getByRole("button", { name: /Dashboard/ })
+    .click();
+  await page.goto(`${environment.origin}/vendedores?view=dashboard&from=2026-02-01&to=2026-02-28`);
+  await expect(report.getByRole("cell", { name: "PRIVATE-PHONE-A", exact: true })).toBeVisible();
+  await expect(report.getByText("PRIVATE-PHONE-B", { exact: true })).toHaveCount(0);
 });
 
 test("clientes sin documentos conservan tabla original y sólo histórico autorizado hasta el corte", async ({

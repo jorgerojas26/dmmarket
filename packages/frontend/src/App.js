@@ -10,15 +10,14 @@ import Audit from './auth/audit';
 import Commissions from './auth/commissions';
 import { useAuth } from './auth/context';
 import Operations from './auth/operations';
-import Parties from './auth/parties';
 import ProviderRanking from './auth/provider-ranking';
 import Providers from './auth/providers';
 import RateHistory from './auth/rate-history';
-import SellerDashboard from './auth/seller-dashboard';
 import AccessWorkspace, { Account, Rates } from './auth/workspace';
 import Clients from './pages/clientes';
 import Purchases from './pages/compras';
 import Inventory from './pages/inventario';
+import Sellers from './pages/vendedores';
 import Sales from './pages/ventas';
 
 export default function App({ onLogout, logoutError }) {
@@ -66,18 +65,7 @@ export default function App({ onLogout, logoutError }) {
             allowed: can('clients.read') || can('receivables.read'),
             content: <Clients />,
         },
-        {
-            path: '/vendedores',
-            label: 'Directorio',
-            allowed: has('sellers.read'),
-            content: <Parties key="sellers" kind="sellers" />,
-        },
-        {
-            path: '/vendedores/panel',
-            label: 'Resumen',
-            allowed: has('sellers.read') && has('sales.read'),
-            content: <SellerDashboard />,
-        },
+        { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read'), content: <Sellers /> },
         { path: '/comisiones', label: 'Consulta', allowed: has('commissions.read'), content: <Commissions /> },
         { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
         { path: '/tasas', label: 'Referencia', allowed: can('rates.read'), content: <Rates /> },
@@ -196,7 +184,7 @@ export default function App({ onLogout, logoutError }) {
                 <Container fluid className="d-flex flex-column flex-grow-1 overflow-hidden p-0">
                     {path === '/' ? (
                         <Redirect to={modules[0]?.path || '/cuenta'} />
-                    ) : view && ['/inventario', '/compras', '/ventas', '/clientes'].includes(path) ? (
+                    ) : view && ['/inventario', '/compras', '/ventas', '/clientes', '/vendedores'].includes(path) ? (
                         view.content
                     ) : view ? (
                         <section

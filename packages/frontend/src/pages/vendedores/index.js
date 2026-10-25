@@ -1,9 +1,11 @@
+import { useAuth } from 'auth/context';
 import SellersDashboard from 'components/Dashboard/SellersDashboard';
 import DateRangePicker from 'components/DateRangePicker';
 import SellerDashboardModal from 'components/SellerDashboardModal';
 import SellersTable from 'components/SellersTable';
 import Sidebar from 'components/Sidebar';
 import { ShowNoeContext } from 'context/show_noe';
+import usePrivateState from 'hooks/usePrivateState';
 import { DateTime } from 'luxon';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
@@ -16,26 +18,38 @@ const initialDateRange = () => ({
 });
 
 const VendedoresPage = () => {
+    const { session } = useAuth();
+    const analytics = session.permissions.some((grant) => grant.capability === 'sales.read');
+    const availableViews = analytics ? VALID_VIEWS : ['sellers'];
     const history = useHistory();
     const location = useLocation();
     const { showNoe } = useContext(ShowNoeContext);
 
     const searchParams = new URLSearchParams(location.search);
     const urlView = searchParams.get('view');
-    const initialView = VALID_VIEWS.includes(urlView) ? urlView : 'dashboard';
+    const initialView = availableViews.includes(urlView) ? urlView : availableViews[0];
 
     const [activeView, setActiveView] = useState(initialView);
-    const [dateRange, setDateRange] = useState(initialDateRange);
-    const [desgloseDateRange, setDesgloseDateRange] = useState(initialDateRange);
-    const [selectedSeller, setSelectedSeller] = useState(null);
-    const [showModal, setShowModal] = useState(false);
+    const [dateRange, setDateRange] = useState(() => ({
+        from: searchParams.get('from') || initialDateRange().from,
+        to: searchParams.get('to') || initialDateRange().to,
+    }));
+    const [desgloseDateRange, setDesgloseDateRange] = useState(() => ({
+        from: searchParams.get('dFrom') || initialDateRange().from,
+        to: searchParams.get('dTo') || initialDateRange().to,
+    }));
+    const [selectedSeller, setSelectedSeller] = usePrivateState('sellers-profile', null);
     const [modalKey, setModalKey] = useState(0);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         params.set('view', activeView);
+        params.set('from', dateRange.from);
+        params.set('to', dateRange.to);
+        params.set('dFrom', desgloseDateRange.from);
+        params.set('dTo', desgloseDateRange.to);
         history.replace({ search: params.toString() });
-    }, [activeView, history]);
+    }, [activeView, dateRange, desgloseDateRange, history]);
 
     const handleDateRangeChange = useCallback(({ from, to }) => {
         setDateRange({ from, to });
@@ -45,11 +59,13 @@ const VendedoresPage = () => {
         setDesgloseDateRange({ from, to });
     }, []);
 
-    const handleRowSelect = useCallback((seller) => {
-        setSelectedSeller(seller);
-        setModalKey((key) => key + 1);
-        setShowModal(true);
-    }, []);
+    const handleRowSelect = useCallback(
+        (seller) => {
+            setSelectedSeller(seller);
+            setModalKey((key) => key + 1);
+        },
+        [setSelectedSeller],
+    );
 
     const sidebarItems = useMemo(
         () => [
@@ -104,20 +120,26 @@ const VendedoresPage = () => {
     );
 
     return (
-        <Container fluid className="clientes-layout p-0">
+        <Container as="section" aria-label="Vendedores" fluid className="clientes-layout p-0">
             <div className="clientes-row">
-                <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
+                <Sidebar
+                    activeKey={activeView}
+                    onSelect={setActiveView}
+                    items={sidebarItems.filter((item) => availableViews.includes(item.eventKey))}
+                />
                 <div className="clientes-content p-4">
                     {activeView === 'sellers' && (
                         <div className="report-page">
                             <div className="clients-content-wrapper report-page-header mb-3">
                                 <h4 className="m-0 text-light">Desglose de Vendedores</h4>
                                 <div className="report-page-filters">
-                                    <DateRangePicker
-                                        initialFrom={desgloseDateRange.from}
-                                        initialTo={desgloseDateRange.to}
-                                        onChange={handleDesgloseDateRangeChange}
-                                    />
+                                    {analytics && (
+                                        <DateRangePicker
+                                            initialFrom={desgloseDateRange.from}
+                                            initialTo={desgloseDateRange.to}
+                                            onChange={handleDesgloseDateRangeChange}
+                                        />
+                                    )}
                                 </div>
                             </div>
                             <div
@@ -149,11 +171,11 @@ const VendedoresPage = () => {
                     )}
                 </div>
             </div>
-            {showModal && (
+            {selectedSeller && (
                 <SellerDashboardModal
                     key={modalKey}
-                    show={showModal}
-                    onClose={() => setShowModal(false)}
+                    show
+                    onClose={() => setSelectedSeller(null)}
                     seller={selectedSeller}
                     initialDateRange={activeView === 'sellers' ? desgloseDateRange : dateRange}
                 />

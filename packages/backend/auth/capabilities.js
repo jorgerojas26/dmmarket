@@ -9,6 +9,7 @@ const DEFINITIONS = {
   "clients.export": {},
   "clients.personal": {},
   "sellers.read": { assigned: true },
+  "sellers.export": { assigned: true },
   "sellers.personal": { assigned: true },
   "commissions.read": { assigned: true },
   "commissions.update": { privileged: true },

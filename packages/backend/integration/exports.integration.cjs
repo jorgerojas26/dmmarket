@@ -30,6 +30,7 @@ test("lectura no concede exportación y exportación no concede lectura", async 
     ["inventory", "inventory", "search=Inventario"],
     ["providers", "providers", "search=Proveedor"],
     ["clients", "clients", salesRange],
+    ["sellers", "sellers", salesRange],
     ["receivables", "receivables", "search=sintético"],
   ]) {
     for (const permission of ["read", "export"]) {
@@ -279,4 +280,30 @@ test("PDF original de cartera requiere exportación propia y no concede lectura 
   expect(result.body.documents.data.every((row) => row.canReadSale === false)).toBe(true);
   expect(JSON.stringify(result.body)).not.toContain("PRIVATE");
   expect((await full.client.request("/api/sales/1")).status).toBe(403);
+});
+
+test("exportación de vendedores cubre el catálogo completo, no sólo sus ventas propias", async () => {
+  const partial = await reader([
+    grant("sellers.read"),
+    grant("sellers.export", "assigned"),
+    grant("sales.read", "assigned"),
+  ]);
+  expect((await partial.client.request(`/api/exports/sellers?${salesRange}`)).status).toBe(403);
+  const scoped = await partial.client.request(`/api/exports/sellers?${salesRange}&employeeId=A`);
+  expect(scoped.status).toBe(200);
+  expect(scoped.body.data.map((row) => row.sellerId)).toEqual(["A"]);
+  const own = await reader([
+    grant("sellers.read", "assigned"),
+    grant("sellers.export", "assigned"),
+    grant("sales.read"),
+  ]);
+  const result = await own.client.request(`/api/exports/sellers?${salesRange}`);
+  expect(result.status).toBe(200);
+  expect(result.body.data.map((row) => row.sellerId)).toEqual(["A"]);
+  expect(Number(result.body.data[0].sales)).toBe(100);
+  expect(JSON.stringify(result.body)).not.toMatch(/profit|marginPercent|PRIVATE/);
+  const catalog = await reader([grant("sellers.read"), grant("sellers.export")]);
+  const rows = await catalog.client.request(`/api/exports/sellers?${salesRange}`);
+  expect(rows.status).toBe(200);
+  expect(rows.body.data.every((row) => Object.keys(row).sort().join(",") === "name,sellerId")).toBe(true);
 });

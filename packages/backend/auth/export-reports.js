@@ -6,7 +6,7 @@ const { purchases, pareto: purchasePareto, options: purchaseOptions } = require(
 const { inventory, options: inventoryOptions } = require("./inventory-reports");
 const { directory } = require("./provider-reports");
 const { dispatchExport } = require("./dispatch-export");
-const { partyList } = require("./party-reports");
+const { partyList, canExportSellers } = require("./party-reports");
 const { inactiveClients } = require("./client-reports");
 const { clientDashboard } = require("./client-dashboard");
 const { createReceivablesService } = require("../receivables");
@@ -134,6 +134,24 @@ async function dataset(resource, tx, access, input) {
               ["unidades", "Unidades"],
               ["monto", "Total Compras"],
             ];
+  } else if (resource === "sellers") {
+    const query = parameters(input, { keys: ["from", "to", "showNoe", "search", "sortBy", "sortDir", "employeeId"] });
+    if (!canExportSellers(access, query)) fail(403);
+    result = await partyList(tx, access, { ...query, page: 1, limit: 5001 }, false);
+    title = "Vendedores autorizados";
+    candidates = [
+      ["sellerId", "ID"],
+      ["name", "Vendedor"],
+      ["sales", "Ventas"],
+      ["profit", "Utilidad"],
+      ["marginPercent", "Margen"],
+      ["invoiceCount", "Facturas"],
+      ["clientCount", "Clientes"],
+      ["avgTicket", "Ticket Prom."],
+      ["lastSale", "Última venta"],
+      ["daysInactive", "Días sin vender"],
+      ["sharePercent", "% del Total"],
+    ];
   } else if (resource === "clients") {
     if (!access.hasGlobal("clients.export") || !access.hasGlobal("clients.read")) fail(403);
     const { kind = "directory", mode = "ventas", ...filters } = input;
