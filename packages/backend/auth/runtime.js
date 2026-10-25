@@ -16,6 +16,7 @@ const { createParetoReports } = require("./pareto-reports");
 const { createInventoryReports } = require("./inventory-reports");
 const { createPurchaseReports } = require("./purchase-reports");
 const { createProviderReports } = require("./provider-reports");
+const { createAuditReports } = require("./audit-reports");
 const { createHttpSecurity, sessionOptions, authErrorHandler } = require("./http-security");
 const { createAuthRouter, forbidden } = require("./router");
 
@@ -69,6 +70,7 @@ async function createAuthRuntime({ db, env = process.env }) {
     router.use(createInventoryReports({ sessions }));
     router.use(createPurchaseReports({ sessions }));
     router.use(createProviderReports({ sessions }));
+    router.use(createAuditReports({ sessions }));
     router.use((req, res, next) => {
       sessions
         .withSession(req.sessionID, {}, async ({ access, transaction }) => {

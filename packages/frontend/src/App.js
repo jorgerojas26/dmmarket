@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Link, NavLink, Redirect, useLocation } from 'react-router-dom';
+import Audit from './auth/audit';
 import ClientDashboard from './auth/client-dashboard';
 import { useAuth } from './auth/context';
 import InactiveClients from './auth/inactive-clients';
@@ -29,6 +30,7 @@ export default function App() {
         { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read') },
         { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
         { path: '/tasas', label: 'Tasas', allowed: can('rates.read') },
+        { path: '/auditoria', label: 'Auditoría', allowed: can('audit.read') },
         { path: '/acceso', label: 'Acceso', allowed: access },
     ].filter((module) => module.allowed);
     const views = [
@@ -80,6 +82,7 @@ export default function App() {
         },
         { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
         { path: '/tasas', label: 'Referencia', allowed: can('rates.read'), content: <Rates /> },
+        { path: '/auditoria', label: 'Historial', allowed: can('audit.read'), content: <Audit /> },
         { path: '/acceso', label: 'Administración', allowed: access, content: <AccessWorkspace /> },
         { path: '/cuenta', label: 'Mi cuenta', allowed: true, content: <Account /> },
     ].filter((view) => view.allowed);

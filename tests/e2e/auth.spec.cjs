@@ -1019,3 +1019,32 @@ test("compras del proveedor requieren su permiso e impiden abrir documentos de o
   );
   expect(status).toBe(404);
 });
+
+test("auditoría permite consultar login real sin dar administración de cuentas", async ({ page, environment }) => {
+  const user = await environment.seedUser({ permissions: [{ capability: "audit.read", scope: "global" }] });
+  await login(page, environment, user);
+  await openModule(page, "Auditoría");
+  const report = page.getByRole("region", { name: "Consulta autorizada de auditoría", exact: true });
+  await report.getByLabel("ID de cuenta objetivo de auditoría", { exact: true }).fill(user.id);
+  await report.getByLabel("Acción exacta de auditoría", { exact: true }).fill("auth.login_succeeded");
+  await report.getByRole("button", { name: "Consultar auditoría", exact: true }).click();
+  await expect(report.getByText("Eventos autorizados: 1", { exact: true })).toBeVisible();
+  const table = report.getByRole("table", { name: "Historial autorizado", exact: true });
+  await expect(table.getByRole("cell", { name: "auth.login_succeeded", exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: user.id, exact: true })).toHaveCount(2);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Módulos disponibles", exact: true })
+      .getByRole("link", { name: "Acceso", exact: true }),
+  ).toHaveCount(0);
+  const today = new Date().toISOString().slice(0, 10);
+  const data = await page.evaluate(
+    async ({ today, userId }) =>
+      await (
+        await fetch(`/api/auth/audit?from=${today}&to=${today}&targetId=${userId}&action=auth.login_succeeded`)
+      ).json(),
+    { today, userId: user.id },
+  );
+  expect(JSON.stringify(data)).not.toContain(user.password);
+  expect(JSON.stringify(data)).not.toContain(user.passwordHash);
+});
