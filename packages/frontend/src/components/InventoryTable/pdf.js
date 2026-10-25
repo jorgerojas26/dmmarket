@@ -1,12 +1,14 @@
 import { DateTime } from 'luxon';
 
 const formatPrice = (value) => {
+    if (value == null) return 'No disponible';
     const num = Number(value);
     if (Number.isNaN(num)) return '';
     return num.toFixed(2);
 };
 
 const formatStock = (value) => {
+    if (value == null) return 'No disponible';
     const num = Number(value);
     if (Number.isNaN(num)) return '';
     return num.toFixed(2);
@@ -64,8 +66,8 @@ const pdfschema = (productList, { stockTotal, valueTotal, currency }, config = {
                 style: 'summary',
                 text: [
                     `Total de productos: ${productList.length}`,
-                    hasStock ? ` — Stock total: ${Number(stockTotal || 0).toFixed(2)}` : '',
-                    hasPrice ? ` — Valor total: ${currency} ${formatPrice(valueTotal || 0)}` : '',
+                    hasStock ? ` — Stock total: ${formatStock(stockTotal)}` : '',
+                    hasPrice ? ` — Valor total: ${currency} ${formatPrice(valueTotal)}` : '',
                 ].join(''),
             },
         ],

@@ -340,9 +340,9 @@ const Table = ({
     const handlePrintConfirm = useCallback(
         (config) => {
             setShowPrintConfig(false);
-            print?.onGlobalPrint?.(config);
+            print?.onGlobalPrint?.({ ...config, search: searchTerm });
         },
-        [print?.onGlobalPrint],
+        [print?.onGlobalPrint, searchTerm],
     );
 
     /* ── Select-all handler (uncontrolled mode: current page only) ── */

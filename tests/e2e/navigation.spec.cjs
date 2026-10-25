@@ -27,7 +27,7 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
   for (const name of ["Acceso", "Proveedores", "Configuración", "Cartera", "Comisiones"])
     await expect(navigation.getByRole("link", { name, exact: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Consulta de ventas", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Inventario autorizado", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Inventario", exact: true })).toHaveCount(0);
   await openModule(page, "Compras");
   await expect(page.getByRole("region", { name: "Consulta autorizada de compras", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Consulta de ventas", exact: true })).toHaveCount(0);
@@ -47,7 +47,7 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
 test("URL directa y rutas pendientes no montan formularios ni consultas protegidas", async ({ page, environment }) => {
   const user = await inventoryUser(environment, [grant("inventory.read")]);
   await login(page, environment, user);
-  await expect(page.getByRole("region", { name: "Inventario autorizado", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Inventario", exact: true })).toBeVisible();
   const requested = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
@@ -78,9 +78,8 @@ test("volver atrás revalida en MySQL antes de mostrar el módulo y no recupera 
 }) => {
   const user = await inventoryUser(environment, [grant("inventory.read"), grant("rates.read")]);
   await login(page, environment, user);
-  const inventory = page.getByRole("region", { name: "Inventario autorizado", exact: true });
-  await inventory.getByLabel("Buscar en inventario", { exact: true }).fill("Inventario sintético");
-  await inventory.getByRole("button", { name: "Consultar inventario", exact: true }).click();
+  const inventory = page.getByRole("region", { name: "Inventario", exact: true });
+  await inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true }).fill("Inventario sintético");
   await expect(inventory.getByRole("cell", { name: "I-A", exact: true })).toBeVisible();
   await openModule(page, "Tasas");
   await expect(page.getByRole("cell", { name: "42.125000", exact: true })).toBeVisible();
@@ -95,8 +94,8 @@ test("volver atrás revalida en MySQL antes de mostrar el módulo y no recupera 
     await expect(page.getByRole("cell", { name: "I-A", exact: true })).toHaveCount(0);
     await environment.db.raw("UNLOCK TABLES").connection(connection);
     locked = false;
-    await expect(inventory.getByRole("button", { name: "Consultar inventario", exact: true })).toBeVisible();
-    await expect(inventory.getByRole("table")).toHaveCount(0);
+    await expect(inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true })).toHaveValue("");
+    await expect(inventory.getByRole("cell", { name: "I-A", exact: true })).toBeVisible();
   } finally {
     if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
     await environment.db.client.releaseConnection(connection);
@@ -112,7 +111,7 @@ test("móvil abre y cierra navegación y cambiar de cuenta no conserva el módul
   const second = await environment.seedUser();
   await login(page, environment, first);
   await openModule(page, "Inventario");
-  await expect(page.getByRole("region", { name: "Inventario autorizado", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Inventario", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   await login(page, environment, second);
@@ -120,5 +119,5 @@ test("móvil abre y cierra navegación y cambiar de cuenta no conserva el módul
   await expect(page.getByRole("cell", { name: "42.125000", exact: true })).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
   await expect(navigation.getByRole("link", { name: "Inventario", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Inventario autorizado", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Inventario", exact: true })).toHaveCount(0);
 });

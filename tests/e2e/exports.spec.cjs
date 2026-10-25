@@ -6,7 +6,7 @@ async function fixture(environment) {
   await require("../support/inventory-fixtures.cjs").seedInventory(environment.db);
 }
 
-test("exportación oficial genera PDF real sin incorporar campos monetarios no autorizados", async ({
+test("impresión original genera PDF real con filtro de stock y sin campos monetarios no autorizados", async ({
   page,
   environment,
 }) => {
@@ -14,40 +14,45 @@ test("exportación oficial genera PDF real sin incorporar campos monetarios no a
   const user = await environment.seedUser({ permissions: [grant("inventory.read"), grant("inventory.export")] });
   await login(page, environment, user);
   await openModule(page, "Inventario");
-  const inventory = page.getByRole("region", { name: "Inventario autorizado", exact: true });
-  await inventory.getByLabel("Buscar en inventario", { exact: true }).fill("Inventario sintético");
-  await inventory.getByLabel("Sólo existencias positivas", { exact: true }).check();
-  await inventory.getByRole("button", { name: "Consultar inventario", exact: true }).click();
-  await expect(inventory.getByText("Productos autorizados: 1", { exact: true })).toBeVisible();
+  const inventory = page.getByRole("region", { name: "Inventario", exact: true });
+  await inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true }).fill("Inventario sintético");
+  await expect(inventory.getByRole("cell", { name: "I-C", exact: true })).toBeVisible();
+  await inventory.getByRole("button", { name: "Imprimir", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("Configuración de impresión", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Precio", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText("Proveedor", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: "Bs", exact: true })).toBeDisabled();
+  await dialog.getByRole("checkbox", { name: "Solo productos con stock > 0", exact: true }).check();
   const prepared = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/exports/inventory");
-  const downloading = page.waitForEvent("download");
-  await inventory.getByRole("button", { name: "Exportar PDF autorizado", exact: true }).click();
+  const opening = page.waitForEvent("popup");
+  await dialog.getByRole("button", { name: "Imprimir", exact: true }).click();
   const response = await prepared;
   expect(response.status()).toBe(200);
   const report = await response.json();
   expect(report.total).toBe(1);
   expect(JSON.stringify(report)).not.toMatch(/PrecioA|inventoryValue|Proveedor|PRIVATE/);
-  const download = await downloading;
-  expect(download.suggestedFilename()).toBe("dmmarket-inventory.pdf");
-  const stream = await download.createReadStream();
-  const chunks = [];
-  for await (const chunk of stream) chunks.push(chunk);
-  expect(Buffer.concat(chunks).subarray(0, 4).toString()).toBe("%PDF");
-  expect(await download.failure()).toBeNull();
+  const popup = await opening;
+  await popup.waitForURL(/^blob:/);
+  const magic = await page.evaluate(async (url) => {
+    const data = await (await fetch(url)).arrayBuffer();
+    return new TextDecoder().decode(data.slice(0, 4));
+  }, popup.url());
+  expect(magic).toBe("%PDF");
+  await popup.close();
 });
 
-test("sólo lectura no muestra función oficial ni permite preparar exportación por URL", async ({
+test("sólo lectura no muestra impresión original ni permite preparar exportación por URL", async ({
   page,
   environment,
 }) => {
   await fixture(environment);
   const user = await environment.seedUser({ permissions: [grant("inventory.read")] });
   await login(page, environment, user);
-  const inventory = page.getByRole("region", { name: "Inventario autorizado", exact: true });
-  await inventory.getByLabel("Buscar en inventario", { exact: true }).fill("Inventario sintético");
-  await inventory.getByRole("button", { name: "Consultar inventario", exact: true }).click();
-  await expect(inventory.getByText("Productos autorizados: 4", { exact: true })).toBeVisible();
-  await expect(inventory.getByRole("button", { name: "Exportar PDF autorizado", exact: true })).toHaveCount(0);
+  const inventory = page.getByRole("region", { name: "Inventario", exact: true });
+  await inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true }).fill("Inventario sintético");
+  await expect(inventory.getByRole("cell", { name: "I-C", exact: true })).toBeVisible();
+  await expect(inventory.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
   expect(await page.evaluate(async () => (await fetch("/api/exports/inventory")).status)).toBe(403);
 });
 

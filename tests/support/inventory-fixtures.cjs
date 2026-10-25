@@ -3,16 +3,17 @@ async function seedInventory(db) {
   for (const name of ["PrecioA", "Existencia"])
     if (!(await db.schema.hasColumn("productos", name)))
       await db.schema.alterTable("productos", (table) => table.decimal(name, 18, 6));
-  await db.schema.createTable("proveedores", (table) => {
-    table.engine("InnoDB");
-    table.charset("utf8");
-    table.collate("utf8_bin");
-    table.string("IdProveedor", 32).primary();
-    table.string("Empresa", 64);
-    table.string("Rif", 64);
-    table.string("Telfs", 64);
-    table.string("Email", 64);
-  });
+  if (!(await db.schema.hasTable("proveedores")))
+    await db.schema.createTable("proveedores", (table) => {
+      table.engine("InnoDB");
+      table.charset("utf8");
+      table.collate("utf8_bin");
+      table.string("IdProveedor", 32).primary();
+      table.string("Empresa", 64);
+      table.string("Rif", 64);
+      table.string("Telfs", 64);
+      table.string("Email", 64);
+    });
   await db("proveedores").insert([
     {
       IdProveedor: "I-PROV-A",

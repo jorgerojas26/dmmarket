@@ -1,18 +1,19 @@
-import { useState } from 'react';
-import Modal from 'components/Modal';
-import { Button, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
-import Select from 'react-select';
-import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import {
+    arrayMove,
     SortableContext,
     sortableKeyboardCoordinates,
     useSortable,
     verticalListSortingStrategy,
-    arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useAuth } from 'auth/context';
+import Modal from 'components/Modal';
 import { darkSelectStyles } from 'components/selectStyles';
 import useLocalStorage from 'hooks/useLocalStorage';
+import { useState } from 'react';
+import { Button, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
+import Select from 'react-select';
 import './PrintConfigModal.css';
 
 /**
@@ -266,6 +267,7 @@ const PrintConfigModal = ({
     onClose,
     onPrint,
 }) => {
+    const { can } = useAuth();
     // Configuración guardada de ESTA tabla (per-table, keyed por `storageKey`).
     // Sin storageKey → no persiste nada. El modal se REMONTA en cada apertura
     // (Table le cambia el `key`), así que el estado inicial se lee de
@@ -287,7 +289,8 @@ const PrintConfigModal = ({
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
     );
 
-    const { columns: selectedKeys, orientation, currency, sortRules, extra } = config;
+    const { columns: selectedKeys, orientation, sortRules, extra } = config;
+    const currency = can('rates.read') ? config.currency : 'USD';
 
     const toggleColumn = (key) => {
         if (selectedKeys.has(key)) {
@@ -526,7 +529,12 @@ const PrintConfigModal = ({
                                         <ToggleButton id="print-currency-usd" value="USD" variant="outline-secondary">
                                             $ USD
                                         </ToggleButton>
-                                        <ToggleButton id="print-currency-bs" value="Bs" variant="outline-secondary">
+                                        <ToggleButton
+                                            id="print-currency-bs"
+                                            value="Bs"
+                                            variant="outline-secondary"
+                                            disabled={!can('rates.read')}
+                                        >
                                             Bs
                                         </ToggleButton>
                                     </ToggleButtonGroup>

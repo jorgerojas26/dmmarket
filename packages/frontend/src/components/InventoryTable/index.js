@@ -1,11 +1,12 @@
-import { fetchProducts } from 'api/products';
+import { useAuth } from 'auth/context';
 import Table from 'components/Table';
-import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { useProducts } from 'hooks/useProducts';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from 'react-bootstrap';
+import { fetcher } from 'swr-config';
 import { sortRows } from 'utils/sortRows';
 import pdf from './pdf';
 
@@ -14,12 +15,14 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 const LIMIT = 20;
 
 const formatPrice = (value) => {
+    if (value == null) return 'No disponible';
     const num = Number(value);
     if (Number.isNaN(num)) return '';
     return `$${num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 const formatStock = (value) => {
+    if (value == null) return 'No disponible';
     const num = Number(value);
     if (Number.isNaN(num)) return '';
     return num.toLocaleString('es-VE', { maximumFractionDigits: 3 });
@@ -41,12 +44,28 @@ const textSortType = (rowA, rowB, columnId) => {
  * @param {string|number} [props.proveedorId] - Provider filter (server-side).
  */
 const InventoryTable = ({ categoryId, proveedorId }) => {
+    const { can } = useAuth();
+    const monetary = can('inventory.costs');
+    const providers = can('providers.read');
+    const exporting = can('inventory.export');
+    const active = useRef(true);
+    const [printError, setPrintError] = useState('');
+    useEffect(
+        () => () => {
+            active.current = false;
+        },
+        [],
+    );
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState({ sortBy: 'Descripcion', sortDir: 'asc' });
 
-    const { data: result, isLoading } = useProducts({
+    const {
+        data: result,
+        isLoading,
+        error,
+    } = useProducts({
         search,
         categoryId,
         proveedorId,
@@ -76,78 +95,97 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
         }
     }, []);
 
-    // Total de stock de TODA la data filtrada (todas las páginas), calculado en
-    // el backend; si no viene, se reduce la página visible (fallback).
-    const stockTotal = useMemo(() => {
-        const global = result?.totals?.existencia;
-        if (global != null) return Number(global);
-        return dataArr.reduce((acc, item) => acc + Number(item.Existencia || 0), 0);
-    }, [result, dataArr]);
+    const stockTotal = result?.totals?.existencia;
 
     const memoizedColumns = useMemo(
         () => [
             { Header: 'ID', accessor: 'IdProducto' },
             { Header: 'Categoría', accessor: 'Grupo', sortType: textSortType },
             { Header: 'Producto', accessor: 'Descripcion', sortType: textSortType },
-            { Header: 'Proveedor', accessor: 'Proveedor', sortType: textSortType },
-            { Header: 'Precio', accessor: 'PrecioA', Cell: ({ value }) => formatPrice(value) },
+            ...(providers ? [{ Header: 'Proveedor', accessor: 'Proveedor', sortType: textSortType }] : []),
+            ...(monetary ? [{ Header: 'Precio', accessor: 'PrecioA', Cell: ({ value }) => formatPrice(value) }] : []),
             { Header: 'Stock', accessor: 'Existencia', Cell: ({ value }) => formatStock(value) },
         ],
-        [],
+        [providers, monetary],
     );
 
     const summaries = useMemo(
         () => ({
-            Existencia: stockTotal ? stockTotal.toLocaleString('es-VE', { maximumFractionDigits: 3 }) : '',
+            Existencia:
+                stockTotal == null
+                    ? 'No disponible'
+                    : Number(stockTotal).toLocaleString('es-VE', { maximumFractionDigits: 3 }),
         }),
         [stockTotal],
     );
 
-    // Print: re-fetches the FULL filtered set server-side (no pagination), with
-    // the stock-only toggle applied as a server filter when enabled, then
-    // converts prices to the chosen currency and applies the dialog sort.
     const handlePrint = useCallback(
         async (config) => {
+            if (!exporting) return;
+            setPrintError('');
             try {
-                const result = await fetchProducts({
-                    search,
-                    categoryId,
-                    proveedorId,
-                    stockOnly: config?.extra?.stockOnly || undefined,
-                    sortBy: sort.sortBy,
-                    sortDir: sort.sortDir,
-                });
-                let productsData = result?.data || [];
+                const parameters = new URLSearchParams({ sortBy: sort.sortBy, sortDir: sort.sortDir });
+                const filter = config.search ?? search;
+                if (filter) parameters.set('search', filter);
+                if (categoryId) parameters.set('categoryId', categoryId);
+                if (providers && proveedorId) parameters.set('proveedorId', proveedorId);
+                if (config?.extra?.stockOnly) parameters.set('stockOnly', 'true');
+                const result = await fetcher(`/api/exports/inventory?${parameters}`);
+                if (!active.current) return;
+                let productsData = result.data;
 
                 const rate = currencyRate?.Cambio;
                 const currency = config?.currency;
-                if (currency === 'Bs' && rate) {
+                if (currency === 'Bs' && (!can('rates.read') || !Number.isFinite(Number(rate)) || Number(rate) <= 0))
+                    throw new Error('No se dispone de una tasa autorizada.');
+                if (currency === 'Bs') {
                     productsData = productsData.map((p) => ({
                         ...p,
-                        PrecioA: Number(p.PrecioA * rate).toFixed(2),
+                        ...(monetary
+                            ? { PrecioA: p.PrecioA == null ? null : Number(p.PrecioA * rate).toFixed(2) }
+                            : {}),
                     }));
                 }
 
                 productsData = sortRows(productsData, config?.sortBy);
 
-                const printedStockTotal = productsData.reduce((acc, p) => acc + Number(p.Existencia || 0), 0);
-                const valueTotal = productsData.reduce(
-                    (acc, p) => acc + Number(p.PrecioA || 0) * Number(p.Existencia || 0),
-                    0,
+                const printedStockTotal = productsData.some((p) => p.Existencia == null)
+                    ? null
+                    : productsData.reduce((acc, p) => acc + Number(p.Existencia), 0);
+                const valueTotal =
+                    !monetary || productsData.some((p) => p.PrecioA == null || p.Existencia == null)
+                        ? null
+                        : productsData.reduce((acc, p) => acc + Number(p.PrecioA) * Number(p.Existencia), 0);
+
+                const columns = memoizedColumns.filter((column) =>
+                    config.columns.some((selected) => selected.accessor === column.accessor),
                 );
+                if (!columns.length) throw new Error('No hay columnas autorizadas seleccionadas.');
 
                 const pdfData = pdf(
                     productsData,
                     { stockTotal: printedStockTotal, valueTotal, currency: currency || 'USD' },
-                    config,
+                    { ...config, columns },
                 );
 
                 pdfMake.createPdf(pdfData).open();
             } catch (err) {
-                console.error('Failed to print inventory:', err);
+                if (active.current && err.name !== 'AbortError')
+                    setPrintError('No se pudo imprimir el inventario autorizado.');
             }
         },
-        [search, categoryId, proveedorId, sort, currencyRate?.Cambio],
+        [
+            search,
+            categoryId,
+            proveedorId,
+            sort,
+            currencyRate?.Cambio,
+            exporting,
+            providers,
+            monetary,
+            can,
+            memoizedColumns,
+        ],
     );
 
     const totalPages = Math.ceil(total / LIMIT);
@@ -158,6 +196,9 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
                 <h3>Inventario</h3>
             </Card.Header>
             <Card.Body style={{ minHeight: 0 }}>
+                {(error || printError) && (
+                    <p role="alert">{printError || 'No se pudo consultar el inventario autorizado.'}</p>
+                )}
                 <Table
                     data={dataArr}
                     columns={memoizedColumns}
@@ -184,7 +225,7 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
                         onPageChange: setPage,
                     }}
                     print={{
-                        enabled: true,
+                        enabled: exporting && Boolean(result) && !error,
                         onGlobalPrint: handlePrint,
                         storageKey: 'inventory',
                         filters: [{ key: 'stockOnly', label: 'Solo productos con stock > 0' }],

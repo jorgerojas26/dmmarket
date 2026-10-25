@@ -1,10 +1,11 @@
 const BASE_URL = '/api/groups';
 
-export const fetchGroups = async ({ filter, showNoe }) => {
-    const filterParam = filter ? `?filter=${filter}&showNoe=${showNoe}` : '';
-    const response = await fetch(BASE_URL + filterParam);
+export const fetchGroups = async ({ filter } = {}) => {
+    const response = await fetch(BASE_URL);
+    if (!response.ok) throw new Error('No se pudieron cargar las categorías autorizadas.');
     const groups = await response.json();
-    return groups;
+    const term = String(filter || '').toLocaleLowerCase('es');
+    return groups.filter((group) => String(group.name).toLocaleLowerCase('es').includes(term));
 };
 
 export const fetchSalesByGroup = async ({ from, to, categoryId, showNoe }) => {

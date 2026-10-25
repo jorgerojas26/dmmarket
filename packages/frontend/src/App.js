@@ -7,7 +7,6 @@ import ClientDashboard from './auth/client-dashboard';
 import Commissions from './auth/commissions';
 import { useAuth } from './auth/context';
 import InactiveClients from './auth/inactive-clients';
-import Inventory from './auth/inventory';
 import Operations from './auth/operations';
 import Pareto from './auth/pareto';
 import Parties from './auth/parties';
@@ -20,6 +19,7 @@ import Receivables from './auth/receivables';
 import Sales from './auth/sales';
 import SellerDashboard from './auth/seller-dashboard';
 import AccessWorkspace, { Account, Rates } from './auth/workspace';
+import Inventory from './pages/inventario';
 
 export default function App() {
     const { session, can } = useAuth();

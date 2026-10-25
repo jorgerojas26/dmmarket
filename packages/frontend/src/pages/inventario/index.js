@@ -1,3 +1,4 @@
+import { useAuth } from 'auth/context';
 import GroupSearch from 'components/GroupSearch';
 import InventoryTable from 'components/InventoryTable';
 import ProveedorSearch from 'components/ProveedorSearch';
@@ -6,6 +7,7 @@ import { useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 
 const InventarioPage = () => {
+    const { can } = useAuth();
     const [activeView, setActiveView] = useState('inventory');
     const [selectedGroup, setSelectedGroup] = useState(null);
     const [selectedProvider, setSelectedProvider] = useState(null);
@@ -51,9 +53,11 @@ const InventarioPage = () => {
                             <div className="inventory-page-filter" role="group" aria-label="Categoría">
                                 <GroupSearch onSelect={setSelectedGroup} />
                             </div>
-                            <div className="inventory-page-filter" role="group" aria-label="Proveedor">
-                                <ProveedorSearch onSelect={setSelectedProvider} />
-                            </div>
+                            {can('providers.read') && (
+                                <div className="inventory-page-filter" role="group" aria-label="Proveedor">
+                                    <ProveedorSearch onSelect={setSelectedProvider} />
+                                </div>
+                            )}
                         </div>
                     </div>
                     {/* La tabla ocupa exactamente el alto restante (como DespachoView):
