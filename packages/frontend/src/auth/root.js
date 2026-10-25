@@ -21,6 +21,19 @@ function Boundary() {
             setLogoutError('No se pudo confirmar la salida en el servidor. Vuelve a intentarlo.');
         }
     };
+    if (!checking && !failure && session?.stage === 'ready') {
+        return (
+            <SWRConfig key={`${epoch}:ready`} value={{ ...swrConfig, fetcher, provider: () => cache }}>
+                <CurrencyRateProvider>
+                    <ShowNoesProvider>
+                        <SidebarProvider>
+                            <App onLogout={signOut} logoutError={logoutError} />
+                        </SidebarProvider>
+                    </ShowNoesProvider>
+                </CurrencyRateProvider>
+            </SWRConfig>
+        );
+    }
     return (
         <main className="bg-dark text-light" style={{ height: '100vh', overflowY: 'auto' }} aria-busy={checking}>
             <div className="container py-4" style={{ maxWidth: 1000 }}>
@@ -62,17 +75,6 @@ function Boundary() {
                         {session?.stage === 'password' && <PasswordForm />}
                         {session?.stage === 'mfa' && <MfaForm />}
                         {session?.stage === 'mfa-enrollment' && <EnrollmentForm />}
-                        {session?.stage === 'ready' && (
-                            <SWRConfig value={{ ...swrConfig, fetcher, provider: () => cache }}>
-                                <CurrencyRateProvider>
-                                    <ShowNoesProvider>
-                                        <SidebarProvider>
-                                            <App />
-                                        </SidebarProvider>
-                                    </ShowNoesProvider>
-                                </CurrencyRateProvider>
-                            </SWRConfig>
-                        )}
                     </div>
                 )}
             </div>

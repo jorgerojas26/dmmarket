@@ -43,7 +43,7 @@ const InventarioPage = () => {
     );
 
     return (
-        <Container fluid className="clientes-layout p-0">
+        <Container as="section" aria-label="Inventario" fluid className="clientes-layout p-0">
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
                 <div className="clientes-content p-4" style={{ display: 'flex', flexDirection: 'column' }}>

@@ -48,6 +48,12 @@ test("URL directa y rutas pendientes no montan formularios ni consultas protegid
   const user = await inventoryUser(environment, [grant("inventory.read")]);
   await login(page, environment, user);
   await expect(page.getByRole("region", { name: "Inventario", exact: true })).toBeVisible();
+  await expect(page.locator(".app-navbar-brand")).toHaveText("SISTEMA DE REPORTES");
+  await expect(page.getByRole("heading", { name: "DMMarket", exact: true })).toHaveCount(0);
+  const frame = await page.locator("#main").boundingBox();
+  expect(frame.width).toBe(1280);
+  expect(frame.height).toBe(900);
+  await expect(page.locator(".App > #main > .container-fluid > .clientes-layout")).toBeVisible();
   const requested = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
@@ -113,6 +119,7 @@ test("móvil abre y cierra navegación y cambiar de cuenta no conserva el módul
   await openModule(page, "Inventario");
   await expect(page.getByRole("region", { name: "Inventario", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   await login(page, environment, second);
   await expect(page).toHaveURL(`${environment.origin}/tasas`);
