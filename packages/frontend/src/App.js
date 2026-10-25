@@ -11,6 +11,7 @@ import Inventory from './auth/inventory';
 import Operations from './auth/operations';
 import Pareto from './auth/pareto';
 import Parties from './auth/parties';
+import ProviderRanking from './auth/provider-ranking';
 import Providers from './auth/providers';
 import PurchaseOverview from './auth/purchase-overview';
 import Purchases from './auth/purchases';
@@ -54,6 +55,12 @@ export default function App() {
         },
         { path: '/compras', label: 'Desglose', allowed: can('purchases.read'), content: <Purchases /> },
         { path: '/proveedores', label: 'Directorio', allowed: can('providers.read'), content: <Providers /> },
+        {
+            path: '/proveedores/comparativo',
+            label: 'Comparativo',
+            allowed: can('providers.read') && (has('sales.read') || (can('purchases.read') && can('purchases.costs'))),
+            content: <ProviderRanking />,
+        },
         { path: '/compras/resumen', label: 'Resumen', allowed: can('purchases.read'), content: <PurchaseOverview /> },
         {
             path: '/compras/pareto',

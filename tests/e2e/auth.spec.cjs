@@ -1146,3 +1146,70 @@ test("vendedor sin permiso de cobranza no tiene cartera ni acceso directo a sald
   await expect(page.getByRole("heading", { name: "Página no disponible", exact: true })).toBeVisible();
   expect(await page.evaluate(async () => (await fetch("/api/receivables/C")).status)).toBe(403);
 });
+
+test("vendedores por proveedor intersectan su lectura con ventas globales antes de mostrar utilidad", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  await require("../support/provider-fixtures.cjs").seedProviders(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "providers.read", scope: "global" },
+      { capability: "sellers.read", scope: "assigned" },
+      { capability: "sales.read", scope: "global" },
+      { capability: "sales.costs", scope: "assigned" },
+      { capability: "sales.profit", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await openModule(page, "Proveedores");
+  await page.getByRole("button", { name: "Abrir proveedor PUR-A", exact: true }).click();
+  const report = page.getByRole("region", { name: "Detalle autorizado del proveedor", exact: true });
+  await report.getByLabel("Proveedor desde", { exact: true }).fill("2026-11-01");
+  await report.getByLabel("Proveedor hasta", { exact: true }).fill("2026-11-30");
+  await report.getByLabel("Actividad del proveedor", { exact: true }).selectOption("sellers");
+  await report.getByRole("button", { name: "Consultar actividad del proveedor", exact: true }).click();
+  const table = report.getByRole("table", { name: "Actividad autorizada del proveedor", exact: true });
+  await expect(table.getByRole("cell", { name: "Vendedor A", exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "40.00", exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("button", { name: /Abrir documento/ })).toHaveCount(0);
+});
+
+test("clientes y comparativo de proveedores conservan la población de ventas propias", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  await require("../support/provider-fixtures.cjs").seedProviders(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "providers.read", scope: "global" },
+      { capability: "clients.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await openModule(page, "Proveedores");
+  await page.getByRole("button", { name: "Abrir proveedor PUR-A", exact: true }).click();
+  const report = page.getByRole("region", { name: "Detalle autorizado del proveedor", exact: true });
+  await report.getByLabel("Proveedor desde", { exact: true }).fill("2026-11-01");
+  await report.getByLabel("Proveedor hasta", { exact: true }).fill("2026-11-30");
+  await report.getByLabel("Actividad del proveedor", { exact: true }).selectOption("clients");
+  await report.getByRole("button", { name: "Consultar actividad del proveedor", exact: true }).click();
+  await expect(report.getByRole("cell", { name: "100.00", exact: true })).toBeVisible();
+  await expect(report.getByRole("cell", { name: "300.00", exact: true })).toHaveCount(0);
+  await openModule(page, "Proveedores", "Comparativo");
+  const ranking = page.getByRole("region", { name: "Comparativo autorizado de proveedores", exact: true });
+  await ranking.getByLabel("Comparativo de proveedores desde", { exact: true }).fill("2026-11-01");
+  await ranking.getByLabel("Comparativo de proveedores hasta", { exact: true }).fill("2026-11-30");
+  await ranking.getByRole("button", { name: "Consultar comparativo de proveedores", exact: true }).click();
+  await expect(ranking.getByRole("cell", { name: "100.00", exact: true })).toBeVisible();
+  await expect(ranking.getByRole("cell", { name: "90.00", exact: true })).toBeVisible();
+  await expect(ranking.getByRole("cell", { name: "300.00", exact: true })).toHaveCount(0);
+});

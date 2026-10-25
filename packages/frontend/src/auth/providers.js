@@ -80,6 +80,10 @@ function Provider({ provider, onClose }) {
         ['invoiceId', 'Documento'],
         ['fecha', 'Fecha'],
         ['product', 'Producto'],
+        ['name', query?.kind === 'sellers' ? 'Vendedor' : 'Cliente'],
+        ['amount', 'Total Ventas autorizado'],
+        ['invoiceCount', 'Documentos'],
+        ['profit', 'Utilidad autorizada'],
         ['quantity', 'Cantidad'],
         ['unidades', 'Unidades'],
         ['cliente', 'Cliente'],
@@ -120,6 +124,10 @@ function Provider({ provider, onClose }) {
                             <>
                                 <option value="sales">Ventas autorizadas</option>
                                 <option value="products">Productos vendidos autorizados</option>
+                                {can('clients.read') && <option value="clients">Clientes del proveedor</option>}
+                                {session.permissions.some((grant) => grant.capability === 'sellers.read') && (
+                                    <option value="sellers">Vendedores del proveedor</option>
+                                )}
                             </>
                         )}
                         {hasPurchases && <option value="purchases">Compras autorizadas</option>}
@@ -184,16 +192,16 @@ function Provider({ provider, onClose }) {
                                     {columns.map(([key, label]) => (
                                         <th key={key}>{label}</th>
                                     ))}
-                                    {query.kind !== 'products' && <th>Detalle</th>}
+                                    {['sales', 'purchases'].includes(query.kind) && <th>Detalle</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {data.data.map((row) => (
-                                    <tr key={row.invoiceId ?? row.productId}>
+                                    <tr key={row.invoiceId ?? row.productId ?? row.clientId ?? row.sellerId}>
                                         {columns.map(([key]) => (
                                             <td key={key}>{row[key] ?? 'No disponible'}</td>
                                         ))}
-                                        {query.kind !== 'products' && (
+                                        {['sales', 'purchases'].includes(query.kind) && (
                                             <td>
                                                 <button
                                                     type="button"

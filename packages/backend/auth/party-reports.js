@@ -511,4 +511,4 @@ function createPartyReports({ sessions }) {
   return router;
 }
 
-module.exports = { createPartyReports };
+module.exports = { createPartyReports, sellerSalesScope };

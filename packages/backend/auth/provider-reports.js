@@ -1,4 +1,5 @@
 const express = require("express");
+const { parties, best } = require("./provider-aggregates");
 const { parameters, listSales, salesBase, kpis, invoiceDetail } = require("./sales-reports");
 const { purchases, purchaseKpis, purchaseBase, metrics } = require("./purchase-reports");
 
@@ -120,6 +121,31 @@ function createProviderReports({ sessions }) {
       keys: ["search", "page", "limit", "sortBy", "sortDir"],
     }),
   );
+  router.get("/providers/best", async (req, res, next) => {
+    try {
+      res.json(
+        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) => {
+          if (!access.hasGlobal("providers.read")) fail(403);
+          const { mode = "ventas", ...input } = req.query;
+          const query = parameters(input, { keys: ["from", "to", "showNoe", "employeeId", "categoryId"] });
+          if (mode === "compras" && (query.showNoe !== undefined || query.employeeId)) fail(400);
+          return best(transaction, access, query, mode);
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  });
+  for (const [path, sellers] of [
+    ["clients", false],
+    ["sellers", true],
+  ])
+    router.get(
+      `/providers/:providerId/${path}`,
+      handle((tx, access, query, id) => parties(tx, access, query, id, sellers), {
+        keys: ["from", "to", "showNoe", "employeeId", "page", "limit", "search", "sortBy", "sortDir"],
+      }),
+    );
   router.get("/providers/:providerId/summary", handle(summary, { keys: ["from", "to", "showNoe", "employeeId"] }));
   for (const [path, kind] of [
     ["sales", "invoices"],
