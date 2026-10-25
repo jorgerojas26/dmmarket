@@ -192,6 +192,41 @@ test("importes desconocidos o negativos no inventan acumulados, porcentajes ni c
   ).toBe(true);
 });
 
+test("cruces de productos no multiplican importes y conservan identidades nulas y exactas", async () => {
+  await environment.db("mastercomp").insert({ IdFactura: "JOIN-UI", Fecha: "2027-03-01", Anulada: false });
+  await environment
+    .db("masterfact")
+    .insert({ IdFactura: "JOIN-UI", IdVend: "A", IdCliente: "C", Fecha: "2027-03-01", Anulada: false });
+  await environment.db("slavecomp").insert([
+    { IdFactura: "JOIN-UI", IdProducto: "PAIR", Precio: 1, Cantidad: 1 },
+    { IdFactura: "JOIN-UI", IdProducto: "PAIR", Precio: 2, Cantidad: 1 },
+    { IdFactura: "JOIN-UI", IdProducto: null, Precio: 3, Cantidad: 1 },
+    { IdFactura: "JOIN-UI", IdProducto: null, Precio: 4, Cantidad: 1 },
+    { IdFactura: "JOIN-UI", IdProducto: "CASE", Precio: 8, Cantidad: 1 },
+    { IdFactura: "JOIN-UI", IdProducto: "UNSOLD", Precio: 9, Cantidad: 1 },
+  ]);
+  await environment.db("slavefact").insert([
+    { IdFactura: "JOIN-UI", IdProducto: "PAIR", Precio: 10, Costo: 1, Cantidad: 2 },
+    { IdFactura: "JOIN-UI", IdProducto: null, Precio: 5, Costo: 1, Cantidad: 1 },
+    { IdFactura: "JOIN-UI", IdProducto: "case", Precio: 999, Costo: 1, Cantidad: 1 },
+  ]);
+  const dates = "from=2027-03-01&to=2027-03-31";
+  const scoped = await reader(own);
+  const sales = await scoped.request(`/api/dashboard/pareto?${dates}&metric=rawProfit`);
+  expect(sales.status).toBe(200);
+  const rows = [...sales.body.products, ...sales.body.newProducts];
+  expect(rows).toHaveLength(2);
+  expect(rows.find((row) => row.productId === "PAIR")).toMatchObject({ rawProfit: 20, quantity: 2 });
+  expect(rows.find((row) => row.productId === "__none__")).toMatchObject({ rawProfit: 5, quantity: 1 });
+  const global = await reader([grant("sales.read"), grant("purchases.read"), grant("purchases.costs")]);
+  const unsold = await global.request(`/api/dashboard/pareto?${dates}&modo=compras-sin-vender`);
+  expect(unsold.status).toBe(200);
+  expect([...unsold.body.products, ...unsold.body.newProducts].map((row) => row.productId).sort()).toEqual([
+    "CASE",
+    "UNSOLD",
+  ]);
+});
+
 test("exceso de productos rechaza el Pareto completo en vez de truncar el universo", async () => {
   const ids = Array.from({ length: 5000 }, (_, i) => `LIMIT-${i}`);
   await environment

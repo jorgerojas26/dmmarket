@@ -137,7 +137,14 @@ async function pareto(transaction, access, query) {
   if (unsold) {
     source = purchases(transaction, query).leftJoin("productos as p", "p.IdProducto", "sc.IdProducto");
     const { base: sold } = salesBase(transaction, access, query);
-    source.whereNotExists(sold.select(transaction.raw("1")).whereRaw("BINARY sf.IdProducto <=> BINARY sc.IdProducto"));
+    const soldProducts = sold
+      .select({ productId: transaction.raw("BINARY sf.IdProducto"), matched: transaction.raw("1") })
+      .groupByRaw("BINARY sf.IdProducto");
+    source
+      .leftJoin(soldProducts.as("authorized_sales"), function () {
+        this.on(transaction.raw("authorized_sales.productId <=> BINARY sc.IdProducto"));
+      })
+      .whereNull("authorized_sales.matched");
     for (const [key, column] of [
       ["categoryId", "p.Grupo"],
       ["proveedorId", "p.Proveedor"],
@@ -148,11 +155,12 @@ async function pareto(transaction, access, query) {
     metrics = { totalPurchased: transaction.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2)") };
   } else {
     source = salesBase(transaction, access, query).base;
-    source.whereExists(
-      purchases(transaction, query)
-        .select(transaction.raw("1"))
-        .whereRaw("BINARY sc.IdProducto <=> BINARY sf.IdProducto"),
-    );
+    const purchasedProducts = purchases(transaction, query)
+      .select({ productId: transaction.raw("BINARY sc.IdProducto") })
+      .groupByRaw("BINARY sc.IdProducto");
+    source.join(purchasedProducts.as("purchased_products"), function () {
+      this.on(transaction.raw("purchased_products.productId <=> BINARY sf.IdProducto"));
+    });
     id = "sf.IdProducto";
     quantity = "sf.Cantidad";
     metrics = {
