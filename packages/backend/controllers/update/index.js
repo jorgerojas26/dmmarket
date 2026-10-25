@@ -148,71 +148,76 @@ const { POST_CHECK, GET_HISTORY } = createUpdateReader();
 
 // Descarga el binario a .dmmarket-update/new.exe y verifica sha256 contra el asset de la release.
 // Con hash que no coincide se borra todo y se responde error: nunca se aplica un binario corrupto.
-const POST_DOWNLOAD = async (req, res) => {
-  if (!requireStandalone(res)) return;
+function createUpdateInstaller(fetchAsset = fetch) {
+  const POST_DOWNLOAD = async (req, res) => {
+    if (!requireStandalone(res)) return;
 
-  const { assetUrl, sha256AssetUrl } = req.body || {};
-  if (!assetUrl || !sha256AssetUrl) {
-    return res
-      .status(400)
-      .json({ error: { message: "Faltan las URLs de descarga. Vuelve a buscar actualizaciones." } });
-  }
-  if (downloadState.active) {
-    return res.status(409).json({ error: { message: "Ya hay una descarga en curso" } });
-  }
-
-  downloadState.active = true;
-  downloadState.bytes = 0;
-  downloadState.total = 0;
-  fs.mkdirSync(UPDATE_DIR, { recursive: true });
-  const tmpPath = `${NEW_BINARY}.tmp`;
-  fs.rmSync(tmpPath, { force: true });
-
-  try {
-    // 1. Binario (streaming, con progreso).
-    const exeResponse = await fetch(assetUrl, { signal: AbortSignal.timeout(600_000) });
-    if (!exeResponse.ok) {
-      throw new Error(`La descarga del binario falló (HTTP ${exeResponse.status})`);
+    const { assetUrl, sha256AssetUrl } = req.body || {};
+    if (!assetUrl || !sha256AssetUrl) {
+      return res
+        .status(400)
+        .json({ error: { message: "Faltan las URLs de descarga. Vuelve a buscar actualizaciones." } });
     }
-    downloadState.total = Number(exeResponse.headers.get("content-length")) || 0;
-    const writer = fs.createWriteStream(tmpPath);
-    for await (const chunk of exeResponse.body) {
-      writer.write(chunk);
-      downloadState.bytes += chunk.length;
-    }
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-      writer.end();
-    });
-
-    // 2. Hash esperado (asset .sha256).
-    const shaResponse = await fetch(sha256AssetUrl, { signal: AbortSignal.timeout(30_000) });
-    if (!shaResponse.ok) {
-      throw new Error(`No se pudo descargar el hash de verificación (HTTP ${shaResponse.status})`);
-    }
-    const expected = (await shaResponse.text()).trim().toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(expected)) {
-      throw new Error("El hash esperado de la release es inválido");
+    if (downloadState.active) {
+      return res.status(409).json({ error: { message: "Ya hay una descarga en curso" } });
     }
 
-    // 3. Verificación.
-    const actual = await sha256File(tmpPath);
-    if (actual !== expected) {
-      throw new Error("La verificación sha256 falló: el binario descargado no coincide con la release");
-    }
-
-    fs.renameSync(tmpPath, NEW_BINARY);
-    res.status(200).json({ success: true, message: "Actualización descargada y verificada" });
-  } catch (error) {
+    downloadState.active = true;
+    downloadState.bytes = 0;
+    downloadState.total = 0;
+    fs.mkdirSync(UPDATE_DIR, { recursive: true });
+    const tmpPath = `${NEW_BINARY}.tmp`;
     fs.rmSync(tmpPath, { force: true });
-    if (!res.headersSent) {
-      res.status(500).json({ error: { message: error.message || "Error al descargar la actualización" } });
+
+    try {
+      // 1. Binario (streaming, con progreso).
+      const exeResponse = await fetchAsset(assetUrl, { signal: AbortSignal.timeout(600_000) });
+      if (!exeResponse.ok) {
+        throw new Error(`La descarga del binario falló (HTTP ${exeResponse.status})`);
+      }
+      downloadState.total = Number(exeResponse.headers.get("content-length")) || 0;
+      const writer = fs.createWriteStream(tmpPath);
+      for await (const chunk of exeResponse.body) {
+        writer.write(chunk);
+        downloadState.bytes += chunk.length;
+      }
+      await new Promise((resolve, reject) => {
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+        writer.end();
+      });
+
+      // 2. Hash esperado (asset .sha256).
+      const shaResponse = await fetchAsset(sha256AssetUrl, { signal: AbortSignal.timeout(30_000) });
+      if (!shaResponse.ok) {
+        throw new Error(`No se pudo descargar el hash de verificación (HTTP ${shaResponse.status})`);
+      }
+      const expected = (await shaResponse.text()).trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(expected)) {
+        throw new Error("El hash esperado de la release es inválido");
+      }
+
+      // 3. Verificación.
+      const actual = await sha256File(tmpPath);
+      if (actual !== expected) {
+        throw new Error("La verificación sha256 falló: el binario descargado no coincide con la release");
+      }
+
+      fs.renameSync(tmpPath, NEW_BINARY);
+      res.status(200).json({ success: true, message: "Actualización descargada y verificada" });
+    } catch (error) {
+      fs.rmSync(tmpPath, { force: true });
+      if (!res.headersSent) {
+        res.status(500).json({ error: { message: error.message || "Error al descargar la actualización" } });
+      }
+    } finally {
+      downloadState.active = false;
     }
-  } finally {
-    downloadState.active = false;
-  }
-};
+  };
+
+  return { POST_DOWNLOAD };
+}
+const { POST_DOWNLOAD } = createUpdateInstaller();
 
 const GET_PROGRESS = (_req, res) => {
   res.status(200).json({
@@ -333,6 +338,7 @@ const POST_APPLY = (_req, res) => {
 module.exports = {
   GET_STATUS,
   createUpdateReader,
+  createUpdateInstaller,
   POST_CHECK,
   GET_HISTORY,
   POST_DOWNLOAD,

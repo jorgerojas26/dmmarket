@@ -1,6 +1,10 @@
 const http = require("node:http");
+const fs = require("node:fs");
+const { createHash } = require("node:crypto");
 
-async function startUpdateSource() {
+async function startUpdateSource({ executablePath, corruptHash = false } = {}) {
+  const binary = executablePath ? fs.readFileSync(executablePath) : null;
+  const checksum = binary ? createHash("sha256").update(binary).digest("hex") : null;
   let requests = 0;
   const release = {
     tag_name: "v999.0.0",
@@ -16,6 +20,17 @@ async function startUpdateSource() {
   };
   const server = http.createServer((req, res) => {
     requests++;
+    if (binary && req.url.includes("/releases/download/")) {
+      if (req.url.endsWith(".sha256")) {
+        res.setHeader("content-type", "text/plain");
+        res.end(corruptHash ? "0".repeat(64) : checksum);
+      } else {
+        res.setHeader("content-type", "application/octet-stream");
+        res.setHeader("content-length", binary.length);
+        res.end(binary);
+      }
+      return;
+    }
     res.setHeader("content-type", "application/json");
     res.end(JSON.stringify(req.url.includes("/latest") ? release : [{ ...release, draft: false, prerelease: false }]));
   });
@@ -23,6 +38,7 @@ async function startUpdateSource() {
   return {
     origin: `http://127.0.0.1:${server.address().port}`,
     requests: () => requests,
+    hasAssets: Boolean(binary),
     close: async () => {
       server.closeAllConnections();
       await new Promise((resolve) => server.close(resolve));

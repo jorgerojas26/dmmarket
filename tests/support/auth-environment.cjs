@@ -110,6 +110,7 @@ async function startEnvironment({
   updateSource = false,
   authKeys = null,
   service = false,
+  executablePath = null,
 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-auth-test-"));
   fs.chmodSync(directory, 0o700);
@@ -175,7 +176,10 @@ async function startEnvironment({
       "dmmarket/mysql:5.0.24",
     );
     environment.container = container;
-    if (updateSource) environment.updateSource = await require("./update-source.cjs").startUpdateSource();
+    if (updateSource)
+      environment.updateSource = await require("./update-source.cjs").startUpdateSource(
+        typeof updateSource === "object" ? updateSource : {},
+      );
     if (rateSource) {
       environment.rateSource = await require("./rate-source.cjs").startRateSource();
     }
@@ -193,6 +197,7 @@ async function startEnvironment({
       BACKUP_DIRECTORY: path.join(directory, "backups"),
       BACKUP_DUMP_COMMAND: path.join(__dirname, "mysql-dump.cjs"),
       DMMARKET_TEST_CONTAINER: container,
+      ...(executablePath ? { EXPECTED_TEST_EXECUTABLE: executablePath } : {}),
       AUTH_SESSION_SECRET: authKeys?.sessionSecret || randomBytes(32).toString("base64"),
       AUTH_MFA_KEY: authKeys?.mfaKey || randomBytes(32).toString("base64"),
       AUTH_RECEIVABLES_WRITES_ENABLED: String(receivablesWrites),
@@ -287,12 +292,39 @@ async function startEnvironment({
       AUTH_PUBLIC_ORIGIN: environment.origin,
     });
     if (environment.rateSource) configuration.RATE_FIXTURE_SOURCE = environment.rateSource.origin;
-    if (environment.updateSource) configuration.UPDATE_FIXTURE_SOURCE = environment.updateSource.origin;
+    if (environment.updateSource) {
+      configuration.UPDATE_FIXTURE_SOURCE = environment.updateSource.origin;
+      if (environment.updateSource.hasAssets)
+        configuration.UPDATE_ASSET_FIXTURE_SOURCE = environment.updateSource.origin;
+    }
     const configurationFile = path.join(directory, "configuration.json");
     fs.writeFileSync(configurationFile, JSON.stringify(configuration), { mode: 0o600 });
     fs.writeFileSync(path.join(directory, "Caddyfile"), caddyFile(configuration), { mode: 0o600 });
-    const server = spawn("bun", [path.join(__dirname, "auth-server.cjs"), configurationFile], { stdio: "ignore" });
-    children.push(server);
+    let startupError = "";
+    const launch = () => {
+      const process = spawn(
+        executablePath || "bun",
+        executablePath ? [configurationFile] : [path.join(__dirname, "auth-server.cjs"), configurationFile],
+        { stdio: ["ignore", "ignore", "pipe"], cwd: directory },
+      );
+      process.stderr.on("data", (value) => {
+        if (startupError.length < 4096) startupError += value.toString().slice(0, 4096 - startupError.length);
+      });
+      children.push(process);
+      return process;
+    };
+    let server = launch();
+    environment.server = server;
+    environment.restartServer = async () => {
+      if (server.exitCode === null && !server.signalCode) throw new Error("Detén primero el proceso aislado.");
+      server = launch();
+      environment.server = server;
+      await until(async () => {
+        if (server.exitCode !== null || server.signalCode)
+          throw new Error(startupError || "El servidor aislado no inició.");
+        return (await environment.client().request("/health")).status === 200;
+      });
+    };
     const manifest = JSON.parse(fs.readFileSync(path.join(root, "packages/backend/caddy-manifest.json")));
     const target = `${process.platform}-${process.arch}`;
     const binary = path.join(root, ".cache/caddy", target, manifest.targets[target].binary);
@@ -312,7 +344,11 @@ async function startEnvironment({
       return fs.existsSync(file) && fs.readFileSync(file);
     });
     environment.ca = fs.readFileSync(path.join(directory, "data/caddy/pki/authorities/local/root.crt"));
-    await until(async () => (await environment.client().request("/health")).status === 200);
+    await until(async () => {
+      if (server.exitCode !== null || server.signalCode)
+        throw new Error(startupError || "El servidor aislado no inició.");
+      return (await environment.client().request("/health")).status === 200;
+    });
     environment.spki = await new Promise((resolve, reject) => {
       const socket = tls.connect(
         { host: "127.0.0.1", port: environment.httpsPort, servername: "auth-probe.localhost", ca: environment.ca },

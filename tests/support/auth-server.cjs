@@ -9,6 +9,11 @@ async function main() {
     Number(configuration.DATABASE_PORT) === 3306
   )
     throw new Error("El servidor de pruebas requiere su contenedor desechable.");
+  if (
+    configuration.EXPECTED_TEST_EXECUTABLE &&
+    fs.realpathSync(process.execPath) !== fs.realpathSync(configuration.EXPECTED_TEST_EXECUTABLE)
+  )
+    throw new Error("El proceso compilado debe pertenecer al ejecutable temporal del laboratorio.");
   process.chdir(path.dirname(process.argv[2]));
   Object.assign(process.env, configuration);
   delete process.env.DEBUG;
@@ -39,6 +44,14 @@ async function main() {
       fetch(`${origin.origin}${new URL(url).pathname}${new URL(url).search}`, options),
     );
   }
+  if (configuration.UPDATE_ASSET_FIXTURE_SOURCE) {
+    const origin = new URL(configuration.UPDATE_ASSET_FIXTURE_SOURCE);
+    if (origin.hostname !== "127.0.0.1" || origin.protocol !== "http:")
+      throw new Error("Los assets requieren el laboratorio local.");
+    services.updateInstaller = require("../../packages/backend/controllers/update").createUpdateInstaller(
+      (url, options) => fetch(`${origin.origin}${new URL(url).pathname}`, options),
+    );
+  }
   await app.initializeAuth(configuration, services);
   const server = app.listen(Number(configuration.PORT), "127.0.0.1");
   process.once("SIGTERM", async () => {
@@ -49,4 +62,10 @@ async function main() {
   });
 }
 
-main().catch(() => process.exit(1));
+main().catch((error) => {
+  let message = String(error.stack || error.message);
+  for (const key of ["DATABASE_PASSWORD", "AUTH_SESSION_SECRET", "AUTH_MFA_KEY"])
+    if (process.env[key]) message = message.split(process.env[key]).join("[oculta]");
+  console.error(message);
+  process.exit(1);
+});

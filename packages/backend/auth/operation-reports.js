@@ -24,6 +24,7 @@ const dateColumn = (tx) => tx.raw("CAST(DATE_FORMAT(Fecha, '%Y-%m-%d') AS CHAR)"
 function createOperationReports({ sessions, security, db, services = {} }) {
   const rateService = services.rates || bcvRateService;
   const updateReader = services.updateReader || updates;
+  const updateInstaller = services.updateInstaller || updates;
   let lastBackup = null;
   let lastSync = null;
   const router = express.Router();
@@ -165,7 +166,7 @@ function createOperationReports({ sessions, security, db, services = {} }) {
       }
     });
   for (const [path, action, controller] of [
-    ["/update/download", "download", updates.POST_DOWNLOAD],
+    ["/update/download", "download", updateInstaller.POST_DOWNLOAD],
     ["/update/apply", "apply", updates.POST_APPLY],
   ])
     router.post(path, security.csrfProtection, async (req, res, next) => {
