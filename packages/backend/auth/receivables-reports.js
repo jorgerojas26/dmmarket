@@ -24,7 +24,7 @@ function clientId(value) {
   return value;
 }
 
-function createReceivablesReports({ sessions, security, writesEnabled = false }) {
+function createReceivablesReports({ sessions, security }) {
   const router = express.Router();
   const handle = (work, keys) => async (req, res, next) => {
     try {
@@ -48,15 +48,13 @@ function createReceivablesReports({ sessions, security, writesEnabled = false })
     "/receivables/status",
     handle(async (service, _req, _query, transaction) => {
       let writesAvailable = false;
-      if (writesEnabled) {
-        try {
-          await assertWritableReceivables(transaction);
-          writesAvailable = true;
-        } catch (error) {
-          if (error.status !== 503) throw error;
-        }
+      try {
+        await assertWritableReceivables(transaction);
+        writesAvailable = true;
+      } catch (error) {
+        if (error.status !== 503) throw error;
       }
-      return { ...(await service.readiness()), writesEnabled, writesAvailable };
+      return { ...(await service.readiness()), writesAvailable };
     }, []),
   );
   router.get(
@@ -90,8 +88,6 @@ function createReceivablesReports({ sessions, security, writesEnabled = false })
             const body = req.body;
             const type = body?.type;
             requireReceivablesOperation(access, type);
-            if (!writesEnabled)
-              throw Object.assign(new Error("Escrituras de cobranza deshabilitadas."), { status: 503 });
             await assertWritableReceivables(transaction);
             const fields =
               type === "payment"

@@ -37,7 +37,7 @@ async function run(who, payload, id = "C") {
   };
 }
 beforeAll(async () => {
-  environment = await startEnvironment({ web: true, receivablesWrites: true });
+  environment = await startEnvironment({ web: true });
   await seedSales(environment.db);
   await seedReceivables(environment.db);
   await prepareReceivablesWrites(environment.db);
@@ -230,28 +230,37 @@ test("abono en bolívares guarda la tasa indicada y no usa REF actual para un d�
   expect((await environment.db("cxc_movimientos").first()).TasaCambio).toBe("2.000000");
 });
 
-test("escrituras deshabilitadas por defecto aunque el esquema y el operador estén preparados", async () => {
-  const disabled = await startEnvironment({ web: true });
+test("operador y esquema preparados permiten abonar sin interruptores de configuración", async () => {
+  const prepared = await startEnvironment({ web: true });
   try {
-    await seedSales(disabled.db);
-    await seedReceivables(disabled.db);
-    await prepareReceivablesWrites(disabled.db);
-    const user = await disabled.seedUser({
+    await seedSales(prepared.db);
+    await seedReceivables(prepared.db);
+    await prepareReceivablesWrites(prepared.db);
+    const user = await prepared.seedUser({
       permissions: [grant("receivables.read"), grant("receivables.payment")],
       enrolled: true,
     });
-    const client = disabled.client();
+    const client = prepared.client();
     await client.login(user);
     expect(
-      (await client.request("/api/auth/mfa", { method: "POST", body: { token: await disabled.token(user.secret) } }))
+      (await client.request("/api/auth/mfa", { method: "POST", body: { token: await prepared.token(user.secret) } }))
         .status,
     ).toBe(200);
-    expect((await client.request("/api/receivables/status")).body.writesAvailable).toBe(false);
-    expect((await client.request("/api/receivables/C/preview", { method: "POST", body: payment("5") })).status).toBe(
-      503,
-    );
-    expect(Number((await disabled.db("cxc_movimientos").count("* as n").first()).n)).toBe(0);
+    const status = await client.request("/api/receivables/status");
+    expect(status.body.writesAvailable).toBe(true);
+    expect(status.body).not.toHaveProperty("writesEnabled");
+    const plan = await client.request("/api/receivables/C/preview", { method: "POST", body: payment("5") });
+    expect(plan.status).toBe(200);
+    expect(
+      (
+        await client.request("/api/receivables/C/operations", {
+          method: "POST",
+          body: { ...payment("5"), requestId: randomUUID(), snapshot: plan.body.snapshot },
+        })
+      ).status,
+    ).toBe(200);
+    expect(Number((await prepared.db("cxc_movimientos").count("* as n").first()).n)).toBe(1);
   } finally {
-    await disabled.close();
+    await prepared.close();
   }
 });

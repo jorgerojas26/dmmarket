@@ -6,7 +6,7 @@ const test = base.extend({
   environment: [
     async ({ browserName }, use) => {
       if (browserName !== "chromium") throw new Error("Esta suite requiere Chrome.");
-      const environment = await startEnvironment({ web: true, receivablesWrites: true });
+      const environment = await startEnvironment({ web: true });
       try {
         await seedSales(environment.db);
         await seedReceivables(environment.db);

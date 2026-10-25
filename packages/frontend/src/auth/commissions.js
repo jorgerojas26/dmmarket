@@ -62,9 +62,8 @@ export default function Commissions() {
                 )}
             </AccessForm>
             <p>
-                Consulta de sólo lectura. La edición requiere permiso explícito, almacenamiento preparado y habilitación
-                independiente. El histórico disponible corresponde únicamente al sistema Facturas; no se reutiliza para
-                notas de entrega.
+                La edición requiere permiso explícito y almacenamiento preparado. El histórico disponible corresponde
+                únicamente al sistema Facturas; no se reutiliza para notas de entrega.
             </p>
             <p>
                 La comisión se calcula con el histórico capturado y el grupo actual del producto. Si falta información o
@@ -146,8 +145,8 @@ export default function Commissions() {
                     <CommissionEditor employeeId={query.employeeId} groups={data} onSaved={() => mutate()} />
                 ) : (
                     <p>
-                        La edición de porcentajes está deshabilitada hasta su preparación transaccional y habilitación
-                        explícita.
+                        La edición de porcentajes no está disponible porque no se ha validado su almacenamiento
+                        transaccional.
                     </p>
                 ))}
         </section>

@@ -297,8 +297,8 @@ export default function Receivables() {
             </p>
             {!readiness?.writesAvailable && (
                 <p>
-                    Las operaciones financieras permanecen deshabilitadas hasta validar su preparación transaccional y
-                    habilitación explícita.
+                    Las operaciones financieras no están disponibles porque no se ha validado su almacenamiento
+                    transaccional.
                 </p>
             )}
             {!data && !error && <p role="status">Consultando cartera…</p>}

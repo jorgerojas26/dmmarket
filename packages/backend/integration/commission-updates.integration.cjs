@@ -27,7 +27,7 @@ async function run(who, payload) {
   return { response: await who.client.request("/api/employees/commissionInfo/A", { method: "PUT", body }), body };
 }
 beforeAll(async () => {
-  environment = await startEnvironment({ web: true, commissionWrites: true });
+  environment = await startEnvironment({ web: true });
   await seedSales(environment.db);
   await seedCommissions(environment.db);
   await prepareCommissionWrites(environment.db);
@@ -195,22 +195,26 @@ test("CSRF y reautenticación reciente se verifican antes de escribir", async ()
   expect((await who.client.request("/api/employees/commissionInfo/A", { method: "PUT", body })).status).toBe(403);
 });
 
-test("habilitación por defecto desactivada y rollback no elimina historial financiero", async () => {
+test("edición disponible sin interruptores y rollback no elimina historial financiero", async () => {
   expect((await run(operator, input())).response.status).toBe(200);
   await expect(require("../migrations/20261027_add_commission_operations").down(environment.db)).rejects.toThrow(
     "historial",
   );
-  const disabled = await startEnvironment({ web: true });
+  const prepared = await startEnvironment({ web: true });
   try {
-    await seedSales(disabled.db);
-    await seedCommissions(disabled.db);
-    await prepareCommissionWrites(disabled.db);
-    const who = await actor([grant("commissions.read"), grant("commissions.update")], disabled);
-    expect((await who.client.request("/api/employees/commissionInfo/A/status")).body.writesAvailable).toBe(false);
-    expect(
-      (await who.client.request("/api/employees/commissionInfo/A/preview", { method: "POST", body: input() })).status,
-    ).toBe(503);
+    await seedSales(prepared.db);
+    await seedCommissions(prepared.db);
+    await prepareCommissionWrites(prepared.db);
+    const who = await actor([grant("commissions.read"), grant("commissions.update")], prepared);
+    const status = await who.client.request("/api/employees/commissionInfo/A/status");
+    expect(status.body.writesAvailable).toBe(true);
+    expect(status.body).not.toHaveProperty("writesEnabled");
+    const { response } = await run(who, input());
+    expect(response.status).toBe(200);
+    expect((await prepared.db("vendedor_comisiones").where({ vendedorId: "A", grupoId: "G" }).first()).comision).toBe(
+      "15.2500",
+    );
   } finally {
-    await disabled.close();
+    await prepared.close();
   }
 });

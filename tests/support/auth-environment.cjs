@@ -104,8 +104,6 @@ function client(environment) {
 
 async function startEnvironment({
   web = false,
-  receivablesWrites = false,
-  commissionWrites = false,
   rateSource = false,
   updateSource = false,
   authKeys = null,
@@ -200,8 +198,6 @@ async function startEnvironment({
       ...(executablePath ? { EXPECTED_TEST_EXECUTABLE: executablePath } : {}),
       AUTH_SESSION_SECRET: authKeys?.sessionSecret || randomBytes(32).toString("base64"),
       AUTH_MFA_KEY: authKeys?.mfaKey || randomBytes(32).toString("base64"),
-      AUTH_RECEIVABLES_WRITES_ENABLED: String(receivablesWrites),
-      AUTH_COMMISSION_WRITES_ENABLED: String(commissionWrites),
     };
     db = knex({
       client: MySql2Client,

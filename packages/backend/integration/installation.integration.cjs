@@ -62,7 +62,8 @@ test("reinstalación sandbox conserva claves y genera configuración privada sin
   const saved = readConfiguration(sandbox.directory);
   expect(saved.AUTH_SESSION_SECRET).toBe(environment.configuration.AUTH_SESSION_SECRET);
   expect(saved.AUTH_MFA_KEY).toBe(environment.configuration.AUTH_MFA_KEY);
-  expect(saved.AUTH_RECEIVABLES_WRITES_ENABLED).toBe("false");
+  expect(saved).not.toHaveProperty("AUTH_RECEIVABLES_WRITES_ENABLED");
+  expect(saved).not.toHaveProperty("AUTH_COMMISSION_WRITES_ENABLED");
   expect(fs.statSync(path.join(sandbox.directory, ".env")).mode & 0o777).toBe(0o600);
   const status = await sandbox.request("status");
   expect(status.body).toMatchObject({

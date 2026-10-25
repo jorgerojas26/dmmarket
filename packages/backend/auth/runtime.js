@@ -28,16 +28,6 @@ const { createAuthRouter, forbidden } = require("./router");
 function validateAuthConfig(env) {
   if (env.WEB_MODE !== "caddy") throw new Error("El acceso requiere HTTPS con Caddy.");
   if (env.HOST !== "127.0.0.1") throw new Error("El acceso protegido requiere HOST=127.0.0.1 y un proxy HTTPS.");
-  if (
-    env.AUTH_RECEIVABLES_WRITES_ENABLED !== undefined &&
-    !["true", "false"].includes(env.AUTH_RECEIVABLES_WRITES_ENABLED)
-  )
-    throw new Error("AUTH_RECEIVABLES_WRITES_ENABLED debe ser true o false.");
-  if (
-    env.AUTH_COMMISSION_WRITES_ENABLED !== undefined &&
-    !["true", "false"].includes(env.AUTH_COMMISSION_WRITES_ENABLED)
-  )
-    throw new Error("AUTH_COMMISSION_WRITES_ENABLED debe ser true o false.");
   const security = createHttpSecurity(env.AUTH_PUBLIC_ORIGIN);
   const mfa = createMfa(env.AUTH_MFA_KEY);
   createAttemptLimiter({ db: null, secret: env.AUTH_SESSION_SECRET });
@@ -90,12 +80,8 @@ async function createAuthRuntime({ db, env = process.env, services = {} }) {
     router.use(createExportReports({ sessions }));
     router.use(createOperationReports({ sessions, security, db, services }));
     router.use(createCommissionReports({ sessions }));
-    router.use(
-      createCommissionUpdates({ sessions, security, writesEnabled: env.AUTH_COMMISSION_WRITES_ENABLED === "true" }),
-    );
-    router.use(
-      createReceivablesReports({ sessions, security, writesEnabled: env.AUTH_RECEIVABLES_WRITES_ENABLED === "true" }),
-    );
+    router.use(createCommissionUpdates({ sessions, security }));
+    router.use(createReceivablesReports({ sessions, security }));
     router.use((req, res, next) => {
       sessions
         .withSession(req.sessionID, {}, async ({ access, transaction }) => {

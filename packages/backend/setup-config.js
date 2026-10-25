@@ -101,8 +101,6 @@ async function prepareAccessConfiguration(configuration) {
       ...configuration,
       AUTH_SESSION_SECRET: configuration.AUTH_SESSION_SECRET || randomBytes(32).toString("base64"),
       AUTH_MFA_KEY: configuration.AUTH_MFA_KEY || randomBytes(32).toString("base64"),
-      AUTH_RECEIVABLES_WRITES_ENABLED: configuration.AUTH_RECEIVABLES_WRITES_ENABLED || "false",
-      AUTH_COMMISSION_WRITES_ENABLED: configuration.AUTH_COMMISSION_WRITES_ENABLED || "false",
     };
     require("./auth/runtime").validateAuthConfig(prepared);
     if (Number(count.total)) {

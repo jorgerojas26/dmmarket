@@ -84,7 +84,7 @@ async function plan(tx, id, input, actorId, lock) {
   };
   return { ...result, snapshot: hash(result) };
 }
-function createCommissionUpdates({ sessions, security, writesEnabled = false }) {
+function createCommissionUpdates({ sessions, security }) {
   const router = express.Router();
   router.get("/employees/commissionInfo/:employeeId/status", async (req, res, next) => {
     try {
@@ -93,14 +93,13 @@ function createCommissionUpdates({ sessions, security, writesEnabled = false }) 
           authorize(access, req.params.employeeId, false);
           if (Object.keys(req.query).length) fail(400);
           let writesAvailable = false;
-          if (writesEnabled)
-            try {
-              await assertWritableCommissions(transaction);
-              writesAvailable = true;
-            } catch (error) {
-              if (error.status !== 503) throw error;
-            }
-          return { writesEnabled, writesAvailable };
+          try {
+            await assertWritableCommissions(transaction);
+            writesAvailable = true;
+          } catch (error) {
+            if (error.status !== 503) throw error;
+          }
+          return { writesAvailable };
         }),
       );
     } catch (error) {
@@ -119,7 +118,6 @@ function createCommissionUpdates({ sessions, security, writesEnabled = false }) 
           await sessions.withSession(req.sessionID, { recent: commit }, async ({ transaction: tx, access, user }) => {
             const id = req.params.employeeId;
             authorize(access, id, true);
-            if (!writesEnabled) fail(503);
             await assertWritableCommissions(tx);
             if (Object.keys(req.query).length) fail(400);
             const input = payload(req.body, commit);
