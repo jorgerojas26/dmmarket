@@ -37,10 +37,10 @@ function Summary({ selection }) {
     );
 }
 
-export default function Parties() {
+export default function Parties({ kind: fixedKind }) {
     const { session } = useAuth();
     const allowed = (capability) => session.permissions.some((grant) => grant.capability === capability);
-    const [kind, setKind] = useState(allowed('clients.read') ? 'clients' : 'sellers');
+    const [kind, setKind] = useState(fixedKind || (allowed('clients.read') ? 'clients' : 'sellers'));
     const [stats, setStats] = useState(false);
     const [search, setSearch] = useState('');
     const [ruta, setRuta] = useState('');
@@ -81,7 +81,13 @@ export default function Parties() {
     return (
         <section aria-label="Directorio de clientes y vendedores" className="my-4">
             <AccessForm
-                title="Consultar clientes y vendedores autorizados"
+                title={
+                    fixedKind === 'clients'
+                        ? 'Consultar clientes autorizados'
+                        : fixedKind === 'sellers'
+                          ? 'Consultar vendedores autorizados'
+                          : 'Consultar clientes y vendedores autorizados'
+                }
                 button="Consultar directorio"
                 onSubmit={async () => {
                     setPage(1);
@@ -102,8 +108,12 @@ export default function Parties() {
                     value={kind}
                     onChange={(event) => setKind(event.target.value)}
                 >
-                    {allowed('clients.read') && <option value="clients">Clientes</option>}
-                    {allowed('sellers.read') && <option value="sellers">Vendedores</option>}
+                    {allowed('clients.read') && (!fixedKind || fixedKind === 'clients') && (
+                        <option value="clients">Clientes</option>
+                    )}
+                    {allowed('sellers.read') && (!fixedKind || fixedKind === 'sellers') && (
+                        <option value="sellers">Vendedores</option>
+                    )}
                 </select>
                 <Field
                     label="Buscar en directorio"

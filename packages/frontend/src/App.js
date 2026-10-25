@@ -1,161 +1,146 @@
-import UpdateToast from 'components/UpdateToast';
-import { ShowNoeContext } from 'context/show_noe';
-import { UpdateProvider } from 'context/update';
-import { useCurrencyRates } from 'hooks/useCurrencyRates';
-import ClientesPage from 'pages/clientes';
-import ComprasPage from 'pages/compras';
-import InventarioPage from 'pages/inventario';
-import VendedoresPage from 'pages/vendedores';
-import VentasPage from 'pages/ventas';
-import { useContext, useEffect } from 'react';
-import Container from 'react-bootstrap/Container';
+import { useState } from 'react';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
-import { Link, Redirect, Route, Switch, useLocation } from 'react-router-dom';
-import SessionWorkspace from './auth/workspace';
-import { CurrencyRateContext } from './context/currency_rate';
-import ConfiguracionPage from './pages/configuracion';
-import ProveedoresPage from './pages/proveedores';
+import { Link, NavLink, Redirect, useLocation } from 'react-router-dom';
+import ClientDashboard from './auth/client-dashboard';
+import { useAuth } from './auth/context';
+import InactiveClients from './auth/inactive-clients';
+import Inventory from './auth/inventory';
+import Pareto from './auth/pareto';
+import Parties from './auth/parties';
+import Purchases from './auth/purchases';
+import Sales from './auth/sales';
+import SellerDashboard from './auth/seller-dashboard';
+import AccessWorkspace, { Account, Rates } from './auth/workspace';
 
-const SIDEBAR_ROUTES = [
-    '/ventas',
-    '/compras',
-    '/clientes',
-    '/proveedores',
-    '/vendedores',
-    '/inventario',
-    '/configuracion',
-];
-
-function AppContent() {
-    const location = useLocation();
-    const { currencyRate, setCurrencyRate } = useContext(CurrencyRateContext);
-    const { showNoe, setShowNoe } = useContext(ShowNoeContext);
-
-    const { data: currenciesRes } = useCurrencyRates();
-
-    useEffect(() => {
-        if (currenciesRes?.data) {
-            setCurrencyRate(currenciesRes.data.find((currency) => currency.Simbolo === 'BsS'));
-        }
-    }, [currenciesRes, setCurrencyRate]);
-
+export default function App() {
+    const { session, can } = useAuth();
+    const { pathname } = useLocation();
+    const [expanded, setExpanded] = useState(false);
+    const has = (capability) => session.permissions.some((grant) => grant.capability === capability);
+    const access = ['access.users', 'access.roles', 'access.links', 'access.recover'].some(can);
+    const modules = [
+        { path: '/ventas', label: 'Ventas', allowed: has('sales.read') },
+        { path: '/compras', label: 'Compras', allowed: can('purchases.read') },
+        { path: '/clientes', label: 'Clientes', allowed: can('clients.read') },
+        { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read') },
+        { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
+        { path: '/tasas', label: 'Tasas', allowed: can('rates.read') },
+        { path: '/acceso', label: 'Acceso', allowed: access },
+    ].filter((module) => module.allowed);
+    const views = [
+        { path: '/ventas', label: 'Desglose', allowed: has('sales.read'), content: <Sales /> },
+        {
+            path: '/ventas/pareto',
+            label: 'Pareto',
+            allowed: has('sales.read') && can('purchases.read'),
+            content: <Pareto />,
+        },
+        { path: '/compras', label: 'Desglose', allowed: can('purchases.read'), content: <Purchases /> },
+        {
+            path: '/clientes',
+            label: 'Directorio',
+            allowed: can('clients.read'),
+            content: <Parties key="clients" kind="clients" />,
+        },
+        {
+            path: '/clientes/panel',
+            label: 'Resumen',
+            allowed: can('clients.read') && has('sales.read'),
+            content: <ClientDashboard />,
+        },
+        {
+            path: '/clientes/sin-documentos',
+            label: 'Sin documentos autorizados',
+            allowed: can('clients.read') && has('sales.read'),
+            content: <InactiveClients />,
+        },
+        {
+            path: '/vendedores',
+            label: 'Directorio',
+            allowed: has('sellers.read'),
+            content: <Parties key="sellers" kind="sellers" />,
+        },
+        {
+            path: '/vendedores/panel',
+            label: 'Resumen',
+            allowed: has('sellers.read') && has('sales.read'),
+            content: <SellerDashboard />,
+        },
+        { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
+        { path: '/tasas', label: 'Referencia', allowed: can('rates.read'), content: <Rates /> },
+        { path: '/acceso', label: 'Administración', allowed: access, content: <AccessWorkspace /> },
+        { path: '/cuenta', label: 'Mi cuenta', allowed: true, content: <Account /> },
+    ].filter((view) => view.allowed);
+    const path = pathname.replace(/\/+$/, '') || '/';
+    const view = views.find((item) => item.path === path);
+    const module = modules.find((item) => path === item.path || path.startsWith(`${item.path}/`));
+    const children = module
+        ? views.filter((item) => item.path === module.path || item.path.startsWith(`${module.path}/`))
+        : [];
     return (
-        <div className="App bg-dark">
-            <UpdateToast />
-            <Container fluid id="main" className="m-0 p-0 vh-100 d-flex flex-column">
-                <Navbar
-                    variant="dark"
-                    className={
-                        'app-navbar' +
-                        (SIDEBAR_ROUTES.some((route) => location.pathname.includes(route))
-                            ? ' has-clients-sidebar'
-                            : '')
-                    }
-                    expand="xl"
-                >
-                    <Container fluid className="app-navbar-inner">
-                        <Navbar.Brand className="app-navbar-brand">SISTEMA DE REPORTES</Navbar.Brand>
-
-                        <Navbar.Toggle aria-controls="basic-navbar-nav" />
-
-                        <Navbar.Collapse id="basic-navbar-nav">
-                            {/* En desktop: links a la izquierda (me-auto) y acciones a la
-                                derecha. En mobile el collapse se apila en columna: links con
-                                área táctil amplia y las acciones debajo, como panel. */}
-                            <Nav className="me-auto app-navbar-links">
-                                {['ventas', 'compras', 'clientes', 'proveedores', 'vendedores', 'inventario'].map(
-                                    (route) => (
-                                        <Link
-                                            key={route}
-                                            to={`/${route}`}
-                                            className={`text-decoration-none nav-link${
-                                                location.pathname.includes(route) ? ' active' : ''
-                                            }`}
-                                        >
-                                            {route}
-                                        </Link>
-                                    ),
-                                )}
-                            </Nav>
-
-                            <div className="app-navbar-actions">
-                                <Link
-                                    to="/configuracion"
-                                    title="Configuración"
-                                    className={`text-decoration-none nav-link app-navbar-icon${
-                                        location.pathname.includes('/configuracion') ? ' active' : ''
-                                    }`}
+        <>
+            <Navbar
+                aria-label="Módulos disponibles"
+                variant="dark"
+                expand="lg"
+                expanded={expanded}
+                onToggle={setExpanded}
+                className="border-bottom border-secondary mb-3"
+            >
+                <Navbar.Brand as={Link} to="/" onClick={() => setExpanded(false)}>
+                    Reportes
+                </Navbar.Brand>
+                <Navbar.Toggle aria-controls="authorized-modules" label="Abrir navegación" />
+                <Navbar.Collapse id="authorized-modules">
+                    <Nav className="me-auto flex-wrap">
+                        {modules.map((item) => (
+                            <Nav.Link
+                                key={item.path}
+                                as={NavLink}
+                                to={item.path}
+                                isActive={() => path === item.path || path.startsWith(`${item.path}/`)}
+                                onClick={() => setExpanded(false)}
+                            >
+                                {item.label}
+                            </Nav.Link>
+                        ))}
+                        <Nav.Link as={NavLink} to="/cuenta" onClick={() => setExpanded(false)}>
+                            Mi cuenta
+                        </Nav.Link>
+                    </Nav>
+                </Navbar.Collapse>
+            </Navbar>
+            {path === '/' ? (
+                <Redirect to={modules[0]?.path || '/cuenta'} />
+            ) : view ? (
+                <section key={path} aria-label={module?.label || 'Mi cuenta'}>
+                    <h2 className="h4">{module?.label || 'Mi cuenta'}</h2>
+                    {children.length > 1 && (
+                        <nav aria-label={`Vistas de ${module.label}`} className="nav nav-pills gap-2 mb-3">
+                            {children.map((item) => (
+                                <NavLink
+                                    key={item.path}
+                                    to={item.path}
+                                    exact
+                                    className="nav-link"
+                                    activeClassName="active"
                                 >
-                                    <svg
-                                        width="20"
-                                        height="20"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <title>Configuración</title>
-                                        <circle cx="12" cy="12" r="3" />
-                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                                    </svg>
-                                </Link>
-
-                                <div className="app-navbar-switch">
-                                    <span className="text-light">Facturas</span>
-                                    <div>
-                                        <label className="switch">
-                                            <input
-                                                type="checkbox"
-                                                checked={showNoe}
-                                                onChange={(e) => setShowNoe(e.target.checked)}
-                                            />
-                                            <span className="slider round"></span>
-                                        </label>
-                                    </div>
-                                    <span className="text-light">Notas de entrega</span>
-                                </div>
-
-                                <div className="text-light app-navbar-ref">
-                                    <span>
-                                        REF: <span className="fw-bold text-info">{currencyRate?.Cambio}</span>{' '}
-                                        {currencyRate?.Simbolo}
-                                    </span>
-                                </div>
-                            </div>
-                        </Navbar.Collapse>
-                    </Container>
-                </Navbar>
-
-                <Container fluid className="d-flex flex-column flex-grow-1 overflow-hidden p-0">
-                    <Switch>
-                        <Redirect exact from="/" to="/ventas" />
-                        <Route path="/ventas" component={VentasPage} />
-                        <Route path="/compras" component={ComprasPage} />
-                        <Route path="/clientes" component={ClientesPage} />
-                        <Route path="/proveedores" component={ProveedoresPage} />
-                        <Route path="/vendedores" component={VendedoresPage} />
-                        <Route path="/inventario" component={InventarioPage} />
-                        <Route path="/configuracion" component={ConfiguracionPage} />
-                    </Switch>
-                </Container>
-            </Container>
-        </div>
+                                    {item.label}
+                                </NavLink>
+                            ))}
+                        </nav>
+                    )}
+                    {!modules.length && <p>No tienes módulos habilitados. Consulta al responsable de acceso.</p>}
+                    {view.content}
+                </section>
+            ) : (
+                <section aria-label="Página no disponible">
+                    <h2 className="h4">Página no disponible</h2>
+                    <p>Esta página no está autorizada para tu cuenta o todavía no está habilitada.</p>
+                    <Link to="/">Volver al inicio</Link>
+                </section>
+            )}
+        </>
     );
 }
-
-export function ReportApp() {
-    return (
-        <UpdateProvider>
-            <AppContent />
-        </UpdateProvider>
-    );
-}
-
-function App() {
-    return <SessionWorkspace />;
-}
-
-export default App;

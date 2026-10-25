@@ -2,19 +2,11 @@ import useSWR from 'hooks/swr-wrapper';
 import { useState } from 'react';
 import { fetcher } from 'swr-config';
 import AccessEditor from './access-editor';
-import ClientDashboard from './client-dashboard';
 import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
-import InactiveClients from './inactive-clients';
-import Inventory from './inventory';
-import Pareto from './pareto';
-import Parties from './parties';
-import Purchases from './purchases';
-import Sales from './sales';
-import SellerDashboard from './seller-dashboard';
 import { authRequest } from './transport';
 
-function Rates() {
+export function Rates() {
     const { data, error } = useSWR('/api/currency_rates', fetcher);
     return (
         <section className="card bg-dark border-secondary p-4 my-3">
@@ -259,52 +251,10 @@ function Users() {
     );
 }
 
-export default function SessionWorkspace() {
-    const { session, can } = useAuth();
+export function Account() {
     const [changePassword, setChangePassword] = useState(false);
     return (
         <>
-            <p role="status">Acceso verificado para {session.user.displayName}.</p>
-            <p className="text-warning">
-                Los módulos de negocio sin autorización completa permanecen deshabilitados durante esta implementación.
-            </p>
-            {can('rates.read') && <Rates />}
-            {can('inventory.read') && <Inventory />}
-            {can('purchases.read') && <Purchases />}
-            {session.permissions.some((grant) => grant.capability === 'sales.read') && <Sales />}
-            {can('purchases.read') && session.permissions.some((grant) => grant.capability === 'sales.read') && (
-                <Pareto />
-            )}
-            {session.permissions.some((grant) => ['clients.read', 'sellers.read'].includes(grant.capability)) && (
-                <Parties />
-            )}
-            {['clients.read', 'sales.read'].every((capability) =>
-                session.permissions.some((grant) => grant.capability === capability),
-            ) && (
-                <>
-                    <InactiveClients />
-                    <ClientDashboard />
-                </>
-            )}
-            {['sellers.read', 'sales.read'].every((capability) =>
-                session.permissions.some((grant) => grant.capability === capability),
-            ) && <SellerDashboard />}
-            {['access.users', 'access.roles', 'access.links', 'access.recover'].some(can) && <ReauthenticationForm />}
-            {can('access.users') && <Users />}
-            {(can('access.roles') || can('access.links')) && <AccessEditor />}
-            {!session.permissions.some((grant) =>
-                [
-                    'rates.read',
-                    'inventory.read',
-                    'purchases.read',
-                    'sales.read',
-                    'clients.read',
-                    'sellers.read',
-                    'access.users',
-                    'access.roles',
-                    'access.links',
-                ].includes(grant.capability),
-            ) && <p>No tienes módulos habilitados en esta fase. Consulta al responsable de acceso.</p>}
             <button
                 type="button"
                 className="btn btn-outline-light my-3"
@@ -313,6 +263,17 @@ export default function SessionWorkspace() {
                 {changePassword ? 'Ocultar cambio de contraseña' : 'Cambiar mi contraseña'}
             </button>
             {changePassword && <PasswordForm />}
+        </>
+    );
+}
+
+export default function AccessWorkspace() {
+    const { can } = useAuth();
+    return (
+        <>
+            <ReauthenticationForm />
+            {can('access.users') && <Users />}
+            {(can('access.roles') || can('access.links')) && <AccessEditor />}
         </>
     );
 }

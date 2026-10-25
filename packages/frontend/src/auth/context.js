@@ -1,10 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useHistory, useLocation } from 'react-router-dom';
 import { authRequest, clearAuthTransport, setCsrfToken } from './transport';
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
+    const history = useHistory();
+    const location = useLocation();
     const [session, setSession] = useState(null);
     const [checking, setChecking] = useState(true);
     const [failure, setFailure] = useState('');
@@ -79,7 +82,9 @@ export function AuthProvider({ children }) {
                     notify();
                     await check();
                 } else if (data.user) {
+                    const entering = current.current?.user?.id !== data.user.id || current.current?.stage !== 'ready';
                     apply(data);
+                    if (entering && data.stage === 'ready') history.replace('/');
                 }
                 return data;
             } catch (error) {
@@ -90,8 +95,12 @@ export function AuthProvider({ children }) {
                 busy.current = false;
             }
         },
-        [apply, check, notify],
+        [apply, check, notify, history],
     );
+
+    useLayoutEffect(() => {
+        if (!busy.current && current.current?.stage === 'ready') void check();
+    }, [location.pathname, location.search, check]);
 
     useEffect(() => {
         void check();

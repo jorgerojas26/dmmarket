@@ -1,5 +1,5 @@
 const { randomBytes } = require("node:crypto");
-const { test, expect, login } = require("./fixtures.cjs");
+const { test, expect, login, openModule } = require("./fixtures.cjs");
 const { docker } = require("../support/auth-environment.cjs");
 const ownerPermissions = ["access.users", "access.roles", "access.links", "access.recover"].map((capability) => ({
   capability,
@@ -25,6 +25,7 @@ test("login incorrecto/correcto, permisos, cookies y cambio propio sin MFA", asy
   const cookie = (await context.cookies()).find((value) => value.name === "__Host-dmmarket.sid");
   expect(cookie).toMatchObject({ secure: true, httpOnly: true, sameSite: "Lax", path: "/" });
   expect(await page.evaluate(() => document.cookie)).not.toContain("dmmarket.sid");
+  await openModule(page, "Mi cuenta");
   await page.getByRole("button", { name: "Cambiar mi contraseña", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Código MFA para cambiar contraseña" })).toHaveCount(0);
   const password = randomBytes(24).toString("base64url");
@@ -255,6 +256,7 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   try {
     const reader = await context.newPage();
     await login(reader, environment, user);
+    await openModule(reader, "Tasas");
     await expect(reader.getByRole("cell", { name: "42.125000" })).toBeVisible();
     await page.getByRole("textbox", { name: "IDs de vendedores vinculados", exact: true }).fill("A");
     await page.getByRole("textbox", { name: "Motivo del cambio de vínculos" }).fill("Vincular vendedor real desde UI");
@@ -357,6 +359,7 @@ test("directorio de vendedores no expone contactos ajenos y sus ventas respetan 
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Vendedores");
   const directory = page.getByRole("region", { name: "Directorio de clientes y vendedores" });
   await directory.getByRole("button", { name: "Consultar directorio", exact: true }).click();
   await expect(directory.getByRole("cell", { name: "PRIVATE-PHONE-A", exact: true })).toBeVisible();
@@ -389,6 +392,7 @@ test("clientes globales no convierten ventas propias en ventas globales ni permi
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Clientes");
   const directory = page.getByRole("region", { name: "Directorio de clientes y vendedores" });
   await directory.getByLabel("Incluir ventas autorizadas", { exact: true }).check();
   await directory.getByLabel("Directorio ventas desde", { exact: true }).fill("2026-01-01");
@@ -424,6 +428,7 @@ test("histórico mensual y ranking por producto conservan alcance y año en ambo
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Clientes");
   const directory = page.getByRole("region", { name: "Directorio de clientes y vendedores" });
   await directory.getByLabel("Incluir ventas autorizadas", { exact: true }).check();
   await directory.getByLabel("Ruta del directorio", { exact: true }).selectOption("R");
@@ -471,6 +476,7 @@ test("panel de vendedores intersecta lecturas antes de calcular ranking y margen
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Vendedores", "Resumen");
   const panel = page.getByRole("region", { name: "Panel de vendedores", exact: true });
   await panel.getByLabel("Panel de vendedores desde", { exact: true }).fill("2026-01-01");
   await panel.getByLabel("Panel de vendedores hasta", { exact: true }).fill("2026-01-31");
@@ -516,6 +522,7 @@ test("panel global omite derivados financieros propios y contactos ajenos", asyn
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Vendedores", "Resumen");
   const panel = page.getByRole("region", { name: "Panel de vendedores", exact: true });
   await panel.getByLabel("Panel de vendedores desde", { exact: true }).fill("2026-01-01");
   await panel.getByLabel("Panel de vendedores hasta", { exact: true }).fill("2026-01-31");
@@ -545,6 +552,7 @@ test("clientes sin documentos no usan actividad ajena ni histórico fuera del co
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Clientes", "Sin documentos autorizados");
   const report = page.getByRole("region", { name: "Clientes sin documentos autorizados", exact: true });
   await report.getByLabel("Sin documentos desde", { exact: true }).fill("2026-02-01");
   await report.getByLabel("Sin documentos hasta", { exact: true }).fill("2026-02-28");
@@ -592,6 +600,7 @@ test("panel de clientes usa sólo actividad propia en clasificación, retención
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Clientes", "Resumen");
   const panel = page.getByRole("region", { name: "Panel de clientes", exact: true });
   await panel.getByLabel("Panel de clientes desde", { exact: true }).fill("2026-01-01");
   await panel.getByLabel("Panel de clientes hasta", { exact: true }).fill("2026-01-31");
@@ -634,6 +643,7 @@ test("panel global no clasifica por utilidad propia hasta acotar el conjunto al 
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Clientes", "Resumen");
   const panel = page.getByRole("region", { name: "Panel de clientes", exact: true });
   await panel.getByLabel("Panel de clientes desde", { exact: true }).fill("2026-01-01");
   await panel.getByLabel("Panel de clientes hasta", { exact: true }).fill("2026-01-31");
@@ -670,6 +680,7 @@ test("Pareto propio conserva población comprada, maduración y privacidad en am
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  await openModule(page, "Ventas", "Pareto");
   const panel = page.getByRole("region", { name: "Pareto autorizado", exact: true });
   await panel.getByLabel("Pareto desde", { exact: true }).fill("2026-06-01");
   await panel.getByLabel("Pareto hasta", { exact: true }).fill("2026-07-01");
@@ -715,6 +726,7 @@ test("Pareto compras sin vender exige ventas globales y omite inventario no auto
     ],
   });
   await login(page, environment, user);
+  await openModule(page, "Ventas", "Pareto");
   const panel = page.getByRole("region", { name: "Pareto autorizado", exact: true });
   await panel.getByLabel("Pareto desde", { exact: true }).fill("2026-06-01");
   await panel.getByLabel("Pareto hasta", { exact: true }).fill("2026-07-01");
@@ -735,6 +747,7 @@ test("inventario básico no expone precio, valoraciones ni proveedores sin permi
   await require("../support/inventory-fixtures.cjs").seedInventory(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "inventory.read", scope: "global" }] });
   await login(page, environment, user);
+  await openModule(page, "Inventario");
   const inventory = page.getByRole("region", { name: "Inventario autorizado", exact: true });
   await inventory.getByLabel("Buscar en inventario", { exact: true }).fill("Inventario sintético");
   await inventory.getByRole("button", { name: "Consultar inventario", exact: true }).click();
@@ -773,6 +786,7 @@ test("inventario monetario mantiene totales filtrados y omite datos personales d
     ],
   });
   await login(page, environment, user);
+  await openModule(page, "Inventario");
   const inventory = page.getByRole("region", { name: "Inventario autorizado", exact: true });
   await inventory.getByLabel("Buscar en inventario", { exact: true }).fill("Inventario sintético");
   await inventory.getByLabel("Grupo del inventario", { exact: true }).selectOption("G");
@@ -796,6 +810,7 @@ test("compras básicas conservan documentos y productos sin importes ni proveedo
   await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "purchases.read", scope: "global" }] });
   await login(page, environment, user);
+  await openModule(page, "Compras");
   const report = page.getByRole("region", { name: "Consulta autorizada de compras", exact: true });
   await report.getByLabel("Compras desde", { exact: true }).fill("2026-08-01");
   await report.getByLabel("Compras hasta", { exact: true }).fill("2026-08-31");
@@ -830,6 +845,7 @@ test("compras financieras muestran sólo importes autorizados y filtros coherent
     ],
   });
   await login(page, environment, user);
+  await openModule(page, "Compras");
   const report = page.getByRole("region", { name: "Consulta autorizada de compras", exact: true });
   await report.getByLabel("Compras desde", { exact: true }).fill("2026-08-01");
   await report.getByLabel("Compras hasta", { exact: true }).fill("2026-08-31");

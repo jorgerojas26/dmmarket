@@ -38,7 +38,25 @@ async function login(page, environment, user) {
   await page.bringToFront();
   await page.getByRole("textbox", { name: "Usuario", exact: true }).fill(user.username);
   await page.getByRole("textbox", { name: "Contraseña", exact: true }).fill(user.password);
+  const response = page.waitForResponse(
+    (result) => new URL(result.url()).pathname === "/api/auth/login" && result.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await (await response).finished();
 }
 
-module.exports = { test, expect, login };
+async function openModule(page, name, view) {
+  const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
+  await navigation.waitFor({ state: "visible" });
+  const link = navigation.getByRole("link", { name, exact: true });
+  if (!(await link.isVisible()))
+    await navigation.getByRole("button", { name: "Abrir navegación", exact: true }).click();
+  await link.click();
+  if (view)
+    await page
+      .getByRole("navigation", { name: `Vistas de ${name}`, exact: true })
+      .getByRole("link", { name: view, exact: true })
+      .click();
+}
+
+module.exports = { test, expect, login, openModule };
