@@ -928,3 +928,94 @@ test("resumen y Pareto de compras financieros respetan filtro y no requieren lec
       .getByRole("link", { name: "Ventas", exact: true }),
   ).toHaveCount(0);
 });
+
+test("proveedores no infiere transacciones ni datos personales desde el directorio", async ({ page, environment }) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "providers.read", scope: "global" },
+      { capability: "providers.personal", scope: "global" },
+    ],
+  });
+  await login(page, environment, user);
+  await openModule(page, "Proveedores");
+  const directory = page.getByRole("region", { name: "Directorio autorizado de proveedores", exact: true });
+  await directory.getByRole("button", { name: "Abrir proveedor PUR-A", exact: true }).click();
+  await expect(
+    directory.getByText("No tienes permisos para consultar transacciones del proveedor.", { exact: true }),
+  ).toBeVisible();
+  await expect(directory.getByText("PRIVATE-PUR", { exact: false })).toHaveCount(0);
+  await expect(directory.getByRole("button", { name: "Consultar actividad del proveedor", exact: true })).toHaveCount(
+    0,
+  );
+});
+
+test("actividad de proveedor conserva ventas propias y detalle acotado en ambos sistemas", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  await require("../support/provider-fixtures.cjs").seedProviders(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "providers.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await openModule(page, "Proveedores");
+  await page.getByRole("button", { name: "Abrir proveedor PUR-A", exact: true }).click();
+  const report = page.getByRole("region", { name: "Detalle autorizado del proveedor", exact: true });
+  await report.getByLabel("Proveedor desde", { exact: true }).fill("2026-11-01");
+  await report.getByLabel("Proveedor hasta", { exact: true }).fill("2026-11-30");
+  for (const system of ["false", "true"]) {
+    await report.getByLabel("Actividad del proveedor", { exact: true }).selectOption("sales");
+    await report.getByLabel("Sistema de ventas del proveedor", { exact: true }).selectOption(system);
+    await report.getByRole("button", { name: "Consultar actividad del proveedor", exact: true }).click();
+    await expect(report.getByText("Registros autorizados del proveedor: 1", { exact: true })).toBeVisible();
+    await report.getByRole("button", { name: "Abrir documento provider-sale-A", exact: true }).click();
+    const detail = page.getByRole("region", { name: "Documento del proveedor", exact: true });
+    await expect(detail.getByText("Total autorizado del documento: 100", { exact: true })).toBeVisible();
+    await expect(detail.getByRole("cell", { name: "Venta proveedor B", exact: true })).toHaveCount(0);
+    await expect(detail.getByRole("columnheader", { name: "Costo autorizado", exact: true })).toHaveCount(0);
+    await expect(detail.getByText("PRIVATE", { exact: false })).toHaveCount(0);
+    await detail.getByRole("button", { name: "Cerrar documento del proveedor", exact: true }).click();
+  }
+});
+
+test("compras del proveedor requieren su permiso e impiden abrir documentos de otro proveedor", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+  await require("../support/provider-fixtures.cjs").seedProviders(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "providers.read", scope: "global" },
+      { capability: "purchases.read", scope: "global" },
+      { capability: "purchases.costs", scope: "global" },
+    ],
+  });
+  await login(page, environment, user);
+  await openModule(page, "Proveedores");
+  await page.getByRole("button", { name: "Abrir proveedor PUR-A", exact: true }).click();
+  const report = page.getByRole("region", { name: "Detalle autorizado del proveedor", exact: true });
+  await report.getByLabel("Proveedor desde", { exact: true }).fill("2026-11-01");
+  await report.getByLabel("Proveedor hasta", { exact: true }).fill("2026-11-30");
+  await report.getByLabel("Actividad del proveedor", { exact: true }).selectOption("purchases");
+  await report.getByRole("button", { name: "Consultar actividad del proveedor", exact: true }).click();
+  await report.getByRole("button", { name: "Abrir documento provider-purchase-A", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "Documento del proveedor", exact: true })
+      .getByText("Total autorizado del documento: 14.00", { exact: true }),
+  ).toBeVisible();
+  const status = await page.evaluate(
+    async () => (await fetch("/api/providers/PUR-A/purchases/provider-purchase-B")).status,
+  );
+  expect(status).toBe(404);
+});

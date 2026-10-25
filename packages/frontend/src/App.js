@@ -8,6 +8,7 @@ import InactiveClients from './auth/inactive-clients';
 import Inventory from './auth/inventory';
 import Pareto from './auth/pareto';
 import Parties from './auth/parties';
+import Providers from './auth/providers';
 import PurchaseOverview from './auth/purchase-overview';
 import Purchases from './auth/purchases';
 import Sales from './auth/sales';
@@ -23,6 +24,7 @@ export default function App() {
     const modules = [
         { path: '/ventas', label: 'Ventas', allowed: has('sales.read') },
         { path: '/compras', label: 'Compras', allowed: can('purchases.read') },
+        { path: '/proveedores', label: 'Proveedores', allowed: can('providers.read') },
         { path: '/clientes', label: 'Clientes', allowed: can('clients.read') },
         { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read') },
         { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
@@ -38,6 +40,7 @@ export default function App() {
             content: <Pareto />,
         },
         { path: '/compras', label: 'Desglose', allowed: can('purchases.read'), content: <Purchases /> },
+        { path: '/proveedores', label: 'Directorio', allowed: can('providers.read'), content: <Providers /> },
         { path: '/compras/resumen', label: 'Resumen', allowed: can('purchases.read'), content: <PurchaseOverview /> },
         {
             path: '/compras/pareto',

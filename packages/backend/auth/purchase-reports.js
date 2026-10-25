@@ -40,8 +40,8 @@ function purchaseBase(transaction, access, query, products) {
     .leftJoin("productos as p", function () {
       this.on(transaction.raw("BINARY p.IdProducto = BINARY sc.IdProducto"));
     })
-    .where("mc.Anulada", 0)
-    .whereBetween("mc.Fecha", [query.from, query.to]);
+    .where("mc.Anulada", 0);
+  if (query.from) base.whereBetween("mc.Fecha", [query.from, query.to]);
   if (providers)
     base.leftJoin("proveedores as v", function () {
       this.on(transaction.raw("BINARY v.IdProveedor = BINARY mc.IdProveedor"));
@@ -266,4 +266,4 @@ function createPurchaseReports({ sessions }) {
   return router;
 }
 
-module.exports = { createPurchaseReports };
+module.exports = { createPurchaseReports, purchases, purchaseKpis, purchaseBase, metrics };

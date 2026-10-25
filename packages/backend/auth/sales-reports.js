@@ -92,7 +92,7 @@ function salesBase(transaction, access, query) {
     if (query[parameter]) {
       if (["clientId", "employeeId"].includes(parameter))
         filterIdentity(base, transaction.raw("BINARY ??", [column]), query[parameter]);
-      else base.where(column, query[parameter]);
+      else base.whereRaw("BINARY ?? = ?", [column, query[parameter]]);
     }
   return { base, invoice };
 }
@@ -486,4 +486,13 @@ function createSalesReports({ sessions }) {
   return router;
 }
 
-module.exports = { createSalesReports, parameters, salesBase, financialFields, listSales, dashboard, kpis };
+module.exports = {
+  createSalesReports,
+  parameters,
+  salesBase,
+  financialFields,
+  listSales,
+  invoiceDetail,
+  dashboard,
+  kpis,
+};
