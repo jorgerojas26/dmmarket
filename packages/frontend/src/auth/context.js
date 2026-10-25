@@ -8,6 +8,7 @@ export const useAuth = () => useContext(AuthContext);
 export function AuthProvider({ children }) {
     const history = useHistory();
     const location = useLocation();
+    const previousLocation = useRef(location);
     const [session, setSession] = useState(null);
     const [checking, setChecking] = useState(true);
     const [failure, setFailure] = useState('');
@@ -99,8 +100,20 @@ export function AuthProvider({ children }) {
     );
 
     useLayoutEffect(() => {
-        if (!busy.current && current.current?.stage === 'ready') void check();
-    }, [location.pathname, location.search, check]);
+        const previous = previousLocation.current;
+        previousLocation.current = location;
+        const changed =
+            previous.pathname !== location.pathname ||
+            previous.search !== location.search ||
+            previous.hash !== location.hash;
+        if (
+            !busy.current &&
+            current.current?.stage === 'ready' &&
+            changed &&
+            (previous.pathname !== location.pathname || history.action === 'POP')
+        )
+            void check();
+    }, [location.pathname, location.search, location.hash, history.action, check]);
 
     useEffect(() => {
         void check();

@@ -1,4 +1,6 @@
-import { fetchPurchasesInvoices, fetchPurchasesProducts } from 'api/purchases';
+import { fetchPurchaseExport } from 'api/purchases';
+import { useAuth } from 'auth/context';
+import invoiceColumns from 'components/PurchasesReportTable/columns';
 import DateRangePicker from 'components/DateRangePicker';
 import GroupSearch from 'components/GroupSearch';
 import ProveedorSearch from 'components/ProveedorSearch';
@@ -12,14 +14,33 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
-import { formatMoney } from 'utils/format';
+import { formatMoney as money } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 const PAGE_SIZE = 50;
+const formatMoney = (value, currency, rate) => (value == null ? 'No disponible' : money(value, currency, rate));
+const sum = (data, key) =>
+    data.some((row) => row[key] == null) ? null : data.reduce((total, row) => total + Number(row[key]), 0);
 
 const DesgloseView = ({ isActive = true }) => {
+    const { can } = useAuth();
+    const monetary = can('purchases.costs');
+    const providers = can('providers.read');
+    const exporting = can('purchases.export');
+    const [printError, setPrintError] = useState('');
+    const visibleInvoices = useMemo(
+        () =>
+            invoiceColumns.filter(
+                (column) => (column.accessor !== 'monto' || monetary) && (column.accessor !== 'proveedor' || providers),
+            ),
+        [monetary, providers],
+    );
+    const visibleProducts = useMemo(
+        () => productosColumns.filter((column) => monetary || !['monto', 'avgUnitCost'].includes(column.accessor)),
+        [monetary],
+    );
     const { currencyRate } = useContext(CurrencyRateContext);
     const history = useHistory();
     const location = useLocation();
@@ -40,7 +61,8 @@ const DesgloseView = ({ isActive = true }) => {
         to: urlDTo || today,
     };
 
-    const initialProveedor = urlProveedorId ? { IdProveedor: urlProveedorId, name: urlProveedorName || '' } : null;
+    const initialProveedor =
+        providers && urlProveedorId ? { IdProveedor: urlProveedorId, name: urlProveedorName || '' } : null;
     const initialGroup = urlGroupId ? { groupId: urlGroupId, name: urlGroupName || '' } : null;
 
     // Date range — defaults to today
@@ -57,7 +79,7 @@ const DesgloseView = ({ isActive = true }) => {
 
     // ---- Productos table state ----
     const [productosPage, setProductosPage] = useState(1);
-    const [productosSort, setProductosSort] = useState({ sortBy: 'monto', sortDir: 'desc' });
+    const [productosSort, setProductosSort] = useState({ sortBy: monetary ? 'monto' : 'quantity', sortDir: 'desc' });
     const [productosSearch, setProductosSearch] = useState('');
 
     // ── Responsive: en pantallas <1400px las dos tablas van en tabs (default
@@ -210,20 +232,21 @@ const DesgloseView = ({ isActive = true }) => {
 
     const handlePrintAllFacturas = useCallback(
         async (config) => {
+            if (!exporting) return;
+            setPrintError('');
             try {
-                const result = await fetchPurchasesInvoices({
+                const result = await fetchPurchaseExport({
+                    kind: 'documents',
                     from: dateRange.from,
                     to: dateRange.to,
                     proveedorId: selectedProveedor?.IdProveedor,
                     groupId: selectedGroup?.groupId,
-                    page: 1,
-                    limit: facturasTotal || 9999,
                     sortBy: facturasSort.sortBy,
                     sortDir: facturasSort.sortDir,
-                    search: facturasSearch || undefined,
+                    search: config.search ?? facturasSearch,
                 });
                 const data = sortRows(result?.data || [], config?.sortBy);
-                const total = data.reduce((s, r) => s + (r.monto || 0), 0);
+                const total = sum(data, 'monto');
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
@@ -253,10 +276,15 @@ const DesgloseView = ({ isActive = true }) => {
                     },
                 ];
                 const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
-                const selected =
-                    selectedAccessors.size > 0
-                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
-                        : pdfColumns;
+                const selected = pdfColumns.filter(
+                    (col) =>
+                        selectedAccessors.has(col.accessor) &&
+                        (monetary || !['monto', 'avgUnitCost'].includes(col.accessor)) &&
+                        (providers || col.accessor !== 'proveedor'),
+                );
+                if (!selected.length) throw new Error('No hay columnas autorizadas seleccionadas.');
+                if (currency === 'Bs' && (!can('rates.read') || !Number.isFinite(Number(rate)) || Number(rate) <= 0))
+                    throw new Error('No se dispone de una tasa autorizada.');
                 const allColumnsSelected = selected.length === pdfColumns.length;
                 const body = [
                     selected.map((col) => ({ text: col.Header, style: 'th' })),
@@ -317,29 +345,42 @@ const DesgloseView = ({ isActive = true }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Error printing all facturas:', err);
+                if (err.name !== 'AbortError') setPrintError('No se pudieron imprimir las facturas autorizadas.');
             }
         },
-        [dateRange, selectedProveedor, selectedGroup, facturasSort, facturasSearch, facturasTotal, currencyRate],
+        [
+            dateRange,
+            selectedProveedor,
+            selectedGroup,
+            facturasSort,
+            facturasSearch,
+            facturasTotal,
+            currencyRate,
+            exporting,
+            monetary,
+            providers,
+            can,
+        ],
     );
 
     const handlePrintAllProductos = useCallback(
         async (config) => {
+            if (!exporting) return;
+            setPrintError('');
             try {
-                const result = await fetchPurchasesProducts({
+                const result = await fetchPurchaseExport({
+                    kind: 'products',
                     from: dateRange.from,
                     to: dateRange.to,
                     proveedorId: selectedProveedor?.IdProveedor,
                     groupId: selectedGroup?.groupId,
-                    page: 1,
-                    limit: productosTotal || 9999,
                     sortBy: productosSort.sortBy,
                     sortDir: productosSort.sortDir,
-                    search: productosSearch || undefined,
+                    search: config.search ?? productosSearch,
                 });
                 const data = sortRows(result?.data || [], config?.sortBy);
-                const totalUnidades = data.reduce((s, r) => s + (r.quantity || 0), 0);
-                const totalMonto = data.reduce((s, r) => s + (r.monto || 0), 0);
+                const totalUnidades = sum(data, 'quantity');
+                const totalMonto = sum(data, 'monto');
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
@@ -368,10 +409,15 @@ const DesgloseView = ({ isActive = true }) => {
                     },
                 ];
                 const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
-                const selected =
-                    selectedAccessors.size > 0
-                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
-                        : pdfColumns;
+                const selected = pdfColumns.filter(
+                    (col) =>
+                        selectedAccessors.has(col.accessor) &&
+                        (monetary || !['monto', 'avgUnitCost'].includes(col.accessor)) &&
+                        (providers || col.accessor !== 'proveedor'),
+                );
+                if (!selected.length) throw new Error('No hay columnas autorizadas seleccionadas.');
+                if (currency === 'Bs' && (!can('rates.read') || !Number.isFinite(Number(rate)) || Number(rate) <= 0))
+                    throw new Error('No se dispone de una tasa autorizada.');
                 const allColumnsSelected = selected.length === pdfColumns.length;
                 const body = [
                     selected.map((col) => ({ text: col.Header, style: 'th' })),
@@ -405,9 +451,12 @@ const DesgloseView = ({ isActive = true }) => {
                                               [
                                                   { text: 'Total', style: 'total' },
                                                   {
-                                                      text: Number(totalUnidades).toLocaleString(undefined, {
-                                                          maximumFractionDigits: 3,
-                                                      }),
+                                                      text:
+                                                          totalUnidades == null
+                                                              ? 'No disponible'
+                                                              : Number(totalUnidades).toLocaleString(undefined, {
+                                                                    maximumFractionDigits: 3,
+                                                                }),
                                                       style: 'total',
                                                   },
                                                   { text: formatMoney(totalMonto, currency, rate), style: 'total' },
@@ -432,10 +481,22 @@ const DesgloseView = ({ isActive = true }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Error printing all productos:', err);
+                if (err.name !== 'AbortError') setPrintError('No se pudieron imprimir los productos autorizados.');
             }
         },
-        [dateRange, selectedProveedor, selectedGroup, productosSort, productosSearch, productosTotal, currencyRate],
+        [
+            dateRange,
+            selectedProveedor,
+            selectedGroup,
+            productosSort,
+            productosSearch,
+            productosTotal,
+            currencyRate,
+            exporting,
+            monetary,
+            providers,
+            can,
+        ],
     );
 
     // Build sortBy array for Table component
@@ -472,6 +533,7 @@ const DesgloseView = ({ isActive = true }) => {
             )}
             <PurchasesReportTable
                 data={facturasData}
+                columns={visibleInvoices}
                 loading={facturasLoading}
                 fillHeight
                 summaries={facturasSummaries}
@@ -494,7 +556,7 @@ const DesgloseView = ({ isActive = true }) => {
                     onSearch: handleFacturasSearch,
                 }}
                 print={{
-                    enabled: true,
+                    enabled: exporting && Boolean(facturasRes) && !facturasError,
                     onGlobalPrint: handlePrintAllFacturas,
                     storageKey: 'compras-facturas',
                 }}
@@ -510,7 +572,7 @@ const DesgloseView = ({ isActive = true }) => {
             <PurchasesReportTable
                 data={productosData}
                 loading={productosLoading}
-                columns={productosColumns}
+                columns={visibleProducts}
                 fillHeight
                 summaries={productosSummaries}
                 sorting={{
@@ -532,7 +594,7 @@ const DesgloseView = ({ isActive = true }) => {
                     onSearch: handleProductosSearch,
                 }}
                 print={{
-                    enabled: true,
+                    enabled: exporting && Boolean(productosRes) && !productosError,
                     onGlobalPrint: handlePrintAllProductos,
                     storageKey: 'compras-productos',
                 }}
@@ -547,6 +609,7 @@ const DesgloseView = ({ isActive = true }) => {
 
     return (
         <div className="report-page">
+            {printError && <p role="alert">{printError}</p>}
             {/* Header row: heading + date range */}
             <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-3">
                 <h4 className="m-0 p-0 bg-red text-light">Desglose de Compras</h4>
@@ -559,9 +622,11 @@ const DesgloseView = ({ isActive = true }) => {
 
             {/* Filter selectors */}
             <div className="d-flex flex-wrap gap-3 mb-3">
-                <div style={{ minWidth: '220px' }}>
-                    <ProveedorSearch onSelect={handleProveedorSelect} defaultValue={proveedorDefaultValue} />
-                </div>
+                {providers && (
+                    <div style={{ minWidth: '220px' }}>
+                        <ProveedorSearch onSelect={handleProveedorSelect} defaultValue={proveedorDefaultValue} />
+                    </div>
+                )}
                 <div style={{ minWidth: '220px' }}>
                     <GroupSearch onSelect={handleGroupSelect} defaultValue={groupDefaultValue} />
                 </div>

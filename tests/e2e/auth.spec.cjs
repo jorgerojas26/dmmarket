@@ -812,7 +812,7 @@ test("inventario original monetario conserva selectores y totales filtrados sin 
   await expect(inventory.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
 });
 
-test("compras básicas conservan documentos y productos sin importes ni proveedores implícitos", async ({
+test("compras originales básicas conservan documentos y productos sin importes ni proveedores implícitos", async ({
   page,
   environment,
 }) => {
@@ -820,23 +820,17 @@ test("compras básicas conservan documentos y productos sin importes ni proveedo
   await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "purchases.read", scope: "global" }] });
   await login(page, environment, user);
-  await openModule(page, "Compras");
-  const report = page.getByRole("region", { name: "Consulta autorizada de compras", exact: true });
-  await report.getByLabel("Compras desde", { exact: true }).fill("2026-08-01");
-  await report.getByLabel("Compras hasta", { exact: true }).fill("2026-08-31");
-  await report.getByRole("button", { name: "Consultar compras", exact: true }).click();
-  await expect(report.getByText("Registros de compras autorizados: 3", { exact: true })).toBeVisible();
-  const table = report.getByRole("table", { name: "Compras autorizadas", exact: true });
-  await expect(table.getByRole("cell", { name: "purchase-august-empty", exact: true })).toBeVisible();
-  await expect(table.getByRole("columnheader", { name: "Total Compras autorizado", exact: true })).toHaveCount(0);
-  await expect(table.getByRole("columnheader", { name: "Proveedor autorizado", exact: true })).toHaveCount(0);
-  await report.getByLabel("Vista de compras", { exact: true }).selectOption("products");
-  await report.getByRole("button", { name: "Consultar compras", exact: true }).click();
-  await expect(report.getByText("Registros de compras autorizados: 2", { exact: true })).toBeVisible();
-  await expect(table.getByRole("cell", { name: "Producto histórico comprado", exact: true })).toBeVisible();
-  await expect(
-    table.getByRole("columnheader", { name: "Costo unitario promedio autorizado", exact: true }),
-  ).toHaveCount(0);
+  await openModule(page, "Compras", "Desglose");
+  await page.goto(`${environment.origin}/compras?view=desglose&dFrom=2026-08-01&dTo=2026-08-31`);
+  const report = page.getByRole("region", { name: "Compras", exact: true });
+  await expect(report.getByRole("cell", { name: "Producto histórico comprado", exact: true })).toBeVisible();
+  await expect(report.getByRole("columnheader", { name: "Costo Prom.", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("columnheader", { name: "Monto", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+  await expect(report.getByText("Buscar proveedor...", { exact: true })).toHaveCount(0);
+  await report.getByRole("button", { name: "Facturas", exact: true }).click();
+  await expect(report.getByRole("cell", { name: "purchase-august-empty", exact: true })).toBeVisible();
+  await expect(report.getByRole("columnheader", { name: "Proveedor", exact: true })).toHaveCount(0);
   const result = await page.evaluate(
     async () => await (await fetch("/api/purchases/products?from=2026-08-01&to=2026-08-31")).json(),
   );
@@ -844,98 +838,72 @@ test("compras básicas conservan documentos y productos sin importes ni proveedo
   expect(result.data.every((row) => !Object.hasOwn(row, "monto"))).toBe(true);
 });
 
-test("compras financieras muestran sólo importes autorizados y filtros coherentes", async ({ page, environment }) => {
+test("compras originales financieras conservan selectores y filtros coherentes", async ({ page, environment }) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
   const user = await environment.seedUser({
-    permissions: [
-      { capability: "purchases.read", scope: "global" },
-      { capability: "purchases.costs", scope: "global" },
-      { capability: "providers.read", scope: "global" },
-    ],
+    permissions: ["purchases.read", "purchases.costs", "providers.read"].map((capability) => ({
+      capability,
+      scope: "global",
+    })),
   });
   await login(page, environment, user);
-  await openModule(page, "Compras");
-  const report = page.getByRole("region", { name: "Consulta autorizada de compras", exact: true });
-  await report.getByLabel("Compras desde", { exact: true }).fill("2026-08-01");
-  await report.getByLabel("Compras hasta", { exact: true }).fill("2026-08-31");
-  await report.getByRole("button", { name: "Consultar compras", exact: true }).click();
-  await expect(report.getByText("Total Compras autorizado del filtro: 130.00", { exact: true })).toBeVisible();
-  const table = report.getByRole("table", { name: "Compras autorizadas", exact: true });
-  await expect(table.getByRole("cell", { name: "Proveedor compras B", exact: true })).toBeVisible();
+  await openModule(page, "Compras", "Desglose");
+  await page.goto(`${environment.origin}/compras?view=desglose&dFrom=2026-08-01&dTo=2026-08-31`);
+  const report = page.getByRole("region", { name: "Compras", exact: true });
+  await expect(report.getByRole("columnheader", { name: "Monto", exact: true })).toBeVisible();
+  await report.getByRole("button", { name: "Facturas", exact: true }).click();
+  await expect(report.getByRole("cell", { name: "Proveedor compras B", exact: true })).toBeVisible();
   await expect(report.getByText("PRIVATE-PUR", { exact: false })).toHaveCount(0);
-  await report.getByLabel("Proveedor de compras", { exact: true }).fill("PUR-A");
-  await report.getByLabel("Grupo de compras", { exact: true }).selectOption("G");
-  await report.getByLabel("Vista de compras", { exact: true }).selectOption("products");
-  await report.getByRole("button", { name: "Consultar compras", exact: true }).click();
-  await expect(report.getByText("Registros de compras autorizados: 1", { exact: true })).toBeVisible();
-  await expect(report.getByText("Total Compras autorizado del filtro: 80.00", { exact: true })).toBeVisible();
-  await expect(table.getByRole("cell", { name: "16.00", exact: true })).toBeVisible();
+  await page.goto(
+    `${environment.origin}/compras?view=desglose&dFrom=2026-08-01&dTo=2026-08-31&proveedorId=PUR-A&proveedorName=Proveedor+compras+A&groupId=G`,
+  );
+  await expect(report.getByRole("cell", { name: "Producto sintético", exact: true })).toBeVisible();
+  await expect(report.getByRole("cell", { name: "$16,00", exact: true })).toBeVisible();
+  await expect(report.getByText("Proveedor compras B", { exact: true })).toHaveCount(0);
 });
 
-test("resumen de compras básico sólo muestra cantidades y comparación no financiera", async ({ page, environment }) => {
+test("dashboard original de compras básico conserva cantidades y comparación sin análisis monetarios", async ({
+  page,
+  environment,
+}) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "purchases.read", scope: "global" }] });
   await login(page, environment, user);
-  await openModule(page, "Compras", "Resumen");
-  const report = page.getByRole("region", { name: "Resumen de compras", exact: true });
-  await report.getByLabel("Resumen de compras desde", { exact: true }).fill("2026-08-01");
-  await report.getByLabel("Resumen de compras hasta", { exact: true }).fill("2026-08-31");
-  await report.getByLabel("Comparar compras desde", { exact: true }).fill("2026-07-01");
-  await report.getByLabel("Comparar compras hasta", { exact: true }).fill("2026-07-31");
-  await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
-  await expect(
-    report.getByRole("group", { name: "Documentos de compras", exact: true }).getByText("3", { exact: true }),
-  ).toBeVisible();
-  await expect(report.getByText("Unidades del período comparado: 2", { exact: true })).toBeVisible();
-  await expect(report.getByRole("table", { name: "Proveedores del resumen de compras", exact: true })).toHaveCount(0);
-  await expect(report.getByRole("columnheader", { name: "Total Compras autorizado", exact: true })).toHaveCount(0);
-  await expect(
-    page
-      .getByRole("navigation", { name: "Vistas de Compras", exact: true })
-      .getByRole("link", { name: "Pareto", exact: true }),
-  ).toHaveCount(0);
+  await openModule(page, "Compras");
+  await page.goto(`${environment.origin}/compras?view=dashboard&from=2026-08-01&to=2026-08-31`);
+  const report = page.getByRole("region", { name: "Compras", exact: true });
+  await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Transacciones" })).toContainText("3");
+  await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Unidades" })).toContainText("6");
+  await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Unidades" })).toContainText("200.0%");
+  await expect(report.getByText("Total Comprado", { exact: true })).toHaveCount(0);
+  await expect(report.getByText("Categorías", { exact: true })).toHaveCount(0);
+  await expect(report.getByText("Top Productos", { exact: true })).toHaveCount(0);
+  await expect(report.getByText("Mejor Proveedor", { exact: true })).toHaveCount(0);
 });
 
-test("resumen y Pareto de compras financieros respetan filtro y no requieren lectura de ventas", async ({
+test("dashboard y Pareto originales de compras conservan montos y no requieren lectura de ventas", async ({
   page,
   environment,
 }) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
   const user = await environment.seedUser({
-    permissions: [
-      { capability: "purchases.read", scope: "global" },
-      { capability: "purchases.costs", scope: "global" },
-      { capability: "providers.read", scope: "global" },
-    ],
+    permissions: ["purchases.read", "purchases.costs", "providers.read"].map((capability) => ({
+      capability,
+      scope: "global",
+    })),
   });
   await login(page, environment, user);
-  await openModule(page, "Compras", "Resumen");
-  const report = page.getByRole("region", { name: "Resumen de compras", exact: true });
-  await report.getByLabel("Resumen de compras desde", { exact: true }).fill("2026-08-01");
-  await report.getByLabel("Resumen de compras hasta", { exact: true }).fill("2026-08-31");
-  await report.getByLabel("Comparar compras desde", { exact: true }).fill("2026-07-01");
-  await report.getByLabel("Comparar compras hasta", { exact: true }).fill("2026-07-31");
-  await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
-  await expect(
-    report.getByRole("group", { name: "Total Compras autorizado", exact: true }).getByText("$130,00", { exact: true }),
-  ).toBeVisible();
-  await expect(report.getByText("Total Compras autorizado del período comparado: 16", { exact: true })).toBeVisible();
-  await expect(
-    report
-      .getByRole("table", { name: "Proveedores del resumen de compras", exact: true })
-      .getByRole("cell", { name: "Proveedor compras A", exact: true }),
-  ).toBeVisible();
-  await expect(report.getByText("PRIVATE-PUR", { exact: false })).toHaveCount(0);
-  await openModule(page, "Compras", "Pareto");
-  const pareto = page.getByRole("region", { name: "Pareto de compras", exact: true });
-  await pareto.getByLabel("Resumen de compras desde", { exact: true }).fill("2026-08-01");
-  await pareto.getByLabel("Resumen de compras hasta", { exact: true }).fill("2026-08-31");
-  await pareto.getByRole("button", { name: "Consultar Pareto de compras", exact: true }).click();
-  await expect(pareto.getByText("Productos analizados en compras: 2", { exact: true })).toBeVisible();
-  await expect(pareto.getByRole("cell", { name: "61.54", exact: true })).toBeVisible();
+  await openModule(page, "Compras");
+  await page.goto(`${environment.origin}/compras?view=dashboard&from=2026-08-01&to=2026-08-31`);
+  const report = page.getByRole("region", { name: "Compras", exact: true });
+  await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Total Comprado" })).toContainText("$130,00");
+  await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Total Comprado" })).toContainText("712.5%");
+  await expect(report.locator(".purchases-dashboard-best-provider")).toContainText("Proveedor compras A");
+  await expect(report.getByRole("cell", { name: "61.54%", exact: true })).toBeVisible();
+  await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
   await expect(
     page
       .getByRole("navigation", { name: "Módulos disponibles", exact: true })

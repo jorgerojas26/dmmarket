@@ -1,6 +1,6 @@
 const express = require("express");
 const { parameters, listSales } = require("./sales-reports");
-const { purchases, options: purchaseOptions } = require("./purchase-reports");
+const { purchases, pareto: purchasePareto, options: purchaseOptions } = require("./purchase-reports");
 const { inventory, options: inventoryOptions } = require("./inventory-reports");
 const { directory } = require("./provider-reports");
 const { appendEvent } = require("./identity");
@@ -75,26 +75,39 @@ async function dataset(resource, tx, access, input) {
   } else if (resource === "purchases") {
     if (!access.hasGlobal("purchases.export")) fail(403);
     const { kind = "documents", ...filters } = input;
-    if (!["documents", "products"].includes(kind)) fail(400);
-    const query = purchaseOptions(filters);
-    result = await purchases(tx, access, { ...query, page: 1, limit: 5001 }, kind === "products");
+    if (!["documents", "products", "pareto"].includes(kind)) fail(400);
+    const query = purchaseOptions(filters, { listing: kind !== "pareto" });
+    if (kind === "pareto") {
+      const report = await purchasePareto(tx, access, query);
+      result = { data: report.products, total: report.products.length };
+    } else result = await purchases(tx, access, { ...query, page: 1, limit: 5001 }, kind === "products");
     title = "Compras autorizadas";
     candidates =
-      kind === "products"
+      kind === "pareto"
         ? [
             ["productId", "ID"],
+            ["rank", "Posición"],
             ["product", "Producto"],
             ["quantity", "Cantidad"],
-            ["monto", "Total Compras"],
-            ["avgUnitCost", "Costo promedio"],
+            ["totalPurchased", "Monto comprado"],
+            ["cumulativePercent", "Acumulado (%)"],
+            ["abcClass", "Clase"],
           ]
-        : [
-            ["invoiceId", "Documento"],
-            ["fecha", "Fecha"],
-            ["proveedor", "Proveedor"],
-            ["unidades", "Unidades"],
-            ["monto", "Total Compras"],
-          ];
+        : kind === "products"
+          ? [
+              ["productId", "ID"],
+              ["product", "Producto"],
+              ["quantity", "Cantidad"],
+              ["monto", "Total Compras"],
+              ["avgUnitCost", "Costo promedio"],
+            ]
+          : [
+              ["invoiceId", "Documento"],
+              ["fecha", "Fecha"],
+              ["proveedor", "Proveedor"],
+              ["unidades", "Unidades"],
+              ["monto", "Total Compras"],
+            ];
   } else if (resource === "inventory") {
     if (!access.hasGlobal("inventory.export")) fail(403);
     const query = inventoryOptions(input);

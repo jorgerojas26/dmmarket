@@ -8,10 +8,13 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Popover from 'react-bootstrap/Popover';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
+import { formatCurrency as money, formatMoney as convertMoney, formatNumber } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
+const formatMoney = (value, currency, rate) => (value == null ? 'No disponible' : convertMoney(value, currency, rate));
+const formatCurrency = (value) => (value == null ? 'No disponible' : money(value));
 
 const inventoryAmount = (value, currency, rate) =>
     value == null ? 'No disponible' : formatMoney(value, currency, rate);
@@ -133,7 +136,7 @@ const buildColumns = (cfg) => {
             Header: '% Acum.',
             accessor: 'cumulativePercent',
             headerHelp: <CumulativePercentHelp valueLabel={cfg.valueLabel} />,
-            Cell: ({ value }) => `${value}%`,
+            Cell: ({ value }) => (value == null ? 'No disponible' : `${value}%`),
         },
         {
             Header: 'Clase',
@@ -370,7 +373,7 @@ const buildParetoPdf = (products, filterLabel, cfg, config = {}, rate) => {
             accessor: 'cumulativePercent',
             Header: '% Acum.',
             width: 'auto',
-            render: (p) => `${p.cumulativePercent}%`,
+            render: (p) => (p.cumulativePercent == null ? 'No disponible' : `${p.cumulativePercent}%`),
         },
         { accessor: 'abcClass', Header: 'Clase', width: 'auto', render: (p) => p.abcClass },
     ];
@@ -513,9 +516,11 @@ const ParetoChart = ({
     loading = false,
     config = {},
     sorting,
+    exportData,
 }) => {
     const cfg = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
     const { currencyRate } = useContext(CurrencyRateContext);
+    const [printError, setPrintError] = useState('');
     const [abcFilter, setAbcFilter] = useState('all');
     const [tablePage, setTablePage] = useState(1);
 
@@ -526,7 +531,13 @@ const ParetoChart = ({
 
     /* ---- chart data: top N + "Resto" bar ---- */
     const chartData = useMemo(() => {
-        if (!products.length) return [];
+        if (
+            !products.length ||
+            products.some(
+                (row) => row[cfg.valueKey] == null || Number(row[cfg.valueKey]) < 0 || row.cumulativePercent == null,
+            )
+        )
+            return [];
         const topN = products.slice(0, CHART_TOP_N);
         const rest = products.slice(CHART_TOP_N);
         const restProfit = rest.reduce((s, p) => s + Number(p[cfg.valueKey] || 0), 0);
@@ -572,23 +583,31 @@ const ParetoChart = ({
 
     /* ---- print handler ---- */
     const handlePrint = useCallback(
-        (config) => {
-            const labels = {
-                all: cfg.allFilterLabel,
-                A: 'Clase A (0–80% acumulado)',
-                B: 'Clase B (80–95% acumulado)',
-                C: 'Clase C (95–100% acumulado)',
-            };
-            const docDef = buildParetoPdf(
-                sortRows(filteredProducts, config?.sortBy),
-                labels[abcFilter] || cfg.allFilterLabel,
-                cfg,
-                config,
-                currencyRate?.Cambio,
-            );
-            pdfMake.createPdf(docDef).open();
+        async (config) => {
+            if (!exportData) return;
+            setPrintError('');
+            try {
+                const authorized = await exportData();
+                const rows = abcFilter === 'all' ? authorized : authorized.filter((row) => row.abcClass === abcFilter);
+                const labels = {
+                    all: cfg.allFilterLabel,
+                    A: 'Clase A (0–80% acumulado)',
+                    B: 'Clase B (80–95% acumulado)',
+                    C: 'Clase C (95–100% acumulado)',
+                };
+                const docDef = buildParetoPdf(
+                    sortRows(rows, config?.sortBy),
+                    labels[abcFilter] || cfg.allFilterLabel,
+                    cfg,
+                    config,
+                    currencyRate?.Cambio,
+                );
+                pdfMake.createPdf(docDef).open();
+            } catch (error) {
+                if (error.name !== 'AbortError') setPrintError('No se pudo imprimir el análisis autorizado.');
+            }
         },
-        [filteredProducts, abcFilter, cfg, currencyRate?.Cambio],
+        [exportData, abcFilter, cfg, currencyRate?.Cambio],
     );
 
     // ── loading / empty ──
@@ -652,6 +671,7 @@ const ParetoChart = ({
 
     return (
         <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
+            {printError && <p role="alert">{printError}</p>}
             {/* ── Title ── */}
             <div className="dashboard-inline-title" style={{ marginBottom: 16 }}>
                 {cfg.title} &mdash; <span style={{ fontWeight: 400, color: '#9ca3af' }}>{cfg.subtitle}</span>
@@ -679,7 +699,7 @@ const ParetoChart = ({
                         <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>{card.label}</div>
                         <div style={{ fontSize: 20, fontWeight: 700, color: '#e4e6ea' }}>{card.count}</div>
                         <div style={{ fontSize: 12, color: card.accent }}>
-                            {card.pct}% {cfg.summaryPctLabel}
+                            {card.pct == null ? 'No disponible' : `${card.pct}% ${cfg.summaryPctLabel}`}
                         </div>
                     </div>
                 ))}
@@ -878,7 +898,7 @@ const ParetoChart = ({
                     onPageChange: handlePageChange,
                 }}
                 print={{
-                    enabled: true,
+                    enabled: Boolean(exportData),
                     onGlobalPrint: handlePrint,
                     storageKey: `pareto-${cfg.valueKey}`,
                 }}

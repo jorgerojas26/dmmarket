@@ -35,8 +35,8 @@ export function usePurchasesDashboard(dateRange) {
 /**
  * Hook: Purchases Pareto data.
  */
-export function usePurchasesPareto(dateRange) {
-    const key = dateRange?.from && dateRange?.to ? ['purchases-pareto', dateRange.from, dateRange.to] : null;
+export function usePurchasesPareto(dateRange, enabled = true) {
+    const key = enabled && dateRange?.from && dateRange?.to ? ['purchases-pareto', dateRange.from, dateRange.to] : null;
     return useSWR(key, () => fetchPurchasesPareto({ from: dateRange.from, to: dateRange.to }), {
         keepPreviousData: true,
     });

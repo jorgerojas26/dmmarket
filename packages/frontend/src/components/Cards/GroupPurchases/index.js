@@ -1,11 +1,9 @@
 import { ResponsivePie } from '@nivo/pie';
 import ChartTooltip from 'components/ChartTooltip';
 import DonutOverview from 'components/DonutOverview';
-import { formatCurrency, formatNumber } from 'utils/format';
+import { formatCurrency } from 'utils/format';
 
-const GroupPurchases = ({ chartData = [], compact = false, title, help, monetary = true }) => {
-    const valueFormat = monetary ? formatCurrency : formatNumber;
-    const valueLabel = monetary ? 'Monto Comprado' : 'Unidades compradas';
+const GroupPurchases = ({ chartData = [], compact = false, title, help }) => {
     if (compact) {
         return (
             <DonutOverview
@@ -15,16 +13,11 @@ const GroupPurchases = ({ chartData = [], compact = false, title, help, monetary
                 ariaLabel="Categorías de compras"
                 detailsId="purchases-categories-title"
                 detailsTitle="Compras por categoría"
-                detailsSubtitle={
-                    monetary
-                        ? 'Participación sobre el monto comprado del periodo.'
-                        : 'Participación sobre las unidades compradas del periodo.'
-                }
-                valueFormat={valueFormat}
+                detailsSubtitle="Participación sobre el monto comprado del periodo."
                 tooltip={({ datum }) => (
                     <ChartTooltip title={datum.label} color={datum.color}>
-                        <span>{valueLabel}</span>
-                        <strong>{valueFormat(datum.value)}</strong>
+                        <span>Monto Comprado</span>
+                        <strong>{formatCurrency(datum.value)}</strong>
                     </ChartTooltip>
                 )}
             />
@@ -62,8 +55,8 @@ const GroupPurchases = ({ chartData = [], compact = false, title, help, monetary
                 arcLabelsTextColor={{ from: 'color', modifiers: [['darker', 2]] }}
                 tooltip={({ datum }) => (
                     <ChartTooltip title={datum.label} color={datum.color}>
-                        <span>{valueLabel}</span>
-                        <strong>{valueFormat(datum.value)}</strong>
+                        <span>Monto Comprado</span>
+                        <strong>{formatCurrency(datum.value)}</strong>
                     </ChartTooltip>
                 )}
             />

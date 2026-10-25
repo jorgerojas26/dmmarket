@@ -52,7 +52,12 @@ async function openModule(page, name, view) {
   if (!(await link.isVisible()))
     await navigation.getByRole("button", { name: "Abrir navegación", exact: true }).click();
   await link.click();
-  if (view)
+  if (view && name === "Compras") {
+    await page
+      .locator(".clients-sidebar")
+      .getByRole("button", { name: new RegExp(view) })
+      .click();
+  } else if (view)
     await page
       .getByRole("navigation", { name: `Vistas de ${name}`, exact: true })
       .getByRole("link", { name: view, exact: true })

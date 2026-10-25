@@ -19,88 +19,66 @@ const test = base.extend({
   ],
 });
 const grant = (capability) => ({ capability, scope: "global" });
-async function enter(page, environment, capabilities, view = "Resumen") {
+async function enter(page, environment, capabilities, from = "2026-08-01", to = "2026-08-31") {
   const user = await environment.seedUser({ permissions: capabilities.map(grant) });
   await login(page, environment, user);
-  await openModule(page, "Compras", view);
-  const report = page.getByRole("region", {
-    name: view === "Resumen" ? "Resumen de compras" : "Pareto de compras",
-    exact: true,
+  await openModule(page, "Compras");
+  await page.goto(`${environment.origin}/compras?view=dashboard&from=${from}&to=${to}`);
+  await expect(page.getByRole("heading", { name: "Dashboard de Compras", exact: true })).toBeVisible();
+  return page.getByRole("region", { name: "Compras", exact: true });
+}
+const card = (report, label) => report.locator(".dashboard-kpi-card").filter({ hasText: label });
+const pareto = (report) =>
+  report.locator(".dashboard-panel").filter({
+    has: report.page().locator(".dashboard-inline-title").filter({ hasText: "Análisis Pareto (ABC) de Compras" }),
   });
-  await dates(report, "2026-08-01", "2026-08-31");
-  return report;
-}
-async function dates(report, from, to) {
-  await report.getByLabel("Resumen de compras desde", { exact: true }).fill(from);
-  await report.getByLabel("Resumen de compras hasta", { exact: true }).fill(to);
-}
 
-test("compras básicas usan unidades en tarjetas, rankings, leyendas y tooltips sin dinero ni proveedores", async ({
+test("dashboard original básico conserva tarjetas y selector de fechas, sin gráficas monetarias ni consultas prohibidas", async ({
   page,
   environment,
 }) => {
   const forbidden = [];
   page.on("request", (request) => {
-    if (/\/api\/(sales|dashboard\/sales|providers|auth\/exports)/.test(request.url())) forbidden.push(request.url());
+    if (/\/api\/(sales|dashboard|providers|purchases\/pareto)/.test(request.url())) forbidden.push(request.url());
   });
   const report = await enter(page, environment, ["purchases.read"]);
-  await report.getByLabel("Comparar compras desde", { exact: true }).fill("2026-07-01");
-  await report.getByLabel("Comparar compras hasta", { exact: true }).fill("2026-07-31");
-  await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
-  await expect(
-    report.getByRole("group", { name: "Unidades compradas", exact: true }).getByText("6", { exact: true }),
-  ).toBeVisible();
-  await expect(report.getByRole("group", { name: "Total Compras autorizado", exact: true })).toHaveCount(0);
-  await expect(
-    report
-      .getByRole("region", { name: "Ranking visual de productos comprados", exact: true })
-      .getByText("5", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    report.getByRole("region", { name: "Proveedor destacado en compras autorizadas", exact: true }),
-  ).toHaveCount(0);
-  const legend = report.getByRole("list", { name: "Categorías de compras", exact: true });
-  await expect(legend).toBeVisible();
-  expect(await legend.getByRole("listitem").first().getAttribute("title")).not.toContain("$");
-  const arc = report.locator(".donut-overview-chart svg path").first();
-  const box = await arc.boundingBox();
-  await arc.hover({ position: { x: 8, y: box.height / 2 }, timeout: 5000 });
-  await expect(report.locator(".donut-overview-chart").getByText("Unidades compradas", { exact: true })).toBeVisible();
-  await expect(report.getByText(/\$|PRIVATE-PUR/)).toHaveCount(0);
-  await expect(report.getByText("Unidades del período comparado: 2", { exact: true })).toBeVisible();
+  await expect(report.locator(".clients-sidebar")).toBeVisible();
+  await expect(card(report, "Unidades")).toContainText("6");
+  await expect(card(report, "Transacciones")).toContainText("3");
+  await expect(report.locator(".dashboard-kpi-card")).toHaveCount(2);
+  await expect(report.locator(".dashboard-inline-title").filter({ hasText: /^Top Productos/ })).toHaveCount(0);
+  await expect(report.getByText("Categorías", { exact: true })).toHaveCount(0);
+  await expect(report.getByText("Mejor Proveedor", { exact: true })).toHaveCount(0);
+  expect(await report.innerText()).not.toMatch(/\$/);
+  await report.locator(".date-range-trigger").click();
+  await expect(report.locator(".date-range-dropdown")).toBeVisible();
+  await report.getByRole("button", { name: "Hoy", exact: true }).click();
+  await expect(report.locator(".date-range-dropdown")).toBeVisible();
+  await report.getByRole("button", { name: "Listo", exact: true }).click();
+  await expect(report.locator(".date-range-trigger")).toContainText("2026");
   expect(forbidden).toEqual([]);
 });
 
-test("importes y proveedores autorizados conservan comparación y cambian con el filtro", async ({
+test("dashboard original financiero conserva categorías, proveedor destacado y comparaciones con montos autorizados", async ({
   page,
   environment,
 }) => {
   const report = await enter(page, environment, ["purchases.read", "purchases.costs", "providers.read"]);
-  await report.getByLabel("Comparar compras desde", { exact: true }).fill("2026-07-01");
-  await report.getByLabel("Comparar compras hasta", { exact: true }).fill("2026-07-31");
-  await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
-  const amount = report.getByRole("group", { name: "Total Compras autorizado", exact: true });
-  await expect(amount.getByText("$130,00", { exact: true })).toBeVisible();
-  await expect(report.getByText("Total Compras autorizado del período comparado: 16", { exact: true })).toBeVisible();
-  const best = report.getByRole("region", { name: "Proveedor destacado en compras autorizadas", exact: true });
-  await expect(best.getByText("Proveedor compras A", { exact: true })).toBeVisible();
-  await expect(best.getByText("$80,00", { exact: true })).toBeVisible();
-  await report.getByLabel("Proveedor del resumen de compras", { exact: true }).fill("PUR-B");
-  await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
-  await expect(amount.getByText("$50,00", { exact: true })).toBeVisible();
-  await expect(best.getByText("Proveedor compras B", { exact: true })).toBeVisible();
-  await expect(
-    report
-      .getByRole("region", { name: "Ranking visual de productos comprados", exact: true })
-      .getByText("$80,00", { exact: true }),
-  ).toHaveCount(0);
-  await expect(report.getByText(/PRIVATE-PUR/)).toHaveCount(0);
+  await expect(card(report, "Total Comprado")).toContainText("$130,00");
+  await expect(card(report, "Total Comprado")).toContainText("712.5%");
+  await expect(report.locator(".purchases-dashboard-best-provider")).toContainText("Proveedor compras A");
+  await expect(report.locator(".dashboard-inline-title").filter({ hasText: /^Top Productos/ })).toBeVisible();
+  await expect(report.locator(".dashboard-inline-title").filter({ hasText: /^Top Proveedores/ })).toBeVisible();
+  await expect(report.locator(".purchases-dashboard-categories svg")).toBeVisible();
+  await expect(report.getByText(/PRIVATE/)).toHaveCount(0);
+  const panel = pareto(report);
+  await expect(panel.getByRole("cell", { name: "61.54%", exact: true })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 360, height: 780 });
-  const geometry = await report.evaluate((element) => ({ width: element.clientWidth, scroll: element.scrollWidth }));
-  expect(geometry.scroll).toBeLessThanOrEqual(geometry.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test("Pareto dibuja cuarenta productos sin recalcular ABC al buscar, filtrar o paginar el universo completo", async ({
+test("Pareto original conserva cuarenta barras más resto, filtros ABC, paginación y PDF original con autorización independiente", async ({
   page,
   environment,
 }) => {
@@ -108,42 +86,60 @@ test("Pareto dibuja cuarenta productos sin recalcular ABC al buscar, filtrar o p
     .db("mastercomp")
     .insert({ IdFactura: "UI-PARETO", Fecha: "2027-04-01", IdProveedor: "PUR-A", Anulada: false });
   await environment.db("slavecomp").insert(
-    Array.from({ length: 45 }, (_, index) => ({
+    Array.from({ length: 45 }, (_, i) => ({
       IdFactura: "UI-PARETO",
-      IdProducto: `UI-${index}`,
-      Descripcion: `Visual producto ${String(index).padStart(2, "0")}`,
-      Precio: 45 - index,
+      IdProducto: `UI-${i}`,
+      Descripcion: `Visual producto ${String(i).padStart(2, "0")}`,
+      Precio: 45 - i,
       Cantidad: 1,
     })),
   );
-  const report = await enter(page, environment, ["purchases.read", "purchases.costs"], "Pareto");
-  await dates(report, "2027-04-01", "2027-04-30");
-  await report.getByRole("button", { name: "Consultar Pareto de compras", exact: true }).click();
-  await expect(report.getByText("Productos analizados en compras: 45", { exact: true })).toBeVisible();
-  const graph = report.getByRole("img", { name: "Gráfico ABC autorizado de compras", exact: true });
-  await expect(graph.locator("svg")).toBeVisible();
-  await expect(graph.locator('svg rect:not([fill="transparent"])')).toHaveCount(40);
-  expect(await graph.locator("svg path").getAttribute("d")).not.toContain("NaN");
-  await graph.locator('svg rect[fill="#22c55e"]').first().hover({ timeout: 5000 });
-  await expect(graph.getByText("Acumulado", { exact: true })).toBeVisible();
-  await expect(report.getByText(/^Gráfico de los primeros 40 productos/)).toBeVisible();
-  const table = report.getByRole("table", { name: "Clasificación autorizada de compras", exact: true });
-  await expect(table.getByRole("row")).toHaveCount(21);
-  await report.getByRole("button", { name: "Pareto de compras: página siguiente", exact: true }).click();
-  await expect(table.getByText("Visual producto 20", { exact: true })).toBeVisible();
-  const classA = await report.getByRole("group", { name: "Clase A de compras", exact: true }).innerText();
-  await report.getByLabel("Clase del Pareto de compras", { exact: true }).selectOption("C");
-  await report.getByLabel("Buscar producto en el Pareto de compras", { exact: true }).fill("44");
-  await expect(table.getByRole("row")).toHaveCount(2);
-  await expect(table.getByRole("cell", { name: "45", exact: true })).toBeVisible();
-  await expect(table.getByRole("cell", { name: "100", exact: true })).toBeVisible();
-  expect(await report.getByRole("group", { name: "Clase A de compras", exact: true }).innerText()).toBe(classA);
-  await expect(report.getByText("Productos analizados en compras: 45", { exact: true })).toBeVisible();
-  await report.getByLabel("Clase del Pareto de compras", { exact: true }).selectOption("A");
-  await expect(table.getByRole("row")).toHaveCount(1);
+  const report = await enter(
+    page,
+    environment,
+    ["purchases.read", "purchases.costs", "purchases.export"],
+    "2027-04-01",
+    "2027-04-30",
+  );
+  const panel = pareto(report);
+  const table = panel.getByRole("table");
+  await expect(table.getByRole("cell", { name: "Visual producto 00", exact: true })).toBeVisible();
+  await expect(
+    panel.locator('svg rect[fill="#22c55e"], svg rect[fill="#f59e0b"], svg rect[fill="#ef4444"]'),
+  ).toHaveCount(41);
+  await panel.getByRole("button", { name: "Página siguiente", exact: true }).click();
+  await expect(table.getByRole("cell", { name: "Visual producto 20", exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "Página siguiente", exact: true }).click();
+  const row = table
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "Visual producto 44", exact: true }) });
+  await expect(row.getByRole("cell", { name: "45", exact: true })).toBeVisible();
+  await expect(row.getByRole("cell", { name: "100%", exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "Clase C", exact: true }).click();
+  await expect(table.getByRole("cell", { name: "Visual producto 44", exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "Visual producto 00", exact: true })).toHaveCount(0);
+  await panel.getByRole("button", { name: "Imprimir", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const prepared = page.waitForResponse((r) => r.url().includes("/api/exports/purchases?"));
+  const opening = page.waitForEvent("popup");
+  await dialog.getByRole("button", { name: "Imprimir", exact: true }).click();
+  const response = await prepared;
+  expect(response.status()).toBe(200);
+  const result = await response.json();
+  expect(result.total).toBe(45);
+  expect(result.data[44]).toMatchObject({ rank: 45, abcClass: "C", cumulativePercent: 100 });
+  const popup = await opening;
+  await popup.waitForURL(/^blob:/);
+  expect(
+    await page.evaluate(
+      async (url) => new TextDecoder().decode((await (await fetch(url)).arrayBuffer()).slice(0, 4)),
+      popup.url(),
+    ),
+  ).toBe("%PDF");
+  await popup.close();
 });
 
-test("datos incompletos y compras negativas no se convierten en cero ni en un Pareto válido", async ({
+test("dashboard original no transforma datos incompletos en cero ni dibuja un Pareto con base inválida", async ({
   page,
   environment,
 }) => {
@@ -154,25 +150,13 @@ test("datos incompletos y compras negativas no se convierten en cero ni en un Pa
     { IdFactura: "UI-UNKNOWN", IdProducto: "UI-NEG", Descripcion: "Compra negativa", Precio: -10, Cantidad: 1 },
     { IdFactura: "UI-UNKNOWN", IdProducto: "UI-NULL", Descripcion: "Compra incompleta", Precio: null, Cantidad: null },
   ]);
-  const report = await enter(page, environment, ["purchases.read", "purchases.costs"]);
-  await dates(report, "2028-01-01", "2028-01-31");
-  await report.getByRole("button", { name: "Consultar resumen de compras", exact: true }).click();
+  const report = await enter(page, environment, ["purchases.read", "purchases.costs"], "2028-01-01", "2028-01-31");
+  await expect(card(report, "Total Comprado")).toContainText("No disponible");
+  await expect(card(report, "Unidades")).toContainText("No disponible");
+  const panel = pareto(report);
+  await expect(panel.getByRole("cell", { name: "Compra incompleta", exact: true })).toBeVisible();
   await expect(
-    report
-      .getByRole("group", { name: "Total Compras autorizado", exact: true })
-      .getByText("No disponible", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    report.getByRole("group", { name: "Unidades compradas", exact: true }).getByText("No disponible", { exact: true }),
-  ).toBeVisible();
-  await expect(report.getByRole("list", { name: "Categorías de compras", exact: true })).toHaveCount(0);
-  await openModule(page, "Compras", "Pareto");
-  const pareto = page.getByRole("region", { name: "Pareto de compras", exact: true });
-  await dates(pareto, "2028-01-01", "2028-01-31");
-  await pareto.getByRole("button", { name: "Consultar Pareto de compras", exact: true }).click();
-  await expect(pareto.getByText("Productos sin clasificación válida: 2", { exact: true })).toBeVisible();
-  await expect(pareto.getByRole("img", { name: "Gráfico ABC autorizado de compras", exact: true })).toHaveCount(0);
-  await expect(
-    pareto.getByText("No se dibuja el Pareto sin una base completa, no negativa y mayor que cero.", { exact: true }),
-  ).toBeVisible();
+    panel.locator('svg rect[fill="#22c55e"], svg rect[fill="#f59e0b"], svg rect[fill="#ef4444"]'),
+  ).toHaveCount(0);
+  await expect(panel.getByRole("cell", { name: "No disponible", exact: true })).not.toHaveCount(0);
 });

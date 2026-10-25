@@ -29,7 +29,7 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
   await expect(page.getByRole("region", { name: "Consulta de ventas", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Inventario", exact: true })).toHaveCount(0);
   await openModule(page, "Compras");
-  await expect(page.getByRole("region", { name: "Consulta autorizada de compras", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard de Compras", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Consulta de ventas", exact: true })).toHaveCount(0);
   await openModule(page, "Clientes");
   await expect(page.getByLabel("Directorio", { exact: true })).toHaveValue("clients");

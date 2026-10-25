@@ -266,4 +266,4 @@ function createPurchaseReports({ sessions }) {
   return router;
 }
 
-module.exports = { createPurchaseReports, purchases, purchaseKpis, purchaseBase, metrics, options };
+module.exports = { createPurchaseReports, purchases, purchaseKpis, purchaseBase, metrics, options, pareto };

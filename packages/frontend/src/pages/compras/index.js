@@ -123,7 +123,7 @@ const ComprasPage = () => {
     const currentView = VIEWS[activeView];
 
     return (
-        <Container fluid className="clientes-layout p-0">
+        <Container as="section" aria-label="Compras" fluid className="clientes-layout p-0">
             <div className="clientes-row">
                 {/* Sidebar */}
                 <Sidebar activeKey={activeView} onSelect={handleViewChange} items={sidebarItems} />

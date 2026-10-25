@@ -15,13 +15,12 @@ import Pareto from './auth/pareto';
 import Parties from './auth/parties';
 import ProviderRanking from './auth/provider-ranking';
 import Providers from './auth/providers';
-import PurchaseOverview from './auth/purchase-overview';
-import Purchases from './auth/purchases';
 import RateHistory from './auth/rate-history';
 import Receivables from './auth/receivables';
 import Sales from './auth/sales';
 import SellerDashboard from './auth/seller-dashboard';
 import AccessWorkspace, { Account, Rates } from './auth/workspace';
+import Purchases from './pages/compras';
 import Inventory from './pages/inventario';
 
 export default function App({ onLogout, logoutError }) {
@@ -68,13 +67,6 @@ export default function App({ onLogout, logoutError }) {
             label: 'Comparativo',
             allowed: can('providers.read') && (has('sales.read') || (can('purchases.read') && can('purchases.costs'))),
             content: <ProviderRanking />,
-        },
-        { path: '/compras/resumen', label: 'Resumen', allowed: can('purchases.read'), content: <PurchaseOverview /> },
-        {
-            path: '/compras/pareto',
-            label: 'Pareto',
-            allowed: can('purchases.read') && can('purchases.costs'),
-            content: <PurchaseOverview pareto />,
         },
         {
             path: '/clientes',
@@ -208,7 +200,7 @@ export default function App({ onLogout, logoutError }) {
                 <Container fluid className="d-flex flex-column flex-grow-1 overflow-hidden p-0">
                     {path === '/' ? (
                         <Redirect to={modules[0]?.path || '/cuenta'} />
-                    ) : view && path === '/inventario' ? (
+                    ) : view && ['/inventario', '/compras'].includes(path) ? (
                         view.content
                     ) : view ? (
                         <section

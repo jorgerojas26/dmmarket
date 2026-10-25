@@ -146,3 +146,23 @@ test("parámetros y exceso de registros se rechazan sin exportación parcial", a
   );
   expect((await client.request("/api/exports/inventory")).status).toBe(413);
 });
+
+test("Pareto de compras conserva clasificación canónica y exige lectura, costos y exportación independientes", async () => {
+  for (const missing of ["purchases.read", "purchases.costs", "purchases.export"]) {
+    const { client } = await reader(
+      ["purchases.read", "purchases.costs", "purchases.export"]
+        .filter((capability) => capability !== missing)
+        .map((capability) => grant(capability)),
+    );
+    expect((await client.request(`/api/exports/purchases?${buyRange}&kind=pareto`)).status).toBe(403);
+  }
+  const { client } = await reader(
+    ["purchases.read", "purchases.costs", "purchases.export"].map((capability) => grant(capability)),
+  );
+  const result = await client.request(`/api/exports/purchases?${buyRange}&kind=pareto`);
+  expect(result.status).toBe(200);
+  expect(result.body.total).toBe(2);
+  expect(result.body.data.map((row) => row.cumulativePercent)).toEqual([61.54, 100]);
+  expect(result.body.data.map((row) => row.abcClass)).toEqual(["A", "C"]);
+  expect(JSON.stringify(result.body)).not.toMatch(/PRIVATE|Proveedor|avgUnitCost/);
+});
