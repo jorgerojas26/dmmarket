@@ -3,7 +3,6 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { run, powershell, psQuote, xml } = require("./service-commands");
 const { prepareWeb, stopWeb, installWeb, uninstallWeb } = require("./web-service");
-const { webEnabled } = require("./web-config");
 
 const LABEL = "com.dmmarket.server";
 const TASK = "DMMarket";
@@ -109,8 +108,9 @@ function installService({ configuration } = {}) {
   if (!configuration) {
     const { readConfiguration } = require("./setup-config");
     const saved = readConfiguration(fs.existsSync(envTarget) ? dir : process.cwd());
-    if (webEnabled(saved)) configuration = saved;
+    configuration = saved;
   }
+  require("./auth/runtime").validateAuthConfig(configuration || {});
   const webPlan = prepareWeb(configuration || {});
   let envContent;
   if (configuration) {
@@ -177,9 +177,7 @@ function installService({ configuration } = {}) {
   }
   console.log(`Arranque automático registrado. Aplicación y configuración: ${dir}`);
   console.log(
-    webEnabled(configuration || {})
-      ? `Acceso: http://${configuration.WEB_HOSTNAME}. Configura el DNS local y comprueba el firewall.`
-      : `Acceso: http://IP-DEL-SERVIDOR:${configuration?.PORT || 8000}. Comprueba el estado del servicio y el firewall.`,
+    `Acceso HTTPS: ${configuration.AUTH_PUBLIC_ORIGIN}. Configura DNS y confianza del certificado en los equipos autorizados.`,
   );
 }
 

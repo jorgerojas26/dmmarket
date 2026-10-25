@@ -26,6 +26,7 @@ const { createHttpSecurity, sessionOptions, authErrorHandler } = require("./http
 const { createAuthRouter, forbidden } = require("./router");
 
 function validateAuthConfig(env) {
+  if (env.WEB_MODE !== "caddy") throw new Error("El acceso requiere HTTPS con Caddy.");
   if (env.HOST !== "127.0.0.1") throw new Error("El acceso protegido requiere HOST=127.0.0.1 y un proxy HTTPS.");
   if (
     env.AUTH_RECEIVABLES_WRITES_ENABLED !== undefined &&

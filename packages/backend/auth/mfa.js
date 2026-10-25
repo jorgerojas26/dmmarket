@@ -62,6 +62,9 @@ function createMfa(keyBase64) {
   }
 
   return Object.freeze({
+    assertStoredSecret(userId, encryptedSecret) {
+      decrypt(userId, encryptedSecret);
+    },
     async createEnrollment(userId, username) {
       context(userId);
       if (typeof username !== "string" || username.length < 1 || username.length > 128) {

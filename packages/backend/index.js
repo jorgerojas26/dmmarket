@@ -60,7 +60,7 @@ app.get("/api/health", (_req, res) =>
   res
     .set("Cache-Control", "no-store")
     .status(authRuntime ? 200 : 503)
-    .json({ ok: Boolean(authRuntime) }),
+    .json({ ok: Boolean(authRuntime), service: process.env.DMMARKET_SERVICE === "1" }),
 );
 app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");

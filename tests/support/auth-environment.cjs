@@ -109,6 +109,7 @@ async function startEnvironment({
   rateSource = false,
   updateSource = false,
   authKeys = null,
+  service = false,
 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-auth-test-"));
   fs.chmodSync(directory, 0o700);
@@ -183,6 +184,7 @@ async function startEnvironment({
     if (binding.HostIp !== "127.0.0.1" || binding.HostPort === "3306") throw new Error("Publicación MySQL no aislada.");
     const configuration = {
       HOST: "127.0.0.1",
+      DMMARKET_SERVICE: service ? "1" : "0",
       DATABASE_HOST: "127.0.0.1",
       DATABASE_PORT: binding.HostPort,
       DATABASE_NAME: "dmmarket_auth_test",

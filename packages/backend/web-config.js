@@ -6,9 +6,9 @@ function webEnabled(configuration) {
 }
 
 function normalizeWeb(input) {
-  const mode = input.WEB_MODE ?? "direct";
-  if (!["direct", "caddy"].includes(mode)) throw new Error("Elige acceso directo o acceso HTTP con Caddy.");
-  if (mode === "direct") return { WEB_MODE: mode, WEB_HOSTNAME: "" };
+  const mode = input.WEB_MODE ?? "caddy";
+  if (mode !== "caddy")
+    throw new Error("DMMarket requiere HTTPS con Caddy; el acceso HTTP directo no está habilitado.");
   const hostname = typeof input.WEB_HOSTNAME === "string" ? input.WEB_HOSTNAME.trim().toLowerCase() : "";
   if (
     hostname.length > 253 ||
@@ -61,7 +61,7 @@ function proxyCredential(configuration) {
   return createHmac("sha256", key).update("dmmarket:proxy:v1").digest("base64url");
 }
 
-function caddyFile(configuration, logFile) {
+function caddyFile(configuration, logFile, storageDirectory) {
   const web = normalizeWeb(configuration);
   const { host, port } = serverOptions(configuration);
   if (!webEnabled(web) || host !== "127.0.0.1" || port < 1024) {
@@ -70,10 +70,13 @@ function caddyFile(configuration, logFile) {
   const logging = logFile
     ? `\n\tlog {\n\t\toutput file ${JSON.stringify(logFile.replace(/\\/g, "/"))} {\n\t\t\troll_size 10MiB\n\t\t\troll_keep 3\n\t\t}\n\t}`
     : "";
+  const storage = storageDirectory
+    ? `\n\tstorage file_system {\n\t\troot ${JSON.stringify(storageDirectory.replace(/\\/g, "/"))}\n\t}`
+    : "";
   const url = httpsOrigin(configuration);
   const bind = configuration.WEB_BIND_ADDRESS || "0.0.0.0";
   if (!["0.0.0.0", "127.0.0.1"].includes(bind)) throw new Error("La dirección pública de Caddy no es válida.");
-  return `{\n\tadmin off\n\tauto_https disable_redirects\n\tskip_install_trust\n\tpersist_config off${logging}\n}\n\n${url.origin} {\n\tbind ${bind}\n\ttls internal\n\theader X-DMMarket-Web ${proxyIdentity(configuration)}\n\treverse_proxy 127.0.0.1:${port} {\n\t\theader_up X-DMMarket-Proxy ${proxyCredential(configuration)}\n\t}\n}\n`;
+  return `{\n\tadmin off\n\tauto_https disable_redirects\n\tskip_install_trust\n\tpersist_config off${logging}${storage}\n}\n\n${url.origin} {\n\tbind ${bind}\n\ttls internal\n\theader X-DMMarket-Web ${proxyIdentity(configuration)}\n\treverse_proxy 127.0.0.1:${port} {\n\t\theader_up X-DMMarket-Proxy ${proxyCredential(configuration)}\n\t}\n}\n`;
 }
 
 module.exports = { webEnabled, normalizeWeb, accessOptions, accessUrls, proxyIdentity, proxyCredential, caddyFile };

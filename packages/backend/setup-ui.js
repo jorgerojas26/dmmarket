@@ -42,29 +42,27 @@ const html = `<!doctype html>
     </section>
     <section data-step="4" hidden>
       <h1>Acceso al servicio</h1>
-      <p>La instalación básica permite acceder directamente al sistema y mantiene el servicio activo después de reiniciar el equipo. No requiere un dominio local ni cambios automáticos en el firewall.</p>
-      <label id="host-options">Acceso<select id="HOST"><option value="0.0.0.0">Desde las máquinas de mi red local</option><option value="127.0.0.1">Solo desde este servidor</option></select></label>
-      <label><span id="port-label">Puerto de DMMarket</span><input id="PORT" type="number" required min="1" max="65535" value="8000"><small id="port-help">Recomendado: 8000. El sistema conservará siempre este puerto.</small></label>
-      <details id="optional-settings">
-        <summary>Configuración adicional (opcional)</summary>
-        <p class="muted">Estas opciones no son necesarias para instalar el servicio. Puedes configurarlas más adelante volviendo a abrir el asistente.</p>
-        <label>Forma de acceso<select id="WEB_MODE"><option value="direct">Acceso directo</option><option value="caddy">Configuración de dominio local</option></select></label>
-        <div id="web-options" hidden>
-          <label>Dominio local<input id="WEB_HOSTNAME" maxlength="253" placeholder="reportes.solser.internal"><small>Sin http://, puerto ni ruta. Usa .internal o un subdominio de un dominio que controles; no uses .local.</small></label>
-          <div class="notice">El acceso mediante dominio usa HTTP, sin cifrado ni certificados. Debes configurar el nombre en el DNS de tu red; no instalamos DNS ni modificamos el router. Si el puerto web 80 está ocupado, la instalación se detendrá antes de cambiar el servicio.</div>
-        </div>
-        <div id="firewall-options">
-          <label class="check"><input id="allow-firewall" type="checkbox">Autorizar acceso desde mi red local en el firewall</label>
-          <label id="network-label" hidden>Red autorizada<input id="network" placeholder="192.168.1.0/24"><small>Ejemplo: 192.168.1.0/24. Comprueba que incluye las máquinas del negocio. No se aceptan redes públicas.</small></label>
-        </div>
+      <p>Las cuentas requieren HTTPS confiable. El backend permanecerá sólo en 127.0.0.1; los equipos accederán mediante Caddy y un nombre DNS de la red.</p>
+      <input id="HOST" type="hidden" value="127.0.0.1">
+      <input id="WEB_MODE" type="hidden" value="caddy">
+      <label id="host-options">Acceso HTTPS<select id="WEB_BIND_ADDRESS"><option value="0.0.0.0">Desde mi red local</option><option value="127.0.0.1">Sólo desde este servidor</option></select></label>
+      <label><span id="port-label">Puerto interno de DMMarket</span><input id="PORT" type="number" required min="1024" max="65535" value="8000"><small id="port-help">Sólo para comunicación local con Caddy. No se abre en el firewall.</small></label>
+      <div id="web-options">
+        <label>Nombre DNS HTTPS<input id="WEB_HOSTNAME" required maxlength="253" placeholder="reportes.dmmarket.internal"><small>Sin protocolo, puerto ni ruta; no uses .local. Configura este nombre en el DNS de la red.</small></label>
+        <label>Puerto HTTPS<input id="WEB_HTTPS_PORT" required type="number" min="1" max="65535" value="443"></label>
+        <div class="notice">Se crea una autoridad local para HTTPS. Debes confiar en su certificado público en cada equipo autorizado; nunca ignores errores de certificado ni distribuyas su clave privada.</div>
+      </div>
+      <details id="optional-settings"><summary>Firewall opcional</summary>
+        <div id="firewall-options"><label class="check"><input id="allow-firewall" type="checkbox">Autorizar HTTPS desde mi red privada en el firewall</label><label id="network-label" hidden>Red autorizada<input id="network" placeholder="192.168.1.0/24"><small>No se permiten redes públicas ni reglas para todo Internet.</small></label></div>
         <div id="network-note" class="notice"></div>
       </details>
+      <p id="key-note" class="notice">Las claves de autenticación se generan sólo al confirmar la instalación y se conservan en reinstalaciones. No se muestran en el navegador. Guarda la configuración de claves fuera de los respaldos de la base.</p>
       <p class="muted">El acceso es para una red local de confianza: no publiques este puerto en Internet. No cambiaremos la IP del servidor ni las reglas de SSH. Reserva una IP fija en tu router y evita que el servidor se suspenda.</p>
     </section>
     <section data-step="5" hidden>
       <h1>Todo listo para instalar</h1>
       <dl id="summary"></dl>
-      <div class="notice">DMMarket se iniciará al encender la máquina y se reiniciará si el proceso termina. Las migraciones pendientes de la aplicación se ejecutarán al iniciar.</div>
+      <div class="notice">DMMarket se iniciará al encender la máquina y se reiniciará si el proceso termina. Sólo se prepara el esquema propio de acceso. Los cambios de tablas compartidas y la activación de escrituras financieras requieren mantenimiento explícito.</div>
       <label class="check"><input id="backup-confirmed" type="checkbox">Tengo un respaldo reciente de la base de datos.</label>
       <label class="check"><input id="install-confirmed" type="checkbox">Confirmo la configuración y la instalación del servicio.</label>
       <p class="muted">Si ya estaba instalado, se reiniciará y se guardará la configuración que acabas de revisar.</p>
@@ -76,6 +74,8 @@ const html = `<!doctype html>
       <div id="dns-note" class="notice" hidden></div>
       <div id="warnings" class="notice" hidden></div>
       <p id="directory" class="muted"></p>
+      <div id="certificate-panel" class="notice" hidden><p id="certificate-fingerprint"></p><button id="certificate-download" class="secondary" type="button">Descargar CA pública</button><button id="certificate-trust" class="secondary" type="button">Confiar en CA sólo en este servidor</button><p>Distribuye sólo el certificado público y verifica su huella. La clave privada de la autoridad permanece en el servidor.</p></div>
+      <div id="access-panel" class="notice" hidden><h2>Preparar la primera cuenta</h2><p id="access-instructions"></p></div>
       <div id="diagnostic" hidden><p>Si no inicia, revisa la conexión MySQL o los logs. Puedes volver a comprobar sin instalar de nuevo.</p><code id="diagnostic-command"></code></div>
       <button id="retry-button" class="secondary" type="button" hidden>Volver a comprobar el inicio</button>
       <p class="muted">Comprueba el acceso desde otra máquina y luego reinicia el servidor para verificar el arranque automático. Puedes cerrar esta ventana al finalizar.</p>
@@ -144,7 +144,7 @@ let busy = false;
 let verified = false;
 let metadata;
 const names = ['Bienvenida', 'Base de datos', 'Comprobación', 'Acceso', 'Confirmación', 'Resultado'];
-const keys = ['DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_NAME', 'HOST', 'PORT', 'WEB_MODE', 'WEB_HOSTNAME'];
+const keys = ['DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_NAME', 'HOST', 'PORT', 'WEB_MODE', 'WEB_HOSTNAME', 'WEB_BIND_ADDRESS', 'WEB_HTTPS_PORT'];
 
 async function api(path, body) {
   const response = await fetch('/api/' + path, {
@@ -161,7 +161,7 @@ function payload() {
   const result = Object.fromEntries(keys.map((key) => [key, byId(key).value]));
   result.useSavedPassword = byId('use-saved-password').checked;
   if (result.WEB_MODE === 'caddy') result.HOST = '127.0.0.1';
-  result.allowFirewall = byId('allow-firewall').checked && (result.WEB_MODE === 'caddy' || result.HOST === '0.0.0.0') && metadata.platform !== 'darwin';
+  result.allowFirewall = byId('allow-firewall').checked && result.WEB_BIND_ADDRESS === '0.0.0.0' && metadata.platform !== 'darwin';
   result.network = byId('network').value.trim();
   return result;
 }
@@ -193,24 +193,13 @@ function show(number) {
 }
 
 function networkOptions() {
-  const proxy = byId('WEB_MODE').value === 'caddy';
-  const lan = proxy || byId('HOST').value === '0.0.0.0';
-  byId('host-options').hidden = proxy;
-  byId('HOST').disabled = proxy;
-  byId('web-options').hidden = !proxy;
-  byId('WEB_HOSTNAME').disabled = !proxy;
-  byId('WEB_HOSTNAME').required = proxy;
-  byId('PORT').min = proxy ? '1024' : '1';
-  byId('port-label').textContent = proxy ? 'Puerto interno de DMMarket' : 'Puerto de DMMarket';
-  byId('port-help').textContent = proxy ? 'Recomendado: 8000. Este puerto será interno; los usuarios accederán mediante el dominio configurado.' : 'Recomendado: 8000. El sistema conservará siempre este puerto.';
+  const lan = byId('WEB_BIND_ADDRESS').value === '0.0.0.0';
+  byId('HOST').value = '127.0.0.1';
+  byId('WEB_MODE').value = 'caddy';
   byId('firewall-options').hidden = !lan || metadata.platform === 'darwin';
   byId('network-label').hidden = !lan || !byId('allow-firewall').checked;
   byId('network').required = lan && byId('allow-firewall').checked && metadata.platform !== 'darwin';
-  byId('network-note').textContent = !lan
-    ? 'Solo se podrá acceder desde esta máquina. No se abrirá el firewall.'
-    : metadata.platform === 'darwin'
-      ? 'Si el firewall de macOS bloquea el acceso, autoriza DMMarket y, si habilitaste el dominio local, Caddy en Ajustes del Sistema → Red → Firewall → Opciones. El asistente no desactiva tu firewall.'
-      : 'La regla es opcional y solo permite TCP desde la red indicada. En Ubuntu usa UFW, sin activarlo ni cambiar las reglas de SSH. Si usas otro firewall, deberás autorizar el puerto allí.';
+  byId('network-note').textContent = !lan ? 'Sólo se podrá acceder desde este servidor; no se abre el firewall.' : 'El firewall, si lo autorizas, sólo permite el puerto HTTPS desde la red indicada. El backend permanece en loopback. No se cambia SSH ni se publica en Internet.';
 }
 
 function validFields(number) {
@@ -248,7 +237,7 @@ function summary() {
     ['Base de datos', values.DATABASE_NAME],
     ['MySQL', values.DATABASE_HOST + ':' + values.DATABASE_PORT],
     ['Usuario', values.DATABASE_USER],
-    ['Acceso', values.WEB_MODE === 'caddy' ? 'http://' + values.WEB_HOSTNAME + ' · sin cifrado' : values.HOST === '0.0.0.0' ? 'Red local · puerto ' + values.PORT : 'Solo este servidor · puerto ' + values.PORT],
+    ['Acceso', values.WEB_MODE === 'caddy' ? 'https://' + values.WEB_HOSTNAME + (values.WEB_HTTPS_PORT === '443' ? '' : ':' + values.WEB_HTTPS_PORT) : values.HOST === '0.0.0.0' ? 'Red local · puerto ' + values.PORT : 'Solo este servidor · puerto ' + values.PORT],
     ['Dominio local', values.WEB_MODE === 'caddy' ? 'Habilitado' : 'No habilitado'],
     ['Firewall', values.allowFirewall ? 'Permitir solo ' + values.network : 'Sin cambios automáticos'],
     ['Archivos', metadata.directory],
@@ -271,22 +260,23 @@ async function checkStartup() {
   byId('retry-button').hidden = true;
   byId('result-title').textContent = 'Comprobando tu servidor…';
   byId('installation-result').className = 'notice';
-  byId('installation-result').textContent = 'El servicio está registrado. La primera preparación de la base de datos puede tardar varios minutos mientras se crean los índices. Mantén abierta la ventana del instalador…';
+  byId('installation-result').textContent = 'El servicio está registrado. Comprobamos HTTPS y el estado de acceso sin ejecutar cambios de índices compartidos…';
   try {
     const deadline = Date.now() + 10 * 60 * 1000;
     let result;
     do {
       result = await api('status');
-      if (result.ready || result.startupError) break;
+      if (result.serviceReady || result.startupError) break;
       await new Promise((resolve) => setTimeout(resolve, 1500));
     } while (Date.now() < deadline);
     const proxy = payload().WEB_MODE === 'caddy';
-    byId('result-title').textContent = result.ready ? proxy ? 'Servidor listo; revisa el DNS local' : '¡DMMarket está listo!' : 'Registrado, pero aún no responde';
-    byId('installation-result').className = result.ready ? 'notice success' : 'notice error';
-    byId('installation-result').textContent = result.ready
-      ? proxy ? 'El acceso mediante dominio está configurado en este servidor y los servicios tienen arranque automático. Configura o comprueba el DNS desde las otras máquinas antes de dar por terminado el acceso por dominio.' : 'El sistema está funcionando y arrancará automáticamente al encender el servidor.'
-      : result.startupError ? 'No se pudo iniciar DMMarket: ' + result.startupError
-      : 'La preparación está tardando más de lo esperado. No cierres el instalador ni vuelvas a instalar mientras pueda haber una migración en curso. Revisa el diagnóstico y vuelve a comprobar el inicio.';
+    byId('result-title').textContent = result.ready ? 'Servidor operativo; comprueba DNS y confianza' : result.serviceReady ? 'HTTPS activo; completa la preparación de acceso' : 'Registrado, pero aún no responde';
+    byId('installation-result').className = result.serviceReady ? 'notice success' : 'notice error';
+    byId('installation-result').textContent = result.serviceReady ? 'La comprobación local de HTTPS es correcta. El acceso requiere además una cuenta preparada, DNS y confianza de la CA en cada equipo.' : result.startupError ? 'No se pudo iniciar DMMarket: ' + result.startupError : 'No se pudo confirmar el inicio. Revisa el diagnóstico antes de reinstalar.';
+    byId('access-panel').hidden = result.administratorReady;
+    byId('access-instructions').textContent = result.accessUnavailable ? 'No se pudo validar el acceso en MySQL. Revisa la conexión antes de continuar.' : result.bootstrapInstructions;
+    byId('certificate-panel').hidden = !result.certificateAvailable;
+    byId('certificate-fingerprint').textContent = 'Huella SHA-256 de la CA pública: ' + (result.certificateFingerprint || 'No disponible');
     byId('access-links').replaceChildren();
     for (const url of result.urls) {
       const item = document.createElement('li');
@@ -301,14 +291,14 @@ async function checkStartup() {
     const records = result.dnsRecords || [];
     byId('dns-note').hidden = !proxy;
     byId('dns-note').textContent = proxy
-      ? 'En el DNS del router o de tu red, crea un registro A para el nombre con la IP reservada de la interfaz LAN correcta. Estas son las IP privadas detectadas; elige la que corresponde, no agregues todas automáticamente:\n\n' + (records.length ? records.map((record) => record.name + ' → ' + record.address).join('\n') : 'No se detectó una IP privada. Revisa la conexión de red del servidor.') + '\n\nDistribuye ese DNS mediante DHCP. Desde otra máquina, comprueba el nombre con nslookup y abre la dirección HTTP indicada. No necesitas redirigir puertos hacia Internet.'
+      ? 'En el DNS del router o de tu red, crea un registro A para el nombre con la IP reservada de la interfaz LAN correcta. Estas son las IP privadas detectadas; elige la que corresponde, no agregues todas automáticamente:\n\n' + (records.length ? records.map((record) => record.name + ' → ' + record.address).join('\n') : 'No se detectó una IP privada. Revisa la conexión de red del servidor.') + '\n\nDistribuye ese DNS mediante DHCP. Desde otra máquina, comprueba el nombre con nslookup y instala la CA pública verificada y abre la dirección HTTPS indicada. Nunca ignores advertencias de certificado ni redirijas puertos a Internet.'
       : '';
     const notices = [...result.warnings];
     if (result.localOnly) notices.push('Esta dirección es local al servidor. Si estás usando SSH desde otra máquina, también necesitas un túnel para el puerto de DMMarket.');
     byId('warnings').textContent = notices.join('\n\n');
     byId('warnings').hidden = !notices.length;
     byId('directory').textContent = 'La configuración queda en ' + result.directory + '. No necesitas conservar la carpeta de descarga.';
-    byId('diagnostic').hidden = result.ready;
+    byId('diagnostic').hidden = result.serviceReady;
     byId('diagnostic-command').textContent = result.diagnostic;
     byId('retry-button').hidden = result.ready;
   } catch (failure) {
@@ -367,8 +357,20 @@ byId('back').addEventListener('click', () => { if (!busy) show(step - 1); });
 byId('cancel').addEventListener('click', () => { if (!busy && confirm('¿Cerrar el asistente sin instalar?')) finish(true); });
 byId('test-button').addEventListener('click', checkConnection);
 byId('retry-button').addEventListener('click', checkStartup);
-byId('HOST').addEventListener('change', networkOptions);
-byId('WEB_MODE').addEventListener('change', networkOptions);
+byId('WEB_BIND_ADDRESS').addEventListener('change', networkOptions);
+byId('certificate-download').addEventListener('click', async () => {
+  try {
+    const response = await fetch('/api/certificate', { headers: { Authorization: 'Bearer ' + token } });
+    if (!response.ok) throw new Error('La CA pública todavía no está disponible.');
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a'); link.href = url; link.download = 'DMMarket-CA.crt'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (failure) { error(failure.message); }
+});
+byId('certificate-trust').addEventListener('click', async () => {
+  if (!confirm('¿Autorizar la confianza de la CA pública de DMMarket sólo en este servidor? Esta acción requiere permisos administrativos.')) return;
+  try { await api('trust', { confirmed: true }); byId('certificate-trust').textContent = 'CA registrada en este servidor'; }
+  catch (failure) { error(failure.message); }
+});
 byId('allow-firewall').addEventListener('change', networkOptions);
 byId('backup-confirmed').addEventListener('change', updateButtons);
 byId('install-confirmed').addEventListener('change', updateButtons);

@@ -1,8 +1,9 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const dotenv = require("dotenv");
+const { randomBytes } = require("node:crypto");
 const { serverOptions } = require("./server");
-const { normalizeWeb, webEnabled } = require("./web-config");
+const { normalizeWeb } = require("./web-config");
 
 const DATABASE_KEYS = ["DATABASE_HOST", "DATABASE_PORT", "DATABASE_USER", "DATABASE_PASSWORD", "DATABASE_NAME"];
 
@@ -23,42 +24,98 @@ function serializeConfiguration(configuration) {
   return `${lines}\n`;
 }
 
-function normalizeConfiguration(input, existing = {}) {
+function normalizeDatabase(input, existing = {}) {
   const configuration = {};
-  for (const key of [...DATABASE_KEYS, "HOST", "PORT"]) {
-    const defaults = { DATABASE_HOST: "localhost", DATABASE_PORT: "3306", HOST: "0.0.0.0", PORT: "8000" };
+  const defaults = { DATABASE_HOST: "localhost", DATABASE_PORT: "3306" };
+  for (const key of DATABASE_KEYS) {
     const value =
       key === "DATABASE_PASSWORD" && input.useSavedPassword === true
         ? existing.DATABASE_PASSWORD
         : (input[key] ?? defaults[key] ?? "");
-    if (typeof value !== "string" || value.length > 1024 || /[\r\n\0]/.test(value)) {
-      throw new Error(`Revisa el campo ${key}: contiene caracteres no válidos.`);
-    }
+    if (typeof value !== "string" || value.length > 1024 || /[\r\n\0]/.test(value))
+      throw new Error(`Revisa el campo ${key}.`);
     configuration[key] = key === "DATABASE_PASSWORD" ? value : value.trim();
   }
-  for (const key of ["DATABASE_HOST", "DATABASE_USER", "DATABASE_NAME"]) {
-    if (!configuration[key]) throw new Error("Completa el servidor, el usuario y el nombre de la base de datos.");
-  }
+  if (["DATABASE_HOST", "DATABASE_USER", "DATABASE_NAME"].some((key) => !configuration[key]))
+    throw new Error("Completa servidor, usuario y base de datos.");
   if (
     !/^\d+$/.test(configuration.DATABASE_PORT) ||
     Number(configuration.DATABASE_PORT) < 1 ||
     Number(configuration.DATABASE_PORT) > 65535
-  ) {
+  )
     throw new Error("El puerto de MySQL debe estar entre 1 y 65535.");
-  }
-  if (!/^\d+$/.test(configuration.PORT)) throw new Error("El puerto de DMMarket debe ser un número entero.");
-  configuration.PORT = String(serverOptions(configuration).port);
-  if (!["0.0.0.0", "127.0.0.1"].includes(configuration.HOST)) {
-    throw new Error("Elige acceso por red local o solo desde este servidor.");
-  }
-  Object.assign(configuration, normalizeWeb(input));
-  if (webEnabled(configuration)) {
-    if (configuration.PORT === "80")
-      throw new Error("El puerto 80 está reservado para Caddy. Elige otro puerto interno.");
-    if (Number(configuration.PORT) < 1024) throw new Error("El puerto interno de DMMarket debe ser 1024 o mayor.");
-    configuration.HOST = "127.0.0.1";
-  }
   return configuration;
+}
+
+function normalizeConfiguration(input, existing = {}) {
+  const configuration = { ...existing, ...normalizeDatabase(input, existing), HOST: "127.0.0.1" };
+  if (input.HOST !== undefined && input.HOST !== "127.0.0.1")
+    throw new Error("El backend debe permanecer en 127.0.0.1; el acceso de red se configura en HTTPS.");
+  const port = input.PORT ?? "8000";
+  if (typeof port !== "string" || !/^\d+$/.test(port)) throw new Error("El puerto interno debe ser un entero.");
+  configuration.PORT = String(serverOptions({ HOST: configuration.HOST, PORT: port }).port);
+  if (Number(configuration.PORT) < 1024) throw new Error("El puerto interno debe ser 1024 o mayor.");
+  Object.assign(configuration, normalizeWeb(input));
+  const bind = input.WEB_BIND_ADDRESS ?? existing.WEB_BIND_ADDRESS ?? "0.0.0.0";
+  if (!["127.0.0.1", "0.0.0.0"].includes(bind)) throw new Error("La dirección HTTPS no es válida.");
+  if (bind === "0.0.0.0" && configuration.WEB_HOSTNAME.endsWith(".localhost"))
+    throw new Error(
+      "Los nombres .localhost sólo permiten acceso desde este servidor; para LAN utiliza un nombre de tu DNS.",
+    );
+  const httpsPort = String(
+    input.WEB_HTTPS_PORT ?? (existing.AUTH_PUBLIC_ORIGIN ? new URL(existing.AUTH_PUBLIC_ORIGIN).port || "443" : "443"),
+  );
+  if (
+    !/^\d+$/.test(httpsPort) ||
+    Number(httpsPort) < 1 ||
+    Number(httpsPort) > 65535 ||
+    Number(httpsPort) === Number(configuration.PORT)
+  )
+    throw new Error("El puerto HTTPS debe ser válido y distinto del puerto interno.");
+  configuration.WEB_BIND_ADDRESS = bind;
+  configuration.AUTH_PUBLIC_ORIGIN = `https://${configuration.WEB_HOSTNAME}${Number(httpsPort) === 443 ? "" : `:${Number(httpsPort)}`}`;
+  return configuration;
+}
+
+async function prepareAccessConfiguration(configuration) {
+  const mysql = require("mysql2/promise");
+  const connection = await mysql.createConnection({
+    host: configuration.DATABASE_HOST,
+    port: Number(configuration.DATABASE_PORT),
+    user: configuration.DATABASE_USER,
+    password: configuration.DATABASE_PASSWORD,
+    database: configuration.DATABASE_NAME,
+    charset: "UTF8_GENERAL_CI",
+    connectTimeout: 5000,
+  });
+  try {
+    const [tables] = await connection.query(
+      "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dmmarket_auth_users'",
+    );
+    const [[count]] = tables.length
+      ? await connection.query("SELECT COUNT(*) AS total FROM dmmarket_auth_users")
+      : [[{ total: 0 }]];
+    if (Number(count.total) && (!configuration.AUTH_SESSION_SECRET || !configuration.AUTH_MFA_KEY))
+      throw new Error("La base contiene cuentas. Restaura sus claves originales; no se regeneran desde el asistente.");
+    const prepared = {
+      ...configuration,
+      AUTH_SESSION_SECRET: configuration.AUTH_SESSION_SECRET || randomBytes(32).toString("base64"),
+      AUTH_MFA_KEY: configuration.AUTH_MFA_KEY || randomBytes(32).toString("base64"),
+      AUTH_RECEIVABLES_WRITES_ENABLED: configuration.AUTH_RECEIVABLES_WRITES_ENABLED || "false",
+      AUTH_COMMISSION_WRITES_ENABLED: configuration.AUTH_COMMISSION_WRITES_ENABLED || "false",
+    };
+    require("./auth/runtime").validateAuthConfig(prepared);
+    if (Number(count.total)) {
+      const mfa = require("./auth/mfa").createMfa(prepared.AUTH_MFA_KEY);
+      const [users] = await connection.query(
+        "SELECT id, mfa_secret FROM dmmarket_auth_users WHERE mfa_secret IS NOT NULL",
+      );
+      for (const user of users) mfa.assertStoredSecret(user.id, user.mfa_secret);
+    }
+    return prepared;
+  } finally {
+    await connection.end();
+  }
 }
 
 function databaseFingerprint(configuration) {
@@ -114,7 +171,9 @@ async function testDatabase(configuration) {
 module.exports = {
   readConfiguration,
   serializeConfiguration,
+  normalizeDatabase,
   normalizeConfiguration,
+  prepareAccessConfiguration,
   databaseFingerprint,
   testDatabase,
 };

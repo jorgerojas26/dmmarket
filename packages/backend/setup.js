@@ -4,7 +4,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { installService, serviceDirectory, checkAdmin } = require("./service");
-const { readConfiguration, normalizeConfiguration, databaseFingerprint, testDatabase } = require("./setup-config");
+const {
+  readConfiguration,
+  normalizeDatabase,
+  normalizeConfiguration,
+  prepareAccessConfiguration,
+  databaseFingerprint,
+  testDatabase,
+} = require("./setup-config");
+const { prepareAccessSchema, accessState } = require("./setup-access");
+const { certificateInfo, trustCertificate } = require("./setup-certificates");
+const { proxyCredential } = require("./web-config");
 const {
   localAddresses,
   firewallSettings,
@@ -46,11 +56,17 @@ function createSetupApp({
   firewall = configureFirewall,
   ready = accessReady,
   finish = () => {},
+  prepareSchema = prepareAccessSchema,
+  access = accessState,
+  certificate = () => certificateInfo(),
+  trust = () => trustCertificate(),
 } = {}) {
   if (!token || token.length < 32) throw new Error("El asistente requiere un token de sesión seguro.");
   const app = express();
   let busy = false;
   let tested;
+  let preparedKeys;
+  let preparedFingerprint;
   let applied;
   let installStartedAt;
   let warnings = [];
@@ -96,14 +112,19 @@ function createSetupApp({
       directory,
       addresses,
       hasSavedPassword: typeof existing.DATABASE_PASSWORD === "string",
+      hasSavedAccessKeys: Boolean(existing.AUTH_SESSION_SECRET && existing.AUTH_MFA_KEY),
       fields: {
         DATABASE_HOST: configuration.DATABASE_HOST || "localhost",
         DATABASE_PORT: configuration.DATABASE_PORT || "3306",
         DATABASE_USER: configuration.DATABASE_USER || "",
         DATABASE_NAME: configuration.DATABASE_NAME || "",
-        HOST: configuration.HOST === "127.0.0.1" ? "127.0.0.1" : "0.0.0.0",
+        HOST: "127.0.0.1",
+        WEB_BIND_ADDRESS: configuration.WEB_BIND_ADDRESS || "0.0.0.0",
+        WEB_HTTPS_PORT: configuration.AUTH_PUBLIC_ORIGIN?.startsWith("https:")
+          ? new URL(configuration.AUTH_PUBLIC_ORIGIN).port || "443"
+          : "443",
         PORT: configuration.PORT || "8000",
-        WEB_MODE: configuration.WEB_MODE || "direct",
+        WEB_MODE: "caddy",
         WEB_HOSTNAME: configuration.WEB_HOSTNAME || "",
       },
     });
@@ -113,7 +134,7 @@ function createSetupApp({
     busy = true;
     tested = undefined;
     try {
-      const configuration = normalizeConfiguration(req.body || {}, existing);
+      const configuration = normalizeDatabase(req.body || {}, existing);
       const result = await testConnection(configuration);
       if (result.ok) tested = databaseFingerprint(configuration);
       res.status(result.ok ? 200 : 422).json(result);
@@ -128,20 +149,31 @@ function createSetupApp({
     busy = true;
     try {
       const input = req.body || {};
-      const configuration = normalizeConfiguration(input, existing);
+      const fingerprint = databaseFingerprint(normalizeDatabase(input, existing));
+      const normalized = normalizeConfiguration(input, {
+        ...existing,
+        ...(preparedFingerprint === fingerprint ? preparedKeys : {}),
+      });
       if (input.confirm !== true || input.backupConfirmed !== true) {
         return res.status(400).json({ error: "Confirma la instalación y el respaldo de la base de datos." });
       }
-      if (!tested || tested !== databaseFingerprint(configuration)) {
+      if (!tested || tested !== databaseFingerprint(normalized)) {
         return res.status(409).json({ error: "Comprueba la conexión con estos datos antes de instalar." });
       }
-      if (configuration.PORT === String(port)) {
+      if (normalized.PORT === String(port)) {
         return res
           .status(400)
           .json({ error: "El puerto elegido lo está usando el asistente. Elige otro puerto para DMMarket." });
       }
+      const configuration = await prepareAccessConfiguration(normalized);
+      preparedKeys = {
+        AUTH_SESSION_SECRET: configuration.AUTH_SESSION_SECRET,
+        AUTH_MFA_KEY: configuration.AUTH_MFA_KEY,
+      };
+      preparedFingerprint = fingerprint;
       const settings = firewallSettings(input, configuration);
       await checkPort(configuration, existing, installed);
+      await prepareSchema(configuration);
       installStartedAt = Date.now();
       await install(configuration);
       applied = configuration;
@@ -163,9 +195,27 @@ function createSetupApp({
   });
   app.get("/api/status", async (_req, res) => {
     if (!applied) return res.status(409).json({ error: "La instalación aún no se ha realizado." });
-    const isReady = await ready(applied);
-    let startupError = isReady ? "" : startupFailure(directory, installStartedAt);
-    if (applied.DATABASE_PASSWORD) startupError = startupError.split(applied.DATABASE_PASSWORD).join("[oculta]");
+    const serviceReady = await ready(applied);
+    let identity = { firstAdministratorRequired: false, administratorReady: false };
+    let accessUnavailable = false;
+    try {
+      identity = await access(applied);
+    } catch {
+      accessUnavailable = true;
+    }
+    const isReady = serviceReady && identity.administratorReady;
+    let startupError = serviceReady ? "" : startupFailure(directory, installStartedAt);
+    for (const secret of [
+      applied.DATABASE_PASSWORD,
+      applied.AUTH_SESSION_SECRET,
+      applied.AUTH_MFA_KEY,
+      proxyCredential(applied),
+    ])
+      if (secret) startupError = startupError.split(secret).join("[oculta]");
+    let ca = null;
+    try {
+      ca = certificate();
+    } catch {}
     const urls = accessUrls(applied, addresses);
     const dnsRecords = webEnabled(applied)
       ? addresses.map(({ address }) => ({ name: applied.WEB_HOSTNAME, type: "A", address }))
@@ -178,12 +228,19 @@ function createSetupApp({
           : "Get-ScheduledTaskInfo -TaskName DMMarket";
     res.json({
       ready: isReady,
+      serviceReady,
+      accessUnavailable,
+      ...identity,
+      certificateAvailable: Boolean(ca),
+      certificateFingerprint: ca?.fingerprint || null,
+      bootstrapInstructions:
+        "Desde una terminal administrativa en la carpeta permanente: detén el servicio de DMMarket, ejecuta el binario con --bootstrap-access --username admin-acceso --display-name Administrador --reason Inicializacion y vuelve a iniciar el servicio. La contraseña temporal sólo se entrega en esa terminal; cambia la contraseña y configura MFA desde el acceso HTTPS. Si ya existe una cuenta temporal, completa ese acceso en lugar de crear otra.",
       startupError,
       urls,
       warnings: webEnabled(applied)
         ? [
             ...warnings,
-            "El acceso con Caddy usa HTTP, sin cifrado. El nombre requiere DNS local: el instalador no configura ni comprueba el DNS de las otras máquinas.",
+            "El acceso requiere HTTPS confiable. Configura DNS e instala la CA pública de DMMarket en cada equipo autorizado; no ignores advertencias de certificado. La comprobación local no verifica el DNS o la confianza de otras máquinas.",
           ]
         : warnings,
       dnsRecords,
@@ -193,6 +250,29 @@ function createSetupApp({
         : diagnostic,
       localOnly: accessOptions(applied).host === "127.0.0.1" || !addresses.length,
     });
+  });
+  app.get("/api/certificate", (_req, res) => {
+    if (!applied) return res.status(409).json({ error: "Confirma primero la instalación." });
+    try {
+      const info = certificate();
+      res
+        .set("Content-Disposition", 'attachment; filename="DMMarket-CA.crt"')
+        .type("application/x-x509-ca-cert")
+        .send(info.certificate);
+    } catch {
+      res.status(404).json({ error: "La CA pública todavía no está disponible." });
+    }
+  });
+  app.post("/api/trust", (req, res) => {
+    if (!applied || req.body?.confirmed !== true || Object.keys(req.body).some((key) => key !== "confirmed"))
+      return res.status(400).json({ error: "Confirma la confianza sólo para este servidor." });
+    try {
+      res.json(trust());
+    } catch {
+      res.status(400).json({
+        error: "No se pudo registrar la CA. Instala su certificado público manualmente con permisos administrativos.",
+      });
+    }
   });
   app.post("/api/finish", (_req, res) => {
     if (busy) return res.status(409).json({ error: "Espera a que termine la operación en curso." });

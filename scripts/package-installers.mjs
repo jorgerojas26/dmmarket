@@ -43,7 +43,6 @@ export function packageInstaller(root, platform, version) {
       copyFileSync(path.join(source, "LICENSE"), path.join(destination, "LICENSE"));
     }
     copyFileSync(path.join(root, "packages/backend/caddy-manifest.json"), path.join(directory, "web", "manifest.json"));
-    copyFileSync(path.join(root, "installers", "LEEME.txt"), path.join(directory, "LEEME.txt"));
     rmSync(output, { force: true });
     const result = spawnSync("zip", ["-q", "-r", "-X", output, folder], { cwd: temporary, encoding: "utf8" });
     if (result.error || result.status !== 0) {
