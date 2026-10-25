@@ -77,3 +77,15 @@ async function seedCommissions(db) {
 }
 
 module.exports = { seedCommissions };
+
+async function prepareCommissionWrites(db) {
+  await require("../../packages/backend/migrations/20261027_add_commission_operations").up(db);
+  await db("vendedor_comisiones").where("grupoId", "COM-G2").del();
+  await db.raw("ALTER TABLE vendedor_comisiones ENGINE=InnoDB");
+  await db.raw("ALTER TABLE vendedor_comisiones MODIFY comision DECIMAL(7,4) NOT NULL");
+  await db.schema.alterTable("vendedor_comisiones", (table) =>
+    table.unique(["vendedorId", "grupoId"], "commission_vendor_group_unique"),
+  );
+}
+
+module.exports.prepareCommissionWrites = prepareCommissionWrites;

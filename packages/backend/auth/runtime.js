@@ -18,6 +18,7 @@ const { createPurchaseReports } = require("./purchase-reports");
 const { createProviderReports } = require("./provider-reports");
 const { createAuditReports } = require("./audit-reports");
 const { createCommissionReports } = require("./commission-reports");
+const { createCommissionUpdates } = require("./commission-updates");
 const { createReceivablesReports } = require("./receivables-reports");
 const { createHttpSecurity, sessionOptions, authErrorHandler } = require("./http-security");
 const { createAuthRouter, forbidden } = require("./router");
@@ -29,6 +30,11 @@ function validateAuthConfig(env) {
     !["true", "false"].includes(env.AUTH_RECEIVABLES_WRITES_ENABLED)
   )
     throw new Error("AUTH_RECEIVABLES_WRITES_ENABLED debe ser true o false.");
+  if (
+    env.AUTH_COMMISSION_WRITES_ENABLED !== undefined &&
+    !["true", "false"].includes(env.AUTH_COMMISSION_WRITES_ENABLED)
+  )
+    throw new Error("AUTH_COMMISSION_WRITES_ENABLED debe ser true o false.");
   const security = createHttpSecurity(env.AUTH_PUBLIC_ORIGIN);
   const mfa = createMfa(env.AUTH_MFA_KEY);
   createAttemptLimiter({ db: null, secret: env.AUTH_SESSION_SECRET });
@@ -79,6 +85,9 @@ async function createAuthRuntime({ db, env = process.env }) {
     router.use(createProviderReports({ sessions }));
     router.use(createAuditReports({ sessions }));
     router.use(createCommissionReports({ sessions }));
+    router.use(
+      createCommissionUpdates({ sessions, security, writesEnabled: env.AUTH_COMMISSION_WRITES_ENABLED === "true" }),
+    );
     router.use(
       createReceivablesReports({ sessions, security, writesEnabled: env.AUTH_RECEIVABLES_WRITES_ENABLED === "true" }),
     );

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
+import CommissionEditor from './commission-editor';
 import { useAuth } from './context';
 import { AccessForm, Field } from './forms';
 
 export default function Commissions() {
-    const { session } = useAuth();
+    const { session, can } = useAuth();
     const sales = session.permissions.some((grant) => grant.capability === 'sales.read');
     const [employeeId, setEmployee] = useState('');
     const [kind, setKind] = useState('rates');
@@ -14,9 +15,15 @@ export default function Commissions() {
     const [to, setTo] = useState(today);
     const [query, setQuery] = useState(null);
     const [page, setPage] = useState(1);
-    const { data, error } = useSWR(
+    const { data, error, mutate } = useSWR(
         query
             ? `/api/employees/${query.kind === 'rates' ? 'commissionInfo' : 'sales'}/${encodeURIComponent(query.employeeId)}${query.kind === 'sales' ? `?${new URLSearchParams({ from: query.from, to: query.to, page, limit: 20 })}` : ''}`
+            : null,
+        fetcher,
+    );
+    const { data: readiness, error: readinessError } = useSWR(
+        query?.kind === 'rates' && can('commissions.update')
+            ? `/api/employees/commissionInfo/${encodeURIComponent(query.employeeId)}/status`
             : null,
         fetcher,
     );
@@ -55,8 +62,9 @@ export default function Commissions() {
                 )}
             </AccessForm>
             <p>
-                Consulta de sólo lectura. Los porcentajes no se pueden editar desde esta pantalla. El histórico
-                disponible corresponde únicamente al sistema Facturas; no se reutiliza para notas de entrega.
+                Consulta de sólo lectura. La edición requiere permiso explícito, almacenamiento preparado y habilitación
+                independiente. El histórico disponible corresponde únicamente al sistema Facturas; no se reutiliza para
+                notas de entrega.
             </p>
             <p>
                 La comisión se calcula con el histórico capturado y el grupo actual del producto. Si falta información o
@@ -129,6 +137,18 @@ export default function Commissions() {
                             Comisiones: página siguiente
                         </button>
                     </>
+                ))}
+            {query?.kind === 'rates' &&
+                data &&
+                !error &&
+                can('commissions.update') &&
+                (readiness?.writesAvailable && !readinessError ? (
+                    <CommissionEditor employeeId={query.employeeId} groups={data} onSaved={() => mutate()} />
+                ) : (
+                    <p>
+                        La edición de porcentajes está deshabilitada hasta su preparación transaccional y habilitación
+                        explícita.
+                    </p>
                 ))}
         </section>
     );

@@ -102,7 +102,7 @@ function client(environment) {
   };
 }
 
-async function startEnvironment({ web = false, receivablesWrites = false } = {}) {
+async function startEnvironment({ web = false, receivablesWrites = false, commissionWrites = false } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-auth-test-"));
   fs.chmodSync(directory, 0o700);
   let container;
@@ -178,6 +178,7 @@ async function startEnvironment({ web = false, receivablesWrites = false } = {})
       AUTH_SESSION_SECRET: randomBytes(32).toString("base64"),
       AUTH_MFA_KEY: randomBytes(32).toString("base64"),
       AUTH_RECEIVABLES_WRITES_ENABLED: String(receivablesWrites),
+      AUTH_COMMISSION_WRITES_ENABLED: String(commissionWrites),
     };
     db = knex({
       client: MySql2Client,
