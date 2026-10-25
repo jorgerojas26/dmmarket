@@ -18,6 +18,7 @@ const { createPurchaseReports } = require("./purchase-reports");
 const { createProviderReports } = require("./provider-reports");
 const { createAuditReports } = require("./audit-reports");
 const { createCommissionReports } = require("./commission-reports");
+const { createReceivablesReports } = require("./receivables-reports");
 const { createHttpSecurity, sessionOptions, authErrorHandler } = require("./http-security");
 const { createAuthRouter, forbidden } = require("./router");
 
@@ -73,6 +74,7 @@ async function createAuthRuntime({ db, env = process.env }) {
     router.use(createProviderReports({ sessions }));
     router.use(createAuditReports({ sessions }));
     router.use(createCommissionReports({ sessions }));
+    router.use(createReceivablesReports({ sessions }));
     router.use((req, res, next) => {
       sessions
         .withSession(req.sessionID, {}, async ({ access, transaction }) => {

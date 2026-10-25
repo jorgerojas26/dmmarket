@@ -58,6 +58,7 @@ test("URL directa y rutas pendientes no montan formularios ni consultas protegid
     "/clientes",
     "/ventas/pareto",
     "/proveedores",
+    "/cartera",
     "/auditoria",
     "/comisiones",
     "/configuracion",

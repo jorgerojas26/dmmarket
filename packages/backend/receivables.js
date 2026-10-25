@@ -100,7 +100,7 @@ const eligible = (d) =>
   d.IdCliente != null &&
   d.saleClient === d.IdCliente;
 
-function createReceivablesService({ db, now = () => new Date() }) {
+function createReceivablesService({ db, now = () => new Date(), personal = true, referenceRate = true }) {
   async function readiness() {
     const tables = await Promise.all(
       ["cxc_documentos", "cxc_movimientos", "cxc_cruces", "cxc_operaciones", "cxc_cierres"].map((table) =>
@@ -122,8 +122,10 @@ function createReceivablesService({ db, now = () => new Date() }) {
 
   function documents(connection, clientId) {
     return connection("cxc_documentos as d")
-      .leftJoin("masterfact as f", "f.IdFactura", "d.IdFactura")
-      .where("d.IdCliente", clientId)
+      .leftJoin("masterfact as f", function () {
+        this.on(connection.raw("BINARY f.IdFactura = BINARY d.IdFactura"));
+      })
+      .whereRaw("BINARY d.IdCliente <=> BINARY ?", [clientId])
       .where("d.TipoDoc", "FAC")
       .where("d.MonedaOriginal", "USD")
       .select("d.*", "f.Anulada as saleCancelled", "f.IdCliente as saleClient")
@@ -134,7 +136,10 @@ function createReceivablesService({ db, now = () => new Date() }) {
   }
 
   async function context(connection, clientId, lock = false, allowUnregistered = false) {
-    const clientQuery = connection("clientes").where("IdCliente", clientId).first();
+    const clientQuery = connection("clientes")
+      .whereRaw("BINARY IdCliente <=> BINARY ?", [clientId])
+      .select("IdCliente", "Empresa", "Ruta", ...(personal ? ["Rif"] : []))
+      .first();
     let client = await (lock ? clientQuery.forUpdate() : clientQuery);
     if (!client && !allowUnregistered) fail("Cliente no encontrado.", 404);
     const docsQuery = documents(connection, clientId);
@@ -151,7 +156,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
     }
     const closures = await connection("cxc_cierres as c")
       .join("cxc_documentos as d", "d.IdDocumento", "c.IdDocumento")
-      .where("d.IdCliente", clientId)
+      .whereRaw("BINARY d.IdCliente <=> BINARY ?", [clientId])
       .whereNull("c.Reapertura")
       .select("c.*")
       .orderBy("c.IdCierre");
@@ -368,9 +373,11 @@ function createReceivablesService({ db, now = () => new Date() }) {
 
   function clientQuery(today) {
     const valid =
-      "d.TipoDoc = 'FAC' AND d.MonedaOriginal = 'USD' AND d.Estatus <> 'ANULADO' AND f.Anulada = 0 AND f.IdCliente = d.IdCliente";
+      "d.TipoDoc = 'FAC' AND d.MonedaOriginal = 'USD' AND d.Estatus <> 'ANULADO' AND f.Anulada = 0 AND BINARY f.IdCliente = BINARY d.IdCliente";
     const aggregates = db("cxc_documentos as d")
-      .leftJoin("masterfact as f", "f.IdFactura", "d.IdFactura")
+      .leftJoin("masterfact as f", function () {
+        this.on(db.raw("BINARY f.IdFactura = BINARY d.IdFactura"));
+      })
       .where("d.TipoDoc", "FAC")
       .where("d.MonedaOriginal", "USD")
       .select("d.IdCliente")
@@ -382,7 +389,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
         ),
       )
       .select(db.raw(`SUM(CASE WHEN ${valid} AND d.SaldoActual > 0 THEN 1 ELSE 0 END) as pendingCount`))
-      .groupBy("d.IdCliente");
+      .groupByRaw("BINARY d.IdCliente");
     const lastPayment = db("cxc_movimientos as m")
       .leftJoin("cxc_operaciones as v", function () {
         this.on("v.Referencia", "m.IdMov").andOnVal("v.Tipo", "ANULACION");
@@ -390,11 +397,15 @@ function createReceivablesService({ db, now = () => new Date() }) {
       .whereNull("v.IdOperacion")
       .select("m.IdCliente")
       .max("m.Fecha as lastPayment")
-      .groupBy("m.IdCliente");
+      .groupByRaw("BINARY m.IdCliente");
     return db
       .from(aggregates.as("a"))
-      .leftJoin("clientes as c", "c.IdCliente", "a.IdCliente")
-      .leftJoin(lastPayment.as("p"), "p.IdCliente", "a.IdCliente")
+      .leftJoin("clientes as c", function () {
+        this.on(db.raw("BINARY c.IdCliente = BINARY a.IdCliente"));
+      })
+      .leftJoin(lastPayment.as("p"), function () {
+        this.on(db.raw("BINARY p.IdCliente = BINARY a.IdCliente"));
+      })
       .select(
         db.raw(
           "CASE WHEN a.IdCliente IS NULL THEN '__none__' WHEN a.IdCliente = '' THEN '__empty__' ELSE a.IdCliente END as id",
@@ -430,7 +441,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
     if (typeof sort !== "string" || (filters.sortDir && !["asc", "desc"].includes(filters.sortDir)))
       fail("Orden de cartera no válido.");
     const scope = clientQuery(status.today);
-    if (ruta) scope.where("c.Ruta", ruta);
+    if (ruta) scope.whereRaw("BINARY c.Ruta = ?", [ruta]);
     const summaryRows = await db
       .from(scope.clone().as("s"))
       .sum("balance as balance")
@@ -438,14 +449,16 @@ function createReceivablesService({ db, now = () => new Date() }) {
       .select(db.raw("SUM(CASE WHEN balance > 0 THEN 1 ELSE 0 END) as debtors"))
       .first();
     const received = db("cxc_movimientos as m")
-      .leftJoin("clientes as c", "c.IdCliente", "m.IdCliente")
+      .leftJoin("clientes as c", function () {
+        this.on(db.raw("BINARY c.IdCliente = BINARY m.IdCliente"));
+      })
       .leftJoin("cxc_operaciones as v", function () {
         this.on("v.Referencia", "m.IdMov").andOnVal("v.Tipo", "ANULACION");
       })
       .whereNull("v.IdOperacion")
       .where("m.Fecha", ">=", `${status.today.slice(0, 7)}-01 00:00:00`)
       .where("m.Fecha", "<=", `${status.today} 23:59:59`);
-    if (ruta) received.where("c.Ruta", ruta);
+    if (ruta) received.whereRaw("BINARY c.Ruta = ?", [ruta]);
     const receivedRow = await received.sum("m.MontoBase as amount").first();
     const query = scope.clone();
     if (search)
@@ -456,9 +469,8 @@ function createReceivablesService({ db, now = () => new Date() }) {
           ),
           "like",
           `%${search}%`,
-        )
-          .orWhere("a.IdCliente", "like", `%${search}%`)
-          .orWhere("c.Rif", "like", `%${search}%`);
+        ).orWhere("a.IdCliente", "like", `%${search}%`);
+        if (personal) this.orWhere("c.Rif", "like", `%${search}%`);
       });
     if (state === "debt") query.where("a.balance", ">", 0);
     if (state === "settled") query.where("a.balance", "=", 0);
@@ -510,7 +522,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
         .leftJoin("cxc_operaciones as v", function () {
           this.on("v.Referencia", "m.IdMov").andOnVal("v.Tipo", "ANULACION");
         })
-        .where("m.IdCliente", clientId)
+        .whereRaw("BINARY m.IdCliente <=> BINARY ?", [clientId])
         .whereNull("v.IdOperacion")
         .groupBy("x.IdDocumento")
         .select("x.IdDocumento")
@@ -546,7 +558,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
         .leftJoin("cxc_operaciones as p", function () {
           this.on("p.Referencia", "m.IdMov").andOnVal("p.Tipo", "ABONO");
         })
-        .where("m.IdCliente", clientId)
+        .whereRaw("BINARY m.IdCliente <=> BINARY ?", [clientId])
         .select(
           connection.raw("CONCAT('m-', m.IdMov) as eventId"),
           connection.raw("'payment' as type"),
@@ -566,7 +578,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
           connection.raw("NULL as reason"),
         );
       const operations = connection("cxc_operaciones")
-        .where("IdCliente", clientId)
+        .whereRaw("BINARY IdCliente <=> BINARY ?", [clientId])
         .whereNot("Tipo", "ABONO")
         .select(
           "IdOperacion as eventId",
@@ -597,18 +609,20 @@ function createReceivablesService({ db, now = () => new Date() }) {
             .sum("x.MontoAplicado as amount")
             .groupBy("x.IdMovimiento", "x.IdDocumento", "d.IdFactura")
         : [];
-      const rateRow = await connection("divisas").where("Simbolo", "BsS").orderBy("IdDivisa").first();
+      const rateRow = referenceRate
+        ? await connection("divisas").where("Simbolo", "BsS").orderBy("IdDivisa").first()
+        : null;
       return {
         ...status,
         client: {
           id: reportId(state.client.IdCliente),
           name: state.client.Empresa,
-          rif: state.client.Rif,
+          ...(personal ? { rif: state.client.Rif } : {}),
           ruta: state.client.Ruta,
           unregistered: !!state.client.unregistered,
         },
         summary: summary(state.docs, status.today),
-        rate: rateRow?.Cambio ? String(rateRow.Cambio) : null,
+        ...(referenceRate ? { rate: rateRow?.Cambio ? String(rateRow.Cambio) : null } : {}),
         documents: { data: docs.slice((page - 1) * limit, page * limit), total: docs.length, page, limit },
         timeline: {
           data: timeline.map((event) => {

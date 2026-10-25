@@ -13,6 +13,7 @@ import Parties from './auth/parties';
 import Providers from './auth/providers';
 import PurchaseOverview from './auth/purchase-overview';
 import Purchases from './auth/purchases';
+import Receivables from './auth/receivables';
 import Sales from './auth/sales';
 import SellerDashboard from './auth/seller-dashboard';
 import AccessWorkspace, { Account, Rates } from './auth/workspace';
@@ -29,6 +30,7 @@ export default function App() {
         { path: '/proveedores', label: 'Proveedores', allowed: can('providers.read') },
         { path: '/clientes', label: 'Clientes', allowed: can('clients.read') },
         { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read') },
+        { path: '/cartera', label: 'Cartera', allowed: can('receivables.read') },
         { path: '/comisiones', label: 'Comisiones', allowed: has('commissions.read') },
         { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
         { path: '/tasas', label: 'Tasas', allowed: can('rates.read') },
@@ -82,6 +84,7 @@ export default function App() {
             allowed: has('sellers.read') && has('sales.read'),
             content: <SellerDashboard />,
         },
+        { path: '/cartera', label: 'Consulta', allowed: can('receivables.read'), content: <Receivables /> },
         { path: '/comisiones', label: 'Consulta', allowed: has('commissions.read'), content: <Commissions /> },
         { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
         { path: '/tasas', label: 'Referencia', allowed: can('rates.read'), content: <Rates /> },

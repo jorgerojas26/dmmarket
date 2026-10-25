@@ -1105,3 +1105,44 @@ test("histórico de comisiones no duplica ventas y no muestra como cero capturas
     ),
   ).toBe(403);
 });
+
+test("cobranza autorizada ve deuda completa del cliente compartido sin heredar filtro de ventas propias", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await require("../support/receivables-fixtures.cjs").seedReceivables(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "receivables.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await openModule(page, "Cartera");
+  const report = page.getByRole("region", { name: "Cartera de cobranza autorizada", exact: true });
+  await expect(report.getByText("Cuentas autorizadas encontradas: 3", { exact: true })).toBeVisible();
+  await report.getByRole("button", { name: "Abrir cuenta C", exact: true }).click();
+  const account = page.getByRole("region", { name: "Cuenta de cobranza autorizada", exact: true });
+  await expect(account.getByText("Saldo completo del cliente (USD): 300.0000", { exact: true })).toBeVisible();
+  const table = account.getByRole("table", { name: "Documentos autorizados de cobranza", exact: true });
+  await expect(table.getByRole("cell", { name: "1", exact: true })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "2", exact: true })).toBeVisible();
+  await expect(account.getByText("PRIVATE-IDENTIFICATION", { exact: false })).toHaveCount(0);
+  await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toHaveCount(0);
+});
+
+test("vendedor sin permiso de cobranza no tiene cartera ni acceso directo a saldos", async ({ page, environment }) => {
+  const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await login(page, environment, user);
+  await expect(
+    page
+      .getByRole("navigation", { name: "Módulos disponibles", exact: true })
+      .getByRole("link", { name: "Cartera", exact: true }),
+  ).toHaveCount(0);
+  await page.goto(`${environment.origin}/cartera`);
+  await expect(page.getByRole("heading", { name: "Página no disponible", exact: true })).toBeVisible();
+  expect(await page.evaluate(async () => (await fetch("/api/receivables/C")).status)).toBe(403);
+});
