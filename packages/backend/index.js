@@ -69,9 +69,9 @@ app.use("/api", (req, res, next) => {
 });
 const { reportCache } = require("./middlewares/report-cache");
 
-async function initializeAuth(env = process.env) {
+async function initializeAuth(env = process.env, services = {}) {
   if (authRuntime) throw new Error("El servicio de acceso ya está iniciado.");
-  authRuntime = await createAuthRuntime({ db: require("./database"), env });
+  authRuntime = await createAuthRuntime({ db: require("./database"), env, services });
   return authRuntime;
 }
 

@@ -36,7 +36,11 @@ export default function App() {
         { path: '/comisiones', label: 'Comisiones', allowed: has('commissions.read') },
         { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
         { path: '/tasas', label: 'Tasas', allowed: can('rates.read') },
-        { path: '/operacion', label: 'Operación', allowed: ['cache.clear', 'backups.read', 'updates.read'].some(can) },
+        {
+            path: '/operacion',
+            label: 'Operación',
+            allowed: ['cache.clear', 'rates.sync', 'backups.read', 'backups.create', 'updates.read'].some(can),
+        },
         { path: '/auditoria', label: 'Auditoría', allowed: can('audit.read') },
         { path: '/acceso', label: 'Acceso', allowed: access },
     ].filter((module) => module.allowed);
@@ -95,7 +99,7 @@ export default function App() {
         {
             path: '/operacion',
             label: 'Sistema',
-            allowed: ['cache.clear', 'backups.read', 'updates.read'].some(can),
+            allowed: ['cache.clear', 'rates.sync', 'backups.read', 'backups.create', 'updates.read'].some(can),
             content: <Operations />,
         },
         { path: '/auditoria', label: 'Historial', allowed: can('audit.read'), content: <Audit /> },

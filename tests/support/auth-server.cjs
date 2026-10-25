@@ -13,7 +13,25 @@ async function main() {
   Object.assign(process.env, configuration);
   delete process.env.DEBUG;
   const app = require("../../packages/backend/index");
-  await app.initializeAuth(configuration);
+  const services = {};
+  if (configuration.RATE_FIXTURE_SOURCE) {
+    const origin = new URL(configuration.RATE_FIXTURE_SOURCE);
+    if (origin.hostname !== "127.0.0.1" || origin.protocol !== "http:")
+      throw new Error("El origen de tasas requiere el laboratorio local.");
+    services.rates = require("../../packages/backend/bcv").crearServicioTasas({
+      download: async (url, { etag } = {}) => {
+        const response = await fetch(`${origin.origin}${new URL(url).pathname}`, {
+          headers: etag ? { "if-none-match": etag } : {},
+        });
+        return {
+          estado: response.status,
+          cabeceras: Object.fromEntries(response.headers),
+          cuerpo: Buffer.from(await response.arrayBuffer()),
+        };
+      },
+    });
+  }
+  await app.initializeAuth(configuration, services);
   const server = app.listen(Number(configuration.PORT), "127.0.0.1");
   process.once("SIGTERM", async () => {
     server.closeAllConnections();

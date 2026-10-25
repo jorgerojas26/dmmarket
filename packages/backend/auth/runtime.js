@@ -43,7 +43,7 @@ function validateAuthConfig(env) {
   return { security, mfa };
 }
 
-async function createAuthRuntime({ db, env = process.env }) {
+async function createAuthRuntime({ db, env = process.env, services = {} }) {
   const { security, mfa } = validateAuthConfig(env);
   const attempts = createAttemptLimiter({ db, secret: env.AUTH_SESSION_SECRET });
   const sessions = await createSessionService({ db, mfa, attempts });
@@ -87,7 +87,7 @@ async function createAuthRuntime({ db, env = process.env }) {
     router.use(createProviderReports({ sessions }));
     router.use(createAuditReports({ sessions }));
     router.use(createExportReports({ sessions }));
-    router.use(createOperationReports({ sessions, security, db }));
+    router.use(createOperationReports({ sessions, security, db, services }));
     router.use(createCommissionReports({ sessions }));
     router.use(
       createCommissionUpdates({ sessions, security, writesEnabled: env.AUTH_COMMISSION_WRITES_ENABLED === "true" }),

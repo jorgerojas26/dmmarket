@@ -102,7 +102,13 @@ function client(environment) {
   };
 }
 
-async function startEnvironment({ web = false, receivablesWrites = false, commissionWrites = false } = {}) {
+async function startEnvironment({
+  web = false,
+  receivablesWrites = false,
+  commissionWrites = false,
+  rateSource = false,
+  authKeys = null,
+} = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-auth-test-"));
   fs.chmodSync(directory, 0o700);
   let container;
@@ -131,6 +137,7 @@ async function startEnvironment({ web = false, receivablesWrites = false, commis
           }
           if (child.exitCode === null && !child.signalCode) child.kill("SIGKILL");
         }
+        if (environment.rateSource) await environment.rateSource.close();
         if (db) await db.destroy();
       } finally {
         try {
@@ -165,6 +172,9 @@ async function startEnvironment({ web = false, receivablesWrites = false, commis
       "dmmarket/mysql:5.0.24",
     );
     environment.container = container;
+    if (rateSource) {
+      environment.rateSource = await require("./rate-source.cjs").startRateSource();
+    }
     const metadata = JSON.parse(docker("inspect", container))[0];
     const binding = metadata.NetworkSettings.Ports["3306/tcp"][0];
     if (binding.HostIp !== "127.0.0.1" || binding.HostPort === "3306") throw new Error("Publicación MySQL no aislada.");
@@ -176,8 +186,10 @@ async function startEnvironment({ web = false, receivablesWrites = false, commis
       DATABASE_USER: "root",
       DATABASE_PASSWORD: password,
       BACKUP_DIRECTORY: path.join(directory, "backups"),
-      AUTH_SESSION_SECRET: randomBytes(32).toString("base64"),
-      AUTH_MFA_KEY: randomBytes(32).toString("base64"),
+      BACKUP_DUMP_COMMAND: path.join(__dirname, "mysql-dump.cjs"),
+      DMMARKET_TEST_CONTAINER: container,
+      AUTH_SESSION_SECRET: authKeys?.sessionSecret || randomBytes(32).toString("base64"),
+      AUTH_MFA_KEY: authKeys?.mfaKey || randomBytes(32).toString("base64"),
       AUTH_RECEIVABLES_WRITES_ENABLED: String(receivablesWrites),
       AUTH_COMMISSION_WRITES_ENABLED: String(commissionWrites),
     };
@@ -269,6 +281,7 @@ async function startEnvironment({ web = false, receivablesWrites = false, commis
       WEB_BIND_ADDRESS: "127.0.0.1",
       AUTH_PUBLIC_ORIGIN: environment.origin,
     });
+    if (environment.rateSource) configuration.RATE_FIXTURE_SOURCE = environment.rateSource.origin;
     const configurationFile = path.join(directory, "configuration.json");
     fs.writeFileSync(configurationFile, JSON.stringify(configuration), { mode: 0o600 });
     fs.writeFileSync(path.join(directory, "Caddyfile"), caddyFile(configuration), { mode: 0o600 });

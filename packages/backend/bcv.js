@@ -246,6 +246,7 @@ function crearServicioTasas({
   logger = console,
   now = () => new Date(),
   intervaloMs = INTERVALO_MS,
+  download = descargar,
 } = {}) {
   let etags = new Map();
   let enCurso = null;
@@ -276,7 +277,7 @@ function crearServicioTasas({
         for (const url of trimestresEnVentana(desde, hoy)) {
           const nombre = url.split("/").pop();
           try {
-            const respuesta = await descargar(url, { etag: etags.get(url) });
+            const respuesta = await download(url, { etag: etags.get(url) });
             if (respuesta.estado === 304) {
               revisadas++;
               continue;

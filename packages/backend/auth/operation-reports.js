@@ -2,7 +2,7 @@ const express = require("express");
 const { randomUUID } = require("node:crypto");
 const { parameters } = require("./sales-reports");
 const { appendEvent } = require("./identity");
-const { fechaEnCaracas } = require("../bcv");
+const { fechaEnCaracas, bcvRateService } = require("../bcv");
 const { backupService } = require("../backups");
 const updates = require("../controllers/update");
 const { reportCache } = require("../middlewares/report-cache");
@@ -20,7 +20,10 @@ function asRate(row) {
 }
 const dateColumn = (tx) => tx.raw("CAST(DATE_FORMAT(Fecha, '%Y-%m-%d') AS CHAR)");
 
-function createOperationReports({ sessions, security, db }) {
+function createOperationReports({ sessions, security, db, services = {} }) {
+  const rateService = services.rates || bcvRateService;
+  let lastBackup = null;
+  let lastSync = null;
   const router = express.Router();
   const handle = (capability, work) => async (req, res, next) => {
     try {
@@ -82,6 +85,7 @@ function createOperationReports({ sessions, security, db }) {
         .first();
       return {
         disponible: true,
+        lastRequest: lastSync,
         ultimaTasa: asRate(current),
         ultimaPublicada: asRate(newest),
         publicadaHasta: newest?.Fecha || null,
@@ -111,6 +115,7 @@ function createOperationReports({ sessions, security, db }) {
       const value = await backupService.status();
       return {
         backups: value.backups.slice(0, 30),
+        lastRequest: lastBackup,
         running: value.running,
         nextRunAt: value.nextRunAt,
         retention: value.retention,
@@ -135,6 +140,80 @@ function createOperationReports({ sessions, security, db }) {
         });
         controller(req, res);
       } catch (error) {
+        next(error);
+      }
+    });
+  for (const [path, capability, service] of [
+    ["/backups", "backups.create", "backup"],
+    ["/currency_rates/bcv/sync", "rates.sync", "rates"],
+  ])
+    router.post(path, security.csrfProtection, async (req, res, next) => {
+      try {
+        if (!req.is("application/json")) fail(415);
+        const operationId = randomUUID();
+        const actorId = await sessions.withSession(
+          req.sessionID,
+          { recent: true },
+          async ({ transaction, access, user }) => {
+            if (!access.hasGlobal(capability)) fail(403);
+            empty(req.query);
+            if (req.body?.confirmed !== true || Object.keys(req.body).some((key) => key !== "confirmed")) fail(400);
+            await appendEvent(transaction, {
+              actorId: user.id,
+              action: `${capability}_requested`,
+              reason: operationId,
+              occurredMs: Date.now(),
+            });
+            return user.id;
+          },
+        );
+        if (
+          (service === "backup" && (await backupService.status()).running) ||
+          (service === "rates" && lastSync?.outcome === "running")
+        )
+          fail(409);
+        const request = { operationId, actorId, startedAt: new Date().toISOString(), outcome: "running" };
+        if (service === "backup") lastBackup = request;
+        else lastSync = request;
+        const work = service === "backup" ? backupService.createManual({ operationId }) : rateService.sincronizar();
+        void Promise.resolve(work)
+          .then(async (result) => {
+            const ok = service === "backup" ? result?.ok === true : true;
+            const outcome = ok ? "success" : "failure";
+            if (service === "backup" && result?.name) request.filename = result.name;
+            if (service === "rates") request.written = result.escritas;
+            await db.transaction((connection) =>
+              appendEvent(connection, {
+                actorId,
+                action: `${capability}_completed`,
+                outcome,
+                reason: operationId,
+                occurredMs: Date.now(),
+              }),
+            );
+            request.outcome = outcome;
+            request.completedAt = new Date().toISOString();
+          })
+          .catch(async () => {
+            request.outcome = "failure";
+            request.completedAt = new Date().toISOString();
+            try {
+              await db.transaction((connection) =>
+                appendEvent(connection, {
+                  actorId,
+                  action: `${capability}_failed`,
+                  outcome: "failure",
+                  reason: operationId,
+                  occurredMs: Date.now(),
+                }),
+              );
+            } catch {
+              console.error("No se pudo registrar el resultado de la operación autorizada.");
+            }
+          });
+        res.status(202).json({ accepted: true, operationId });
+      } catch (error) {
+        if (error.code === "BACKUP_RUNNING") error.status = 409;
         next(error);
       }
     });
