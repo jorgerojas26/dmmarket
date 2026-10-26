@@ -31,6 +31,7 @@ async function prepareAccessSchema(configuration) {
       await require("./migrations/20261025_add_auth_event_role").up(db);
     }
     await assertAuthSchema(db);
+    await require("./seeds/001_default_roles").seed(db);
   } finally {
     try {
       await db.raw("SELECT RELEASE_LOCK(?)", [lockName]);

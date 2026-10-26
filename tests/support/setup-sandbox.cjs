@@ -2,13 +2,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
 const { randomBytes } = require("node:crypto");
-const { backend } = require("./auth-environment.cjs");
+const { backend, until } = require("./auth-environment.cjs");
+const { spawn } = require("node:child_process");
+const { once } = require("node:events");
+const { buildNativeServer } = require("./native-server.cjs");
 const { createSetupApp } = backend("./setup");
 const { serializeConfiguration } = backend("./setup-config");
 const { checkApplicationPort, proxyReady } = backend("./setup-network");
 const { certificateInfo } = backend("./setup-certificates");
 
-async function startSetupSandbox(environment, existing = environment.configuration) {
+async function startSetupSandbox(environment, existing = environment.configuration, compiled = false) {
   const directory = fs.mkdtempSync(path.join(environment.directory, "setup-"));
   const web = path.join(directory, "web");
   const certificateFile = path.join(web, "data", "pki", "authorities", "local", "root.crt");
@@ -16,26 +19,59 @@ async function startSetupSandbox(environment, existing = environment.configurati
   fs.writeFileSync(certificateFile, environment.ca, { mode: 0o600 });
   fs.writeFileSync(path.join(web, "installation.json"), JSON.stringify({ component: "DMMarket-Web" }));
   const token = randomBytes(32).toString("hex");
-  let app;
-  const server = http.createServer((req, res) => app(req, res));
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const port = server.address().port;
-  app = createSetupApp({
-    token,
-    port,
-    existing,
-    installed: true,
-    directory,
-    addresses: [],
-    install: async (configuration) => {
-      fs.writeFileSync(path.join(directory, ".env"), serializeConfiguration(configuration), { mode: 0o600 });
-    },
-    checkPort: (configuration, saved, installed) =>
-      checkApplicationPort(configuration, saved, installed, { ca: environment.ca, directory: web }),
-    ready: (configuration) => proxyReady(configuration, environment.ca),
-    certificate: () => certificateInfo(web),
-  });
-  const url = `http://127.0.0.1:${port}`;
+  let server, binary, child, url;
+  try {
+    if (compiled) {
+      binary = buildNativeServer("setup-server.cjs");
+      const configurationFile = path.join(directory, "fixture.json");
+      fs.writeFileSync(
+        configurationFile,
+        JSON.stringify({
+          ...existing,
+          EXPECTED_SETUP_EXECUTABLE: binary.executablePath,
+          SETUP_FIXTURE_DIRECTORY: directory,
+          SETUP_FIXTURE_CA: environment.ca.toString("base64"),
+          SETUP_FIXTURE_TOKEN: token,
+        }),
+        { mode: 0o600 },
+      );
+      child = spawn(binary.executablePath, [configurationFile], { cwd: directory, stdio: "ignore" });
+      await until(() => {
+        if (child.exitCode !== null) throw new Error("El instalador compilado terminó antes de estar listo.");
+        return fs.existsSync(path.join(directory, "ready.json"));
+      });
+      url = JSON.parse(fs.readFileSync(path.join(directory, "ready.json"), "utf8")).url;
+    } else {
+      let app;
+      server = http.createServer((req, res) => app(req, res));
+      await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const port = server.address().port;
+      app = createSetupApp({
+        token,
+        port,
+        existing,
+        installed: true,
+        directory,
+        addresses: [],
+        install: async (configuration) => {
+          fs.writeFileSync(path.join(directory, ".env"), serializeConfiguration(configuration), { mode: 0o600 });
+        },
+        checkPort: (configuration, saved, installed) =>
+          checkApplicationPort(configuration, saved, installed, { ca: environment.ca, directory: web }),
+        ready: (configuration) => proxyReady(configuration, environment.ca),
+        certificate: () => certificateInfo(web),
+      });
+      url = `http://127.0.0.1:${port}`;
+    }
+  } catch (error) {
+    if (child && child.exitCode === null) {
+      child.kill("SIGTERM");
+      await once(child, "exit");
+    }
+    binary?.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+    throw error;
+  }
   return {
     directory,
     web,
@@ -74,11 +110,19 @@ async function startSetupSandbox(environment, existing = environment.configurati
       WEB_HTTPS_PORT: String(environment.httpsPort),
     },
     close: async () => {
-      server.closeAllConnections();
-      await new Promise((resolve) => server.close(resolve));
+      if (child && child.exitCode === null) {
+        child.kill("SIGTERM");
+        await once(child, "exit");
+      }
+      if (server) {
+        server.closeAllConnections();
+        await new Promise((resolve) => server.close(resolve));
+      }
+      binary?.close();
       fs.rmSync(directory, { recursive: true, force: true });
     },
   };
 }
 
-module.exports = { startSetupSandbox };
+const startCompiledSetupSandbox = (environment) => startSetupSandbox(environment, environment.configuration, true);
+module.exports = { startSetupSandbox, startCompiledSetupSandbox };

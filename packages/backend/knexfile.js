@@ -33,6 +33,7 @@ module.exports = {
       });
     },
   },
+  seeds: { directory: require("node:path").join(__dirname, "seeds") },
   migrations: {
     directory: "./migrations",
     disableTransactions: true,

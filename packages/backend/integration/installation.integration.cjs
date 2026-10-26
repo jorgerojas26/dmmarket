@@ -4,7 +4,7 @@ const { randomBytes } = require("node:crypto");
 const { startEnvironment, backend } = require("../../../tests/support/auth-environment.cjs");
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedPurchases } = require("../../../tests/support/purchase-fixtures.cjs");
-const { startSetupSandbox } = require("../../../tests/support/setup-sandbox.cjs");
+const { startSetupSandbox, startCompiledSetupSandbox } = require("../../../tests/support/setup-sandbox.cjs");
 const { readConfiguration } = backend("./setup-config");
 const { proxyReady } = backend("./setup-network");
 let environment;
@@ -59,6 +59,16 @@ test("reinstalación sandbox conserva claves y genera configuración privada sin
   expect((await sandbox.request("install", { ...sandbox.payload, confirm: true, backupConfirmed: true })).status).toBe(
     200,
   );
+  expect(
+    (
+      await environment
+        .db("dmmarket_auth_roles")
+        .whereIn("name", ["Dirección", "Administración técnica", "Consulta operativa", "Cobranza"])
+        .select("name")
+    )
+      .map((row) => row.name)
+      .sort(),
+  ).toEqual(["Dirección", "Administración técnica", "Consulta operativa", "Cobranza"].sort());
   const saved = readConfiguration(sandbox.directory);
   expect(saved.AUTH_SESSION_SECRET).toBe(environment.configuration.AUTH_SESSION_SECRET);
   expect(saved.AUTH_MFA_KEY).toBe(environment.configuration.AUTH_MFA_KEY);
@@ -170,5 +180,27 @@ test("Caddy HTTPS conserva su autoridad al reiniciar con almacenamiento explíci
     expect(new X509Certificate(caddy.ca).fingerprint256).toBe(fingerprint);
   } finally {
     await caddy.close();
+  }
+});
+
+test("instalador compilado incluye el seed sin archivos fuente y no crea cuentas ni asignaciones", async () => {
+  const fresh = await startEnvironment({ web: true, service: true });
+  let compiled;
+  try {
+    await seedSales(fresh.db);
+    await seedPurchases(fresh.db);
+    compiled = await startCompiledSetupSandbox(fresh);
+    expect((await compiled.request("test", compiled.payload)).status).toBe(200);
+    expect(
+      (await compiled.request("install", { ...compiled.payload, confirm: true, backupConfirmed: true })).status,
+    ).toBe(200);
+    expect((await fresh.db("dmmarket_auth_roles").select("name")).map((row) => row.name).sort()).toEqual(
+      ["Dirección", "Administración técnica", "Consulta operativa", "Cobranza"].sort(),
+    );
+    expect(Number((await fresh.db("dmmarket_auth_users").count("* as n").first()).n)).toBe(0);
+    expect(Number((await fresh.db("dmmarket_auth_user_roles").count("* as n").first()).n)).toBe(0);
+  } finally {
+    await compiled?.close();
+    await fresh.close();
   }
 });
