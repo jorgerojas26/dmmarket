@@ -19,7 +19,7 @@ test("login incorrecto/correcto, permisos, cookies y cambio propio sin MFA", asy
   await expect(page.getByRole("alert")).toBeVisible();
   await page.getByRole("textbox", { name: "Contraseña", exact: true }).fill(user.password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
-  await expect(page.getByRole("cell", { name: "42.125000" })).toBeVisible();
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Administración de usuarios" })).toHaveCount(0);
   expect(await page.evaluate(async () => (await fetch("/api/auth/users")).status)).toBe(403);
   const cookie = (await context.cookies()).find((value) => value.name === "__Host-dmmarket.sid");
@@ -33,7 +33,7 @@ test("login incorrecto/correcto, permisos, cookies y cambio propio sin MFA", asy
   await expect(page.getByRole("heading", { name: "Cambiar mi contraseña", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   await login(page, environment, { ...user, password });
-  await expect(page.getByRole("cell", { name: "42.125000" })).toBeVisible();
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
 });
 
 test("alta, recuperación y bloqueo de usuario desde administrador con MFA real", async ({
@@ -105,17 +105,17 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
 test("logout y expiración eliminan datos en dos pestañas y al volver atrás", async ({ page, context, environment }) => {
   const user = await environment.seedUser();
   await login(page, environment, user);
-  await expect(page.getByRole("cell", { name: "42.125000" })).toBeVisible();
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
   const second = await context.newPage();
   await second.goto(environment.origin);
-  await expect(second.getByRole("cell", { name: "42.125000" })).toBeVisible();
+  await expect(second.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   await expect(second.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   await second.goto(`${environment.origin}/history-check`);
   await second.goBack();
   await expect(second.getByRole("table")).toHaveCount(0);
   await login(page, environment, user);
-  await expect(page.getByRole("cell", { name: "42.125000" })).toBeVisible();
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
   await environment
     .db("dmmarket_auth_session_state")
     .where("user_id", user.id)
@@ -131,7 +131,7 @@ test("cambiar cuenta no reutiliza caché SWR mientras SQL está bloqueado", asyn
   const first = await environment.seedUser();
   const second = await environment.seedUser();
   await login(page, environment, first);
-  await expect(page.getByRole("cell", { name: "42.125000" })).toBeVisible();
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   const connection = await environment.db.client.acquireConnection();
@@ -141,11 +141,11 @@ test("cambiar cuenta no reutiliza caché SWR mientras SQL está bloqueado", asyn
     locked = true;
     await environment.db.raw("UPDATE divisas SET Cambio = ?", ["84.25"]).connection(connection);
     await login(page, environment, second);
-    await expect(page.getByText("Cargando tasas…", { exact: true })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "42.125000" })).toHaveCount(0);
+    await expect(page.locator('.app-navbar-ref[aria-busy="true"]')).toBeVisible();
+    await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toHaveCount(0);
     await environment.db.raw("UNLOCK TABLES").connection(connection);
     locked = false;
-    await expect(page.getByRole("cell", { name: "84.250000" })).toBeVisible();
+    await expect(page.locator(".app-navbar-ref").getByText("84.250000", { exact: true })).toBeVisible();
   } finally {
     if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
     await environment.db.client.releaseConnection(connection);
@@ -155,7 +155,7 @@ test("cambiar cuenta no reutiliza caché SWR mientras SQL está bloqueado", asyn
 
 test("MySQL realmente suspendido oculta datos sin fallback anónimo y recupera", async ({ page, environment }) => {
   await login(page, environment, await environment.seedUser());
-  await expect(page.getByRole("cell", { name: "42.125000" })).toBeVisible();
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
   docker("pause", environment.container);
   try {
     await page.reload();
@@ -166,7 +166,7 @@ test("MySQL realmente suspendido oculta datos sin fallback anónimo y recupera",
     docker("unpause", environment.container);
   }
   await page.getByRole("button", { name: "Reintentar validación" }).click();
-  await expect(page.getByRole("cell", { name: "42.125000" })).toBeVisible();
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
 });
 
 test("login móvil no desborda el viewport", async ({ page, environment }) => {
@@ -256,8 +256,8 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   try {
     const reader = await context.newPage();
     await login(reader, environment, user);
-    await openModule(reader, "Tasas");
-    await expect(reader.getByRole("cell", { name: "42.125000" })).toBeVisible();
+    await openModule(reader, "Configuración", "Tasas BCV");
+    await expect(reader.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
     await page.getByRole("textbox", { name: "IDs de vendedores vinculados", exact: true }).fill("A");
     await page.getByRole("textbox", { name: "Motivo del cambio de vínculos" }).fill("Vincular vendedor real desde UI");
     await page.getByRole("button", { name: "Guardar vendedores vinculados", exact: true }).click();

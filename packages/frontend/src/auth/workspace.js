@@ -6,35 +6,6 @@ import { useAuth } from './context';
 import { AccessForm, Field, PasswordForm, ReauthenticationForm } from './forms';
 import { authRequest } from './transport';
 
-export function Rates() {
-    const { data, error } = useSWR('/api/currency_rates', fetcher);
-    return (
-        <section className="card bg-dark border-secondary p-4 my-3">
-            <h2 className="h4">Tasas de referencia</h2>
-            {error && <p role="alert">No se pudieron consultar las tasas autorizadas.</p>}
-            {!data && !error && <p role="status">Cargando tasas…</p>}
-            {data && !error && (
-                <table className="table table-dark">
-                    <thead>
-                        <tr>
-                            <th>Moneda</th>
-                            <th>Cambio</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {data.map((row) => (
-                            <tr key={row.Simbolo}>
-                                <td>{row.Simbolo}</td>
-                                <td>{row.Cambio}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
-        </section>
-    );
-}
-
 function Users() {
     const { session, can } = useAuth();
     const [page, setPage] = useState(1);

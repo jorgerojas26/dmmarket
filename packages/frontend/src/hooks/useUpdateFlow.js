@@ -1,21 +1,27 @@
 import { applyUpdate, checkForUpdate, downloadUpdate, fetchUpdateStatus, getDownloadProgress } from 'api/update';
+import { useAuth } from 'auth/context';
+import usePrivateState from 'hooks/usePrivateState';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const useUpdateFlow = () => {
-    const [status, setStatus] = useState(null);
+    const { can, runPrivileged } = useAuth();
+    const enabled = can('updates.read');
+    const executable = can('updates.execute');
+    const [status, setStatus] = usePrivateState('update-status', null);
     const [checking, setChecking] = useState(false);
-    const [checkResult, setCheckResult] = useState(null);
+    const [checkResult, setCheckResult] = usePrivateState('update-check', null);
     const [checkError, setCheckError] = useState(null);
     const [downloading, setDownloading] = useState(false);
-    const [downloaded, setDownloaded] = useState(false);
+    const [downloaded, setDownloaded] = usePrivateState('update-downloaded', false);
     const [downloadError, setDownloadError] = useState(null);
     const [progress, setProgress] = useState({ bytes: 0, total: 0 });
     const [applying, setApplying] = useState(false);
-    const [applied, setApplied] = useState(false);
+    const [applied, setApplied] = usePrivateState('update-applied', false);
     const [applyError, setApplyError] = useState(null);
     const busy = useRef(false);
 
     useEffect(() => {
+        if (!enabled) return undefined;
         let cancelled = false;
         fetchUpdateStatus()
             .then(({ status: resStatus, data }) => {
@@ -27,10 +33,10 @@ const useUpdateFlow = () => {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [enabled]);
 
     useEffect(() => {
-        if (!downloading) return undefined;
+        if (!enabled || !downloading) return undefined;
         let cancelled = false;
         const id = setInterval(async () => {
             try {
@@ -42,7 +48,7 @@ const useUpdateFlow = () => {
             cancelled = true;
             clearInterval(id);
         };
-    }, [downloading]);
+    }, [downloading, enabled]);
 
     useEffect(() => {
         if (!applied) return undefined;
@@ -90,10 +96,11 @@ const useUpdateFlow = () => {
     }, [applied, checkResult?.latestVersion, status?.currentVersion]);
 
     const handleCheck = useCallback(async () => {
-        if (busy.current) return;
+        if (!enabled || busy.current) return;
         busy.current = true;
         setChecking(true);
         setCheckError(null);
+        setCheckResult(null);
         try {
             const { status: resStatus, data } = await checkForUpdate();
             if (resStatus === 200 && data) {
@@ -108,10 +115,11 @@ const useUpdateFlow = () => {
             busy.current = false;
             setChecking(false);
         }
-    }, []);
+    }, [enabled]);
 
     const handleDownload = useCallback(async () => {
-        if (busy.current || !checkResult?.updateAvailable) return false;
+        if (!enabled || !executable || !status?.standalone || busy.current || !checkResult?.updateAvailable)
+            return false;
         busy.current = true;
         setDownloading(true);
         setDownloadError(null);
@@ -119,10 +127,12 @@ const useUpdateFlow = () => {
         setDownloaded(false);
         setProgress({ bytes: 0, total: 0 });
         try {
-            const { status: resStatus, data } = await downloadUpdate({
-                assetUrl: checkResult.assetUrl,
-                sha256AssetUrl: checkResult.sha256AssetUrl,
-            });
+            const { status: resStatus, data } = await runPrivileged(() =>
+                downloadUpdate({
+                    assetUrl: checkResult.assetUrl,
+                    sha256AssetUrl: checkResult.sha256AssetUrl,
+                }),
+            );
             if (resStatus === 200) {
                 setDownloaded(true);
                 return true;
@@ -135,15 +145,15 @@ const useUpdateFlow = () => {
             setDownloading(false);
         }
         return false;
-    }, [checkResult]);
+    }, [checkResult, enabled, executable, status?.standalone, runPrivileged]);
 
     const handleApply = useCallback(async () => {
-        if (busy.current) return false;
+        if (!enabled || !executable || !status?.standalone || !downloaded || busy.current) return false;
         busy.current = true;
         setApplying(true);
         setApplyError(null);
         try {
-            const { status: resStatus, data } = await applyUpdate();
+            const { status: resStatus, data } = await runPrivileged(() => applyUpdate());
             if (resStatus === 200) {
                 setApplied(true);
                 return true;
@@ -156,7 +166,7 @@ const useUpdateFlow = () => {
             setApplying(false);
         }
         return false;
-    }, []);
+    }, [enabled, executable, status?.standalone, downloaded, runPrivileged]);
 
     const percent = progress.total ? Math.min(100, Math.round((progress.bytes / progress.total) * 100)) : 0;
 

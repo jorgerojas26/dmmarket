@@ -4,6 +4,7 @@ const { parameters } = require("./sales-reports");
 const { appendEvent } = require("./identity");
 const { fechaEnCaracas, bcvRateService } = require("../bcv");
 const { backupService } = require("../backups");
+const { driveBackupService } = require("../drive-backups");
 const updates = require("../controllers/update");
 const { allowedReleaseAssets } = require("../utils/update-assets");
 const { reportCache } = require("../middlewares/report-cache");
@@ -86,9 +87,13 @@ function createOperationReports({ sessions, security, db, services = {} }) {
         .select({ Fecha: dateColumn(tx), Venta: "Venta" })
         .orderBy("Fecha", "desc")
         .first();
+      const operational = typeof rateService.estado === "function" ? await rateService.estado() : {};
       return {
         disponible: true,
         lastRequest: lastSync,
+        sincronizando: lastSync?.outcome === "running" || operational.sincronizando === true,
+        ultimaSincronizacion: operational.ultimaSincronizacion || lastSync?.completedAt || null,
+        intervaloMinutos: operational.intervaloMinutos || null,
         ultimaTasa: asRate(current),
         ultimaPublicada: asRate(newest),
         publicadaHasta: newest?.Fecha || null,
@@ -128,6 +133,31 @@ function createOperationReports({ sessions, security, db, services = {} }) {
         retentionError: value.retentionError
           ? { message: "No se pudo completar la retención de respaldos.", occurredAt: value.retentionError.occurredAt }
           : null,
+      };
+    }),
+  );
+  router.get(
+    "/backups/drive",
+    handle("backups.read", async (_tx, req) => {
+      empty(req.query);
+      const value = await driveBackupService.status();
+      return {
+        configured: value.configured === true,
+        connected: value.connected === true,
+        connecting: value.connecting === true,
+        running: value.running === true,
+        email: value.email || null,
+        folderName: value.folderName || null,
+        recoveryConfirmed: value.recoveryConfirmed === true,
+        localAccess: false,
+        currentBackup: value.currentBackup || null,
+        lastError: value.lastError ? "No se pudo completar la operación de Google Drive." : null,
+        uploads: (value.uploads || []).slice(0, 30).map((entry) => ({
+          name: entry.name,
+          status: entry.status,
+          uploadedAt: entry.uploadedAt,
+          error: entry.error ? "No se pudo completar la subida." : null,
+        })),
       };
     }),
   );

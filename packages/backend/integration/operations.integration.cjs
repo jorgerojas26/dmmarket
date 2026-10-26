@@ -67,7 +67,17 @@ test("metadatos de respaldos no entregan ruta del servidor ni tokens de control"
   expect(status.body.backups).toEqual([]);
   expect(status.body).not.toHaveProperty("controlToken");
   expect(status.body).not.toHaveProperty("directory");
-  expect((await client.request("/api/backups/drive")).status).toBe(403);
+  const drive = await client.request("/api/backups/drive");
+  expect(drive.status).toBe(200);
+  expect(drive.body.localAccess).toBe(false);
+  expect(drive.body).not.toHaveProperty("controlToken");
+  expect(drive.body).not.toHaveProperty("localSetupUrl");
+  for (const action of ["connect", "enable", "test", "disconnect", "recovery-key"])
+    expect(
+      (await client.request(`/api/backups/drive/${action}`, { method: "POST", body: { confirmed: true } })).status,
+    ).toBe(403);
+  const unrelated = await reader([grant("rates.read")]);
+  expect((await unrelated.client.request("/api/backups/drive")).status).toBe(403);
 });
 
 test("estado de actualización sólo es lectura y no autoriza descarga o aplicación", async () => {

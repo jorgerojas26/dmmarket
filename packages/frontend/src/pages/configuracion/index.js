@@ -1,8 +1,9 @@
 import { fetchUpdateHistory } from 'api/update';
+import { useAuth } from 'auth/context';
 import Sidebar from 'components/Sidebar';
 import { useUpdate } from 'context/update';
 import { DateTime } from 'luxon';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
 import ReactMarkdown from 'react-markdown';
 import { useHistory, useLocation } from 'react-router-dom';
@@ -86,15 +87,21 @@ const VIEWS = { '#acercade': 'about', '#respaldos': 'backups', '#tasas': 'rates'
 const HASHES = { about: '#acercade', backups: '#respaldos', rates: '#tasas' };
 
 const ConfiguracionPage = () => {
+    const { can } = useAuth();
+    const availableViews = [
+        ...(can('updates.read') ? ['about'] : []),
+        ...(['backups.read', 'backups.create'].some(can) ? ['backups'] : []),
+        ...(['rates.read', 'rates.sync'].some(can) ? ['rates'] : []),
+    ];
     const historyRouter = useHistory();
     const location = useLocation();
-    const activeView = VIEWS[location.hash] || 'about';
+    const activeView = availableViews.includes(VIEWS[location.hash]) ? VIEWS[location.hash] : availableViews[0];
 
     useEffect(() => {
-        if (!VIEWS[location.hash]) {
-            historyRouter.replace({ ...location, hash: HASHES.about });
+        if (!availableViews.includes(VIEWS[location.hash])) {
+            historyRouter.replace({ ...location, hash: HASHES[activeView] });
         }
-    }, [historyRouter, location]);
+    }, [historyRouter, location, activeView]);
 
     const selectView = (view) => {
         const hash = HASHES[view] || HASHES.about;
@@ -121,6 +128,7 @@ const ConfiguracionPage = () => {
     const [historyError, setHistoryError] = useState(null);
 
     useEffect(() => {
+        if (!can('updates.read')) return undefined;
         let cancelled = false;
         fetchUpdateHistory()
             .then(({ status: resStatus, data }) => {
@@ -139,10 +147,10 @@ const ConfiguracionPage = () => {
         };
     }, []);
 
-    const sidebarItemsMemo = useMemo(() => sidebarItems, []);
+    const sidebarItemsMemo = sidebarItems.filter((item) => availableViews.includes(item.eventKey));
 
     return (
-        <Container fluid className="clientes-layout p-0">
+        <Container as="section" aria-label="Configuración" fluid className="clientes-layout p-0">
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={selectView} items={sidebarItemsMemo} />
                 <div className="clientes-content p-4">
@@ -199,7 +207,11 @@ const ConfiguracionPage = () => {
                                                         </div>
                                                     )}
                                                     {!downloading && !downloaded && (
-                                                        <Button variant="success" onClick={handleDownload}>
+                                                        <Button
+                                                            variant="success"
+                                                            disabled={!can('updates.execute') || !status?.standalone}
+                                                            onClick={handleDownload}
+                                                        >
                                                             Descargar actualización
                                                         </Button>
                                                     )}
@@ -208,7 +220,13 @@ const ConfiguracionPage = () => {
                                                             <span className="text-info">
                                                                 Descargado — Reiniciar para actualizar
                                                             </span>
-                                                            <Button variant="primary" onClick={handleApply}>
+                                                            <Button
+                                                                variant="primary"
+                                                                disabled={
+                                                                    !can('updates.execute') || !status?.standalone
+                                                                }
+                                                                onClick={handleApply}
+                                                            >
                                                                 Reiniciar ahora
                                                             </Button>
                                                         </>

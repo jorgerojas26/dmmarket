@@ -27,8 +27,16 @@ export const fetchBcvStatus = async () => {
 };
 
 export const syncBcvRates = async () => {
-    const response = await fetch(`${BASE_URL}/bcv/sync`, { method: 'POST' });
+    const response = await fetch(`${BASE_URL}/bcv/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmed: true }),
+    });
     const data = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(data?.error?.message || 'No se pudo consultar el BCV');
+    if (!response.ok)
+        throw Object.assign(new Error(data?.error?.message || 'No se pudo consultar el BCV'), {
+            status: response.status,
+            code: data?.error?.code,
+        });
     return data;
 };

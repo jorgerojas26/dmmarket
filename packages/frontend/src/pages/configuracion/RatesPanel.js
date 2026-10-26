@@ -1,10 +1,11 @@
 import { ResponsiveLine } from '@nivo/line';
 import { syncBcvRates } from 'api/currency_rates';
+import { useAuth } from 'auth/context';
 import ChartTooltip from 'components/ChartTooltip';
 import DateSelect from 'components/DateSelect';
 import { useBcvRateByDate, useBcvRates, useBcvStatus } from 'hooks/useBcvRates';
 import { DateTime } from 'luxon';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Spinner } from 'react-bootstrap';
 import './rates.css';
 
@@ -126,15 +127,23 @@ const TasaDelDia = ({ vigente, buscada, buscando, error }) => {
 };
 
 const RatesPanel = () => {
-    const { data: status, error: statusError, isLoading: statusLoading, mutate: refreshStatus } = useBcvStatus();
-    const { data: rates, error: ratesError, isLoading: ratesLoading, mutate: refreshRates } = useBcvRates();
+    const { can, runPrivileged } = useAuth();
+    const readable = can('rates.read');
+    const [requestId, setRequestId] = useState(null);
+    const {
+        data: status,
+        error: statusError,
+        isLoading: statusLoading,
+        mutate: refreshStatus,
+    } = useBcvStatus(readable);
+    const { data: rates, error: ratesError, isLoading: ratesLoading, mutate: refreshRates } = useBcvRates(readable);
     const [fecha, setFecha] = useState('');
     const {
         data: buscada,
         error: busquedaError,
         isLoading: buscando,
         mutate: refreshBuscada,
-    } = useBcvRateByDate(fecha);
+    } = useBcvRateByDate(fecha, readable);
     const [syncing, setSyncing] = useState(false);
     const [syncError, setSyncError] = useState(null);
     const [syncMessage, setSyncMessage] = useState(null);
@@ -150,20 +159,32 @@ const RatesPanel = () => {
         setSyncError(null);
         setSyncMessage(null);
         try {
-            const resultado = await syncBcvRates();
-            setSyncMessage(
-                !resultado?.escritas
-                    ? 'No se encontraron tasas nuevas ni correcciones en los archivos del BCV.'
-                    : `Se actualizaron ${resultado?.escritas ?? 0} tasas.`,
-            );
-            if (resultado?.fallos?.length) setSyncError(resultado.fallos.join(' · '));
-            await Promise.all([refreshStatus(), refreshRates(), ...(fecha ? [refreshBuscada()] : [])]);
+            const resultado = await runPrivileged(() => syncBcvRates());
+            setRequestId(resultado.operationId);
+            setSyncMessage('Consulta del BCV solicitada.');
+            if (readable) await refreshStatus();
         } catch (fallo) {
             setSyncError(fallo.message);
         } finally {
             setSyncing(false);
         }
     };
+
+    useEffect(() => {
+        const request = status?.lastRequest;
+        if (!requestId || request?.operationId !== requestId || request.outcome === 'running') return;
+        setRequestId(null);
+        if (request.outcome === 'success') {
+            setSyncMessage(
+                request.written === 0
+                    ? 'No se encontraron tasas nuevas ni correcciones en los archivos del BCV.'
+                    : request.written != null
+                      ? `Se actualizaron ${request.written} tasas.`
+                      : 'Consulta del BCV finalizada.',
+            );
+            void Promise.all([refreshRates(), ...(fecha ? [refreshBuscada()] : [])]);
+        } else setSyncError('La consulta del BCV no pudo completarse.');
+    }, [status, requestId, refreshRates, refreshBuscada, fecha]);
 
     return (
         <div className="rates-panel">
@@ -173,15 +194,22 @@ const RatesPanel = () => {
                     <p>Tipo de cambio de referencia Bs/USD publicado por el Banco Central de Venezuela.</p>
                 </div>
                 <div className="rates-header-actions">
-                    <DateSelect
-                        value={fecha || vigente?.fecha}
-                        min={rates?.[0]?.fecha}
-                        max={hoyEnCaracas()}
-                        today={vigente?.fecha}
-                        onChange={setFecha}
-                        ariaLabel="Fecha de la tasa"
-                    />
-                    <Button className="rates-sync" variant="outline-light" disabled={syncing} onClick={sync}>
+                    {readable && (
+                        <DateSelect
+                            value={fecha || vigente?.fecha}
+                            min={rates?.[0]?.fecha}
+                            max={hoyEnCaracas()}
+                            today={vigente?.fecha}
+                            onChange={setFecha}
+                            ariaLabel="Fecha de la tasa"
+                        />
+                    )}
+                    <Button
+                        className="rates-sync"
+                        variant="outline-light"
+                        disabled={!can('rates.sync') || syncing || status?.lastRequest?.outcome === 'running'}
+                        onClick={sync}
+                    >
                         {syncing ? <Spinner animation="border" size="sm" aria-hidden="true" /> : null}
                         {syncing ? 'Consultando…' : 'Consultar BCV'}
                     </Button>
@@ -213,10 +241,7 @@ const RatesPanel = () => {
             {status && !status.disponible && (
                 <Alert variant="secondary">
                     <strong>Las tasas todavía no están habilitadas.</strong>
-                    <div>
-                        Falta aplicar la migración de la tabla de tasas en este equipo. Se habilita al reiniciar la
-                        aplicación actualizada.
-                    </div>
+                    <div>Solicita al responsable que prepare la tabla de tasas de forma segura en este equipo.</div>
                 </Alert>
             )}
 
@@ -246,10 +271,12 @@ const RatesPanel = () => {
                         <div className="rates-card">
                             <span className="rates-card-label">Última consulta</span>
                             <strong className="rates-card-value rates-card-value-sm">
-                                {formatHora(status.ultimaSincronizacion)}
+                                {formatHora(status.ultimaSincronizacion || status.lastRequest?.completedAt)}
                             </strong>
                             <span className="rates-card-note">
-                                Se consulta automáticamente cada {status.intervaloMinutos} minutos
+                                {status.intervaloMinutos
+                                    ? `Se consulta automáticamente cada ${status.intervaloMinutos} minutos`
+                                    : 'Última consulta registrada'}
                             </span>
                         </div>
                     </section>

@@ -22,9 +22,9 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
   await login(page, environment, user);
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
   await expect(page).toHaveURL(/\/ventas\?/);
-  for (const name of ["Ventas", "Compras", "Clientes", "Vendedores", "Inventario", "Tasas", "Mi cuenta"])
+  for (const name of ["Ventas", "Compras", "Clientes", "Vendedores", "Inventario", "Configuración", "Mi cuenta"])
     await expect(navigation.getByRole("link", { name, exact: true })).toBeVisible();
-  for (const name of ["Acceso", "Proveedores", "Configuración", "Cartera", "Comisiones"])
+  for (const name of ["Acceso", "Proveedores", "Cartera", "Comisiones"])
     await expect(navigation.getByRole("link", { name, exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Dashboard de Ventas", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Inventario", exact: true })).toHaveCount(0);
@@ -85,8 +85,8 @@ test("volver atrás revalida en MySQL antes de mostrar el módulo y no recupera 
   const inventory = page.getByRole("region", { name: "Inventario", exact: true });
   await inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true }).fill("Inventario sintético");
   await expect(inventory.getByRole("cell", { name: "I-A", exact: true })).toBeVisible();
-  await openModule(page, "Tasas");
-  await expect(page.getByRole("cell", { name: "42.125000", exact: true })).toBeVisible();
+  await openModule(page, "Configuración", "Tasas BCV");
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
   const connection = await environment.db.client.acquireConnection();
   let locked = false;
   try {
@@ -120,8 +120,9 @@ test("móvil abre y cierra navegación y cambiar de cuenta no conserva el módul
   await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   await login(page, environment, second);
-  await expect(page).toHaveURL(`${environment.origin}/tasas`);
-  await expect(page.getByRole("cell", { name: "42.125000", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(`${environment.origin}/configuracion#tasas`);
+  await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
   await expect(navigation.getByRole("link", { name: "Inventario", exact: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Inventario", exact: true })).toHaveCount(0);

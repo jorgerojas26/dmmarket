@@ -1,6 +1,7 @@
 import { CurrencyRateProvider } from 'context/currency_rate';
 import { ShowNoesProvider } from 'context/show_noe';
 import { SidebarProvider } from 'context/sidebar';
+import { UpdateProvider } from 'context/update';
 import { SWRConfig } from 'hooks/swr-wrapper';
 import { useMemo, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
@@ -26,7 +27,9 @@ function BoundaryContent() {
             <SWRConfig key={`${epoch}:ready`} value={{ ...swrConfig, fetcher, provider: () => cache }}>
                 <CurrencyRateProvider>
                     <SidebarProvider>
-                        <App onLogout={signOut} logoutError={logoutError} />
+                        <UpdateProvider>
+                            <App onLogout={signOut} logoutError={logoutError} />
+                        </UpdateProvider>
                         <ReauthenticationDialog />
                     </SidebarProvider>
                 </CurrencyRateProvider>
