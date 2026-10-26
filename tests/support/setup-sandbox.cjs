@@ -11,7 +11,12 @@ const { serializeConfiguration } = backend("./setup-config");
 const { checkApplicationPort, proxyReady } = backend("./setup-network");
 const { certificateInfo } = backend("./setup-certificates");
 
-async function startSetupSandbox(environment, existing = environment.configuration, compiled = false) {
+async function startSetupSandbox(
+  environment,
+  existing = environment.configuration,
+  compiled = false,
+  { installed = true } = {},
+) {
   const directory = fs.mkdtempSync(path.join(environment.directory, "setup-"));
   const web = path.join(directory, "web");
   const certificateFile = path.join(web, "data", "pki", "authorities", "local", "root.crt");
@@ -32,6 +37,7 @@ async function startSetupSandbox(environment, existing = environment.configurati
           SETUP_FIXTURE_DIRECTORY: directory,
           SETUP_FIXTURE_CA: environment.ca.toString("base64"),
           SETUP_FIXTURE_TOKEN: token,
+          SETUP_FIXTURE_INSTALLED: installed,
         }),
         { mode: 0o600 },
       );
@@ -50,14 +56,14 @@ async function startSetupSandbox(environment, existing = environment.configurati
         token,
         port,
         existing,
-        installed: true,
+        installed,
         directory,
         addresses: [],
         install: async (configuration) => {
           fs.writeFileSync(path.join(directory, ".env"), serializeConfiguration(configuration), { mode: 0o600 });
         },
-        checkPort: (configuration, saved, installed) =>
-          checkApplicationPort(configuration, saved, installed, { ca: environment.ca, directory: web }),
+        checkPort: (configuration, saved) =>
+          checkApplicationPort(configuration, saved, true, { ca: environment.ca, directory: web }),
         ready: (configuration) => proxyReady(configuration, environment.ca),
         certificate: () => certificateInfo(web),
       });
@@ -124,5 +130,6 @@ async function startSetupSandbox(environment, existing = environment.configurati
   };
 }
 
-const startCompiledSetupSandbox = (environment) => startSetupSandbox(environment, environment.configuration, true);
+const startCompiledSetupSandbox = (environment, options = {}) =>
+  startSetupSandbox(environment, environment.configuration, true, options);
 module.exports = { startSetupSandbox, startCompiledSetupSandbox };

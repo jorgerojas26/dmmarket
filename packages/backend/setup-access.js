@@ -18,7 +18,7 @@ function connectionFor(configuration) {
   });
 }
 
-async function prepareAccessSchema(configuration) {
+async function prepareAccessSchema(configuration, { firstInstallation = false } = {}) {
   const db = connectionFor(configuration);
   const lockName = `dmmarket:migrations:${createHash("sha256").update(configuration.DATABASE_NAME.toLowerCase()).digest("hex").slice(0, 40)}`;
   try {
@@ -30,8 +30,20 @@ async function prepareAccessSchema(configuration) {
       await require("./migrations/20261024_add_auth_access").up(db);
       await require("./migrations/20261025_add_auth_event_role").up(db);
     }
+    await require("./migrations/20261029_add_initial_setup_state").up(db);
     await assertAuthSchema(db);
     await require("./seeds/001_default_roles").seed(db);
+    await db.transaction(async (transaction) => {
+      const { lockAccessMutation } = require("./auth/identity");
+      await lockAccessMutation(transaction);
+      const control = await transaction("dmmarket_auth_control").where("id", 1).first("first_setup");
+      const accounts = Number((await transaction("dmmarket_auth_users").count("* as total").first()).total);
+      if (accounts) await transaction("dmmarket_auth_control").where("id", 1).update({ first_setup: "closed" });
+      else if (control.first_setup === "new")
+        await transaction("dmmarket_auth_control")
+          .where("id", 1)
+          .update({ first_setup: firstInstallation ? "pending" : "closed" });
+    });
   } finally {
     try {
       await db.raw("SELECT RELEASE_LOCK(?)", [lockName]);
@@ -53,7 +65,12 @@ async function accessState(configuration) {
     } catch (error) {
       if (error.status !== 409) throw error;
     }
-    return { firstAdministratorRequired: users === 0, administratorReady };
+    const control = await db("dmmarket_auth_control").where("id", 1).first("first_setup");
+    return {
+      firstAdministratorRequired: users === 0,
+      administratorReady,
+      initialSetupPending: users === 0 && control.first_setup === "pending",
+    };
   } finally {
     await db.destroy();
   }

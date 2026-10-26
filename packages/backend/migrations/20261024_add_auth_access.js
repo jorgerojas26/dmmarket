@@ -15,6 +15,7 @@ const definitions = [
     "dmmarket_auth_control",
     (table) => {
       table.integer("id").primary();
+      table.string("first_setup", 16).notNullable().defaultTo("closed");
     },
   ],
   [
@@ -120,7 +121,7 @@ exports.up = async (knex) => {
         table.collate("utf8_bin");
         define(table);
       });
-      if (name === "dmmarket_auth_control") await knex(name).insert({ id: 1 });
+      if (name === "dmmarket_auth_control") await knex(name).insert({ id: 1, first_setup: "new" });
     }
     const row = await knex("information_schema.TABLES")
       .whereRaw("TABLE_SCHEMA = DATABASE()")

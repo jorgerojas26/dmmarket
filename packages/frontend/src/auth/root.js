@@ -8,7 +8,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { fetcher, swrConfig } from 'swr-config';
 import App from '../App';
 import { AuthProvider, useAuth } from './context';
-import { EnrollmentForm, LoginForm, MfaForm, PasswordForm, ReauthenticationDialog } from './forms';
+import { EnrollmentForm, InitialAccountForm, LoginForm, MfaForm, PasswordForm, ReauthenticationDialog } from './forms';
 
 function BoundaryContent() {
     const { session, checking, failure, epoch, action, check } = useAuth();
@@ -73,6 +73,18 @@ function BoundaryContent() {
                     </section>
                 ) : (
                     <div key={`${epoch}:${session?.stage}`}>
+                        {session?.stage === 'first-user' && <InitialAccountForm />}
+                        {session?.stage === 'setup-required' && (
+                            <section>
+                                <h2 className="h4">Configuración inicial pendiente</h2>
+                                <p>
+                                    Completa la creación del primer administrador desde el propio servidor de DMMarket.
+                                </p>
+                                <button type="button" className="btn btn-primary" onClick={() => check()}>
+                                    Actualizar estado
+                                </button>
+                            </section>
+                        )}
                         {session?.stage === 'anonymous' && <LoginForm />}
                         {session?.stage === 'password' && <PasswordForm />}
                         {session?.stage === 'mfa' && <MfaForm />}

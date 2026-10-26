@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const { hashPassword, createTemporaryPassword } = require("./passwords");
+const { isLocalSource, initialSetupState } = require("./initial-setup");
 const { validateGrants } = require("./capabilities");
 const {
   assertAuthSchema,
@@ -120,6 +121,34 @@ async function createAccountService({ db, sessions, now = Date.now }) {
   }
 
   return Object.freeze({
+    initialState(source) {
+      return initialSetupState(db, source);
+    },
+    async createInitialUser({ username, displayName, password, confirmation }, source) {
+      if (!isLocalSource(source)) fail(403, "El primer administrador se crea desde el servidor.");
+      const names = accountNames(username, displayName);
+      if (typeof password !== "string" || password !== confirmation) fail(400, "Las contraseñas no coinciden.");
+      return db.transaction(async (connection) => {
+        await lockAccessMutation(connection);
+        const control = await connection("dmmarket_auth_control").where("id", 1).first("first_setup");
+        const existing = Number((await connection("dmmarket_auth_users").count("* as total").first()).total);
+        if (control.first_setup !== "pending" || existing) fail(409, "La creación inicial ya no está disponible.");
+        const passwordHash = await hashPassword(password);
+        const id = randomUUID();
+        await connection("dmmarket_auth_users").insert({
+          id,
+          ...names,
+          password_hash: passwordHash,
+          must_change_password: false,
+          temporary_expires_ms: null,
+        });
+        const roleId = await recoveryRole(connection);
+        await connection("dmmarket_auth_user_roles").insert({ user_id: id, role_id: roleId });
+        await connection("dmmarket_auth_control").where("id", 1).update({ first_setup: "closed" });
+        await audit(connection, id, id, "auth.initial_administrator_created", "server-local-initialization");
+        return { id, username: names.username };
+      });
+    },
     async createUser(sid, { username, displayName, roleIds = [], reason }) {
       const names = accountNames(username, displayName);
       const motive = validateReason(reason);
@@ -187,6 +216,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
           });
           const roleId = await recoveryRole(connection);
           await connection("dmmarket_auth_user_roles").insert({ user_id: id, role_id: roleId });
+          await connection("dmmarket_auth_control").where("id", 1).update({ first_setup: "closed" });
           await audit(connection, null, id, "auth.local_bootstrap", motive);
           return {
             id,
@@ -201,6 +231,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
         const link = await connection("dmmarket_auth_user_roles").where({ user_id: user.id, role_id: roleId }).first();
         if (!link) await connection("dmmarket_auth_user_roles").insert({ user_id: user.id, role_id: roleId });
         await connection("dmmarket_auth_users").where("id", user.id).update({ enabled: true });
+        await connection("dmmarket_auth_control").where("id", 1).update({ first_setup: "closed" });
         return reset(connection, user, null, true, motive, true);
       });
     },

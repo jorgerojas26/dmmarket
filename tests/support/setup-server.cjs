@@ -29,13 +29,12 @@ async function main() {
     token: config.SETUP_FIXTURE_TOKEN,
     port,
     existing: config,
-    installed: true,
+    installed: config.SETUP_FIXTURE_INSTALLED !== false,
     directory,
     addresses: [],
     install: async (configuration) =>
       fs.writeFileSync(path.join(directory, ".env"), serializeConfiguration(configuration), { mode: 0o600 }),
-    checkPort: (configuration, saved, installed) =>
-      checkApplicationPort(configuration, saved, installed, { ca, directory: web }),
+    checkPort: (configuration, saved) => checkApplicationPort(configuration, saved, true, { ca, directory: web }),
     ready: (configuration) => proxyReady(configuration, ca),
     certificate: () => certificateInfo(web),
     firewall: async () => {

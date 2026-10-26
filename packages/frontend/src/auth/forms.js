@@ -72,6 +72,53 @@ export function Field({
     );
 }
 
+export function InitialAccountForm() {
+    const { action } = useAuth();
+    const [displayName, setDisplayName] = useState(''),
+        [username, setUsername] = useState(''),
+        [password, setPassword] = useState(''),
+        [confirmation, setConfirmation] = useState('');
+    return (
+        <AccessForm
+            title="Crear primer administrador"
+            button="Crear administrador"
+            onSubmit={async () => {
+                try {
+                    if (password !== confirmation) throw new Error('Las contraseñas no coinciden.');
+                    await action('first-user', { displayName, username, password, confirmation });
+                } finally {
+                    setPassword('');
+                    setConfirmation('');
+                }
+            }}
+        >
+            <p>
+                Bienvenido a DMMarket. Esta cuenta administrará el acceso. Después de crearla deberás configurar MFA
+                antes de continuar.
+            </p>
+            <Field label="Nombre" value={displayName} onChange={setDisplayName} maxLength={128} autoComplete="name" />
+            <Field label="Usuario" value={username} onChange={setUsername} maxLength={64} autoComplete="username" />
+            <Field
+                label="Contraseña"
+                value={password}
+                onChange={setPassword}
+                type="password"
+                minLength={15}
+                autoComplete="new-password"
+            />
+            <Field
+                label="Confirmar contraseña"
+                value={confirmation}
+                onChange={setConfirmation}
+                type="password"
+                minLength={15}
+                autoComplete="new-password"
+            />
+            <p>Usa al menos 15 caracteres. No se crean usuarios ni contraseñas predeterminadas.</p>
+        </AccessForm>
+    );
+}
+
 export function LoginForm() {
     const { action } = useAuth();
     const [username, setUsername] = useState('');

@@ -123,7 +123,7 @@ export function AuthProvider({ children }) {
                 return data;
             } catch (error) {
                 if (error.name === 'TimeoutError') await check();
-                else if ([401, 403].includes(error.status)) await check(false);
+                else if (path === 'first-user' || [401, 403].includes(error.status)) await check(false);
                 throw error;
             } finally {
                 busy.current = false;

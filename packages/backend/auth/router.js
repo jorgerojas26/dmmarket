@@ -57,7 +57,8 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
       if (req.session.authenticated) await replaceSession(req, newSessionId());
       const csrfToken = security.issueCsrfToken(req);
       await save(req);
-      res.json({ user: null, stage: "anonymous", csrfToken });
+      const stage = await accounts.initialState(req.get("x-dmmarket-client-ip"));
+      res.json({ user: null, stage, csrfToken });
     }),
   );
   router.use(security.csrfProtection);
@@ -67,6 +68,15 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
     }
     next();
   });
+  router.post(
+    "/first-user",
+    handler(async (req, res) => {
+      const user = await accounts.createInitialUser(req.body, req.get("x-dmmarket-client-ip"));
+      const sid = newSessionId();
+      const context = await sessions.login({ sid, username: user.username, password: req.body.password }, source(req));
+      await respond(req, res, context, sid);
+    }),
+  );
   router.post(
     "/login",
     handler(async (req, res) => {

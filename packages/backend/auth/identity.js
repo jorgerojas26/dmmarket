@@ -28,6 +28,10 @@ async function assertAuthSchema(db) {
       "El esquema de autenticación requiere todas sus tablas InnoDB/utf8_bin preparadas en mantenimiento.",
     );
   }
+  if (!(await db.schema.hasColumn("dmmarket_auth_control", "first_setup")))
+    throw new Error(
+      "El esquema de acceso requiere preparar el estado de inicialización desde el instalador actualizado.",
+    );
   if (!(await db.schema.hasColumn("dmmarket_auth_events", "target_role_id")))
     throw new Error("El esquema de acceso requiere la migración manual del objetivo de roles.");
   if (

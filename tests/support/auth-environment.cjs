@@ -109,6 +109,7 @@ async function startEnvironment({
   authKeys = null,
   service = false,
   executablePath = null,
+  proxyClientAddress = null,
 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-auth-test-"));
   fs.chmodSync(directory, 0o700);
@@ -295,7 +296,15 @@ async function startEnvironment({
     }
     const configurationFile = path.join(directory, "configuration.json");
     fs.writeFileSync(configurationFile, JSON.stringify(configuration), { mode: 0o600 });
-    fs.writeFileSync(path.join(directory, "Caddyfile"), caddyFile(configuration), { mode: 0o600 });
+    let proxyConfig = caddyFile(configuration);
+    if (proxyClientAddress !== null) {
+      if (!require("node:net").isIP(proxyClientAddress)) throw new Error("La IP del proxy de prueba no es válida.");
+      proxyConfig = proxyConfig.replace(
+        "header_up X-DMMarket-Client-IP {http.request.remote.host}",
+        `header_up X-DMMarket-Client-IP ${proxyClientAddress}`,
+      );
+    }
+    fs.writeFileSync(path.join(directory, "Caddyfile"), proxyConfig, { mode: 0o600 });
     let startupError = "";
     const launch = () => {
       const process = spawn(

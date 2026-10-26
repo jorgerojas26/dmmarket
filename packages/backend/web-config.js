@@ -58,7 +58,7 @@ function proxyCredential(configuration) {
   const key = Buffer.from(secret, "base64");
   if (key.length < 32 || key.length > 64 || key.toString("base64") !== secret)
     throw new Error("El secreto del proxy no es válido.");
-  return createHmac("sha256", key).update("dmmarket:proxy:v1").digest("base64url");
+  return createHmac("sha256", key).update("dmmarket:proxy:v2:client-ip").digest("base64url");
 }
 
 function caddyFile(configuration, logFile, storageDirectory) {
@@ -76,7 +76,7 @@ function caddyFile(configuration, logFile, storageDirectory) {
   const url = httpsOrigin(configuration);
   const bind = configuration.WEB_BIND_ADDRESS || "0.0.0.0";
   if (!["0.0.0.0", "127.0.0.1"].includes(bind)) throw new Error("La dirección pública de Caddy no es válida.");
-  return `{\n\tadmin off\n\tauto_https disable_redirects\n\tskip_install_trust\n\tpersist_config off${logging}${storage}\n}\n\n${url.origin} {\n\tbind ${bind}\n\ttls internal\n\theader X-DMMarket-Web ${proxyIdentity(configuration)}\n\treverse_proxy 127.0.0.1:${port} {\n\t\theader_up X-DMMarket-Proxy ${proxyCredential(configuration)}\n\t}\n}\n`;
+  return `{\n\tadmin off\n\tauto_https disable_redirects\n\tskip_install_trust\n\tpersist_config off${logging}${storage}\n}\n\n${url.origin} {\n\tbind ${bind}\n\ttls internal\n\theader X-DMMarket-Web ${proxyIdentity(configuration)}\n\treverse_proxy 127.0.0.1:${port} {\n\t\theader_up X-DMMarket-Proxy ${proxyCredential(configuration)}\n\t\theader_up X-DMMarket-Client-IP {http.request.remote.host}\n\t}\n}\n`;
 }
 
 module.exports = { webEnabled, normalizeWeb, accessOptions, accessUrls, proxyIdentity, proxyCredential, caddyFile };
