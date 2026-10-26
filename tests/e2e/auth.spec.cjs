@@ -646,6 +646,7 @@ test("dashboard original global no muestra utilidad propia ni controles financie
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/clientes?view=dashboard&from=2026-01-01&to=2026-01-31`);
+  await expect(page.getByRole("region", { name: "Clientes", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Utilidad", exact: true })).toHaveCount(0);
   const payload = await page.evaluate(
     async () => await (await fetch("/api/clients/dashboard?from=2026-01-01&to=2026-01-31")).json(),
@@ -1024,14 +1025,15 @@ test("porcentajes de comisiones son sólo lectura y no conceden ventas ni otros 
   const user = await environment.seedUser({ permissions: [{ capability: "commissions.read", scope: "assigned" }] });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  await openModule(page, "Comisiones");
-  const report = page.getByRole("region", { name: "Consulta autorizada de comisiones", exact: true });
-  await report.getByLabel("ID del vendedor para comisiones", { exact: true }).fill("A");
-  await report.getByRole("button", { name: "Consultar comisiones", exact: true }).click();
-  await expect(report.getByRole("cell", { name: "10", exact: true })).toBeVisible();
-  await expect(report.getByRole("cell", { name: "Grupo comisión secundario", exact: true })).toBeVisible();
-  await expect(report.getByRole("option", { name: "Ventas e histórico capturado", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Mi cuenta", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
+  const rates = await page.evaluate(async () => await (await fetch("/api/employees/commissionInfo/A")).json());
+  expect(rates).toContainEqual({ groupId: "G", group: "Grupo sintético", commission: 10 });
+  expect(rates.some((row) => row.group === "Grupo comisión secundario")).toBe(true);
   expect(await page.evaluate(async () => (await fetch("/api/employees/commissionInfo/B")).status)).toBe(403);
+  expect(
+    await page.evaluate(async () => (await fetch("/api/employees/sales/A?from=2026-12-01&to=2026-12-31")).status),
+  ).toBe(403);
 });
 
 test("histórico de comisiones no duplica ventas y no muestra como cero capturas faltantes", async ({
@@ -1048,23 +1050,19 @@ test("histórico de comisiones no duplica ventas y no muestra como cero capturas
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  await openModule(page, "Comisiones");
-  const report = page.getByRole("region", { name: "Consulta autorizada de comisiones", exact: true });
-  await report.getByLabel("ID del vendedor para comisiones", { exact: true }).fill("A");
-  await report.getByLabel("Vista de comisiones", { exact: true }).selectOption("sales");
-  await report.getByLabel("Comisiones desde", { exact: true }).fill("2026-12-01");
-  await report.getByLabel("Comisiones hasta", { exact: true }).fill("2026-12-31");
-  await report.getByRole("button", { name: "Consultar comisiones", exact: true }).click();
-  await expect(report.getByText("Ventas autorizadas con comisiones: 5", { exact: true })).toBeVisible();
-  const table = report.getByRole("table", { name: "Histórico autorizado de comisiones", exact: true });
-  const valid = table.getByRole("row").filter({ has: page.getByRole("cell", { name: "COM-A", exact: true }) });
-  await expect(valid.getByRole("cell", { name: "10", exact: true })).toBeVisible();
-  const duplicate = table.getByRole("row").filter({ has: page.getByRole("cell", { name: "COM-DUP", exact: true }) });
-  await expect(duplicate.getByRole("cell", { name: "100.00", exact: true })).toBeVisible();
-  await expect(duplicate.getByRole("cell", { name: "No disponible", exact: true })).toBeVisible();
-  await expect(table.getByRole("columnheader", { name: "Utilidad autorizada", exact: true })).toHaveCount(0);
-  await expect(table.getByRole("cell", { name: "COM-B", exact: true })).toHaveCount(0);
-  await expect(report.getByText("PRIVATE-COMMISSION", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Ventas", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
+  const history = await page.evaluate(
+    async () => await (await fetch("/api/employees/sales/A?from=2026-12-01&to=2026-12-31")).json(),
+  );
+  expect(history.pagination.total).toBe(5);
+  expect(history.data.find((row) => row.invoiceId === "COM-A").commissionTotal).toBe(10);
+  expect(history.data.find((row) => row.invoiceId === "COM-DUP")).toMatchObject({
+    invoiceTotal: "100.00",
+    commissionTotal: null,
+  });
+  expect(history.data.every((row) => !Object.hasOwn(row, "utilidad") && row.invoiceId !== "COM-B")).toBe(true);
+  expect(JSON.stringify(history)).not.toContain("PRIVATE-COMMISSION");
   expect(
     await page.evaluate(
       async () => (await fetch("/api/employees/sales/A?from=2026-12-01&to=2026-12-31&showNoe=true")).status,

@@ -8,7 +8,6 @@ import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Link, NavLink, Redirect, useLocation } from 'react-router-dom';
 import Audit from './auth/audit';
-import Commissions from './auth/commissions';
 import { useAuth } from './auth/context';
 import AccessWorkspace, { Account } from './auth/workspace';
 import Clients from './pages/clientes';
@@ -38,7 +37,6 @@ export default function App({ onLogout, logoutError }) {
         { path: '/clientes', label: 'Clientes', allowed: can('clients.read') || can('receivables.read') },
         { path: '/proveedores', label: 'Proveedores', allowed: can('providers.read') },
         { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read') },
-        { path: '/comisiones', label: 'Comisiones', allowed: has('commissions.read') },
         { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
         { path: '/configuracion', label: 'Configuración', allowed: configuration },
         { path: '/auditoria', label: 'Auditoría', allowed: can('audit.read') },
@@ -55,7 +53,6 @@ export default function App({ onLogout, logoutError }) {
             content: <Clients />,
         },
         { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read'), content: <Sellers /> },
-        { path: '/comisiones', label: 'Consulta', allowed: has('commissions.read'), content: <Commissions /> },
         { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
         { path: '/configuracion', label: 'Configuración', allowed: configuration, content: <Configuration /> },
         { path: '/auditoria', label: 'Historial', allowed: can('audit.read'), content: <Audit /> },

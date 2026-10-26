@@ -1,4 +1,4 @@
-const { test: base, expect, login, openModule } = require("./fixtures.cjs");
+const { test: base, expect, login } = require("./fixtures.cjs");
 const { startEnvironment } = require("../support/auth-environment.cjs");
 const { seedSales } = require("../support/sales-fixtures.cjs");
 const { seedCommissions, prepareCommissionWrites } = require("../support/commission-fixtures.cjs");
@@ -33,30 +33,41 @@ test("edición de comisión confirma actor y no recalcula capturas históricas",
   await login(page, environment, user);
   await page.getByLabel("Código MFA", { exact: true }).fill(await environment.token(user.secret));
   await page.getByRole("button", { name: "Verificar código", exact: true }).click();
-  await openModule(page, "Comisiones");
-  const report = page.getByRole("region", { name: "Consulta autorizada de comisiones", exact: true });
-  await report.getByLabel("ID del vendedor para comisiones", { exact: true }).fill("A");
-  await report.getByRole("button", { name: "Consultar comisiones", exact: true }).click();
-  const editor = report.getByRole("region", { name: "Edición autorizada de comisiones", exact: true });
-  await editor.getByLabel("Grupo del porcentaje", { exact: true }).selectOption("G");
-  await editor.getByLabel("Nuevo porcentaje de comisión", { exact: true }).fill("15.25");
-  await editor.getByLabel("Motivo del cambio de porcentaje", { exact: true }).fill("Cambio de porcentaje E2E aprobado");
-  await editor.getByRole("button", { name: "Previsualizar porcentaje", exact: true }).click();
-  await expect(editor.getByRole("cell", { name: "10.0000", exact: true })).toBeVisible();
-  await expect(editor.getByRole("cell", { name: "15.2500", exact: true })).toBeVisible();
-  await editor.getByRole("button", { name: "Confirmar porcentaje", exact: true }).click();
-  await expect(
-    report
-      .getByRole("table", { name: "Porcentajes autorizados de comisión", exact: true })
-      .getByRole("cell", { name: "15.2500", exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Ventas", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
+  await page.goto(`${environment.origin}/comisiones`);
+  await expect(page.getByRole("region", { name: "Página no disponible", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Consulta autorizada de comisiones", exact: true })).toHaveCount(0);
+  const applied = await page.evaluate(async () => {
+    const payload = { commissionInfo: { G: "15.25" }, reason: "Cambio de porcentaje E2E aprobado" },
+      headers = { "content-type": "application/json" };
+    const previewResponse = await fetch("/api/employees/commissionInfo/A/preview", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const preview = await previewResponse.json();
+    const committed = await fetch("/api/employees/commissionInfo/A", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ ...payload, requestId: crypto.randomUUID(), snapshot: preview.snapshot }),
+    });
+    return {
+      previewStatus: previewResponse.status,
+      changes: preview.changes,
+      status: committed.status,
+      rates: await (await fetch("/api/employees/commissionInfo/A")).json(),
+    };
+  });
+  expect(applied.previewStatus).toBe(200);
+  expect(applied.changes[0]).toMatchObject({ before: "10.0000", after: "15.2500" });
+  expect(applied.status).toBe(200);
+  expect(applied.rates.find((row) => row.groupId === "G").commission).toBe("15.2500");
   const record = await environment.db("dmmarket_commission_operations").first();
   expect(record.actor_id).toBe(user.id);
   expect(JSON.parse(record.data).changes[0]).toMatchObject({ before: "10.0000", after: "15.2500" });
-  await report.getByLabel("Vista de comisiones", { exact: true }).selectOption("sales");
-  await report.getByLabel("Comisiones desde", { exact: true }).fill("2026-12-01");
-  await report.getByLabel("Comisiones hasta", { exact: true }).fill("2026-12-31");
-  await report.getByRole("button", { name: "Consultar comisiones", exact: true }).click();
-  const row = report.getByRole("row").filter({ has: page.getByRole("cell", { name: "COM-A", exact: true }) });
-  await expect(row.getByRole("cell", { name: "10", exact: true })).toBeVisible();
+  const history = await page.evaluate(
+    async () => await (await fetch("/api/employees/sales/A?from=2026-12-01&to=2026-12-31")).json(),
+  );
+  expect(history.data.find((row) => row.invoiceId === "COM-A").commissionTotal).toBe(10);
 });
