@@ -8,21 +8,27 @@ export function AccessForm({ title, onSubmit, children, button = 'Continuar' }) 
     const [error, setError] = useState('');
     const submit = async (event) => {
         event.preventDefault();
+        const form = event.currentTarget;
+        const values = Object.fromEntries(new FormData(form));
         setBusy(true);
         setError('');
         try {
-            await onSubmit();
+            await onSubmit(values);
         } catch (failure) {
             if (failure.name !== 'AbortError')
                 setError(`${failure.message}${failure.retryAfter ? ` Espera ${failure.retryAfter} segundos.` : ''}`);
         } finally {
+            for (const input of form.querySelectorAll(
+                'input[autocomplete="current-password"], input[autocomplete="new-password"], input[autocomplete="one-time-code"]',
+            ))
+                input.value = '';
             setBusy(false);
         }
     };
     return (
         <section className="card bg-dark text-light border-secondary p-4 my-3">
             <h2 className="h4">{title}</h2>
-            <form onSubmit={submit}>
+            <form method="post" onSubmit={submit}>
                 <fieldset disabled={busy}>
                     {children}
                     {error && (
@@ -41,6 +47,7 @@ export function AccessForm({ title, onSubmit, children, button = 'Continuar' }) 
 
 export function Field({
     label,
+    name,
     value,
     onChange,
     type = 'text',
@@ -58,6 +65,7 @@ export function Field({
             </label>
             <input
                 id={id}
+                name={name}
                 className="form-control"
                 type={type}
                 value={value}
@@ -66,7 +74,7 @@ export function Field({
                 maxLength={maxLength}
                 inputMode={inputMode}
                 required={required}
-                onChange={(event) => onChange(event.target.value)}
+                onChange={onChange ? (event) => onChange(event.target.value) : undefined}
             />
         </div>
     );
@@ -74,42 +82,25 @@ export function Field({
 
 export function InitialAccountForm() {
     const { action } = useAuth();
-    const [displayName, setDisplayName] = useState(''),
-        [username, setUsername] = useState(''),
-        [password, setPassword] = useState(''),
-        [confirmation, setConfirmation] = useState('');
     return (
         <AccessForm
             title="Crear primer administrador"
             button="Crear administrador"
-            onSubmit={async () => {
-                try {
-                    if (password !== confirmation) throw new Error('Las contraseñas no coinciden.');
-                    await action('first-user', { displayName, username, password, confirmation });
-                } finally {
-                    setPassword('');
-                    setConfirmation('');
-                }
+            onSubmit={async ({ displayName, username, password, confirmation }) => {
+                if (password !== confirmation) throw new Error('Las contraseñas no coinciden.');
+                await action('first-user', { displayName, username, password, confirmation });
             }}
         >
             <p>
                 Bienvenido a DMMarket. Esta cuenta administrará el acceso. Después de crearla deberás configurar MFA
                 antes de continuar.
             </p>
-            <Field label="Nombre" value={displayName} onChange={setDisplayName} maxLength={128} autoComplete="name" />
-            <Field label="Usuario" value={username} onChange={setUsername} maxLength={64} autoComplete="username" />
-            <Field
-                label="Contraseña"
-                value={password}
-                onChange={setPassword}
-                type="password"
-                minLength={15}
-                autoComplete="new-password"
-            />
+            <Field label="Nombre" name="displayName" maxLength={128} autoComplete="name" />
+            <Field label="Usuario" name="username" maxLength={64} autoComplete="username" />
+            <Field label="Contraseña" name="password" type="password" minLength={15} autoComplete="new-password" />
             <Field
                 label="Confirmar contraseña"
-                value={confirmation}
-                onChange={setConfirmation}
+                name="confirmation"
                 type="password"
                 minLength={15}
                 autoComplete="new-password"
@@ -121,74 +112,41 @@ export function InitialAccountForm() {
 
 export function LoginForm() {
     const { action } = useAuth();
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
     return (
         <AccessForm
             title="Iniciar sesión"
             button="Entrar"
-            onSubmit={async () => {
-                try {
-                    await action('login', { username, password });
-                } finally {
-                    setPassword('');
-                }
-            }}
+            onSubmit={({ username, password }) => action('login', { username, password })}
         >
-            <Field label="Usuario" value={username} onChange={setUsername} autoComplete="username" maxLength={64} />
-            <Field
-                label="Contraseña"
-                value={password}
-                onChange={setPassword}
-                type="password"
-                autoComplete="current-password"
-            />
+            <Field label="Usuario" name="username" autoComplete="username" maxLength={64} />
+            <Field label="Contraseña" name="password" type="password" autoComplete="current-password" />
         </AccessForm>
     );
 }
 
 export function PasswordForm() {
     const { action, session } = useAuth();
-    const [currentPassword, setCurrentPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmation, setConfirmation] = useState('');
-    const [token, setToken] = useState('');
     return (
         <AccessForm
             title={session.stage === 'password' ? 'Cambiar contraseña temporal' : 'Cambiar mi contraseña'}
             button="Guardar contraseña"
-            onSubmit={async () => {
-                try {
-                    if (newPassword !== confirmation) throw new Error('Las contraseñas nuevas no coinciden.');
-                    await action('password', { currentPassword, newPassword, token });
-                } finally {
-                    setCurrentPassword('');
-                    setNewPassword('');
-                    setConfirmation('');
-                    setToken('');
-                }
+            onSubmit={async ({ currentPassword, newPassword, confirmation, token = '' }) => {
+                if (newPassword !== confirmation) throw new Error('Las contraseñas nuevas no coinciden.');
+                await action('password', { currentPassword, newPassword, token });
             }}
         >
             <p>Usa al menos 15 caracteres. No reutilices la contraseña temporal.</p>
-            <Field
-                label="Contraseña actual"
-                value={currentPassword}
-                onChange={setCurrentPassword}
-                type="password"
-                autoComplete="current-password"
-            />
+            <Field label="Contraseña actual" name="currentPassword" type="password" autoComplete="current-password" />
             <Field
                 label="Contraseña nueva"
-                value={newPassword}
-                onChange={setNewPassword}
+                name="newPassword"
                 type="password"
                 autoComplete="new-password"
                 minLength={15}
             />
             <Field
                 label="Confirmar contraseña nueva"
-                value={confirmation}
-                onChange={setConfirmation}
+                name="confirmation"
                 type="password"
                 autoComplete="new-password"
                 minLength={15}
@@ -196,8 +154,7 @@ export function PasswordForm() {
             {session.stage === 'ready' && session.mfaEnabled && (
                 <Field
                     label="Código MFA para cambiar contraseña"
-                    value={token}
-                    onChange={setToken}
+                    name="token"
                     maxLength={6}
                     inputMode="numeric"
                     autoComplete="one-time-code"
@@ -209,27 +166,13 @@ export function PasswordForm() {
 
 export function MfaForm() {
     const { action } = useAuth();
-    const [token, setToken] = useState('');
     return (
         <AccessForm
             title="Verificar segundo factor"
             button="Verificar código"
-            onSubmit={async () => {
-                try {
-                    await action('mfa', { token });
-                } finally {
-                    setToken('');
-                }
-            }}
+            onSubmit={({ token }) => action('mfa', { token })}
         >
-            <Field
-                label="Código MFA"
-                value={token}
-                onChange={setToken}
-                maxLength={6}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-            />
+            <Field label="Código MFA" name="token" maxLength={6} inputMode="numeric" autoComplete="one-time-code" />
         </AccessForm>
     );
 }
@@ -295,10 +238,8 @@ function ManualMfaConfiguration({ uri }) {
 
 export function EnrollmentForm() {
     const { action } = useAuth();
-    const [password, setPassword] = useState('');
     const [uri, setUri] = useState('');
     const [qr, setQr] = useState('');
-    const [token, setToken] = useState('');
     useEffect(() => {
         let active = true;
         if (uri)
@@ -316,20 +257,15 @@ export function EnrollmentForm() {
             <AccessForm
                 title="Configurar segundo factor"
                 button="Generar configuración MFA"
-                onSubmit={async () => {
-                    try {
-                        const data = await action('mfa/enrollment', { password });
-                        setUri(data.uri);
-                    } finally {
-                        setPassword('');
-                    }
+                onSubmit={async ({ password }) => {
+                    const data = await action('mfa/enrollment', { password });
+                    setUri(data.uri);
                 }}
             >
                 <p>Tu acceso requiere MFA. Confirma tu contraseña para generar una configuración nueva.</p>
                 <Field
                     label="Contraseña para configurar MFA"
-                    value={password}
-                    onChange={setPassword}
+                    name="password"
                     type="password"
                     autoComplete="current-password"
                 />
@@ -339,13 +275,7 @@ export function EnrollmentForm() {
         <AccessForm
             title="Confirmar configuración MFA"
             button="Confirmar MFA"
-            onSubmit={async () => {
-                try {
-                    await action('mfa/enrollment/confirm', { token });
-                } finally {
-                    setToken('');
-                }
-            }}
+            onSubmit={({ token }) => action('mfa/enrollment/confirm', { token })}
         >
             <p>
                 Escanea este código con tu autenticador. La configuración vence en cinco minutos y no se mostrará de
@@ -355,8 +285,7 @@ export function EnrollmentForm() {
             <ManualMfaConfiguration key={uri} uri={uri} />
             <Field
                 label="Código de confirmación MFA"
-                value={token}
-                onChange={setToken}
+                name="token"
                 maxLength={6}
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -381,37 +310,28 @@ export function ReauthenticationForm({
     description = 'Las acciones de acceso exigen contraseña y MFA comprobados en los últimos cinco minutos.',
 } = {}) {
     const { action } = useAuth();
-    const [password, setPassword] = useState('');
-    const [token, setToken] = useState('');
     const [confirmed, setConfirmed] = useState(false);
     return (
         <AccessForm
             title={title}
             button="Confirmar identidad"
-            onSubmit={async () => {
+            onSubmit={async ({ password, token }) => {
                 setConfirmed(false);
-                try {
-                    await action('reauthenticate', { password, token });
-                    setConfirmed(true);
-                    onConfirmed?.();
-                } finally {
-                    setPassword('');
-                    setToken('');
-                }
+                await action('reauthenticate', { password, token });
+                setConfirmed(true);
+                onConfirmed?.();
             }}
         >
             <p>{description}</p>
             <Field
                 label="Contraseña de reautenticación"
-                value={password}
-                onChange={setPassword}
+                name="password"
                 type="password"
                 autoComplete="current-password"
             />
             <Field
                 label="Código MFA de reautenticación"
-                value={token}
-                onChange={setToken}
+                name="token"
                 maxLength={6}
                 inputMode="numeric"
                 autoComplete="one-time-code"
