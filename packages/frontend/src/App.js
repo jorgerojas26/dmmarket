@@ -43,28 +43,24 @@ export default function App({ onLogout, logoutError }) {
         { path: '/acceso', label: 'Acceso', allowed: access },
     ].filter((module) => module.allowed);
     const views = [
-        { path: '/ventas', label: 'Desglose', allowed: has('sales.read'), content: <Sales /> },
-        { path: '/compras', label: 'Desglose', allowed: can('purchases.read'), content: <Purchases /> },
-        { path: '/proveedores', label: 'Directorio', allowed: can('providers.read'), content: <Providers /> },
+        { path: '/ventas', allowed: has('sales.read'), content: <Sales /> },
+        { path: '/compras', allowed: can('purchases.read'), content: <Purchases /> },
+        { path: '/proveedores', allowed: can('providers.read'), content: <Providers /> },
         {
             path: '/clientes',
-            label: 'Clientes',
             allowed: can('clients.read') || can('receivables.read'),
             content: <Clients />,
         },
-        { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read'), content: <Sellers /> },
-        { path: '/inventario', label: 'Existencias', allowed: can('inventory.read'), content: <Inventory /> },
-        { path: '/configuracion', label: 'Configuración', allowed: configuration, content: <Configuration /> },
-        { path: '/auditoria', label: 'Historial', allowed: can('audit.read'), content: <Audit /> },
-        { path: '/acceso', label: 'Administración', allowed: access, content: <AccessWorkspace /> },
-        { path: '/cuenta', label: 'Mi cuenta', allowed: true, content: <Account /> },
+        { path: '/vendedores', allowed: has('sellers.read'), content: <Sellers /> },
+        { path: '/inventario', allowed: can('inventory.read'), content: <Inventory /> },
+        { path: '/configuracion', allowed: configuration, content: <Configuration /> },
+        { path: '/auditoria', allowed: can('audit.read'), content: <Audit /> },
+        { path: '/acceso', allowed: access, content: <AccessWorkspace /> },
+        { path: '/cuenta', allowed: true, content: <Account /> },
     ].filter((view) => view.allowed);
     const path = pathname.replace(/\/+$/, '') || '/';
     const view = views.find((item) => item.path === path);
     const module = modules.find((item) => path === item.path || path.startsWith(`${item.path}/`));
-    const children = module
-        ? views.filter((item) => item.path === module.path || item.path.startsWith(`${module.path}/`))
-        : [];
     return (
         <div className="App bg-dark">
             <UpdateToast />
@@ -220,21 +216,6 @@ export default function App({ onLogout, logoutError }) {
                             className="flex-grow-1 overflow-auto p-4 text-light"
                         >
                             <h2 className="h4">{module?.label || 'Mi cuenta'}</h2>
-                            {children.length > 1 && (
-                                <nav aria-label={`Vistas de ${module.label}`} className="nav nav-pills gap-2 mb-3">
-                                    {children.map((item) => (
-                                        <NavLink
-                                            key={item.path}
-                                            to={item.path}
-                                            exact
-                                            className="nav-link"
-                                            activeClassName="active"
-                                        >
-                                            {item.label}
-                                        </NavLink>
-                                    ))}
-                                </nav>
-                            )}
                             {!modules.length && (
                                 <p>No tienes módulos habilitados. Consulta al responsable de acceso.</p>
                             )}

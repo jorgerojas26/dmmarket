@@ -127,3 +127,53 @@ test("móvil abre y cierra navegación y cambiar de cuenta no conserva el módul
   await expect(navigation.getByRole("link", { name: "Inventario", exact: true })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Inventario", exact: true })).toHaveCount(0);
 });
+
+test("navbar conserva orden, rótulos y engranaje originales sin menú sustituto de Comisiones", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  await login(
+    page,
+    environment,
+    await environment.seedUser({
+      permissions: [
+        "sales.read",
+        "purchases.read",
+        "clients.read",
+        "providers.read",
+        "sellers.read",
+        "inventory.read",
+        "rates.read",
+        "commissions.read",
+      ].map((capability) => ({ capability, scope: "global" })),
+    }),
+  );
+  await expect(page.getByRole("link", { name: "Ventas", exact: true })).toBeVisible();
+  const links = page.locator(".app-navbar-links");
+  await expect(links.locator(".nav-link")).toHaveText([
+    "ventas",
+    "compras",
+    "clientes",
+    "proveedores",
+    "vendedores",
+    "inventario",
+  ]);
+  await expect(links.getByRole("link", { name: "Configuración", exact: true })).toHaveCount(0);
+  await expect(
+    page.locator(".app-navbar-actions").getByRole("link", { name: "Configuración", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
+  const noe = page.getByRole("checkbox", { name: "Notas de entrega", exact: true });
+  await expect(noe.locator("..")).toBeVisible();
+  await noe.locator("..").click();
+  await expect(noe).toBeChecked();
+  await noe.locator("..").click();
+  await expect(noe).not.toBeChecked();
+  await expect(page.locator(".app-navbar-ref")).toContainText("42.125000");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Inventario", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
