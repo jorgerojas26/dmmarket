@@ -26,7 +26,6 @@ test("lectura de inventario no se infiere de costos, ventas o administración", 
     "sales.read",
     "purchases.read",
     "providers.read",
-    "providers.personal",
     "access.users",
   ]) {
     const client = await reader([grant(permission)]);
@@ -35,7 +34,7 @@ test("lectura de inventario no se infiere de costos, ventas o administración", 
 });
 
 test("inventario básico omite importes, proveedores y derivados incluso con permisos financieros ajenos", async () => {
-  const client = await reader([grant("inventory.read"), grant("sales.costs"), grant("purchases.costs")]);
+  const client = await reader([grant("inventory.read"), grant("sales.financial"), grant("purchases.costs")]);
   const result = await client.request(`/api/products?${search}&limit=1&sortBy=IdProducto&sortDir=asc`);
   expect(result.status).toBe(200);
   expect(result.body).toMatchObject({ total: 4, page: 1, limit: 1, totals: { existencia: null } });

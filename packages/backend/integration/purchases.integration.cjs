@@ -35,7 +35,7 @@ test("compras exige lectura explícita, no se infiere de ventas, costos o provee
 });
 
 test("lectura básica conserva documentos sin líneas y cantidades sin exponer importes o proveedores", async () => {
-  const client = await reader([grant("purchases.read"), grant("inventory.costs"), grant("sales.costs")]);
+  const client = await reader([grant("purchases.read"), grant("inventory.costs"), grant("sales.financial")]);
   const invoices = await client.request(`/api/purchases/invoices?${range}&sortBy=numero&sortDir=asc&limit=1`);
   expect(invoices.status).toBe(200);
   expect(invoices.body.pagination).toEqual({ page: 1, limit: 1, total: 3 });
@@ -78,7 +78,7 @@ test("proveedores son permiso separado y su identificación no entra en compras"
   for (const suffix of ["proveedorId=PUR-A", "sortBy=proveedor"])
     expect((await basic.request(`/api/purchases/invoices?${range}&${suffix}`)).status).toBe(403);
   expect((await basic.request(`/api/purchases/invoices?${range}&search=Proveedor`)).body.pagination.total).toBe(0);
-  const client = await reader([grant("purchases.read"), grant("providers.read"), grant("providers.personal")]);
+  const client = await reader([grant("purchases.read"), grant("providers.read")]);
   const result = await client.request(`/api/purchases/invoices?${range}&proveedorId=PUR-A&sortBy=proveedor`);
   expect(result.status).toBe(200);
   expect(result.body.pagination.total).toBe(2);

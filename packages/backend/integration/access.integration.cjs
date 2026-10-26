@@ -62,7 +62,20 @@ test("catálogo cerrado, permisos separados y acceso no administrativo denegado"
     privileged: true,
     assigned: false,
   });
+  expect(catalog.body.data).toHaveLength(37);
+  expect(catalog.body.data.find((row) => row.capability === "sales.financial")).toMatchObject({
+    assigned: true,
+    privileged: false,
+  });
+  expect(
+    catalog.body.data.some((row) => ["sales.costs", "sales.profit", "providers.personal"].includes(row.capability)),
+  ).toBe(false);
+  expect(catalog.body.data.some((row) => row.capability === "commissions.read")).toBe(true);
+  expect(catalog.body.data.some((row) => row.capability === "commissions.update")).toBe(true);
   for (const permission of [
+    { capability: "sales.costs", scope: "global" },
+    { capability: "sales.profit", scope: "global" },
+    { capability: "providers.personal", scope: "global" },
     { capability: "manage.all", scope: "global" },
     { capability: "clients.read", scope: "assigned" },
   ]) {

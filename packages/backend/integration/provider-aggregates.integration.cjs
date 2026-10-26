@@ -53,8 +53,7 @@ test("vendedores propios intersectan ventas globales antes de agregar utilidad",
     grant("providers.read"),
     grant("sellers.read", "assigned"),
     grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   const result = await client.request(`/api/providers/PUR-A/sellers?${range}`);
   expect(result.status).toBe(200);
@@ -73,8 +72,7 @@ test("vendedores propios intersectan ventas globales antes de agregar utilidad",
     grant("providers.read"),
     grant("sellers.read"),
     grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   const rows = await global.request(`/api/providers/PUR-A/sellers?${range}`);
   expect(rows.body.pagination.total).toBe(2);

@@ -98,8 +98,7 @@ test.each(["false", "true"])("ventas globales se intersectan con vendedores prop
   const client = await reader([
     grant("sellers.read", "assigned"),
     grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   const amount = showNoe === "true" ? 200 : 100;
   const result = await client.request(`/api/sellers/list?${range}&showNoe=${showNoe}`);
@@ -118,12 +117,7 @@ test.each(["false", "true"])("ventas globales se intersectan con vendedores prop
 });
 
 test("utilidad propia nunca ordena ni expone métricas del directorio global", async () => {
-  const client = await reader([
-    grant("sellers.read"),
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const client = await reader([grant("sellers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
   const result = await client.request(`/api/sellers/list?${range}`);
   expect(result.status).toBe(200);
   expect(Number(result.body.totals.sales)).toBe(550);
@@ -146,12 +140,7 @@ test("orden por utilidad de clientes exige cobertura completa, filtrado de nombr
 });
 
 test("filtro de vendedor también limita el catálogo y no inventa utilidad para otros", async () => {
-  const client = await reader([
-    grant("sellers.read"),
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const client = await reader([grant("sellers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
   const result = await client.request(`/api/sellers/list?${range}&employeeId=A&sortBy=profit`);
   expect(result.status).toBe(200);
   expect(result.body.total).toBe(1);
@@ -207,11 +196,7 @@ test("collation compartida insensible no amplía vendedor ni datos financieros p
   const restricted = await reader([grant("sellers.read", "assigned"), grant("sales.read", "assigned")]);
   expect((await restricted.request(`/api/sellers/list?${range}`)).body.data.map((row) => row.sellerId)).toEqual(["A"]);
   expect((await restricted.request(`/api/sales/facturas?${range}`)).body.totals.monto).toBe("100.00");
-  const global = await reader([
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const global = await reader([grant("sales.read"), grant("sales.financial", "assigned")]);
   const own = await global.request(`/api/sales/productos?${range}&employeeId=A`);
   expect(Number(own.body.totals.rawProfit)).toBe(100);
   expect(Number(own.body.totals.netProfit)).toBe(39);

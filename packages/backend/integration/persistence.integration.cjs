@@ -222,16 +222,16 @@ test("permisos cargados desde SQL conservan alcances por capacidad", async () =>
   const user = await environment.seedUser({
     permissions: [
       { capability: "sales.read", scope: "global" },
-      { capability: "sales.profit", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
     ],
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   const active = await login(user);
   await sessions.withSession(active.sid, {}, async ({ access }) => {
     expect(access.canRecord("sales.read", "B")).toBe(true);
-    expect(access.canRecord("sales.profit", "A")).toBe(true);
-    expect(access.canRecord("sales.profit", "B")).toBe(false);
-    expect(access.covers("sales.profit", ["A", "B"])).toBe(false);
+    expect(access.canRecord("sales.financial", "A")).toBe(true);
+    expect(access.canRecord("sales.financial", "B")).toBe(false);
+    expect(access.covers("sales.financial", ["A", "B"])).toBe(false);
   });
 });
 

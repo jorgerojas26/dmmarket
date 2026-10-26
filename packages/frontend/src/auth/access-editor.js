@@ -81,7 +81,7 @@ function RoleEditor() {
                         concede acceso.
                     </p>
                     <p>
-                        En ventas, utilidad y margen requieren sales.profit y sales.costs con cobertura del conjunto
+                        En ventas, costos, utilidad y margen requieren sales.financial con cobertura del conjunto
                         consultado: total menos utilidad revela el costo.
                     </p>
                     {catalog.data.map((capability) => (

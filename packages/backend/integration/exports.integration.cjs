@@ -63,8 +63,7 @@ test("lectura global y exportación propia requieren acotar explícitamente el c
   const { client } = await reader([
     grant("sales.read"),
     grant("sales.export", "assigned"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   expect((await client.request(`/api/exports/sales?${salesRange}`)).status).toBe(403);
   expect((await client.request(`/api/exports/sales?${salesRange}&employeeId=B`)).status).toBe(403);
@@ -75,12 +74,7 @@ test("lectura global y exportación propia requieren acotar explícitamente el c
 });
 
 test("exportar global no amplía privilegios financieros propios", async () => {
-  const { client } = await reader([
-    grant("sales.read"),
-    grant("sales.export"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const { client } = await reader([grant("sales.read"), grant("sales.export"), grant("sales.financial", "assigned")]);
   const result = await client.request(`/api/exports/sales?${salesRange}`);
   expect(result.status).toBe(200);
   expect(result.body.total).toBe(2);
@@ -106,7 +100,7 @@ test("compras e inventario conservan omisión monetaria y permisos separados de 
 });
 
 test("directorio de proveedores exporta sólo nombre e ID sin transacciones ni contactos", async () => {
-  const { client } = await reader([grant("providers.read"), grant("providers.export"), grant("providers.personal")]);
+  const { client } = await reader([grant("providers.read"), grant("providers.export")]);
   const result = await client.request("/api/exports/providers?search=compras");
   expect(result.status).toBe(200);
   expect(result.body.total).toBe(2);
@@ -174,8 +168,7 @@ test("documento exportado exige alcance del vendedor exacto y no conserva utilid
   const { client } = await reader([
     grant("sales.read"),
     grant("sales.export", "assigned"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   const permitted = await client.request("/api/exports/sales/1?showNoe=false");
   expect(permitted.status).toBe(200);
@@ -213,8 +206,7 @@ test("despacho exporta selección completa autorizada sin reconstruir costos ni 
   const own = await reader([
     grant("sales.read"),
     grant("sales.export", "assigned"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   expect(
     (

@@ -23,11 +23,11 @@ afterAll(async () => {
 });
 
 test("directorio requiere providers.read y nunca selecciona datos personales o importes", async () => {
-  for (const capability of ["providers.personal", "purchases.read", "sales.read", "inventory.read", "access.users"]) {
+  for (const capability of ["purchases.read", "sales.read", "inventory.read", "access.users"]) {
     const client = await reader([grant(capability)]);
     expect((await client.request("/api/providers/list")).status).toBe(403);
   }
-  const client = await reader([grant("providers.read"), grant("providers.personal")]);
+  const client = await reader([grant("providers.read")]);
   const result = await client.request("/api/providers/list?limit=1&sortBy=IdProveedor&sortDir=asc");
   expect(result.status).toBe(200);
   expect(result.body).toMatchObject({ total: 2, page: 1, limit: 1 });
@@ -69,12 +69,7 @@ test.each(["false", "true"])(
 );
 
 test("costo propio no se amplía al proveedor global; acotar empleado legítimo permite campos", async () => {
-  const client = await reader([
-    grant("providers.read"),
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const client = await reader([grant("providers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
   const global = await client.request(`/api/providers/PUR-A/summary?${range}`);
   expect(global.body.sales.totalRawProfit).toBe(300);
   expect(global.body.sales).not.toHaveProperty("totalNetProfit");
@@ -176,20 +171,14 @@ test("tabla original agrega sólo ventas propias y conserva compras sin revelar 
 });
 
 test("tabla original global no obtiene utilidad propia ni convierte costos incompletos en cero", async () => {
-  const global = await reader([
-    grant("providers.read"),
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const global = await reader([grant("providers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
   const result = await global.request(`/api/providers/list?${range}`);
   expect(result.status).toBe(200);
   expect(result.body.totals).not.toHaveProperty("utilidad");
   const own = await reader([
     grant("providers.read"),
     grant("sales.read", "assigned"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   await environment
     .db("slavefact")

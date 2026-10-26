@@ -228,6 +228,10 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   const name = `Rol E2E ${randomBytes(4).toString("hex")}`;
   await page.getByRole("textbox", { name: "Nombre del rol", exact: true }).fill(name);
   await page.getByLabel("sales.read", { exact: true }).selectOption("assigned");
+  await expect(page.getByLabel("sales.financial", { exact: true })).toBeVisible();
+  for (const retired of ["sales.costs", "sales.profit", "providers.personal"])
+    await expect(page.getByLabel(retired, { exact: true })).toHaveCount(0);
+  await page.getByLabel("sales.financial", { exact: true }).selectOption("assigned");
   await page.getByLabel("rates.read", { exact: true }).selectOption("global");
   await page.getByRole("textbox", { name: "Motivo del cambio de rol" }).fill("Crear rol real desde interfaz");
   const createdResponse = page.waitForResponse(
@@ -240,6 +244,7 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   await expect(page.getByText("Rol guardado.", { exact: false })).toBeVisible();
   await page.getByLabel("Rol para editar", { exact: true }).selectOption(role.id);
   await expect(page.getByLabel("sales.read", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("sales.financial", { exact: true })).toHaveValue("assigned");
   await page.getByLabel("sales.read", { exact: true }).selectOption("global");
   await page.getByRole("textbox", { name: "Motivo del cambio de rol" }).fill("Cambiar alcance real del rol");
   const updatedResponse = page.waitForResponse(
@@ -472,8 +477,7 @@ test("dashboard original de Vendedores intersecta lectura antes de ranking, marg
     permissions: [
       { capability: "sellers.read", scope: "assigned" },
       { capability: "sales.read", scope: "global" },
-      { capability: "sales.costs", scope: "assigned" },
-      { capability: "sales.profit", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
     ],
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
@@ -525,8 +529,7 @@ test("dashboard original global oculta utilidad propia y contactos ajenos sin su
       { capability: "sellers.read", scope: "global" },
       { capability: "sales.read", scope: "global" },
       { capability: "sellers.personal", scope: "assigned" },
-      { capability: "sales.costs", scope: "assigned" },
-      { capability: "sales.profit", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
     ],
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
@@ -639,8 +642,7 @@ test("dashboard original global no muestra utilidad propia ni controles financie
     permissions: [
       { capability: "clients.read", scope: "global" },
       { capability: "sales.read", scope: "global" },
-      { capability: "sales.costs", scope: "assigned" },
-      { capability: "sales.profit", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
     ],
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
@@ -689,7 +691,7 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
   }
   await page.getByRole("button", { name: "Salir", exact: true }).click();
   const user = await environment.seedUser({
-    permissions: ["sales.read", "sales.costs", "sales.profit"]
+    permissions: ["sales.read", "sales.financial"]
       .map((capability) => ({ capability, scope: "assigned" }))
       .concat([{ capability: "purchases.read", scope: "global" }]),
   });
@@ -908,10 +910,7 @@ test("directorio original de Proveedores no infiere transacciones ni contactos d
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
   const user = await environment.seedUser({
-    permissions: [
-      { capability: "providers.read", scope: "global" },
-      { capability: "providers.personal", scope: "global" },
-    ],
+    permissions: [{ capability: "providers.read", scope: "global" }],
   });
   await login(page, environment, user);
   await openModule(page, "Proveedores");
@@ -1123,8 +1122,7 @@ test("Vendedores del proveedor original intersectan sus permisos antes de mostra
       { capability: "providers.read", scope: "global" },
       { capability: "sellers.read", scope: "assigned" },
       { capability: "sales.read", scope: "global" },
-      { capability: "sales.costs", scope: "assigned" },
-      { capability: "sales.profit", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
     ],
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });

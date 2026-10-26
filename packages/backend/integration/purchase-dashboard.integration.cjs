@@ -21,7 +21,7 @@ afterAll(async () => {
 });
 
 test("dashboard básico no ordena ni revela importes, comparaciones financieras o proveedores", async () => {
-  const client = await reader([grant("purchases.read"), grant("sales.costs"), grant("inventory.costs")]);
+  const client = await reader([grant("purchases.read"), grant("sales.financial"), grant("inventory.costs")]);
   const result = await client.request(`/api/purchases/dashboard?${range}&${compare}`);
   expect(result.status).toBe(200);
   expect(result.body.kpis).toEqual({ totalInvoices: 3, totalQuantity: 6, compareQuantity: 2, compareInvoices: 1 });
@@ -61,7 +61,7 @@ test("totales, costo promedio y comparación requieren costos de compras", async
 });
 
 test("datos básicos de proveedor y clasificaciones no incluyen identificación o contactos", async () => {
-  const client = await reader([grant("purchases.read"), grant("providers.read"), grant("providers.personal")]);
+  const client = await reader([grant("purchases.read"), grant("providers.read")]);
   const result = await client.request(`/api/purchases/dashboard?${range}`);
   expect(result.body.bestProvider).toMatchObject({
     id: "PUR-A",

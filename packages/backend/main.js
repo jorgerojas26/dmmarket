@@ -12,6 +12,13 @@ if (["--bootstrap-access", "--recover-access"].includes(command)) {
       console.error(error.message);
       process.exitCode = 1;
     });
+} else if (command === "--migrate-access-catalog") {
+  Promise.resolve()
+    .then(() => require("./auth/recovery-command").runCatalogMigration(process.argv.slice(3)))
+    .catch((error) => {
+      console.error(error.message);
+      process.exitCode = 1;
+    });
 } else if (["--install-service", "--uninstall-service", "--setup"].includes(command)) {
   Promise.resolve()
     .then(() => {

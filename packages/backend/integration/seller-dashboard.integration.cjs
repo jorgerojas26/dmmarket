@@ -29,7 +29,7 @@ test("dashboard requiere ambas lecturas y no infiere acceso desde administració
     [grant("access.users")],
     [grant("sellers.read")],
     [grant("sales.read")],
-    [grant("sellers.personal"), grant("sales.costs"), grant("sales.profit")],
+    [grant("sellers.personal"), grant("sales.financial")],
   ]) {
     const client = await reader(permissions);
     expect((await client.request(`/api/sellers/dashboard?${range}`)).status).toBe(403);
@@ -44,8 +44,7 @@ test.each(["false", "true"])(
     const client = await reader([
       grant("sellers.read", "assigned"),
       grant("sales.read"),
-      grant("sales.costs", "assigned"),
-      grant("sales.profit", "assigned"),
+      grant("sales.financial", "assigned"),
     ]);
     const result = await client.request(`/api/sellers/dashboard?${range}&showNoe=${showNoe}`);
     const sales = showNoe === "true" ? 200 : 100;
@@ -72,12 +71,7 @@ test.each(["false", "true"])(
 test.each(["false", "true"])(
   "lectura global no convierte privilegios financieros propios en globales showNoe=%s",
   async (showNoe) => {
-    const client = await reader([
-      grant("sellers.read"),
-      grant("sales.read"),
-      grant("sales.costs", "assigned"),
-      grant("sales.profit", "assigned"),
-    ]);
+    const client = await reader([grant("sellers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
     const result = await client.request(`/api/sellers/dashboard?${range}&showNoe=${showNoe}`);
     expect(result.status).toBe(200);
     expect(result.body.kpis).toMatchObject({ totalSellers: 2, totalSales: 550, totalInvoices: 3, compareSales: 30 });
@@ -89,8 +83,8 @@ test.each(["false", "true"])(
   },
 );
 
-test("no seleccionar costos o utilidad por separado tampoco expone margen ni alertas derivadas", async () => {
-  for (const capability of ["sales.costs", "sales.profit"]) {
+test("otros permisos no conceden finanzas ni alertas derivadas", async () => {
+  for (const capability of ["inventory.costs", "purchases.costs"]) {
     const client = await reader([grant("sellers.read"), grant("sales.read"), grant(capability)]);
     const result = await client.request(`/api/sellers/dashboard?${range}`);
     expect(result.status).toBe(200);
@@ -98,12 +92,7 @@ test("no seleccionar costos o utilidad por separado tampoco expone margen ni ale
     expect(result.body.kpis).not.toHaveProperty("marginPercent");
     expect(result.body.ranking.every((row) => !Object.hasOwn(row, "profit"))).toBe(true);
   }
-  const financial = await reader([
-    grant("sellers.read"),
-    grant("sales.read"),
-    grant("sales.costs"),
-    grant("sales.profit"),
-  ]);
+  const financial = await reader([grant("sellers.read"), grant("sales.read"), grant("sales.financial")]);
   const global = await financial.request(`/api/sellers/dashboard?${range}`);
   expect(global.body.kpis.marginPercent).toBe(44.73);
   expect(global.body.kpis.lowMarginSellers).toBe(1);
@@ -197,8 +186,7 @@ test("collation insensible no amplía comparación, ranking ni tendencia propios
   const client = await reader([
     grant("sellers.read", "assigned"),
     grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   const result = await client.request(`/api/sellers/dashboard?${range}`);
   expect(result.status).toBe(200);

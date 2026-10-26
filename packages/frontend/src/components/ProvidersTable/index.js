@@ -19,11 +19,7 @@ const LIMIT = 20;
 const ProvidersTable = ({ onRowSelect, dateRange }) => {
     const { session, can } = useAuth();
     const has = (cap) => session.permissions.some((grant) => grant.capability === cap);
-    const financial =
-        has('sales.read') &&
-        has('sales.costs') &&
-        has('sales.profit') &&
-        (!can('sales.read') || (can('sales.costs') && can('sales.profit')));
+    const financial = has('sales.read') && has('sales.financial') && (!can('sales.read') || can('sales.financial'));
     const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);

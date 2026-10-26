@@ -58,7 +58,7 @@ test("columnas financieras originales sólo aparecen para el conjunto cubierto y
   const report = await enter(
     page,
     environment,
-    [grant("sales.read"), grant("sellers.read"), grant("sales.costs", "assigned"), grant("sales.profit", "assigned")],
+    [grant("sales.read"), grant("sellers.read"), grant("sales.financial", "assigned")],
     "desglose",
   );
   await page.goto(

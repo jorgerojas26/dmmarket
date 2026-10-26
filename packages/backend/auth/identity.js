@@ -30,6 +30,14 @@ async function assertAuthSchema(db) {
   }
   if (!(await db.schema.hasColumn("dmmarket_auth_events", "target_role_id")))
     throw new Error("El esquema de acceso requiere la migración manual del objetivo de roles.");
+  if (
+    await db("dmmarket_auth_role_permissions")
+      .whereIn("capability", ["sales.costs", "sales.profit", "providers.personal"])
+      .first()
+  )
+    throw new Error(
+      "El catálogo de acceso requiere migración manual. Detén la web y ejecuta --migrate-access-catalog con el binario actualizado.",
+    );
   if (!(await db("dmmarket_auth_control").where("id", 1).first()))
     throw new Error("Falta el control transaccional de acceso.");
 }

@@ -70,12 +70,7 @@ test.each(["false", "true"])(
       total_USD: showNoe === "true" ? "200.00" : "100.00",
     });
     expect(result.body[0]).not.toHaveProperty("utilidad");
-    const financial = await reader([
-      grant("clients.read"),
-      grant("sales.read"),
-      grant("sales.costs", "assigned"),
-      grant("sales.profit", "assigned"),
-    ]);
+    const financial = await reader([grant("clients.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
     const global = await financial.request(`/api/clients/best/product/P?${range}&showNoe=${showNoe}`);
     expect(global.body).toHaveLength(2);
     expect(global.body.every((row) => !Object.hasOwn(row, "utilidad"))).toBe(true);
@@ -128,12 +123,7 @@ test("identificadores insensibles no amplían histórico, ranking ni utilidad pr
     .insert({ IdFactura: "lowercase", IdProducto: "P", Precio: 999, Costo: 1, Cantidad: 1 });
   const client = await reader([grant("clients.read"), grant("sales.read", "assigned")]);
   expect((await client.request(`/api/clients/average/month/C?${range}`)).body.data[0].y).toBe(100);
-  const financial = await reader([
-    grant("clients.read"),
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const financial = await reader([grant("clients.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
   const product = await financial.request(`/api/clients/best/product/P?${range}&employeeId=A`);
   expect(Number(product.body[0].utilidad)).toBe(39);
   expect(Number(product.body[0].total_USD)).toBe(100);

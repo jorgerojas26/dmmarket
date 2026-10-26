@@ -66,8 +66,7 @@ test("cambiar filtros originales no conserva columnas financieras propias mientr
       grant("sales.read"),
       grant("sellers.read"),
       grant("sales.export"),
-      grant("sales.costs", "assigned"),
-      grant("sales.profit", "assigned"),
+      grant("sales.financial", "assigned"),
     ],
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });

@@ -30,7 +30,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
     const { can } = useAuth();
     const financial = products?.length
         ? products.every((row) => Object.hasOwn(row, 'utilidad'))
-        : can('sales.costs') && can('sales.profit');
+        : can('sales.financial');
     const [printError, setPrintError] = useState('');
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');

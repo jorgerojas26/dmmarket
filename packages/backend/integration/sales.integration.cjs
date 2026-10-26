@@ -42,8 +42,7 @@ test("lectura global más utilidad/costos propios no expone márgenes globales n
   const client = await reader(
     [
       { capability: "sales.read", scope: "global" },
-      { capability: "sales.costs", scope: "assigned" },
-      { capability: "sales.profit", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
     ],
     ["A"],
   );
@@ -61,10 +60,10 @@ test("lectura global más utilidad/costos propios no expone márgenes globales n
   expect(other.body.totals).not.toHaveProperty("netProfit");
 });
 
-test("métricas de utilidad no permiten deducir costo sin ambas capacidades", async () => {
+test("permisos de compras no conceden información financiera de ventas", async () => {
   const client = await reader([
     { capability: "sales.read", scope: "global" },
-    { capability: "sales.profit", scope: "global" },
+    { capability: "purchases.costs", scope: "global" },
   ]);
   const response = await client.request(`/api/sales/productos?${query}`);
   expect(response.status).toBe(200);
@@ -73,9 +72,7 @@ test("métricas de utilidad no permiten deducir costo sin ambas capacidades", as
 });
 
 test("analista autorizado recibe métricas completas y límites validados", async () => {
-  const client = await reader(
-    ["sales.read", "sales.costs", "sales.profit"].map((capability) => ({ capability, scope: "global" })),
-  );
+  const client = await reader(["sales.read", "sales.financial"].map((capability) => ({ capability, scope: "global" })));
   const response = await client.request(`/api/sales/productos?${query}&limit=1`);
   expect(response.status).toBe(200);
   expect(response.body.pagination.total).toBe(1);
@@ -110,8 +107,7 @@ test("identificación exige permiso explícito y costos/utilidad respetan el ven
   const client = await reader(
     [
       { capability: "sales.read", scope: "global" },
-      { capability: "sales.costs", scope: "assigned" },
-      { capability: "sales.profit", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
     ],
     ["A"],
   );
@@ -180,8 +176,7 @@ test("agregados globales no revelan utilidad ni ranking por utilidad propia", as
   const client = await reader(
     [
       { capability: "sales.read", scope: "global" },
-      { capability: "sales.costs", scope: "assigned" },
-      { capability: "sales.profit", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
     ],
     ["A"],
   );

@@ -59,12 +59,11 @@ function parameters(query, { range = true, compare = false, keys = null } = {}) 
 }
 
 function financialFields(access, query, read = access.scopeFor("sales.read")) {
-  return ["sales.costs", "sales.profit"].every(
-    (capability) =>
-      access.hasGlobal(capability) ||
-      (query.employeeId
-        ? !["__none__", "__empty__"].includes(query.employeeId) && access.canRecord(capability, query.employeeId)
-        : !read.global && access.covers(capability, read.sellerIds)),
+  return (
+    access.hasGlobal("sales.financial") ||
+    (query.employeeId
+      ? !["__none__", "__empty__"].includes(query.employeeId) && access.canRecord("sales.financial", query.employeeId)
+      : !read.global && access.covers("sales.financial", read.sellerIds))
   );
 }
 
@@ -290,11 +289,9 @@ async function invoiceDetail(transaction, access, query, id) {
   });
   if (!header) fail(404);
   const sellers = await base.clone().select({ id: "mf.IdVend" }).groupByRaw("BINARY mf.IdVend");
-  const financial = ["sales.costs", "sales.profit"].every((capability) =>
-    access.covers(
-      capability,
-      sellers.map((row) => row.id),
-    ),
+  const financial = access.covers(
+    "sales.financial",
+    sellers.map((row) => row.id),
   );
   const metrics = {
     total: transaction.raw(

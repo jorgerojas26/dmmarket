@@ -67,12 +67,7 @@ test("notas de entrega no reutilizan historial de masterfact con IDs coincidente
 test("costos y utilidad conservan cobertura por registro sin inferirse de comisiones", async () => {
   const basic = await reader([grant("commissions.read"), grant("sales.read")]);
   expect((await basic.request(`/api/employees/sales/A?${range}&sortBy=utilidad`)).status).toBe(403);
-  const finance = await reader([
-    grant("commissions.read"),
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const finance = await reader([grant("commissions.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
   const own = await finance.request(`/api/employees/sales/A?${range}&search=COM-A`);
   expect(own.body.data[0].utilidad).toBe("60.00");
   const other = await finance.request(`/api/employees/sales/B?${range}`);

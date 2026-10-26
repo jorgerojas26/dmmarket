@@ -18,7 +18,8 @@ function assertLocalAdministrator() {
   } else {
     administrator = typeof process.getuid === "function" && process.getuid() === 0;
   }
-  if (!administrator) throw new Error("La recuperación requiere permisos administrativos del sistema operativo.");
+  if (!administrator)
+    throw new Error("El mantenimiento de acceso requiere permisos administrativos del sistema operativo.");
 }
 
 function parseOptions(args) {
@@ -46,6 +47,16 @@ async function runAccessCommand(mode, args) {
   if (!process.stdout.isTTY || !process.stdin.isTTY)
     throw new Error("Usa una terminal interactiva; no se entregan credenciales a logs o redirecciones.");
   const options = parseOptions(args);
+  return withStoppedWeb(async (db) => {
+    const accounts = await require("./accounts").createAccountService({ db });
+    const result = await accounts.recoverLocally({ mode, ...options });
+    process.stdout.write(
+      `\nUsuario: ${result.username}\nContraseña temporal: ${result.temporaryPassword}\nVence: ${new Date(result.expiresAtMs).toISOString()}\nCambia la contraseña y completa MFA antes de abrir el acceso general.\n`,
+    );
+  });
+}
+
+async function withStoppedWeb(work) {
   require("dotenv").config();
   const port = Number(process.env.PORT || 8000);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT no es válido.");
@@ -53,7 +64,9 @@ async function runAccessCommand(mode, args) {
   await new Promise((resolve, reject) => {
     guard.once("error", () =>
       reject(
-        new Error("Detén la web y su supervisor antes de recuperar acceso; el puerto configurado no está disponible."),
+        new Error(
+          "Detén la web y su supervisor antes del mantenimiento de acceso; el puerto configurado no está disponible.",
+        ),
       ),
     );
     guard.listen(port, "127.0.0.1", resolve);
@@ -61,14 +74,10 @@ async function runAccessCommand(mode, args) {
   let db;
   try {
     db = require("knex")(require("../knexfile"));
-    const accounts = await require("./accounts").createAccountService({ db });
-    const result = await accounts.recoverLocally({ mode, ...options });
-    process.stdout.write(
-      `\nUsuario: ${result.username}\nContraseña temporal: ${result.temporaryPassword}\nVence: ${new Date(result.expiresAtMs).toISOString()}\nCambia la contraseña y completa MFA antes de abrir el acceso general.\n`,
-    );
+    return await work(db);
   } catch (error) {
     if (error.sql || error.sqlMessage || error.code?.startsWith("ER_")) {
-      throw new Error("No se pudo recuperar el acceso. Revisa MySQL y el esquema propio preparado en mantenimiento.");
+      throw new Error("No se pudo completar el mantenimiento de acceso. Revisa MySQL y el esquema propio preparado.");
     }
     throw error;
   } finally {
@@ -80,4 +89,12 @@ async function runAccessCommand(mode, args) {
   }
 }
 
-module.exports = { runAccessCommand, assertLocalAdministrator };
+async function runCatalogMigration(args) {
+  assertLocalAdministrator();
+  if (args.length)
+    throw new Error("Usa --migrate-access-catalog sin argumentos, con la web y su supervisor detenidos.");
+  await withStoppedWeb((db) => require("../migrations/20261028_consolidate_access_catalog").up(db));
+  process.stdout.write("Catálogo de acceso actualizado. Las sesiones afectadas fueron revocadas.\n");
+}
+
+module.exports = { runAccessCommand, runCatalogMigration, assertLocalAdministrator };

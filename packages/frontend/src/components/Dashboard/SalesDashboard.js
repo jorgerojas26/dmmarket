@@ -45,9 +45,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     const { can } = useAuth();
     const { data, error, isLoading } = useDashboardSalesRaw(dateRange, showNoe);
     const [paretoMode, setParetoMode] = useState(
-        can('sales.read') && can('purchases.costs') && !(can('sales.costs') && can('sales.profit'))
-            ? 'compras-sin-vender'
-            : 'ventas',
+        can('sales.read') && can('purchases.costs') && !can('sales.financial') ? 'compras-sin-vender' : 'ventas',
     );
     const [paretoSort, setParetoSort] = useState(null); // { id, desc } | null = default del modo
     const [newSearch, setNewSearch] = useState('');
@@ -321,6 +319,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                                     mode.key === 'ventas' ? financial : can('sales.read') && can('purchases.costs'),
                                 ).map(({ key, label, color }) => (
                                     <button
+                                        type="button"
                                         key={key}
                                         onClick={() => handleParetoModeChange(key)}
                                         style={{

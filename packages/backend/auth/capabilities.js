@@ -2,8 +2,7 @@ const { createMongoAbility, subject } = require("@casl/ability");
 
 const DEFINITIONS = {
   "sales.read": { assigned: true },
-  "sales.costs": { assigned: true },
-  "sales.profit": { assigned: true },
+  "sales.financial": { assigned: true },
   "sales.export": { assigned: true },
   "clients.read": {},
   "clients.export": {},
@@ -23,7 +22,6 @@ const DEFINITIONS = {
   "purchases.costs": {},
   "purchases.export": {},
   "providers.read": {},
-  "providers.personal": {},
   "providers.export": {},
   "inventory.read": {},
   "inventory.costs": {},

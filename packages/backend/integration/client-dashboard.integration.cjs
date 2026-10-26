@@ -66,12 +66,7 @@ test.each(["false", "true"])(
 );
 
 test("utilidad y ordenación derivada requieren costos y utilidad sobre todo el conjunto", async () => {
-  const partial = await reader([
-    grant("clients.read"),
-    grant("sales.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const partial = await reader([grant("clients.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
   const result = await partial.request(`/api/clients/dashboard?${range}`);
   expect(result.body.kpis).toMatchObject({
     activeClients: 2,
@@ -85,11 +80,11 @@ test("utilidad y ordenación derivada requieren costos y utilidad sobre todo el 
   const narrowed = await partial.request(`/api/clients/dashboard?${range}&employeeId=A`);
   expect(narrowed.body.abcUtility.clients[0].utilidad).toBe(39);
   expect(narrowed.body.abcUtility.clients[0].total_usd).toBe(100);
-  for (const capability of ["sales.costs", "sales.profit"]) {
+  for (const capability of ["inventory.costs", "purchases.costs"]) {
     const single = await reader([grant("clients.read"), grant("sales.read"), grant(capability)]);
     expect((await single.request(`/api/clients/dashboard?${range}`)).body).not.toHaveProperty("abcUtility");
   }
-  const full = await reader([grant("clients.read"), grant("sales.read"), grant("sales.costs"), grant("sales.profit")]);
+  const full = await reader([grant("clients.read"), grant("sales.read"), grant("sales.financial")]);
   const all = await full.request(`/api/clients/dashboard?${range}`);
   expect(all.body.abcUtility.clients.map((row) => row.utilidad)).toEqual([146, 100]);
 });
@@ -155,8 +150,7 @@ test("cero o contribuciones negativas no inventan porcentajes ni clases ABC", as
   const client = await reader([
     grant("clients.read"),
     grant("sales.read", "assigned"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
+    grant("sales.financial", "assigned"),
   ]);
   const negative = await client.request("/api/clients/dashboard?from=2026-04-01&to=2026-04-30");
   expect(negative.body.abc.clients[0]).toMatchObject({ total_usd: -10, cumulativePercent: null, abcClass: null });

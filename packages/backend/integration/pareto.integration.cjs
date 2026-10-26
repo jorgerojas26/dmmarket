@@ -56,12 +56,7 @@ test.each(["false", "true"])("filtra vendedor antes de ranking y maduración a 3
 });
 
 test("cobertura financiera se exige sobre todo el conjunto, no basta una capacidad", async () => {
-  const partial = await reader([
-    grant("sales.read"),
-    grant("purchases.read"),
-    grant("sales.costs", "assigned"),
-    grant("sales.profit", "assigned"),
-  ]);
+  const partial = await reader([grant("sales.read"), grant("purchases.read"), grant("sales.financial", "assigned")]);
   expect((await partial.request(`/api/dashboard/pareto?${range}`)).status).toBe(403);
   const bounded = await partial.request(`/api/dashboard/pareto?${range}&employeeId=A`);
   expect(bounded.status).toBe(200);
@@ -69,7 +64,7 @@ test("cobertura financiera se exige sobre todo el conjunto, no basta una capacid
     ["Q", 60],
     ["P", 39],
   ]);
-  for (const capability of ["sales.costs", "sales.profit"]) {
+  for (const capability of ["inventory.costs", "purchases.costs"]) {
     const single = await reader([...own, grant(capability)]);
     expect((await single.request(`/api/dashboard/pareto?${range}`)).status).toBe(403);
   }
