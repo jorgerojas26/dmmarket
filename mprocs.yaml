@@ -1,5 +1,15 @@
 procs:
-  server:
-    shell: bun dev:backend
-  client:
-    shell: bun dev:frontend
+  backend:
+    cmd: ["bun", "run", "dev:backend"]
+    autostart: false
+    cwd: <CONFIG_DIR>
+    stop: SIGTERM
+  frontend:
+    cmd: ["bun", "run", "dev:frontend"]
+    autostart: false
+    cwd: <CONFIG_DIR>
+    stop: SIGTERM
+  mysql:
+    cmd: ["bun", "scripts/dev.mjs", "logs"]
+    cwd: <CONFIG_DIR>
+    stop: SIGTERM
