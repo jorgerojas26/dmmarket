@@ -1,5 +1,6 @@
 const { withReportCache } = require("./report-cache");
 const express = require("express");
+const { exactKey, groupRows, sumValues, roundAmount, descendingAmount } = require("./report-aggregation");
 const { canExportSales } = require("./sales-export");
 const { filterIdentity } = require("../utils/report-identity");
 
@@ -68,7 +69,7 @@ function financialFields(access, query, read = access.scopeFor("sales.read")) {
   );
 }
 
-function salesBase(transaction, access, query) {
+function salesBase(transaction, access, query, { clients = true, sellers = true, products = true } = {}) {
   const read = access.scopeFor("sales.read");
   if (!read.global && !read.sellerIds.length) fail(403);
   if (query.proveedorId && !access.hasGlobal("providers.read")) fail(403);
@@ -76,19 +77,21 @@ function salesBase(transaction, access, query) {
   const master = noe ? "masternoe" : "masterfact";
   const slave = noe ? "slavenoe" : "slavefact";
   const invoice = noe ? "IdNoe" : "IdFactura";
-  const base = transaction(`${slave} as sf`)
-    .join(`${master} as mf`, function () {
-      this.on(`mf.${invoice}`, "=", `sf.${invoice}`)
-        .andOn(transaction.raw("BINARY ?? = BINARY ??", [`mf.${invoice}`, `sf.${invoice}`]))
-        .andOn("mf.Anulada", 0);
-    })
-    .leftJoin("clientes as c", function () {
+  const base = transaction(`${slave} as sf`).join(`${master} as mf`, function () {
+    this.on(`mf.${invoice}`, "=", `sf.${invoice}`)
+      .andOn(transaction.raw("BINARY ?? = BINARY ??", [`mf.${invoice}`, `sf.${invoice}`]))
+      .andOn("mf.Anulada", 0);
+  });
+  if (clients || query.ruta)
+    base.leftJoin("clientes as c", function () {
       this.on(transaction.raw("c.IdCliente = mf.IdCliente AND BINARY c.IdCliente = BINARY mf.IdCliente"));
-    })
-    .leftJoin("vendedores as v", function () {
+    });
+  if (sellers)
+    base.leftJoin("vendedores as v", function () {
       this.on(transaction.raw("v.idVend = mf.IdVend AND BINARY v.idVend = BINARY mf.IdVend"));
-    })
-    .leftJoin("productos as p", function () {
+    });
+  if (products || query.categoryId || query.proveedorId)
+    base.leftJoin("productos as p", function () {
       this.on(transaction.raw("p.IdProducto = sf.IdProducto AND BINARY p.IdProducto = BINARY sf.IdProducto"));
     });
   if (query.from) base.whereBetween("mf.Fecha", [query.from, query.to]);
@@ -364,7 +367,7 @@ async function groupSales(transaction, access, query) {
 }
 
 async function kpis(transaction, access, query) {
-  const { base, invoice } = salesBase(transaction, access, query);
+  const { base, invoice } = salesBase(transaction, access, query, { clients: false, sellers: false, products: false });
   const financial = financialFields(access, query);
   const perInvoice = base
     .select({
@@ -399,9 +402,48 @@ async function kpis(transaction, access, query) {
   return Object.fromEntries(Object.entries(result).map(([key, value]) => [key, rowNumber(value)]));
 }
 
+async function lookupNames(transaction, table, id, name, ids) {
+  const identities = [...new Set(ids.filter((value) => value != null))];
+  if (!identities.length) return new Map();
+  const rows = await transaction(table)
+    .select({ id, name })
+    .whereIn(id, identities)
+    .whereIn(transaction.raw("BINARY ??", [id]), identities);
+  return new Map(rows.map((row) => [exactKey(row.id), row.name]));
+}
+
 async function dashboard(transaction, access, query) {
   const financial = financialFields(access, query);
-  const summary = await kpis(transaction, access, query);
+  const { base, invoice } = salesBase(transaction, access, query, { clients: false, sellers: false, products: false });
+  const invoices = await base
+    .select({
+      invoiceId: `mf.${invoice}`,
+      sellerId: "mf.IdVend",
+      clientId: "mf.IdCliente",
+      amount: transaction.raw("SUM(sf.Precio * sf.Cantidad)"),
+      quantity: transaction.raw("SUM(sf.Cantidad)"),
+      ...(financial
+        ? {
+            profit: transaction.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)"),
+            margin: transaction.raw("AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100)"),
+          }
+        : {}),
+    })
+    .groupBy(`mf.${invoice}`);
+  const amount = sumValues(invoices, "amount");
+  const margin = financial ? sumValues(invoices, "margin") : null;
+  const summary = {
+    totalRawProfit: roundAmount(amount),
+    totalQuantity: roundAmount(sumValues(invoices, "quantity"), 3),
+    totalInvoices: invoices.length,
+    avgTicket: amount && invoices.length ? roundAmount(amount.div(invoices.length)) : 0,
+    ...(financial
+      ? {
+          totalNetProfit: roundAmount(sumValues(invoices, "profit")),
+          avgMarginPercent: margin && invoices.length ? roundAmount(margin.div(invoices.length)) : 0,
+        }
+      : {}),
+  };
   const compare = query.compareFrom
     ? await kpis(transaction, access, { ...query, from: query.compareFrom, to: query.compareTo })
     : null;
@@ -411,43 +453,110 @@ async function dashboard(transaction, access, query) {
     compareInvoices: compare?.totalInvoices ?? null,
     ...(financial ? { compareNetProfit: compare?.totalNetProfit ?? null } : {}),
   });
-  const raw = (sql) => transaction.raw(sql);
-  const { base, invoice } = salesBase(transaction, access, query);
-  const best = await base
-    .clone()
+  const { base: productBase } = salesBase(transaction, access, query, { clients: false, sellers: false });
+  const products = await productBase
     .select({
-      id: "mf.IdVend",
-      name: raw("COALESCE(v.Empresa, 'Vendedor no registrado')"),
-      totalSales: raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)"),
+      productId: "sf.IdProducto",
+      product: transaction.raw("COALESCE(p.Descripcion, CONCAT('Producto no registrado (', sf.IdProducto, ')'))"),
+      groupId: "p.Grupo",
+      groupAmount: transaction.raw("SUM(sf.Precio * sf.Cantidad)"),
+      quantity: transaction.raw("CASE WHEN COUNT(*)=COUNT(sf.Cantidad) THEN ROUND(COALESCE(SUM(sf.Cantidad),0),3) END"),
+      peso: transaction.raw("CASE WHEN COUNT(p.Peso)=COUNT(*) THEN ROUND(SUM(sf.Cantidad * p.Peso),3) END"),
+      rawProfit: transaction.raw(
+        "CASE WHEN COUNT(*)=COUNT(sf.Precio*sf.Cantidad) THEN ROUND(COALESCE(SUM(sf.Precio*sf.Cantidad),0),2) END",
+      ),
+      ...(financial
+        ? {
+            groupProfit: transaction.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)"),
+            netProfit: transaction.raw(
+              "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)*sf.Cantidad) THEN ROUND(COALESCE(SUM((sf.Precio-sf.Costo)*sf.Cantidad),0),2) END",
+            ),
+            averageProfitPercent: transaction.raw(
+              "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)/NULLIF(sf.Precio,0)) THEN ROUND(AVG((sf.Precio-sf.Costo)/NULLIF(sf.Precio,0)*100),2) END",
+            ),
+          }
+        : {}),
     })
-    .groupBy("mf.IdVend", "v.Empresa")
-    .orderBy("totalSales", "desc")
-    .first();
-  const clients = await base
-    .clone()
-    .select({
-      clientId: "mf.IdCliente",
-      invoiceCount: transaction.raw("COUNT(DISTINCT ??)", [`mf.${invoice}`]),
-      client: raw("COALESCE(c.Empresa, 'Cliente no registrado')"),
-      total_USD: raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)"),
-      ...(financial ? { netProfit: raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2)") } : {}),
-    })
-    .groupBy("mf.IdCliente", "c.Empresa")
-    .orderBy(financial ? "netProfit" : "total_USD", "desc")
-    .limit(30);
-  const products = await listSales(
+    .groupByRaw("BINARY sf.IdProducto");
+  const sellerNames = await lookupNames(
     transaction,
-    access,
-    { ...query, page: 1, limit: 30, sortBy: financial ? "netProfit" : "rawProfit", sortDir: "desc" },
-    "products",
+    "vendedores",
+    "idVend",
+    "Empresa",
+    invoices.map((row) => row.sellerId),
   );
+  const clientNames = await lookupNames(
+    transaction,
+    "clientes",
+    "IdCliente",
+    "Empresa",
+    invoices.map((row) => row.clientId),
+  );
+  const groupNames = await lookupNames(
+    transaction,
+    "grupos",
+    "IdGrupo",
+    "Descripcion",
+    products.map((row) => row.groupId),
+  );
+  const sellers = groupRows(invoices, "sellerId")
+    .map((rows) => ({
+      id: rows[0].sellerId,
+      name: sellerNames.get(exactKey(rows[0].sellerId)) ?? "Vendedor no registrado",
+      totalSales: sumValues(rows, "amount"),
+    }))
+    .sort((first, second) => descendingAmount(first.totalSales, second.totalSales));
+  const clients = groupRows(invoices, "clientId").map((rows) => {
+    const sales = sumValues(rows, "amount");
+    const profit = financial ? sumValues(rows, "profit") : null;
+    return {
+      clientId: rows[0].clientId,
+      client: clientNames.get(exactKey(rows[0].clientId)) ?? "Cliente no registrado",
+      invoiceCount: rows.length,
+      total_USD: sales === null ? null : roundAmount(sales),
+      ...(financial ? { netProfit: profit === null ? null : roundAmount(profit) } : {}),
+    };
+  });
+  const groups = groupRows(products, "groupId")
+    .map((rows) => {
+      const groupId = rows[0].groupId;
+      const name = groupNames.get(exactKey(groupId));
+      const sales = sumValues(rows, "groupAmount");
+      const profit = financial ? sumValues(rows, "groupProfit") : null;
+      return {
+        groupId,
+        categoria: name?.trim() ? name : `Grupo no registrado (${groupId ?? "sin ID"})`,
+        rawProfit: sales === null ? null : roundAmount(sales),
+        ...(financial ? { netProfit: profit === null ? null : roundAmount(profit) } : {}),
+      };
+    })
+    .sort((first, second) =>
+      first.groupId == null
+        ? second.groupId == null
+          ? 0
+          : -1
+        : second.groupId == null
+          ? 1
+          : typeof first.groupId === "number" && typeof second.groupId === "number"
+            ? first.groupId - second.groupId
+            : String(first.groupId).localeCompare(String(second.groupId)),
+    );
+  if (groups.length > 500) fail(413);
+  const productSort = financial ? "netProfit" : "rawProfit";
   return {
     kpis: summary,
     exportAllowed: canExportSales(access, query),
-    bestEmployee: best ? { ...best, totalSales: rowNumber(best.totalSales) } : null,
-    topProducts: products.data,
-    topClients: clients,
-    groupSalesChart: await groupSales(transaction, access, query),
+    bestEmployee: sellers.length ? { ...sellers[0], totalSales: roundAmount(sellers[0].totalSales) } : null,
+    topProducts: products
+      .sort((first, second) => descendingAmount(first[productSort], second[productSort]))
+      .slice(0, 30)
+      .map(({ groupId, groupAmount, groupProfit, ...row }) => row),
+    topClients: clients
+      .sort((first, second) =>
+        descendingAmount(first[financial ? "netProfit" : "total_USD"], second[financial ? "netProfit" : "total_USD"]),
+      )
+      .slice(0, 30),
+    groupSalesChart: groups,
   };
 }
 

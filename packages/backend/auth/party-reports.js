@@ -1,5 +1,7 @@
 const { withReportCache } = require("./report-cache");
 const express = require("express");
+const { Types } = require("mysql2");
+const { exactKey, groupRows, sumValues, roundAmount, formatAmount, descendingAmount } = require("./report-aggregation");
 const { reportId, filterIdentity, missingName } = require("../utils/report-identity");
 const { parameters, salesBase, financialFields, listSales, dashboard, kpis } = require("./sales-reports");
 
@@ -138,128 +140,159 @@ async function partyList(transaction, access, query, clients) {
     };
   }
   const scope = clients ? requireCapability(access, "sales.read") : sellerSalesScope(access);
-  const { base, invoice } = salesBase(transaction, access, query);
-  const idColumn = clients ? "mf.IdCliente" : "mf.IdVend";
-  if (!scope.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
   const financial = financialFields(access, query, scope);
-  const aggregate = base
+  const allowed = clients
+    ? ["IdCliente", "Empresa", "total_ventas", "num_ventas", "last_factura", ...(financial ? ["utilidad"] : [])]
+    : [
+        "sellerId",
+        "name",
+        "sales",
+        "invoiceCount",
+        "clientCount",
+        "lastSale",
+        ...(financial ? ["profit", "marginPercent"] : []),
+      ];
+  const sortBy = query.sortBy || (clients ? "total_ventas" : "sales");
+  if (["profit", "utilidad", "marginPercent"].includes(sortBy) && !financial) fail(403);
+  if (!allowed.includes(sortBy)) fail(400);
+  const idColumn = clients ? "c.IdCliente" : "v.idVend";
+  const nameColumn = clients ? "c.Empresa" : "v.Empresa";
+  const personal = clients
+    ? access.hasGlobal("clients.personal")
+      ? { rif: "c.Rif" }
+      : {}
+    : sellerColumns(transaction, access);
+  const pattern = `%${query.search || ""}%`;
+  const catalogQuery = transaction(clients ? "clientes as c" : "vendedores as v");
+  const read = access.scopeFor(clients ? "clients.read" : "sellers.read");
+  if (!read.global) catalogQuery.whereIn(transaction.raw("BINARY ??", [idColumn]), read.sellerIds);
+  if (!clients && query.employeeId)
+    filterIdentity(catalogQuery, transaction.raw("BINARY ??", [idColumn]), query.employeeId);
+  if (clients && query.ruta) catalogQuery.whereRaw("BINARY c.Ruta = ?", [query.ruta]);
+  const catalog = await catalogQuery.select({
+    id: idColumn,
+    name: nameColumn,
+    matches: transaction.raw("(?? LIKE ? OR BINARY ?? LIKE ?)", [nameColumn, pattern, idColumn, pattern]),
+    ...personal,
+  });
+  const { base, invoice } = salesBase(transaction, access, query, { clients: false, sellers: false, products: false });
+  if (!scope.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
+  const partyId = clients ? "mf.IdCliente" : "mf.IdVend";
+  const aggregateQuery = base
     .select({
-      partyId: idColumn,
+      id: partyId,
       sales: transaction.raw("SUM(sf.Precio * sf.Cantidad)"),
       invoices: transaction.raw("COUNT(DISTINCT ??)", [`mf.${invoice}`]),
       clients: transaction.raw("COUNT(DISTINCT BINARY mf.IdCliente)"),
       lastSale: transaction.raw("MAX(mf.Fecha)"),
+      daysInactive: transaction.raw("DATEDIFF(?, MAX(mf.Fecha))", [query.to]),
+      matches: transaction.raw("BINARY ?? LIKE ?", [partyId, pattern]),
       ...(financial ? { profit: transaction.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)") } : {}),
     })
-    .groupByRaw("BINARY ??", [idColumn]);
-  const catalog = transaction(clients ? "clientes" : "vendedores").select({
-    id: transaction.raw("BINARY ??", [clients ? "IdCliente" : "idVend"]),
-  });
-  if (!clients && query.employeeId) filterIdentity(catalog, transaction.raw("BINARY idVend"), query.employeeId);
-  const readScope = clients ? access.scopeFor("clients.read") : access.scopeFor("sellers.read");
-  if (!readScope.global) catalog.whereIn(transaction.raw("BINARY idVend"), readScope.sellerIds);
-  const { base: historical } = salesBase(transaction, access, query);
-  if (!scope.global) historical.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
-  const identities = catalog.union(historical.distinct({ id: transaction.raw("BINARY ??", [idColumn]) }));
-  const source = transaction
-    .from(identities.as("i"))
-    .leftJoin(clients ? "clientes as c" : "vendedores as v", function () {
-      const identity = clients ? "c.IdCliente" : "v.idVend";
-      this.on(identity, "=", transaction.raw("CAST(i.id AS CHAR)")).andOn(
-        transaction.raw("BINARY ?? = BINARY i.id", [identity]),
-      );
-    })
-    .leftJoin(aggregate.as("a"), function () {
-      this.on(transaction.raw("BINARY a.partyId <=> BINARY i.id"));
-    });
-  const nameColumn = clients ? "c.Empresa" : "v.Empresa";
-  const name = transaction.raw("CAST(COALESCE(NULLIF(??, ''), CONCAT(?, COALESCE(i.id, 'sin ID'), ')')) AS CHAR)", [
-    nameColumn,
-    clients ? "Cliente no registrado (" : "Vendedor no registrado (",
-  ]);
-  if (query.search)
-    source.where(function () {
-      this.where(nameColumn, "like", `%${query.search}%`).orWhere("i.id", "like", `%${query.search}%`);
-    });
-  if (clients && query.ruta) source.whereRaw("BINARY c.Ruta = ?", [query.ruta]);
-  const raw = (sql) => transaction.raw(sql);
-  const amount = raw("ROUND(COALESCE(a.sales, 0), 2)");
-  const profit = raw("ROUND(COALESCE(a.profit, 0), 2)");
-  const count = raw("COALESCE(a.invoices, 0)");
-  const sort = clients
-    ? {
-        IdCliente: transaction.raw("CAST(i.id AS CHAR)"),
-        Empresa: name,
-        total_ventas: amount,
-        num_ventas: count,
-        last_factura: "a.lastSale",
-        ...(financial ? { utilidad: profit } : {}),
-      }
-    : {
-        sellerId: transaction.raw("CAST(i.id AS CHAR)"),
-        name,
-        sales: amount,
-        invoiceCount: count,
-        clientCount: raw("COALESCE(a.clients, 0)"),
-        lastSale: "a.lastSale",
-        ...(financial ? { profit, marginPercent: raw("COALESCE(a.profit / NULLIF(a.sales, 0) * 100, 0)") } : {}),
-      };
-  const sortBy = query.sortBy || (clients ? "total_ventas" : "sales");
-  if (["profit", "utilidad", "marginPercent"].includes(sortBy) && !financial) fail(403);
-  if (!Object.hasOwn(sort, sortBy)) fail(400);
-  const [{ total }] = await source.clone().count("* as total");
-  const selected = clients
-    ? {
-        IdCliente: transaction.raw("CAST(i.id AS CHAR)"),
-        Empresa: name,
-        total_ventas: amount,
-        num_ventas: count,
-        last_factura: "a.lastSale",
-        ...(access.hasGlobal("clients.personal") ? { rif: "c.Rif" } : {}),
-        ...(financial ? { utilidad: profit } : {}),
-      }
-    : {
-        sellerId: transaction.raw("CAST(i.id AS CHAR)"),
-        name,
-        sales: amount,
-        invoiceCount: count,
-        clientCount: raw("COALESCE(a.clients, 0)"),
-        lastSale: "a.lastSale",
-        daysInactive: transaction.raw("DATEDIFF(?, a.lastSale)", [query.to]),
-        avgTicket: raw("ROUND(COALESCE(a.sales / NULLIF(a.invoices, 0), 0), 2)"),
-        ...sellerColumns(transaction, access),
-        ...(financial
-          ? { profit, marginPercent: raw("ROUND(COALESCE(a.profit / NULLIF(a.sales, 0) * 100, 0), 2)") }
-          : {}),
-      };
-  const rows = await source
-    .clone()
-    .select(selected)
-    .orderBy(sort[sortBy], query.sortDir)
-    .orderBy("i.id")
-    .limit(query.limit)
-    .offset((query.page - 1) * query.limit);
-  const totals = await source
-    .clone()
-    .select({
-      [clients ? "total_ventas" : "sales"]: raw("ROUND(COALESCE(SUM(a.sales), 0), 2)"),
-      [clients ? "num_ventas" : "invoiceCount"]: raw("COALESCE(SUM(a.invoices), 0)"),
-      ...(financial ? { [clients ? "utilidad" : "profit"]: raw("ROUND(COALESCE(SUM(a.profit), 0), 2)") } : {}),
-    })
-    .first();
-  const identified = rows.map((row) => ({
-    ...row,
-    ...(!clients
+    .groupByRaw("BINARY ??", [partyId])
+    .toSQL();
+  const [aggregates, fields] = await transaction.raw(aggregateQuery.sql, aggregateQuery.bindings);
+  const decimalAmounts =
+    !transaction.client.config.connection.decimalNumbers &&
+    [Types.DECIMAL, Types.NEWDECIMAL].includes(fields.find((field) => field.name === "sales")?.columnType);
+  const money = (value) => formatAmount(value, decimalAmounts);
+  const cohort = new Map(catalog.map((row) => [exactKey(row.id), { id: row.id, catalog: row }]));
+  for (const aggregate of aggregates) {
+    const key = exactKey(aggregate.id);
+    const row = cohort.get(key) || { id: aggregate.id };
+    row.aggregate = aggregate;
+    cohort.set(key, row);
+  }
+  const matches = [...cohort.values()].filter(
+    (row) => !query.search || Number(row.catalog?.matches) || Number(row.aggregate?.matches),
+  );
+  const totals = {
+    [clients ? "total_ventas" : "sales"]: money(
+      sumValues(
+        matches.map((row) => row.aggregate || {}),
+        "sales",
+      ),
+    ),
+    [clients ? "num_ventas" : "invoiceCount"]: matches.reduce(
+      (total, row) => total + Number(row.aggregate?.invoices || 0),
+      0,
+    ),
+    ...(financial
       ? {
-          sharePercent:
-            Number(totals.sales) > 0 ? Math.round((Number(row.sales) / Number(totals.sales)) * 10000) / 100 : null,
+          [clients ? "utilidad" : "profit"]: money(
+            sumValues(
+              matches.map((row) => row.aggregate || {}),
+              "profit",
+            ),
+          ),
         }
       : {}),
-    [clients ? "IdCliente" : "sellerId"]: reportId(row[clients ? "IdCliente" : "sellerId"]),
-  }));
+  };
+  const projected = matches.map((record) => {
+    const rawId = record.id == null ? null : String(record.id);
+    const aggregate = record.aggregate || {};
+    const amount = sumValues([aggregate], "sales");
+    const profit = financial ? sumValues([aggregate], "profit") : null;
+    const sales = roundAmount(amount);
+    const invoices = Number(aggregate.invoices || 0);
+    const name = record.catalog?.name?.trim()
+      ? record.catalog.name
+      : `${clients ? "Cliente" : "Vendedor"} no registrado (${rawId ?? "sin ID"})`;
+    const margin = amount && !amount.isZero() && profit ? profit.div(amount).times(100) : 0;
+    const contacts = Object.fromEntries(Object.keys(personal).map((field) => [field, record.catalog?.[field] ?? null]));
+    const row = clients
+      ? {
+          IdCliente: reportId(rawId),
+          Empresa: name,
+          total_ventas: money(amount),
+          num_ventas: invoices,
+          last_factura: aggregate.lastSale ?? null,
+          ...contacts,
+          ...(financial ? { utilidad: money(profit) } : {}),
+        }
+      : {
+          sellerId: reportId(rawId),
+          name,
+          sales: money(amount),
+          invoiceCount: invoices,
+          clientCount: Number(aggregate.clients || 0),
+          lastSale: aggregate.lastSale ?? null,
+          daysInactive: aggregate.daysInactive == null ? null : Number(aggregate.daysInactive),
+          avgTicket: money(amount && invoices ? amount.div(invoices) : 0),
+          ...contacts,
+          ...(financial ? { profit: money(profit), marginPercent: money(margin) } : {}),
+          sharePercent: totals.sales > 0 ? Math.round((sales / totals.sales) * 10000) / 100 : null,
+        };
+    return {
+      id: rawId,
+      data: clients ? row : sellerRow(access, row, "sellerId"),
+      sortValue: sortBy === "marginPercent" ? margin : row[sortBy],
+    };
+  });
+  const compareIds = (first, second) =>
+    first == null
+      ? second == null
+        ? 0
+        : -1
+      : second == null
+        ? 1
+        : Buffer.compare(Buffer.from(String(first)), Buffer.from(String(second)));
+  projected.sort((first, second) => {
+    let compared;
+    if (["IdCliente", "sellerId"].includes(sortBy)) compared = compareIds(first.id, second.id);
+    else if (["Empresa", "name"].includes(sortBy))
+      compared = String(first.sortValue).localeCompare(String(second.sortValue), "en", { sensitivity: "base" });
+    else if (["last_factura", "lastSale"].includes(sortBy))
+      compared = descendingAmount(
+        second.sortValue == null ? null : Date.parse(second.sortValue),
+        first.sortValue == null ? null : Date.parse(first.sortValue),
+      );
+    else compared = descendingAmount(second.sortValue, first.sortValue);
+    return (query.sortDir === "desc" ? -compared : compared) || compareIds(first.id, second.id);
+  });
   return {
-    data: clients ? identified : identified.map((row) => sellerRow(access, row, "sellerId")),
-    total: Number(total),
+    data: projected.slice((query.page - 1) * query.limit, query.page * query.limit).map((row) => row.data),
+    total: projected.length,
     page: query.page,
     limit: query.limit,
     totals,
@@ -373,77 +406,122 @@ async function sellerSummary(transaction, access, query, id) {
 
 async function sellerDashboard(transaction, access, query) {
   const scope = sellerSalesScope(access);
-  const load = async (range) => {
-    const result = await partyList(
-      transaction,
-      access,
-      { ...range, page: 1, limit: 5001, sortBy: "sales", sortDir: "desc" },
-      false,
-    );
-    if (result.total > 5000) fail(413);
-    return result;
-  };
+  const financial = financialFields(access, query, scope);
+  const catalogQuery = transaction("vendedores as v");
+  const read = access.scopeFor("sellers.read");
+  if (!read.global) catalogQuery.whereIn(transaction.raw("BINARY v.idVend"), read.sellerIds);
+  if (query.employeeId) filterIdentity(catalogQuery, transaction.raw("BINARY v.idVend"), query.employeeId);
+  const catalog = await catalogQuery
+    .select({ sellerId: "v.idVend", name: "v.Empresa", ...sellerColumns(transaction, access) })
+    .orderByRaw("BINARY v.idVend")
+    .limit(5001);
+  if (catalog.length > 5000) fail(413);
   const span = Date.parse(query.to) - Date.parse(query.from) + 86400000;
   const previousRange = {
     from: new Date(Date.parse(query.from) - span).toISOString().slice(0, 10),
     to: new Date(Date.parse(query.from) - 86400000).toISOString().slice(0, 10),
   };
   parameters(previousRange);
-  const current = await load(query);
-  const previous = await load({ ...query, ...previousRange });
-  const financial = Object.hasOwn(current.totals, "profit");
+  const load = (range, monthly) => {
+    const { base, invoice } = salesBase(transaction, access, range, {
+      clients: false,
+      sellers: false,
+      products: false,
+    });
+    if (!scope.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
+    base
+      .select({
+        sellerId: "mf.IdVend",
+        sales: transaction.raw("SUM(sf.Precio * sf.Cantidad)"),
+        invoiceCount: transaction.raw("COUNT(DISTINCT ??)", [`mf.${invoice}`]),
+        lastSale: transaction.raw("MAX(mf.Fecha)"),
+        daysInactive: transaction.raw("DATEDIFF(?, MAX(mf.Fecha))", [query.to]),
+        ...(financial ? { profit: transaction.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)") } : {}),
+      })
+      .groupByRaw("BINARY mf.IdVend");
+    if (monthly)
+      base
+        .select({ month: transaction.raw("CAST(DATE_FORMAT(mf.Fecha, '%Y-%m') AS CHAR)") })
+        .groupByRaw("DATE_FORMAT(mf.Fecha, '%Y-%m')");
+    return base;
+  };
+  const current = await load(query, true);
+  const previous = await load({ ...query, ...previousRange }, false);
+  const catalogById = new Map(catalog.map((row) => [exactKey(row.sellerId), sellerRow(access, row, "sellerId")]));
+  const currentGroups = groupRows(current, "sellerId");
+  const previousById = new Map(previous.map((row) => [exactKey(row.sellerId), row]));
+  const cohort = new Map(catalogById);
+  for (const rows of currentGroups)
+    if (!cohort.has(exactKey(rows[0].sellerId))) cohort.set(exactKey(rows[0].sellerId), { sellerId: rows[0].sellerId });
+  if (cohort.size > 5000 || new Set([...catalogById.keys(), ...previousById.keys()]).size > 5000) fail(413);
+  const totalSales = roundAmount(sumValues(current, "sales"));
+  const totalProfit = financial ? roundAmount(sumValues(current, "profit")) : null;
+  const totalInvoices = current.reduce((total, row) => total + Number(row.invoiceCount), 0);
   const round = (value) => Math.round(value * 100) / 100;
-  const totalSales = Number(current.totals.sales);
-  const totalInvoices = Number(current.totals.invoiceCount);
-  const marginPercent = financial && totalSales ? round((Number(current.totals.profit) / totalSales) * 100) : 0;
-  const previousById = new Map(previous.data.map((row) => [row.sellerId, row]));
-  const ranking = current.data
-    .filter((row) => Number(row.invoiceCount) > 0)
-    .map((row) => {
-      const sales = Number(row.sales);
-      const previousSales = Number(previousById.get(row.sellerId)?.sales || 0);
+  const nameFor = (id) => {
+    const name = catalogById.get(exactKey(id))?.name;
+    return name?.trim() ? name : `Vendedor no registrado (${id ?? "sin ID"})`;
+  };
+  const ranking = currentGroups
+    .map((rows) => {
+      const sellerId = rows[0].sellerId;
+      const amount = sumValues(rows, "sales");
+      const profit = financial ? sumValues(rows, "profit") : null;
+      const sales = roundAmount(amount);
+      const previousSales = roundAmount(previousById.get(exactKey(sellerId))?.sales);
+      const invoiceCount = rows.reduce((total, row) => total + Number(row.invoiceCount), 0);
+      const latest = rows.reduce(
+        (last, row) => (!last || (row.lastSale && Date.parse(row.lastSale) > Date.parse(last.lastSale)) ? row : last),
+        null,
+      );
       return {
-        sellerId: row.sellerId,
-        name: row.name,
+        sellerId: reportId(sellerId),
+        name: nameFor(sellerId),
         sales,
         previousSales,
         changePercent: previousSales ? round(((sales - previousSales) / previousSales) * 100) : null,
-        invoiceCount: Number(row.invoiceCount),
-        lastSale: row.lastSale,
-        daysInactive: row.daysInactive == null ? null : Number(row.daysInactive),
-        avgTicket: Number(row.avgTicket),
+        invoiceCount,
+        lastSale: latest?.lastSale ?? null,
+        daysInactive: latest?.daysInactive == null ? null : Number(latest.daysInactive),
+        avgTicket: amount && invoiceCount ? roundAmount(amount.div(invoiceCount)) : 0,
         sharePercent: totalSales ? round((sales / totalSales) * 100) : 0,
-        ...(financial ? { profit: Number(row.profit), marginPercent: Number(row.marginPercent) } : {}),
+        ...(financial
+          ? {
+              profit: roundAmount(profit),
+              marginPercent: amount && !amount.isZero() && profit ? roundAmount(profit.div(amount).times(100)) : 0,
+            }
+          : {}),
       };
-    });
-  const inactiveSellers = current.data
-    .filter((row) => !Number(row.invoiceCount))
+    })
+    .sort(
+      (first, second) =>
+        second.sales - first.sales ||
+        (first.sellerId === "__none__"
+          ? -1
+          : second.sellerId === "__none__"
+            ? 1
+            : Buffer.compare(Buffer.from(String(first.sellerId)), Buffer.from(String(second.sellerId)))),
+    );
+  const active = new Set(currentGroups.map((rows) => exactKey(rows[0].sellerId)));
+  const inactiveSellers = [...cohort.values()]
+    .filter((row) => !active.has(exactKey(row.sellerId)))
     .map((row) => ({
-      sellerId: row.sellerId,
-      name: row.name,
+      sellerId: reportId(row.sellerId),
+      name: nameFor(row.sellerId),
       ...(Object.hasOwn(row, "phone") ? { phone: row.phone } : {}),
     }));
-  const { base, invoice } = salesBase(transaction, access, query);
-  if (!scope.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
-  const trend = await base
-    .select({
-      month: transaction.raw("CAST(DATE_FORMAT(mf.Fecha, '%Y-%m') AS CHAR)"),
-      sales: transaction.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)"),
-      invoiceCount: transaction.raw("COUNT(DISTINCT ??)", [`mf.${invoice}`]),
-    })
-    .groupByRaw("DATE_FORMAT(mf.Fecha, '%Y-%m')")
-    .orderBy("month");
+  const marginPercent = financial && totalSales ? round((totalProfit / totalSales) * 100) : 0;
   return {
     kpis: {
-      totalSellers: current.total,
+      totalSellers: cohort.size,
       activeSellers: ranking.length,
       inactiveSellers: inactiveSellers.length,
-      coveragePercent: current.total ? round((ranking.length / current.total) * 100) : 0,
+      coveragePercent: cohort.size ? round((ranking.length / cohort.size) * 100) : 0,
       totalSales,
       totalInvoices,
       avgSalesPerSeller: ranking.length ? round(totalSales / ranking.length) : 0,
       avgInvoicesPerSeller: ranking.length ? round(totalInvoices / ranking.length) : 0,
-      compareSales: Number(previous.totals.sales),
+      compareSales: roundAmount(sumValues(previous, "sales")),
       improvedSellers: ranking.filter((row) => row.sales > row.previousSales).length,
       staleSellers: ranking.filter((row) => row.daysInactive > 30).length,
       ...(financial
@@ -451,11 +529,13 @@ async function sellerDashboard(transaction, access, query) {
         : {}),
     },
     ranking,
-    monthlyTrend: trend.map((row) => ({
-      month: row.month,
-      sales: Number(row.sales),
-      invoiceCount: Number(row.invoiceCount),
-    })),
+    monthlyTrend: groupRows(current, "month")
+      .map((rows) => ({
+        month: rows[0].month,
+        sales: roundAmount(sumValues(rows, "sales")),
+        invoiceCount: rows.reduce((total, row) => total + Number(row.invoiceCount), 0),
+      }))
+      .sort((first, second) => first.month.localeCompare(second.month)),
     inactiveSellers,
   };
 }

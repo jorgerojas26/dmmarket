@@ -245,3 +245,35 @@ test("búsqueda del documento conserva líneas y totales coherentes, sin consult
   expect(hidden.body.pagination.total).toBe(0);
   expect((await client.request("/api/invoices/multi-line/detail?sortBy=cost")).status).toBe(400);
 });
+
+test("dashboard conserva redondeo global y datos incompletos al reutilizar agregados", async () => {
+  await environment.db("masterfact").insert([
+    { IdFactura: "precision-1", IdVend: "A", IdCliente: "C", Fecha: "2026-05-01", Anulada: false },
+    { IdFactura: "precision-2", IdVend: "A", IdCliente: "C", Fecha: "2026-06-01", Anulada: false },
+    { IdFactura: "precision-null", IdVend: "A", IdCliente: "C", Fecha: "2026-06-02", Anulada: false },
+  ]);
+  await environment.db("slavefact").insert([
+    { IdFactura: "precision-1", IdProducto: "P", Precio: 0.005, Costo: 0, Cantidad: 1 },
+    { IdFactura: "precision-2", IdProducto: "P", Precio: 0.005, Costo: 0, Cantidad: 1 },
+    { IdFactura: "precision-null", IdProducto: "P", Precio: null, Costo: 0, Cantidad: 1 },
+  ]);
+  const client = await reader(
+    [
+      { capability: "sales.read", scope: "assigned" },
+      { capability: "sales.financial", scope: "assigned" },
+    ],
+    ["A"],
+  );
+  const result = await client.request("/api/dashboard/sales?from=2026-05-01&to=2026-06-30");
+  expect(result.status).toBe(200);
+  expect(result.body.kpis).toMatchObject({
+    totalRawProfit: 0.01,
+    totalNetProfit: 0.01,
+    totalInvoices: 3,
+    avgMarginPercent: 66.67,
+  });
+  expect(result.body.topProducts[0]).toMatchObject({ rawProfit: null, netProfit: null, averageProfitPercent: null });
+  expect(Number(result.body.topProducts[0].quantity)).toBe(3);
+  expect(Number(result.body.groupSalesChart[0].rawProfit)).toBe(0.01);
+  expect(Number(result.body.topClients[0].total_USD)).toBe(0.01);
+});

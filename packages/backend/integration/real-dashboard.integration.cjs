@@ -56,3 +56,26 @@ test.each(["ventas", "compras-sin-vender"])(
     expect(responses[2].body.length).toBeGreaterThan(0);
   },
 );
+
+test.each([
+  ["/dashboard/sales", 2500],
+  ["/sellers/dashboard", 1800],
+])("%s responde en frío sin esconder la regresión con caché", async (path, budget) => {
+  expect((await client.request("/api/cache/clear", { method: "POST", body: { confirmed: true } })).status).toBe(200);
+  const comparison = path === "/dashboard/sales" ? "&compareFrom=2025-03-08&compareTo=2025-12-31" : "";
+  const start = Date.now();
+  const response = await client.request(`/api${path}?${range}${comparison}`);
+  const elapsed = Date.now() - start;
+  expect(response.status).toBe(200);
+  expect(response.headers["x-report-cache"]).toBe("MISS");
+  expect(elapsed).toBeLessThan(budget);
+});
+
+test.each(["/clients/list", "/sellers/list"])("%s pagina sin repetir agregados ni usar caché", async (path) => {
+  const start = Date.now();
+  const response = await client.request(`/api${path}?${range}`);
+  const elapsed = Date.now() - start;
+  expect(response.status).toBe(200);
+  expect(response.headers["x-report-cache"]).toBeUndefined();
+  expect(elapsed).toBeLessThan(1800);
+});

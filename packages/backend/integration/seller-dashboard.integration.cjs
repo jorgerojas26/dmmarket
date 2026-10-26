@@ -195,6 +195,27 @@ test("collation insensible no amplía comparación, ranking ni tendencia propios
   expect(result.body.monthlyTrend).toEqual([{ month: "2026-01", sales: 100, invoiceCount: 1 }]);
 });
 
+test("totales anuales no suman importes mensuales ya redondeados", async () => {
+  await environment.db("masterfact").insert([
+    { IdFactura: "seller-precision-1", IdVend: "A", IdCliente: "C", Fecha: "2026-04-01", Anulada: false },
+    { IdFactura: "seller-precision-2", IdVend: "A", IdCliente: "C", Fecha: "2026-05-01", Anulada: false },
+  ]);
+  await environment.db("slavefact").insert([
+    { IdFactura: "seller-precision-1", IdProducto: "P", Precio: 0.005, Costo: 0, Cantidad: 1 },
+    { IdFactura: "seller-precision-2", IdProducto: "P", Precio: 0.005, Costo: 0, Cantidad: 1 },
+  ]);
+  const client = await reader([
+    grant("sellers.read", "assigned"),
+    grant("sales.read"),
+    grant("sales.financial", "assigned"),
+  ]);
+  const result = await client.request("/api/sellers/dashboard?from=2026-04-01&to=2026-05-31");
+  expect(result.status).toBe(200);
+  expect(result.body.kpis.totalSales).toBe(0.01);
+  expect(result.body.ranking[0]).toMatchObject({ sales: 0.01, profit: 0.01, invoiceCount: 2 });
+  expect(result.body.monthlyTrend.map((row) => row.sales)).toEqual([0.01, 0.01]);
+});
+
 test("dashboard rechaza cohortes superiores al límite en vez de truncar rankings", async () => {
   await environment
     .db("vendedores")
