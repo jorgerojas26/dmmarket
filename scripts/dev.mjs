@@ -18,7 +18,7 @@ const id = `${slug}-${hash}`;
 const project = `dmmarket-${id}`;
 const frontend = `${id}.dmmarket`;
 const backend = `api.${frontend}`;
-const volume = `${project}_mysql_data`;
+const volume = `${project}_mysql_data_50`;
 const configFile = path.join(root, ".dev.local.json");
 const settings = existsSync(configFile) ? JSON.parse(readFileSync(configFile, "utf8")) : {};
 const command = process.argv[2] || "start";
@@ -39,7 +39,7 @@ function environment(extra = {}) {
     DATABASE_NAME: "bdsolser_md_nieto",
     BACKUP_DIRECTORY: path.join(directory, "backups"),
     BACKUP_DUMP_COMMAND: path.join(root, "scripts/dev-mysqldump.sh"),
-    BACKUP_CONSISTENCY: "transactional",
+    BACKUP_CONSISTENCY: "locked",
     GOOGLE_DRIVE_CLIENT_ID: "",
     GOOGLE_DRIVE_CLIENT_SECRET: "",
     DMMARKET_SERVICE: "0",

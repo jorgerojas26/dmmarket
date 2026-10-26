@@ -1,6 +1,7 @@
 services:
   mysql:
-    image: mysql:5.7
+    image: dmmarket/mysql:5.0.24
+    build: ./docker/mysql-5.0
     platform: linux/amd64
     ports:
       - "127.0.0.1::3306"
@@ -11,7 +12,7 @@ services:
     labels:
       io.dmmarket.worktree: "${DMMARKET_DEV_ROOT:?Usa bun run dev}"
     healthcheck:
-      test: ["CMD-SHELL", "test -f /var/lib/mysql/.dmmarket-dev-seed-ready && mysqladmin ping --protocol=tcp -h 127.0.0.1 -proot --silent"]
+      test: ["CMD-SHELL", "test -f /var/lib/mysql/.dmmarket-initialized && mysqladmin ping --protocol=tcp -h 127.0.0.1 -proot --silent"]
       interval: 5s
       timeout: 5s
       retries: 240
@@ -23,15 +24,9 @@ services:
         read_only: true
         bind:
           create_host_path: false
-      - type: bind
-        source: "${DMMARKET_DEV_ROOT}/docker/dev-ready.sh"
-        target: /docker-entrypoint-initdb.d/zz-dmmarket-ready.sh
-        read_only: true
-        bind:
-          create_host_path: false
-      - mysql_data:/var/lib/mysql
+      - mysql_data_50:/var/lib/mysql
 
 volumes:
-  mysql_data:
+  mysql_data_50:
     labels:
       io.dmmarket.worktree: "${DMMARKET_DEV_ROOT:?Usa bun run dev}"
