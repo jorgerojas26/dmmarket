@@ -186,7 +186,7 @@ async function startEnvironment({
     });
     await until(async () => {
       const [[version]] = await db.raw("SELECT VERSION() AS version");
-      if (!String(version.version).startsWith("5.7.")) throw new Error("Se requiere MySQL 5.7 del servicio de tests.");
+      if (String(version.version) !== "5.0.24") throw new Error("Se requiere MySQL 5.0.24 del servicio de tests.");
       return true;
     });
     const existing = await db("information_schema.TABLES")

@@ -1,6 +1,7 @@
 services:
   mysql:
-    image: mysql:5.7
+    image: dmmarket/mysql:5.0.24
+    build: ./docker/mysql-5.0
     platform: linux/amd64
     ports:
       - "127.0.0.1::3306"
@@ -11,7 +12,7 @@ services:
     labels:
       io.dmmarket.worktree: "${DMMARKET_DEV_ROOT:?Usa bun run dev}"
     healthcheck:
-      test: ["CMD-SHELL", "test -f /var/lib/mysql/.dmmarket-dev-seed-ready && mysqladmin ping --protocol=tcp -h 127.0.0.1 -proot --silent"]
+      test: ["CMD-SHELL", "test -f /var/lib/mysql/.dmmarket-initialized && mysqladmin ping --protocol=tcp -h 127.0.0.1 -proot --silent"]
       interval: 5s
       timeout: 5s
       retries: 240
@@ -23,41 +24,36 @@ services:
         read_only: true
         bind:
           create_host_path: false
-      - type: bind
-        source: "${DMMARKET_DEV_ROOT}/docker/dev-ready.sh"
-        target: /docker-entrypoint-initdb.d/zz-dmmarket-ready.sh
-        read_only: true
-        bind:
-          create_host_path: false
-      - mysql_data:/var/lib/mysql
+      - mysql_data_50:/var/lib/mysql
 
   mysql-tests:
-    image: mysql:5.7
+    image: dmmarket/mysql:5.0.24
+    build: ./docker/mysql-5.0
     platform: linux/amd64
     profiles: ["test"]
     ports:
       - "127.0.0.1::3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: dmmarket_test_seed
     command: --sql-mode="" --log-bin-trust-function-creators=1
     labels:
       io.dmmarket.worktree: "${DMMARKET_DEV_ROOT:?Usa bun run test:prepare}"
       io.dmmarket.test: "true"
     healthcheck:
-      test: ["CMD-SHELL", "mysql --protocol=tcp -h 127.0.0.1 -uroot -proot -e 'SELECT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "test -f /var/lib/mysql/.dmmarket-initialized && mysql --protocol=tcp -h 127.0.0.1 -uroot -proot -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 2s
       timeout: 5s
       retries: 60
       start_period: 10s
     volumes:
-      - mysql_test_data:/var/lib/mysql
+      - mysql_test_data_50:/var/lib/mysql
 
 volumes:
-  mysql_test_data:
+  mysql_test_data_50:
     labels:
       io.dmmarket.worktree: "${DMMARKET_DEV_ROOT:?Usa bun run test:prepare}"
       io.dmmarket.test: "true"
-  mysql_data:
+  mysql_data_50:
     labels:
       io.dmmarket.worktree: "${DMMARKET_DEV_ROOT:?Usa bun run dev}"

@@ -66,7 +66,7 @@ function testContainer() {
   if (
     labels["io.dmmarket.worktree"] !== root ||
     labels["io.dmmarket.test"] !== "true" ||
-    info.Config.Image !== "mysql:5.7" ||
+    info.Config.Image !== "dmmarket/mysql:5.0.24" ||
     !info.State.Running ||
     info.State.Paused ||
     bindings?.length !== 1 ||
@@ -106,7 +106,7 @@ function database(configuration) {
 
 async function createFixtureDatabase() {
   const name = `dmmarket_test_${randomUUID().replaceAll("-", "")}`;
-  const user = `dmtest_${name.slice(-24)}`;
+  const user = `dmtest_${name.slice(-9)}`;
   const password = randomBytes(32).toString("hex");
   const admin = database(connection());
   try {
@@ -127,7 +127,8 @@ async function dropFixtureDatabase(name) {
   const admin = database(connection());
   try {
     await admin.raw("DROP DATABASE IF EXISTS ??", [name]);
-    await admin.raw("DROP USER IF EXISTS ?@'%'", [`dmtest_${name.slice(-24)}`]);
+    const user = `dmtest_${name.slice(-9)}`;
+    if (await admin("mysql.user").where({ User: user, Host: "%" }).first()) await admin.raw("DROP USER ?@'%'", [user]);
   } finally {
     await admin.destroy();
   }
@@ -152,7 +153,8 @@ function completed(child) {
   });
 }
 
-async function copyRealDatabase(sourceContainer, sourceDatabase, confirm) {
+async function copyRealDatabase(sourceContainer, sourceDatabase, confirm, consistency = "transactional") {
+  if (!["transactional", "locked"].includes(consistency)) throw new Error("Consistencia de copia no válida.");
   if (process.versions.bun) throw new Error("Ejecuta la copia con bun run test:copy para usar el stream de Node.");
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(sourceContainer || "") || !/^[a-zA-Z0-9_]+$/.test(sourceDatabase || ""))
     throw new Error("Indica --source-container y --source-database explícitamente.");
@@ -163,13 +165,13 @@ async function copyRealDatabase(sourceContainer, sourceDatabase, confirm) {
     labels["com.docker.compose.service"] !== "mysql" ||
     !labels["io.dmmarket.worktree"] ||
     labels["io.dmmarket.test"] === "true" ||
-    source.Config.Image !== "mysql:5.7"
+    source.Config.Image !== "dmmarket/mysql:5.0.24"
   )
     throw new Error("El origen debe ser el MySQL de desarrollo de un worktree, nunca un servicio instalado.");
   const destination = prepareDatabase();
   if (source.Id === destination.Id) throw new Error("Origen y destino deben ser distintos.");
   const admin = database(connection());
-  const reader = "dmmarket_real_reader";
+  const reader = "dm_real_reader";
   const password = randomBytes(32).toString("hex");
   let created = false;
   try {
@@ -188,8 +190,10 @@ async function copyRealDatabase(sourceContainer, sourceDatabase, confirm) {
       "--execute",
       `SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='${sourceDatabase}' AND TABLE_TYPE='BASE TABLE' AND ENGINE <> 'InnoDB'`,
     );
-    if (engines !== "0")
-      throw new Error("El origen contiene tablas no transaccionales; no se puede copiar sin bloqueo global.");
+    if (engines !== "0" && consistency !== "locked")
+      throw new Error(
+        "El origen contiene tablas no transaccionales; autoriza --consistency locked para copiar con bloqueo global.",
+      );
     const tables = docker(
       "exec",
       "--env",
@@ -219,11 +223,10 @@ async function copyRealDatabase(sourceContainer, sourceDatabase, confirm) {
         source.Id,
         "mysqldump",
         "--user=root",
-        "--single-transaction",
+        consistency === "locked" ? "--lock-all-tables" : "--single-transaction",
         "--quick",
         "--routines",
         "--hex-blob",
-        "--set-gtid-purged=OFF",
         sourceDatabase,
       ],
       { stdio: ["ignore", "pipe", "inherit"] },
@@ -246,7 +249,8 @@ async function copyRealDatabase(sourceContainer, sourceDatabase, confirm) {
       .pluck("TABLE_NAME");
     if (JSON.stringify(tables) !== JSON.stringify(imported))
       throw new Error("La copia no contiene las mismas tablas del origen.");
-    await admin.raw("DROP USER IF EXISTS ?@'%'", [reader]);
+    if (await admin("mysql.user").where({ User: reader, Host: "%" }).first())
+      await admin.raw("DROP USER ?@'%'", [reader]);
     await admin.raw("CREATE USER ?@'%' IDENTIFIED BY ?", [reader, password]);
     await admin.raw("GRANT SELECT ON ??.* TO ?@'%'", [realName, reader]);
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
