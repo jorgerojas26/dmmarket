@@ -22,7 +22,7 @@ async function rates(transaction, access, id, input) {
     .groupByRaw("BINARY grupoId");
   const data = await transaction("grupos as g")
     .leftJoin(configured.as("r"), function () {
-      this.on(transaction.raw("BINARY r.groupId = BINARY g.IdGrupo"));
+      this.on(transaction.raw("r.groupId = g.IdGrupo AND BINARY r.groupId = BINARY g.IdGrupo"));
     })
     .select({
       groupId: "g.IdGrupo",
@@ -52,7 +52,7 @@ async function sales(transaction, access, id, input) {
         .where("m.Anulada", 0)
         .whereRaw("BINARY m.IdVend = ?", [id])
         .whereBetween("m.Fecha", [query.from, query.to])
-        .whereRaw("BINARY m.IdFactura = BINARY f.masterfactId"),
+        .whereRaw("m.IdFactura = f.masterfactId AND BINARY m.IdFactura = BINARY f.masterfactId"),
     )
     .select({
       invoiceId: "f.masterfactId",
@@ -62,8 +62,8 @@ async function sales(transaction, access, id, input) {
     })
     .groupByRaw("BINARY f.masterfactId, BINARY f.grupoId");
   base.leftJoin(frozen.as("f"), function () {
-    this.on(transaction.raw("BINARY f.invoiceId = BINARY mf.IdFactura")).andOn(
-      transaction.raw("BINARY f.groupId = BINARY p.Grupo"),
+    this.on(transaction.raw("f.invoiceId = mf.IdFactura AND BINARY f.invoiceId = BINARY mf.IdFactura")).andOn(
+      transaction.raw("f.groupId = p.Grupo AND BINARY f.groupId = BINARY p.Grupo"),
     );
   });
   const financial = financialFields(access, filtered);

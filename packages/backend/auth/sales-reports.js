@@ -1,3 +1,4 @@
+const { withReportCache } = require("./report-cache");
 const express = require("express");
 const { canExportSales } = require("./sales-export");
 const { filterIdentity } = require("../utils/report-identity");
@@ -77,16 +78,18 @@ function salesBase(transaction, access, query) {
   const invoice = noe ? "IdNoe" : "IdFactura";
   const base = transaction(`${slave} as sf`)
     .join(`${master} as mf`, function () {
-      this.on(transaction.raw("BINARY ?? = BINARY ??", [`mf.${invoice}`, `sf.${invoice}`])).andOn("mf.Anulada", 0);
+      this.on(`mf.${invoice}`, "=", `sf.${invoice}`)
+        .andOn(transaction.raw("BINARY ?? = BINARY ??", [`mf.${invoice}`, `sf.${invoice}`]))
+        .andOn("mf.Anulada", 0);
     })
     .leftJoin("clientes as c", function () {
-      this.on(transaction.raw("BINARY c.IdCliente = BINARY mf.IdCliente"));
+      this.on(transaction.raw("c.IdCliente = mf.IdCliente AND BINARY c.IdCliente = BINARY mf.IdCliente"));
     })
     .leftJoin("vendedores as v", function () {
-      this.on(transaction.raw("BINARY v.idVend = BINARY mf.IdVend"));
+      this.on(transaction.raw("v.idVend = mf.IdVend AND BINARY v.idVend = BINARY mf.IdVend"));
     })
     .leftJoin("productos as p", function () {
-      this.on(transaction.raw("BINARY p.IdProducto = BINARY sf.IdProducto"));
+      this.on(transaction.raw("p.IdProducto = sf.IdProducto AND BINARY p.IdProducto = BINARY sf.IdProducto"));
     });
   if (query.from) base.whereBetween("mf.Fecha", [query.from, query.to]);
   if (!read.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), read.sellerIds);
@@ -224,7 +227,7 @@ async function invoiceList(transaction, access, query) {
     });
   const ids = summary.data.map((row) => row.invoiceId);
   base.leftJoin("grupos as dispatchGroup", function () {
-    this.on(transaction.raw("BINARY dispatchGroup.IdGrupo = BINARY p.Grupo"));
+    this.on(transaction.raw("dispatchGroup.IdGrupo = p.Grupo AND BINARY dispatchGroup.IdGrupo = BINARY p.Grupo"));
   });
   const lines = ids.length
     ? await base
@@ -452,7 +455,7 @@ function createSalesReports({ sessions }) {
   const router = express.Router();
   const handle = (work, options) => async (req, res, next) => {
     try {
-      const result = await sessions.withSession(req.sessionID, {}, async ({ transaction, access }) =>
+      const result = await withReportCache(req, res, sessions, async ({ transaction, access }) =>
         work(transaction, access, parameters(req.query, options), req.params),
       );
       res.json(result);

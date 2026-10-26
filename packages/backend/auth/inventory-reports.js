@@ -35,11 +35,11 @@ async function inventory(transaction, access, query) {
   };
   if (!Object.hasOwn(sort, sortBy)) fail(400);
   const source = transaction("productos as p").leftJoin("grupos as g", function () {
-    this.on(transaction.raw("BINARY g.IdGrupo = BINARY p.Grupo"));
+    this.on(transaction.raw("g.IdGrupo = p.Grupo AND BINARY g.IdGrupo = BINARY p.Grupo"));
   });
   if (providers)
     source.leftJoin("proveedores as v", function () {
-      this.on(transaction.raw("BINARY v.IdProveedor = BINARY p.Proveedor"));
+      this.on(transaction.raw("v.IdProveedor = p.Proveedor AND BINARY v.IdProveedor = BINARY p.Proveedor"));
     });
   if (query.search)
     source.where(function () {

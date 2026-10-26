@@ -58,7 +58,7 @@ async function clientDashboard(transaction, access, query) {
   const financial = financialFields(access, query);
   const catalogQuery = transaction("clientes as c")
     .leftJoin("rutas as r", function () {
-      this.on(transaction.raw("BINARY r.Id_Ruta = BINARY c.Ruta"));
+      this.on(transaction.raw("r.Id_Ruta = c.Ruta AND BINARY r.Id_Ruta = BINARY c.Ruta"));
     })
     .select({
       clientId: "c.IdCliente",
@@ -75,7 +75,7 @@ async function clientDashboard(transaction, access, query) {
     if (query.ruta)
       result.base
         .join("clientes as c", function () {
-          this.on(transaction.raw("BINARY c.IdCliente = BINARY mf.IdCliente"));
+          this.on(transaction.raw("c.IdCliente = mf.IdCliente AND BINARY c.IdCliente = BINARY mf.IdCliente"));
         })
         .whereRaw("BINARY c.Ruta = ?", [query.ruta]);
     return result;

@@ -19,6 +19,7 @@
     "package:installers": "bun scripts/package-installers.mjs",
     "prepare:caddy": "bun scripts/prepare-caddy.mjs",
     "test:caddy": "bun scripts/test-caddy.mjs",
+    "test:dev:https": "bun scripts/test-dev-https.mjs",
     "build:installer:linux": "bun run build:linux && bun run package:installers linux",
     "build:installer:windows": "bun run build:windows && bun run package:installers windows",
     "release": "bun scripts/release.mjs",

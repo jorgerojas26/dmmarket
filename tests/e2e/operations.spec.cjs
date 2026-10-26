@@ -66,7 +66,7 @@ test("limpieza de caché usa sesión y MFA reales sin conservar una pantalla de 
   await login(page, environment, user);
   await page.getByLabel("Código MFA", { exact: true }).fill(await environment.token(user.secret));
   await page.getByRole("button", { name: "Verificar código", exact: true }).click();
-  await expect(page.getByRole("link", { name: "Mi cuenta", exact: true })).toBeVisible();
+  await openModule(page, "Mi cuenta");
   await expect(page.getByRole("link", { name: "Operación", exact: true })).toHaveCount(0);
   const statuses = await page.evaluate(async () => {
     const session = await (await fetch("/api/auth/session")).json();

@@ -1,9 +1,9 @@
 const { randomUUID, randomBytes } = require("node:crypto");
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
-const { startEnvironment, backend } = require("../../../tests/support/auth-environment.cjs");
+const { startEnvironment, backend, docker } = require("../../../tests/support/auth-environment.cjs");
 const { seed } = backend("./seeds/001_default_roles");
-const { createAccess } = backend("./auth/capabilities");
+const { CAPABILITIES, createAccess } = backend("./auth/capabilities");
 const { createSessionService } = backend("./auth/sessions");
 const { createAttemptLimiter } = backend("./auth/attempts");
 let environment;
@@ -214,7 +214,15 @@ test("colisión con nombre de rol propio detiene toda la siembra sin adoptar ni 
 });
 
 test("error real de auditoría revierte también roles y permisos ya insertados", async () => {
-  await environment.db.raw(
+  docker(
+    "exec",
+    "--env",
+    "MYSQL_PWD=root",
+    environment.container,
+    "mysql",
+    "--user=root",
+    environment.configuration.DATABASE_NAME,
+    "--execute",
     "CREATE TRIGGER fail_default_role_audit BEFORE INSERT ON dmmarket_auth_events FOR EACH ROW INSERT INTO missing_seed_audit_target(id) VALUES(NEW.id)",
   );
   try {
@@ -222,7 +230,17 @@ test("error real de auditoría revierte también roles y permisos ya insertados"
     expect(await roles()).toHaveLength(0);
     expect(await environment.db("dmmarket_auth_role_permissions")).toHaveLength(0);
   } finally {
-    await environment.db.raw("DROP TRIGGER fail_default_role_audit");
+    docker(
+      "exec",
+      "--env",
+      "MYSQL_PWD=root",
+      environment.container,
+      "mysql",
+      "--user=root",
+      environment.configuration.DATABASE_NAME,
+      "--execute",
+      "DROP TRIGGER fail_default_role_audit",
+    );
   }
 });
 
@@ -265,14 +283,36 @@ test("Knex seed:run ejecuta el mismo archivo real y es idempotente desde el task
   expect(await roles()).toEqual(before);
 });
 
-test("bootstrap explícito conserva sólo permisos de emergencia sin asignar el rol técnico ampliado", async () => {
+test("recuperación de una cuenta existente no concede permisos de negocio adicionales", async () => {
+  const user = await environment.seedUser({ permissions: [{ capability: "rates.read", scope: "global" }] });
+  const accounts = await backend("./auth/accounts").createAccountService({ db: environment.db });
+  await accounts.recoverLocally({
+    mode: "recover",
+    username: user.username,
+    reason: "Recuperación local sin ampliar negocio",
+  });
+  const grants = await environment
+    .db("dmmarket_auth_role_permissions as p")
+    .join("dmmarket_auth_user_roles as r", "r.role_id", "p.role_id")
+    .where("r.user_id", user.id)
+    .select("p.capability", "p.scope")
+    .orderBy("p.capability");
+  expect(grants).toEqual(
+    ["access.links", "access.recover", "access.roles", "access.users", "rates.read"].map((capability) => ({
+      capability,
+      scope: "global",
+    })),
+  );
+});
+
+test("bootstrap inicial explícito concede todo el catálogo sin modificar los roles predefinidos", async () => {
   await seed(environment.db);
   const accounts = await backend("./auth/accounts").createAccountService({ db: environment.db });
   const account = await accounts.recoverLocally({
     mode: "bootstrap",
     username: "default-role-owner",
     displayName: "Responsable inicial",
-    reason: "Verificar bootstrap sin ampliación",
+    reason: "Verificar superusuario inicial",
   });
   const permissions = await environment
     .db("dmmarket_auth_role_permissions as p")
@@ -281,7 +321,7 @@ test("bootstrap explícito conserva sólo permisos de emergencia sin asignar el 
     .select("p.capability", "p.scope")
     .orderBy("p.capability");
   expect(permissions).toEqual(
-    ["access.users", "access.roles", "access.links", "access.recover"]
+    Object.keys(CAPABILITIES)
       .sort()
       .map((capability) => ({ capability, scope: "global" })),
   );

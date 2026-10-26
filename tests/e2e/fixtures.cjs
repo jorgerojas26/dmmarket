@@ -53,8 +53,14 @@ async function openModule(page, name, view) {
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
   await navigation.waitFor({ state: "visible" });
   const link = navigation.getByRole("link", { name, exact: true });
-  if (!(await link.isVisible()))
-    await navigation.getByRole("button", { name: "Abrir navegación", exact: true }).click();
+  if (!(await link.isVisible())) {
+    const toggle = navigation.getByRole("button", { name: "Abrir navegación", exact: true });
+    if (await toggle.isVisible()) {
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    }
+    if (["Mi cuenta", "Acceso", "Auditoría"].includes(name))
+      await navigation.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
+  }
   await link.click();
   if (view && ["Compras", "Ventas", "Clientes", "Vendedores", "Configuración"].includes(name)) {
     await page

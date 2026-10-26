@@ -1275,7 +1275,18 @@ input:checked + .slider:before {
 .app-navbar-actions {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 12px;
+}
+
+.app-navbar-account-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.app-navbar-account-toggle::after {
+    display: none;
 }
 
 .app-navbar-actions .app-navbar-icon {
@@ -1288,7 +1299,7 @@ input:checked + .slider:before {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    white-space: nowrap;
 }
 
 .app-navbar-switch > span {

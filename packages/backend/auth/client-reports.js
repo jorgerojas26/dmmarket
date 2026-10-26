@@ -1,3 +1,4 @@
+const { withReportCache } = require("./report-cache");
 const express = require("express");
 const { reportId, missingName, filterIdentity } = require("../utils/report-identity");
 const { parameters, salesBase, financialFields } = require("./sales-reports");
@@ -75,7 +76,7 @@ async function inactiveClients(transaction, access, query) {
   const activity = documents()
     .select(transaction.raw("1"))
     .whereBetween("mf.Fecha", [query.from, query.to])
-    .whereRaw("BINARY mf.IdCliente = BINARY c.IdCliente");
+    .whereRaw("mf.IdCliente = c.IdCliente AND BINARY mf.IdCliente = BINARY c.IdCliente");
   const history = documents()
     .leftJoin(`${slave} as sf`, `sf.${invoice}`, `mf.${invoice}`)
     .where("mf.Fecha", "<=", query.to)
@@ -88,7 +89,7 @@ async function inactiveClients(transaction, access, query) {
   const source = transaction("clientes as c")
     .leftJoin("rutas as r", "r.Id_Ruta", "c.Ruta")
     .leftJoin(history.as("h"), function () {
-      this.on(transaction.raw("BINARY h.clientId = BINARY c.IdCliente"));
+      this.on(transaction.raw("h.clientId = c.IdCliente AND BINARY h.clientId = BINARY c.IdCliente"));
     })
     .whereNotExists(activity);
   if (query.search) source.where("c.Empresa", "like", `%${query.search}%`);
@@ -128,7 +129,7 @@ function createClientReports({ sessions }) {
   const handle = (work, options) => async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) => {
+        await withReportCache(req, res, sessions, ({ transaction, access }) => {
           if (!access.hasGlobal("clients.read")) fail(403);
           return work(transaction, access, parameters(req.query, options), req.params);
         }),

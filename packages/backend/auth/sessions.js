@@ -32,7 +32,7 @@ function unwrap(result) {
   return result.value;
 }
 
-async function createSessionService({ db, mfa, attempts, now = Date.now }) {
+async function createSessionService({ db, statusDb = db, mfa, attempts, now = Date.now }) {
   if (!mfa || typeof mfa.verifyToken !== "function") throw new TypeError("Se requiere el verificador MFA.");
   if (!attempts || typeof attempts.consume !== "function")
     throw new TypeError("Se requieren límites persistentes de acceso.");
@@ -71,9 +71,16 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
     }
   }
 
-  async function lockSession(connection, hash, userId, includeAccess = true) {
-    const user = await connection("dmmarket_auth_users").where("id", userId).forUpdate().first();
-    const state = await connection("dmmarket_auth_session_state").where("sid_hash", hash).forUpdate().first();
+  async function lockSession(
+    connection,
+    hash,
+    userId,
+    { includeAccess = true, readOnly = false, shared = false } = {},
+  ) {
+    const userQuery = connection("dmmarket_auth_users").where("id", userId);
+    const stateQuery = connection("dmmarket_auth_session_state").where("sid_hash", hash);
+    const user = await (readOnly ? userQuery : shared ? userQuery.forShare() : userQuery.forUpdate()).first();
+    const state = await (readOnly ? stateQuery : shared ? stateQuery.forShare() : stateQuery.forUpdate()).first();
     if (!user || !state || state.user_id !== user.id || state.revoked_ms !== null) return null;
     const current = time();
     const timestamps = [state.authenticated_ms, state.activity_ms, state.password_ms, state.mfa_ms]
@@ -96,7 +103,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
       reason = "temporary-expiry";
     }
     if (reason) {
-      await revoke(connection, state, reason);
+      if (!readOnly) await revoke(connection, state, reason);
       return null;
     }
     if (!includeAccess) return { user, state };
@@ -104,10 +111,15 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
     return { user, state, access, stage: stageFor(user, state, access) };
   }
 
-  async function useSession(sid, work, accessMutation = false, source = null) {
+  async function useSession(
+    sid,
+    work,
+    { accessMutation = false, source = null, readOnly = false, shared = false } = {},
+  ) {
+    const sessionDb = readOnly ? statusDb : db;
     const hash = sessionHash(sid);
     const reference = hash
-      ? await db("dmmarket_auth_session_state").where("sid_hash", hash).select("user_id").first()
+      ? await sessionDb("dmmarket_auth_session_state").where("sid_hash", hash).select("user_id").first()
       : null;
     if (source !== null)
       await attempts.consume({
@@ -116,9 +128,9 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
         targetUserId: reference?.user_id || null,
       });
     if (!reference) return unwrap(denied());
-    const result = await db.transaction(async (connection) => {
+    const result = await sessionDb.transaction(async (connection) => {
       if (accessMutation) await lockAccessMutation(connection);
-      const context = await lockSession(connection, hash, reference.user_id);
+      const context = await lockSession(connection, hash, reference.user_id, { readOnly, shared });
       if (!context) return denied();
       const result = await work(connection, context);
       if (!result.error) {
@@ -250,7 +262,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
       );
     },
     async status(sid) {
-      return useSession(sid, async (_connection, context) => ({ value: publicContext(context) }));
+      return useSession(sid, async (_connection, context) => ({ value: publicContext(context) }), { readOnly: true });
     },
     async withSession(
       sid,
@@ -285,7 +297,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
             return unwrap(denied(403, "RECENT_AUTH_REQUIRED"));
           return { value };
         },
-        accessMutation,
+        { accessMutation, shared: !activity && !accessMutation },
       );
     },
     async changePassword(sid, { currentPassword, newPassword, token, newSid } = {}, source) {
@@ -327,8 +339,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
             context.stage === "ready" && context.user.mfa_secret ? time() : null,
           );
         },
-        true,
-        normalizeSource(source),
+        { accessMutation: true, source: normalizeSource(source) },
       );
     },
     async beginMfaEnrollment(sid, password, source) {
@@ -363,8 +374,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
           context.state.password_ms = current;
           return { value: { uri: enrollment.uri, expiresAtMs: current + RECENT_AUTH_MS } };
         },
-        true,
-        normalizeSource(source),
+        { accessMutation: true, source: normalizeSource(source) },
       );
     },
     async finishMfaEnrollment(sid, { token, newSid } = {}, source) {
@@ -402,8 +412,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
           });
           return rotateSession(connection, context, newSid, "auth.mfa_enrolled", context.state.password_ms, current);
         },
-        true,
-        normalizeSource(source),
+        { accessMutation: true, source: normalizeSource(source) },
       );
     },
     async verifyMfa(sid, token, source) {
@@ -424,8 +433,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
           context.state.mfa_ms = current;
           return { value: { stage: "ready" } };
         },
-        false,
-        normalizeSource(source),
+        { source: normalizeSource(source) },
       );
     },
     async reauthenticate(sid, { password, token }, source) {
@@ -456,8 +464,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
           context.state.password_ms = current;
           return { value: { stage: "ready" } };
         },
-        false,
-        normalizeSource(source),
+        { source: normalizeSource(source) },
       );
     },
     async logout(sid) {
@@ -466,7 +473,7 @@ async function createSessionService({ db, mfa, attempts, now = Date.now }) {
       const reference = await db("dmmarket_auth_session_state").where("sid_hash", hash).select("user_id").first();
       if (!reference) return;
       await db.transaction(async (connection) => {
-        const context = await lockSession(connection, hash, reference.user_id, false);
+        const context = await lockSession(connection, hash, reference.user_id, { includeAccess: false });
         if (context) await revoke(connection, context.state, "logout", context.user.id);
       });
     },

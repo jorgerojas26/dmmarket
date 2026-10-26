@@ -54,15 +54,79 @@ function createReportCache({
     res.type("json").status(200).send(entry.body);
   };
 
-  const middleware = async (req, res, next) => {
-    if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
-      if (isBusinessPath(req.path)) {
-        res.once("finish", () => {
-          if (res.statusCode >= 200 && res.statusCode < 300) clear();
-        });
-      }
-      return next();
+  const invalidate = (req, res, next) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && isBusinessPath(req.path)) {
+      res.once("finish", () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) clear();
+      });
     }
+    return next();
+  };
+
+  const prepare = async (key, work) => {
+    const bypass = async () => ({ value: await work(), state: "BYPASS" });
+    if (key.length > 4096) return bypass();
+    const cached = entries.get(key);
+    if (cached && cached.expires <= now()) remove(key);
+    else if (cached) {
+      entries.delete(key);
+      entries.set(key, cached);
+      return {
+        value: JSON.parse(cached.body),
+        state: "HIT",
+        age: Math.max(0, Math.floor((now() - cached.created) / 1000)),
+      };
+    }
+    const running = pending.get(key);
+    if (running) {
+      const entry = await running.promise;
+      if (entry && running.generation === generation)
+        return {
+          value: JSON.parse(entry.body),
+          state: "SHARED",
+          age: Math.max(0, Math.floor((now() - entry.created) / 1000)),
+        };
+      return bypass();
+    }
+    if (pending.size >= maxEntries) return bypass();
+    let resolve;
+    let body;
+    let completed = false;
+    const flight = {
+      generation,
+      promise: new Promise((done) => {
+        resolve = done;
+      }),
+    };
+    const finish = (success) => {
+      if (completed) return;
+      completed = true;
+      clearTimeout(timer);
+      if (pending.get(key) === flight) pending.delete(key);
+      let entry;
+      if (success && body !== undefined && flight.generation === generation) {
+        const created = now();
+        entry = { body, created, expires: created + ttlMs, bytes: Buffer.byteLength(body) + Buffer.byteLength(key) };
+        store(key, entry);
+      }
+      resolve(entry);
+    };
+    flight.cancel = () => finish(false);
+    const timer = setTimeout(flight.cancel, pendingTtlMs);
+    timer.unref?.();
+    pending.set(key, flight);
+    try {
+      const value = await work();
+      body = JSON.stringify(value);
+      return { value, state: "MISS", commit: () => finish(true), cancel: flight.cancel };
+    } catch (error) {
+      finish(false);
+      throw error;
+    }
+  };
+
+  const middleware = async (req, res, next) => {
+    if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) return invalidate(req, res, next);
     if (req.method === "GET" && isBusinessPath(req.path)) res.set("Cache-Control", "no-store");
     if (req.method !== "GET" || !isDashboardPath(req.path) || req.headers.authorization || req.headers.cookie)
       return next();
@@ -138,7 +202,7 @@ function createReportCache({
     return next();
   };
 
-  return { middleware, clear };
+  return { middleware, clear, prepare, invalidate };
 }
 
 const reportCache = createReportCache();

@@ -1,8 +1,10 @@
 const express = require("express");
 const session = require("express-session");
 const mysql = require("mysql2/promise");
+const knex = require("knex");
 const { timingSafeEqual } = require("node:crypto");
 const { proxyCredential } = require("../web-config");
+const { reportCache } = require("../middlewares/report-cache");
 const { createMfa } = require("./mfa");
 const { createAttemptLimiter } = require("./attempts");
 const { createSessionStore } = require("./mysql-store");
@@ -37,9 +39,7 @@ function validateAuthConfig(env) {
 async function createAuthRuntime({ db, env = process.env, services = {} }) {
   const { security, mfa } = validateAuthConfig(env);
   const attempts = createAttemptLimiter({ db, secret: env.AUTH_SESSION_SECRET });
-  const sessions = await createSessionService({ db, mfa, attempts });
-  const accounts = await createAccountService({ db, sessions });
-  const administration = await createAccessAdministration({ db, sessions });
+  const statusDb = knex({ ...db.client.config, pool: { min: 0, max: 2 }, acquireConnectionTimeout: 2000 });
   const connection = mysql.createPool({
     host: env.DATABASE_HOST,
     port: Number(env.DATABASE_PORT || 3306),
@@ -54,6 +54,9 @@ async function createAuthRuntime({ db, env = process.env, services = {} }) {
   });
   const store = createSessionStore(connection);
   try {
+    const sessions = await createSessionService({ db, statusDb, mfa, attempts });
+    const accounts = await createAccountService({ db, sessions });
+    const administration = await createAccessAdministration({ db, sessions });
     await store.onReady();
     const options = sessionOptions({ store, secret: env.AUTH_SESSION_SECRET });
     const router = express.Router();
@@ -69,6 +72,7 @@ async function createAuthRuntime({ db, env = process.env, services = {} }) {
     router.use("/exports/sales/dispatch", express.json({ limit: "128kb", strict: true }));
     router.use(express.json({ limit: "8kb", strict: true }));
     router.use(session(options));
+    router.use(reportCache.invalidate);
     router.use("/auth", createAuthRouter({ sessions, accounts, administration, security }));
     router.use(createSalesReports({ sessions }));
     router.use(createPartyReports({ sessions }));
@@ -125,11 +129,13 @@ async function createAuthRuntime({ db, env = process.env, services = {} }) {
         await maintenance;
         await store.close();
         await connection.end();
+        await statusDb.destroy();
       },
     };
   } catch (error) {
     await store.close();
     await connection.end();
+    await statusDb.destroy();
     throw error;
   }
 }

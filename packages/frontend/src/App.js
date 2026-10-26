@@ -4,6 +4,7 @@ import { ShowNoeContext } from 'context/show_noe';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import { useContext, useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
+import Dropdown from 'react-bootstrap/Dropdown';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Link, NavLink, Redirect, useLocation } from 'react-router-dom';
@@ -90,9 +91,9 @@ export default function App({ onLogout, logoutError }) {
                         <Navbar.Brand className="app-navbar-brand">SISTEMA DE REPORTES</Navbar.Brand>
                         <Navbar.Toggle aria-controls="basic-navbar-nav" label="Abrir navegación" />
                         <Navbar.Collapse id="basic-navbar-nav">
-                            <Nav className="me-auto app-navbar-links flex-wrap">
+                            <Nav className="me-auto app-navbar-links">
                                 {modules
-                                    .filter((item) => item.path !== '/configuracion')
+                                    .filter((item) => !['/configuracion', '/auditoria', '/acceso'].includes(item.path))
                                     .map((item) => (
                                         <Nav.Link
                                             key={item.path}
@@ -168,24 +169,75 @@ export default function App({ onLogout, logoutError }) {
                                         </span>
                                     </div>
                                 )}
-                                <span className="text-light" role="status" aria-label="Usuario conectado">
-                                    {session.user.username}
-                                </span>
-                                <Link
-                                    to="/cuenta"
-                                    className="text-decoration-none nav-link"
-                                    onClick={() => setExpanded(false)}
-                                >
-                                    Mi cuenta
-                                </Link>
-                                <button
-                                    type="button"
-                                    data-auth-logout="true"
-                                    className="btn btn-outline-light"
-                                    onClick={onLogout}
-                                >
-                                    Salir
-                                </button>
+                                <div className="app-navbar-account-actions">
+                                    <Dropdown align="end">
+                                        <Dropdown.Toggle
+                                            id="account-menu"
+                                            variant="link"
+                                            className="nav-link app-navbar-icon app-navbar-account-toggle"
+                                            aria-label="Menú de cuenta"
+                                            title="Cuenta y administración"
+                                        >
+                                            <svg
+                                                width="20"
+                                                height="20"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                aria-hidden="true"
+                                            >
+                                                <circle cx="12" cy="8" r="4" />
+                                                <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
+                                            </svg>
+                                            <span
+                                                className="visually-hidden"
+                                                role="status"
+                                                aria-label="Usuario conectado"
+                                            >
+                                                {session.user.username}
+                                            </span>
+                                        </Dropdown.Toggle>
+                                        <Dropdown.Menu variant="dark">
+                                            <Dropdown.Header>{session.user.username}</Dropdown.Header>
+                                            <Dropdown.Item as={NavLink} to="/cuenta" onClick={() => setExpanded(false)}>
+                                                Mi cuenta
+                                            </Dropdown.Item>
+                                            {modules
+                                                .filter((item) => ['/acceso', '/auditoria'].includes(item.path))
+                                                .map((item) => (
+                                                    <Dropdown.Item
+                                                        key={item.path}
+                                                        as={NavLink}
+                                                        to={item.path}
+                                                        onClick={() => setExpanded(false)}
+                                                    >
+                                                        {item.label}
+                                                    </Dropdown.Item>
+                                                ))}
+                                        </Dropdown.Menu>
+                                    </Dropdown>
+                                    <button
+                                        type="button"
+                                        data-auth-logout="true"
+                                        className="btn btn-link nav-link app-navbar-icon"
+                                        aria-label="Salir"
+                                        title="Salir"
+                                        onClick={onLogout}
+                                    >
+                                        <svg
+                                            width="20"
+                                            height="20"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            aria-hidden="true"
+                                        >
+                                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                         </Navbar.Collapse>
                     </Container>

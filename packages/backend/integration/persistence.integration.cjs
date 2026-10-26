@@ -103,6 +103,88 @@ test("credencial temporal es de un solo uso y no permite operaciones pendientes"
   expect((await sessions.status(newSid)).stage).toBe("ready");
 });
 
+test("un reporte lento no bloquea la consulta de sesión y la revocación se observa al terminar", async () => {
+  const user = await environment.seedUser();
+  const active = await login(user);
+  let release;
+  let entered;
+  const blocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  const started = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const report = sessions.withSession(active.sid, {}, async () => {
+    entered();
+    await blocked;
+  });
+  let status;
+  let timer;
+  try {
+    await started;
+    status = sessions.status(active.sid);
+    const result = await Promise.race([
+      status,
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), 1000);
+      }),
+    ]);
+    expect(result?.stage).toBe("ready");
+  } finally {
+    clearTimeout(timer);
+    release();
+    await Promise.all([report, status]);
+  }
+  await sessions.logout(active.sid);
+  await expect(sessions.status(active.sid)).rejects.toMatchObject({ status: 401 });
+});
+
+test("reportes de una sesión leen en paralelo y logout espera a que termine el reporte activo", async () => {
+  const user = await environment.seedUser();
+  const active = await login(user);
+  let release;
+  let entered;
+  const blocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  const started = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const report = sessions.withSession(active.sid, {}, async () => {
+    entered();
+    await blocked;
+  });
+  let second;
+  let logout;
+  let timer;
+  try {
+    await started;
+    second = sessions.withSession(
+      active.sid,
+      {},
+      async ({ transaction }) => (await transaction.raw("SELECT 1 AS ready"))[0][0].ready,
+    );
+    const result = await Promise.race([
+      second,
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), 1000);
+      }),
+    ]);
+    expect(result).toBe(1);
+    let revoked = false;
+    logout = sessions.logout(active.sid).then(() => {
+      revoked = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(revoked).toBe(false);
+  } finally {
+    clearTimeout(timer);
+    release();
+    await Promise.all([report, second, logout]);
+  }
+  await expect(sessions.status(active.sid)).rejects.toMatchObject({ status: 401 });
+});
+
 test("dos conexiones no pueden consumir el mismo paso MFA", async () => {
   const user = await environment.seedUser({ permissions: ownerPermissions, enrolled: true });
   const one = await login(user);

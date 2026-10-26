@@ -36,6 +36,52 @@ test("login incorrecto/correcto, permisos, cookies y cambio propio sin MFA", asy
   await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
 });
 
+test("configuración manual MFA permite mostrar y copiar la clave sin escanear", async ({
+  page,
+  context,
+  environment,
+}) => {
+  const user = await environment.seedUser({ permissions: ownerPermissions });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: environment.origin });
+  await login(page, environment, user);
+  await page.getByLabel("Contraseña para configurar MFA", { exact: true }).fill(user.password);
+  await page.getByRole("button", { name: "Generar configuración MFA", exact: true }).click();
+  const copy = page.getByRole("button", { name: "Copiar clave MFA", exact: true });
+  await expect(copy).toBeVisible();
+  const field = page.getByLabel("Configuración manual MFA", { exact: true });
+  const secret = await field.inputValue();
+  expect(/^[A-Z2-7]{32}$/.test(secret)).toBe(true);
+  await expect(field).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Mostrar clave MFA", exact: true }).click();
+  await expect(field).toHaveAttribute("type", "text");
+  await copy.click();
+  await expect(page.getByRole("status").filter({ hasText: "Clave copiada" })).toBeVisible();
+  expect(await page.evaluate(async (secret) => (await navigator.clipboard.readText()) === secret, secret)).toBe(true);
+  await page.getByRole("button", { name: "Ocultar clave MFA", exact: true }).click();
+  await expect(field).toHaveAttribute("type", "password");
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => {
+      throw new Error("NotAllowedError");
+    };
+  });
+  await copy.click();
+  await expect(page.getByRole("status").filter({ hasText: "No se pudo copiar" })).toBeVisible();
+  await page.getByRole("button", { name: "Mostrar clave MFA", exact: true }).click();
+  await expect(field).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "Generar otra configuración", exact: true }).click();
+  await expect(field).toHaveCount(0);
+  await page.getByLabel("Contraseña para configurar MFA", { exact: true }).fill(user.password);
+  await page.getByRole("button", { name: "Generar configuración MFA", exact: true }).click();
+  await expect(field).toHaveAttribute("type", "password");
+  await expect(page.getByRole("status").filter({ hasText: /Clave copiada|No se pudo copiar/ })).toHaveCount(0);
+  const replacement = await field.inputValue();
+  expect(replacement === secret).toBe(false);
+  await page.getByLabel("Código de confirmación MFA", { exact: true }).fill(await environment.token(replacement));
+  await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Administración de usuarios", exact: true })).toBeVisible();
+  await expect(field).toHaveCount(0);
+});
+
 test("alta, recuperación y bloqueo de usuario desde administrador con MFA real", async ({
   page,
   browser,
@@ -49,14 +95,12 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
   await changePassword(page, owner.password, password);
   await page.getByRole("textbox", { name: "Contraseña para configurar MFA" }).fill(password);
   await page.getByRole("button", { name: "Generar configuración MFA" }).click();
-  const uri = await page.getByRole("textbox", { name: "Configuración manual MFA" }).inputValue();
+  const secret = await page.getByRole("textbox", { name: "Configuración manual MFA" }).inputValue();
   await expect(page.getByRole("img", { name: "Código QR de configuración MFA" })).toBeVisible();
   await page.getByRole("textbox", { name: "Código de confirmación MFA" }).fill("invalid");
   await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
   await expect(page.getByRole("alert")).toBeVisible();
-  await page
-    .getByRole("textbox", { name: "Código de confirmación MFA" })
-    .fill(await environment.token(new URL(uri).searchParams.get("secret")));
+  await page.getByRole("textbox", { name: "Código de confirmación MFA" }).fill(await environment.token(secret));
   await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Administración de usuarios" })).toBeVisible();
   const username = `created-${randomBytes(4).toString("hex")}`;
@@ -150,6 +194,105 @@ test("cambiar cuenta no reutiliza caché SWR mientras SQL está bloqueado", asyn
     if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
     await environment.db.client.releaseConnection(connection);
     await environment.db("divisas").update({ Cambio: "42.125" });
+  }
+});
+
+test("revalidar con reportes bloqueados no expulsa una sesión válida ni agota su conexión", async ({
+  page,
+  environment,
+}) => {
+  await login(page, environment, await environment.seedUser());
+  const reference = page.locator(".app-navbar-ref");
+  await expect(reference).toContainText("42.125000");
+  const connection = await environment.db.client.acquireConnection();
+  let locked = false;
+  try {
+    await environment.db.raw("LOCK TABLES divisas WRITE").connection(connection);
+    locked = true;
+    await page.evaluate(() => {
+      for (let index = 0; index < 12; index++)
+        void fetch("/api/currency_rates")
+          .then((response) => response.json())
+          .catch(() => {});
+    });
+    await require("../support/auth-environment.cjs").until(async () => {
+      const [rows] = await environment.db.raw("SHOW FULL PROCESSLIST");
+      return (
+        rows.filter(
+          (row) => String(row.State) === "Locked" || /for update|lock in share mode/i.test(String(row.Info || "")),
+        ).length >= 2
+      );
+    }, 5000);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(reference).toBeVisible({ timeout: 7000 });
+    await expect(page.getByRole("alert").filter({ hasText: "No se puede validar la sesión" })).toHaveCount(0);
+  } finally {
+    if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
+    await environment.db.client.releaseConnection(connection);
+  }
+});
+
+test("revalidar mientras carga el dashboard descarta la cancelación y conserva errores reales", async ({
+  page,
+  environment,
+}) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+  const user = await environment.seedUser({
+    permissions: [
+      { capability: "sales.read", scope: "assigned" },
+      { capability: "rates.read", scope: "global" },
+    ],
+  });
+  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  let requested = 0;
+  const pattern = "**/api/dashboard/sales?**";
+  await page.route(pattern, async (route) => {
+    const cookie = (await page.context().cookies()).find((value) => value.name === "__Host-dmmarket.sid");
+    const client = environment.client();
+    client.jar.cookie = `${cookie.name}=${cookie.value}`;
+    const url = new URL(route.request().url());
+    const response = await client.request(`${url.pathname}${url.search}`);
+    expect(response.status).toBe(200);
+    requested += 1;
+    await gate;
+    await route
+      .fulfill({ status: response.status, contentType: "application/json", body: response.text })
+      .catch(() => {});
+  });
+  try {
+    await login(page, environment, user);
+    await expect.poll(() => requested).toBeGreaterThanOrEqual(1);
+    const checked = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/auth/session" && response.status() === 200,
+    );
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    await checked;
+    await expect.poll(() => requested).toBeGreaterThanOrEqual(2);
+    await expect(page.getByRole("heading", { name: "Dashboard de Ventas", exact: true })).toBeVisible();
+    await expect(page.locator(".alert-danger")).toHaveCount(0);
+    release();
+    const gross = page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" });
+    await expect(gross).toContainText("$100,00");
+    await setNoe(page, true);
+    await expect(gross).toContainText("$200,00");
+    await page.unroute(pattern);
+    await page.route(pattern, (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { message: "Servicio temporalmente no disponible." } }),
+      }),
+    );
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    await expect(page.locator(".alert-danger")).toContainText("Dashboard API error: 503");
+    await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toBeChecked();
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: "wait" });
   }
 });
 
@@ -1024,7 +1167,7 @@ test("porcentajes de comisiones son sólo lectura y no conceden ventas ni otros 
   const user = await environment.seedUser({ permissions: [{ capability: "commissions.read", scope: "assigned" }] });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
-  await expect(page.getByRole("link", { name: "Mi cuenta", exact: true })).toBeVisible();
+  await openModule(page, "Mi cuenta");
   await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
   const rates = await page.evaluate(async () => await (await fetch("/api/employees/commissionInfo/A")).json());
   expect(rates).toContainEqual({ groupId: "G", group: "Grupo sintético", commission: 10 });

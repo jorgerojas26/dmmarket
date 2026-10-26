@@ -1,3 +1,4 @@
+const { withReportCache } = require("./report-cache");
 const express = require("express");
 const { reportId } = require("../utils/report-identity");
 const { parameters, salesBase, financialFields } = require("./sales-reports");
@@ -44,6 +45,22 @@ function purchases(transaction, query) {
       this.on("mc.IdFactura", "sc.IdFactura").andOn("mc.Anulada", 0);
     })
     .whereBetween("mc.Fecha", [query.from, query.to]);
+}
+
+function restrictProducts(transaction, source, column, products, exclude = false) {
+  const ids = products.filter((row) => row.productId != null).map((row) => row.productId);
+  const includesNull = products.some((row) => row.productId == null);
+  source.where(function () {
+    const identity = transaction.raw("BINARY ??", [column]);
+    if (exclude) {
+      this.whereNotIn(identity, ids);
+      if (includesNull) this.whereNotNull(column);
+      else this.orWhereNull(column);
+    } else {
+      this.whereIn(identity, ids);
+      if (includesNull) this.orWhereNull(column);
+    }
+  });
 }
 
 function sorted(rows, field, direction = "desc") {
@@ -137,14 +154,10 @@ async function pareto(transaction, access, query) {
   if (unsold) {
     source = purchases(transaction, query).leftJoin("productos as p", "p.IdProducto", "sc.IdProducto");
     const { base: sold } = salesBase(transaction, access, query);
-    const soldProducts = sold
-      .select({ productId: transaction.raw("BINARY sf.IdProducto"), matched: transaction.raw("1") })
+    const soldProducts = await sold
+      .select({ productId: transaction.raw("BINARY sf.IdProducto") })
       .groupByRaw("BINARY sf.IdProducto");
-    source
-      .leftJoin(soldProducts.as("authorized_sales"), function () {
-        this.on(transaction.raw("authorized_sales.productId <=> BINARY sc.IdProducto"));
-      })
-      .whereNull("authorized_sales.matched");
+    restrictProducts(transaction, source, "sc.IdProducto", soldProducts, true);
     for (const [key, column] of [
       ["categoryId", "p.Grupo"],
       ["proveedorId", "p.Proveedor"],
@@ -155,12 +168,10 @@ async function pareto(transaction, access, query) {
     metrics = { totalPurchased: transaction.raw("ROUND(SUM(sc.Precio * sc.Cantidad), 2)") };
   } else {
     source = salesBase(transaction, access, query).base;
-    const purchasedProducts = purchases(transaction, query)
+    const purchasedProducts = await purchases(transaction, query)
       .select({ productId: transaction.raw("BINARY sc.IdProducto") })
       .groupByRaw("BINARY sc.IdProducto");
-    source.join(purchasedProducts.as("purchased_products"), function () {
-      this.on(transaction.raw("purchased_products.productId <=> BINARY sf.IdProducto"));
-    });
+    restrictProducts(transaction, source, "sf.IdProducto", purchasedProducts);
     id = "sf.IdProducto";
     quantity = "sf.Cantidad";
     metrics = {
@@ -254,7 +265,7 @@ function createParetoReports({ sessions }) {
   router.get("/dashboard/pareto", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) =>
+        await withReportCache(req, res, sessions, ({ transaction, access }) =>
           pareto(transaction, access, options(req.query)),
         ),
       );

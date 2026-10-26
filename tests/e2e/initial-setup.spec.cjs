@@ -53,12 +53,24 @@ test("primera apertura tras instalador compilado crea administrador y completa M
     await expect(page.getByRole("heading", { name: "Configurar segundo factor", exact: true })).toBeVisible();
     await page.getByLabel("Contraseña para configurar MFA", { exact: true }).fill(user.password);
     await page.getByRole("button", { name: "Generar configuración MFA", exact: true }).click();
-    const uri = await page.getByLabel("Configuración manual MFA", { exact: true }).inputValue();
-    await page
-      .getByLabel("Código de confirmación MFA", { exact: true })
-      .fill(await environment.token(new URL(uri).searchParams.get("secret")));
+    const secret = await page.getByLabel("Configuración manual MFA", { exact: true }).inputValue();
+    await page.getByLabel("Código de confirmación MFA", { exact: true }).fill(await environment.token(secret));
     await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
-    await expect(page.getByRole("link", { name: "Acceso", exact: true })).toBeVisible();
+    await expect(page).toHaveURL((url) => url.origin === environment.origin && url.pathname === "/ventas");
+    for (const name of ["Ventas", "Compras", "Clientes", "Proveedores", "Vendedores", "Inventario", "Configuración"]) {
+      await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
+    }
+    await expect(
+      page.getByRole("heading", { name: "Confirmar identidad para administrar acceso", exact: true }),
+    ).toHaveCount(0);
+    const permissions = await page.evaluate(async () => (await (await fetch("/api/auth/session")).json()).permissions);
+    const { CAPABILITIES } = require("../support/auth-environment.cjs").backend("./auth/capabilities");
+    expect(permissions.map((grant) => grant.capability).sort()).toEqual(Object.keys(CAPABILITIES).sort());
+    expect(permissions.every((grant) => grant.scope === "global")).toBe(true);
+    await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
+    for (const name of ["Auditoría", "Acceso", "Mi cuenta"])
+      await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
     const ready = await setup.request("status");
     expect(ready.body.administratorReady).toBe(true);
     expect(ready.body.bootstrapInstructions).not.toContain("--bootstrap-access");

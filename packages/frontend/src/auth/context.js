@@ -15,6 +15,7 @@ export function AuthProvider({ children }) {
     const [epoch, setEpoch] = useState(0);
     const current = useRef(null);
     const sequence = useRef(0);
+    const validation = useRef(null);
     const channel = useRef(null);
     const busy = useRef(false);
     const pendingReauthentication = useRef(null);
@@ -80,24 +81,35 @@ export function AuthProvider({ children }) {
 
     const check = useCallback(
         async (hide = true) => {
+            if (validation.current?.ticket === sequence.current) {
+                if (hide) setChecking(true);
+                return validation.current.promise;
+            }
             const ticket = ++sequence.current;
             if (hide) {
                 clearAuthTransport();
                 setChecking(true);
             }
-            try {
-                const data = await authRequest('session');
-                if (ticket !== sequence.current) return;
-                apply(data);
-                setFailure('');
-            } catch (error) {
-                if (ticket !== sequence.current || error.name === 'AbortError') return;
-                clearAuthTransport();
-                current.current = null;
-                setSession(null);
-                setChecking(false);
-                setFailure('No se puede validar la sesión. No se mostrarán datos hasta recuperar el acceso.');
-            }
+            const promise = (async () => {
+                try {
+                    const data = await authRequest('session');
+                    if (ticket !== sequence.current) return;
+                    if (validation.current?.ticket === ticket) validation.current = null;
+                    apply(data);
+                    setFailure('');
+                } catch (error) {
+                    if (ticket !== sequence.current || error.name === 'AbortError') return;
+                    clearAuthTransport();
+                    current.current = null;
+                    setSession(null);
+                    setChecking(false);
+                    setFailure('No se puede validar la sesión. No se mostrarán datos hasta recuperar el acceso.');
+                } finally {
+                    if (validation.current?.ticket === ticket) validation.current = null;
+                }
+            })();
+            validation.current = { ticket, promise };
+            return promise;
         },
         [apply],
     );
@@ -139,10 +151,12 @@ export function AuthProvider({ children }) {
             previous.pathname !== location.pathname ||
             previous.search !== location.search ||
             previous.hash !== location.hash;
+        const homeRedirect = previous.pathname === '/' && history.action === 'REPLACE';
         if (
             !busy.current &&
             current.current?.stage === 'ready' &&
             changed &&
+            !homeRedirect &&
             (previous.pathname !== location.pathname || history.action === 'POP')
         )
             void check();
@@ -154,14 +168,29 @@ export function AuthProvider({ children }) {
             if (!busy.current && current.current) void check(current.current.stage === 'ready');
         };
         const restore = (event) => {
-            if (event.persisted) void check();
-            else refresh();
+            if (event.persisted) {
+                sequence.current += 1;
+                void check();
+            }
+        };
+        const changed = () => {
+            if (!busy.current) {
+                sequence.current += 1;
+                void check();
+            }
+        };
+        const focus = () => {
+            if (!busy.current && current.current) void check(false);
         };
         const lost = () => {
+            sequence.current += 1;
             void check();
         };
         const hide = () => {
-            if (!busy.current) clearAuthTransport();
+            if (!busy.current) {
+                sequence.current += 1;
+                clearAuthTransport();
+            }
             setChecking(true);
         };
         const visible = () => {
@@ -169,11 +198,11 @@ export function AuthProvider({ children }) {
             else if (current.current?.stage === 'ready') hide();
         };
         const storage = (event) => {
-            if (event.key === 'dmmarket:auth-change') refresh();
+            if (event.key === 'dmmarket:auth-change') changed();
         };
         if (typeof BroadcastChannel !== 'undefined') {
             channel.current = new BroadcastChannel('dmmarket-auth');
-            channel.current.onmessage = refresh;
+            channel.current.onmessage = changed;
         }
         const timer = setInterval(() => {
             if (!busy.current && current.current && document.visibilityState === 'visible') void check(false);
@@ -181,7 +210,7 @@ export function AuthProvider({ children }) {
         window.addEventListener('dmmarket:access-lost', lost);
         window.addEventListener('pageshow', restore);
         window.addEventListener('pagehide', hide);
-        window.addEventListener('focus', refresh);
+        window.addEventListener('focus', focus);
         window.addEventListener('storage', storage);
         document.addEventListener('visibilitychange', visible);
         return () => {
@@ -192,7 +221,7 @@ export function AuthProvider({ children }) {
             window.removeEventListener('dmmarket:access-lost', lost);
             window.removeEventListener('pageshow', restore);
             window.removeEventListener('pagehide', hide);
-            window.removeEventListener('focus', refresh);
+            window.removeEventListener('focus', focus);
             window.removeEventListener('storage', storage);
             document.removeEventListener('visibilitychange', visible);
         };

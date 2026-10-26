@@ -1,3 +1,4 @@
+const { withReportCache } = require("./report-cache");
 const express = require("express");
 const { parameters } = require("./sales-reports");
 const { reportId, filterIdentity } = require("../utils/report-identity");
@@ -35,16 +36,16 @@ function purchaseBase(transaction, access, query, products) {
   if (query.proveedorId && !providers) fail(403);
   const base = transaction("mastercomp as mc")
     .leftJoin("slavecomp as sc", function () {
-      this.on(transaction.raw("BINARY sc.IdFactura = BINARY mc.IdFactura"));
+      this.on(transaction.raw("sc.IdFactura = mc.IdFactura AND BINARY sc.IdFactura = BINARY mc.IdFactura"));
     })
     .leftJoin("productos as p", function () {
-      this.on(transaction.raw("BINARY p.IdProducto = BINARY sc.IdProducto"));
+      this.on(transaction.raw("p.IdProducto = sc.IdProducto AND BINARY p.IdProducto = BINARY sc.IdProducto"));
     })
     .where("mc.Anulada", 0);
   if (query.from) base.whereBetween("mc.Fecha", [query.from, query.to]);
   if (providers)
     base.leftJoin("proveedores as v", function () {
-      this.on(transaction.raw("BINARY v.IdProveedor = BINARY mc.IdProveedor"));
+      this.on(transaction.raw("v.IdProveedor = mc.IdProveedor AND BINARY v.IdProveedor = BINARY mc.IdProveedor"));
     });
   if (products) base.whereNotNull("sc.IdFactura");
   if (query.categoryId) base.whereRaw("BINARY p.Grupo = ?", [query.categoryId]);
@@ -185,7 +186,7 @@ async function dashboard(transaction, access, query) {
   const { base } = purchaseBase(transaction, access, query, true);
   const groups = await base
     .leftJoin("grupos as g", function () {
-      this.on(transaction.raw("BINARY g.IdGrupo = BINARY p.Grupo"));
+      this.on(transaction.raw("g.IdGrupo = p.Grupo AND BINARY g.IdGrupo = BINARY p.Grupo"));
     })
     .select({
       groupId: "p.Grupo",
@@ -240,7 +241,7 @@ function createPurchaseReports({ sessions }) {
     router.get(path, async (req, res, next) => {
       try {
         res.json(
-          await sessions.withSession(req.sessionID, {}, ({ transaction, access }) =>
+          await withReportCache(req, res, sessions, ({ transaction, access }) =>
             work(transaction, access, options(req.query, { listing: false, compare })),
           ),
         );
@@ -255,7 +256,7 @@ function createPurchaseReports({ sessions }) {
     router.get(path, async (req, res, next) => {
       try {
         res.json(
-          await sessions.withSession(req.sessionID, {}, ({ transaction, access }) =>
+          await withReportCache(req, res, sessions, ({ transaction, access }) =>
             purchases(transaction, access, options(req.query), products),
           ),
         );

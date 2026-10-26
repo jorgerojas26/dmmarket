@@ -9,11 +9,13 @@ import { fetcher, swrConfig } from 'swr-config';
 import App from '../App';
 import { AuthProvider, useAuth } from './context';
 import { EnrollmentForm, InitialAccountForm, LoginForm, MfaForm, PasswordForm, ReauthenticationDialog } from './forms';
+import { authTransportGeneration } from './transport';
 
 function BoundaryContent() {
     const { session, checking, failure, epoch, action, check } = useAuth();
     const [logoutError, setLogoutError] = useState('');
     const cache = useMemo(() => new Map(), [epoch]);
+    const generation = authTransportGeneration();
     const signOut = async () => {
         setLogoutError('');
         try {
@@ -24,7 +26,15 @@ function BoundaryContent() {
     };
     if (!checking && !failure && session?.stage === 'ready') {
         return (
-            <SWRConfig key={`${epoch}:ready`} value={{ ...swrConfig, fetcher, provider: () => cache }}>
+            <SWRConfig
+                key={`${epoch}:ready`}
+                value={{
+                    ...swrConfig,
+                    fetcher,
+                    provider: () => cache,
+                    isPaused: () => generation !== authTransportGeneration(),
+                }}
+            >
                 <CurrencyRateProvider>
                     <SidebarProvider>
                         <UpdateProvider>
@@ -36,8 +46,21 @@ function BoundaryContent() {
             </SWRConfig>
         );
     }
+    if (checking)
+        return (
+            <main className="App bg-dark text-light" aria-busy="true" aria-label="Validando acceso">
+                <div id="main" className="m-0 p-0 vh-100 d-flex flex-column">
+                    <header className="navbar navbar-dark app-navbar">
+                        <div className="container-fluid app-navbar-inner">
+                            <span className="navbar-brand app-navbar-brand">SISTEMA DE REPORTES</span>
+                        </div>
+                    </header>
+                    <div className="flex-grow-1" />
+                </div>
+            </main>
+        );
     return (
-        <main className="bg-dark text-light" style={{ height: '100vh', overflowY: 'auto' }} aria-busy={checking}>
+        <main className="bg-dark text-light" style={{ height: '100vh', overflowY: 'auto' }}>
             <div className="container py-4" style={{ maxWidth: 1000 }}>
                 <header className="d-flex justify-content-between align-items-center mb-4">
                     <h1 className="h3">DMMarket</h1>
@@ -62,9 +85,7 @@ function BoundaryContent() {
                         {logoutError}
                     </p>
                 )}
-                {checking ? (
-                    <p role="status">Comprobando sesión…</p>
-                ) : failure ? (
+                {failure ? (
                     <section>
                         <p role="alert">{failure}</p>
                         <button type="button" className="btn btn-primary" onClick={() => check()}>

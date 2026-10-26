@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, wr
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startDevelopmentHttps } from "./dev-https.mjs";
 
 const root = realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const directory = path.join(root, ".dev");
@@ -26,7 +27,7 @@ const command = process.argv[2] || "start";
 function environment(extra = {}) {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (/^(DATABASE_|BACKUP_|GOOGLE_DRIVE_|DMMARKET_|REACT_APP_|WDS_SOCKET_|PORTLESS_APP_PORT)/.test(key))
+    if (/^(DATABASE_|BACKUP_|GOOGLE_DRIVE_|DMMARKET_|REACT_APP_|WDS_SOCKET_|PORTLESS_APP_PORT|AUTH_|WEB_)/.test(key))
       delete env[key];
   }
   for (const key of ["PORT", "HOST", "PORTLESS", "PORTLESS_URL", "COMPOSE_FILE", "COMPOSE_PROJECT_NAME", "NODE_ENV"])
@@ -43,8 +44,11 @@ function environment(extra = {}) {
     GOOGLE_DRIVE_CLIENT_ID: "",
     GOOGLE_DRIVE_CLIENT_SECRET: "",
     DMMARKET_SERVICE: "0",
-    WEB_MODE: "direct",
+    WEB_MODE: "caddy",
     WEB_HOSTNAME: "",
+    AUTH_PUBLIC_ORIGIN: "",
+    AUTH_SESSION_SECRET: "",
+    AUTH_MFA_KEY: "",
     ...extra,
   };
 }
@@ -65,14 +69,16 @@ function capture(args, options = {}) {
 }
 
 async function run(args, options = {}) {
+  const { onSpawn, ...spawnOptions } = options;
   const child = Bun.spawn(args, {
     cwd: root,
     env: environment(),
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
-    ...options,
+    ...spawnOptions,
   });
+  onSpawn?.(child);
   const stop = (signal) => child.kill(signal);
   const interrupt = () => stop("SIGINT");
   const terminate = () => stop("SIGTERM");
@@ -159,7 +165,20 @@ function serviceUrl(name) {
 
 function showStatus() {
   console.log(`Worktree: ${root}\nIdentidad: ${id}\nCompose: ${project}\nVolumen: ${volume}`);
-  console.log(`Frontend: ${serviceUrl(frontend)}\nBackend: ${serviceUrl(backend)}`);
+  const stateFile = path.join(directory, "https.json");
+  let publicOrigin = "detenido; inicia el backend";
+  if (existsSync(stateFile)) {
+    const state = JSON.parse(readFileSync(stateFile, "utf8"));
+    try {
+      process.kill(state.pid, 0);
+      publicOrigin = state.origin;
+    } catch (error) {
+      if (error.code !== "ESRCH") throw error;
+    }
+  }
+  console.log(`Aplicación HTTPS: ${publicOrigin}`);
+  console.log(`Frontend interno: ${serviceUrl(frontend)}\nBackend interno: ${serviceUrl(backend)}`);
+  console.log(`CA local: ${path.join(directory, "caddy-data/pki/authorities/local/root.crt")}`);
   const env = databaseEnvironment();
   console.log(
     `MySQL: ${env.DATABASE_HOST}:${env.DATABASE_PORT}/${env.DATABASE_NAME}\nRespaldos: ${env.BACKUP_DIRECTORY}`,
@@ -207,16 +226,58 @@ async function main() {
       break;
     }
     case "backend":
-      await run(["portless", "--name", backend, "bun", "run", "start"], {
-        cwd: path.join(root, "packages/backend"),
+      await run(["portless", "--name", backend, "bun", path.join(root, "scripts/dev.mjs"), "backend:serve"], {
         env: databaseEnvironment(),
       });
       break;
+    case "backend:serve": {
+      const proxy = await startDevelopmentHttps({
+        root,
+        env: process.env,
+        frontendUrl: serviceUrl(frontend),
+      });
+      console.log(`Aplicación HTTPS: ${proxy.env.AUTH_PUBLIC_ORIGIN}`);
+      console.log(`Confía la CA local en tu sistema/navegador: ${proxy.certificate}`);
+      let child;
+      const stop = () => {
+        void proxy.close();
+      };
+      process.on("SIGINT", stop);
+      process.on("SIGTERM", stop);
+      try {
+        await Promise.race([
+          run(["bun", "run", "start"], {
+            cwd: path.join(root, "packages/backend"),
+            env: proxy.env,
+            onSpawn: (process) => {
+              child = process;
+            },
+          }),
+          proxy.exited.then(() => {
+            throw new Error("El proxy HTTPS se detuvo.");
+          }),
+        ]);
+      } finally {
+        if (child && child.exitCode === null) {
+          child.kill("SIGTERM");
+          await child.exited;
+        }
+        await proxy.close();
+        process.off("SIGINT", stop);
+        process.off("SIGTERM", stop);
+      }
+      break;
+    }
     case "frontend": {
       databaseEnvironment();
       await run(["portless", "--name", frontend, "bun", "run", "start"], {
         cwd: path.join(root, "packages/frontend"),
-        env: environment({ DMMARKET_API_URL: serviceUrl(backend), BROWSER: "none" }),
+        env: environment({
+          DMMARKET_API_URL: serviceUrl(backend),
+          BROWSER: "none",
+          HTTPS: "false",
+          WDS_SOCKET_PORT: "",
+        }),
       });
       break;
     }

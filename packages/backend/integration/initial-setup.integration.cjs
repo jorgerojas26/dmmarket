@@ -4,6 +4,7 @@ const { startEnvironment, backend, docker } = require("../../../tests/support/au
 const { prepareAccessSchema } = backend("./setup-access");
 const stateMigration = backend("./migrations/20261029_add_initial_setup_state");
 const { verifyPassword } = backend("./auth/passwords");
+const { CAPABILITIES } = backend("./auth/capabilities");
 let environment;
 const payload = () => ({
   username: "first-owner",
@@ -93,7 +94,7 @@ test("proxy TLS que identifica cliente LAN impide alta incluso con cabeceras loc
   }
 });
 
-test("primera cuenta usa contraseña elegida, SID nuevo, sólo cuatro permisos de acceso y exige MFA", async () => {
+test("primera cuenta es superusuario global con contraseña elegida, SID nuevo y MFA obligatorio", async () => {
   const client = await initialize();
   const cookie = client.jar.cookie;
   const { input, response } = await create(client);
@@ -106,8 +107,18 @@ test("primera cuenta usa contraseña elegida, SID nuevo, sólo cuatro permisos d
   expect(await verifyPassword(input.password, user.password_hash)).toBe(true);
   expect(response.text).not.toContain(input.password);
   expect(response.text).not.toContain(user.password_hash);
-  const capabilities = response.body.permissions.map((grant) => grant.capability).sort();
-  expect(capabilities).toEqual(["access.users", "access.roles", "access.links", "access.recover"].sort());
+  expect(response.body.permissions.sort((a, b) => a.capability.localeCompare(b.capability))).toEqual(
+    Object.keys(CAPABILITIES)
+      .sort((a, b) => a.localeCompare(b))
+      .map((capability) => ({ capability, scope: "global" })),
+  );
+  const role = await environment
+    .db("dmmarket_auth_roles as r")
+    .join("dmmarket_auth_user_roles as ur", "ur.role_id", "r.id")
+    .where("ur.user_id", user.id)
+    .first("r.name");
+  expect(role.name).toBe("Superusuario inicial");
+  expect((await client.request("/api/currency_rates")).status).toBe(403);
   expect((await client.request("/api/auth/users")).status).toBe(403);
   expect((await environment.db("dmmarket_auth_control").first()).first_setup).toBe("closed");
   expect(
@@ -181,6 +192,10 @@ test("interrumpir MFA permite volver con la misma contraseña y no abre otra alt
   });
   expect(confirmed.body.stage).toBe("ready");
   expect((await client.request("/api/auth/users")).status).toBe(200);
+  expect((await client.request("/api/currency_rates")).status).toBe(200);
+  const session = await client.request("/api/auth/session");
+  expect(session.body.permissions).toHaveLength(Object.keys(CAPABILITIES).length);
+  expect(session.body.permissions.every((grant) => grant.scope === "global")).toBe(true);
 });
 
 test("reinicio real conserva cierre y sesión MFA pendiente", async () => {
@@ -236,7 +251,15 @@ test("CLI de emergencia cierra igualmente la inicialización web", async () => {
 
 test("error real SQL revierte la cuenta, rol inicial y cierre del formulario", async () => {
   const client = await initialize();
-  await environment.db.raw(
+  docker(
+    "exec",
+    "--env",
+    "MYSQL_PWD=root",
+    environment.container,
+    "mysql",
+    "--user=root",
+    environment.configuration.DATABASE_NAME,
+    "--execute",
     "CREATE TRIGGER fail_first_user_audit BEFORE INSERT ON dmmarket_auth_events FOR EACH ROW INSERT INTO missing_first_user_audit(id) VALUES(NEW.id)",
   );
   try {
@@ -244,7 +267,17 @@ test("error real SQL revierte la cuenta, rol inicial y cierre del formulario", a
     expect(Number((await environment.db("dmmarket_auth_users").count("* as n").first()).n)).toBe(0);
     expect((await environment.db("dmmarket_auth_control").first()).first_setup).toBe("pending");
   } finally {
-    await environment.db.raw("DROP TRIGGER fail_first_user_audit");
+    docker(
+      "exec",
+      "--env",
+      "MYSQL_PWD=root",
+      environment.container,
+      "mysql",
+      "--user=root",
+      environment.configuration.DATABASE_NAME,
+      "--execute",
+      "DROP TRIGGER fail_first_user_audit",
+    );
   }
 });
 

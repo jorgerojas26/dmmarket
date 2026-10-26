@@ -1,3 +1,4 @@
+const { withReportCache } = require("./report-cache");
 const express = require("express");
 const { reportId, filterIdentity, missingName } = require("../utils/report-identity");
 const { parameters, salesBase, financialFields, listSales, dashboard, kpis } = require("./sales-reports");
@@ -463,7 +464,7 @@ function createPartyReports({ sessions }) {
   const router = express.Router();
   const handle = (work, options) => async (req, res, next) => {
     try {
-      const result = await sessions.withSession(req.sessionID, {}, async ({ transaction, access }) =>
+      const result = await withReportCache(req, res, sessions, async ({ transaction, access }) =>
         work(transaction, access, parameters(req.query, options), req.params),
       );
       res.json(result);

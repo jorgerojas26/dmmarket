@@ -234,6 +234,65 @@ export function MfaForm() {
     );
 }
 
+function ManualMfaConfiguration({ uri }) {
+    const [visible, setVisible] = useState(false);
+    const [message, setMessage] = useState('');
+    const secret = new URL(uri).searchParams.get('secret');
+    return (
+        <div className="mt-3">
+            <label className="form-label" htmlFor="mfa-secret">
+                Configuración manual MFA
+            </label>
+            <p id="mfa-secret-help">
+                Si no puedes escanear el QR, añade una clave de configuración en tu autenticador. Usa esta clave con
+                códigos basados en tiempo (TOTP), 6 dígitos, intervalo de 30 segundos y algoritmo SHA-1.
+            </p>
+            <input
+                id="mfa-secret"
+                autoComplete="off"
+                aria-describedby="mfa-secret-help"
+                type={visible ? 'text' : 'password'}
+                className="form-control"
+                value={secret}
+                readOnly
+                spellCheck={false}
+                onFocus={(event) => {
+                    if (visible) event.target.select();
+                }}
+            />
+            <div className="d-flex flex-wrap gap-2 mt-2">
+                <button
+                    type="button"
+                    className="btn btn-outline-light"
+                    aria-pressed={visible}
+                    onClick={() => setVisible(!visible)}
+                >
+                    {visible ? 'Ocultar clave MFA' : 'Mostrar clave MFA'}
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-outline-light"
+                    onClick={async () => {
+                        try {
+                            await navigator.clipboard.writeText(secret);
+                            setMessage('Clave copiada. Pégala en tu autenticador.');
+                        } catch {
+                            setMessage('No se pudo copiar. Pulsa Mostrar clave MFA y cópiala manualmente.');
+                        }
+                    }}
+                >
+                    Copiar clave MFA
+                </button>
+            </div>
+            {message && (
+                <p role="status" className="mt-2">
+                    {message}
+                </p>
+            )}
+        </div>
+    );
+}
+
 export function EnrollmentForm() {
     const { action } = useAuth();
     const [password, setPassword] = useState('');
@@ -293,18 +352,7 @@ export function EnrollmentForm() {
                 nuevo.
             </p>
             {qr && <img src={qr} width="240" height="240" alt="Código QR de configuración MFA" />}
-            <label className="form-label d-block mt-3" htmlFor="mfa-uri">
-                Configuración manual MFA
-            </label>
-            <input
-                id="mfa-uri"
-                autoComplete="off"
-                aria-label="Configuración manual MFA"
-                type="password"
-                className="form-control"
-                value={uri}
-                readOnly
-            />
+            <ManualMfaConfiguration key={uri} uri={uri} />
             <Field
                 label="Código de confirmación MFA"
                 value={token}

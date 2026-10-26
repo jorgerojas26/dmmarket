@@ -108,7 +108,7 @@ async function best(transaction, access, query, mode) {
   } else {
     base = salesBase(transaction, access, query).base;
     base.leftJoin("proveedores as vprov", function () {
-      this.on(transaction.raw("BINARY vprov.IdProveedor = BINARY p.Proveedor"));
+      this.on(transaction.raw("vprov.IdProveedor = p.Proveedor AND BINARY vprov.IdProveedor = BINARY p.Proveedor"));
     });
     identity = "p.Proveedor";
     amount = transaction.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2)");

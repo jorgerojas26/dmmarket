@@ -2,6 +2,7 @@ const { randomUUID } = require("node:crypto");
 const { hashPassword, createTemporaryPassword } = require("./passwords");
 const { isLocalSource, initialSetupState } = require("./initial-setup");
 const { validateGrants } = require("./capabilities");
+const { createInitialAdministratorRole } = require("./initial-administrator");
 const {
   assertAuthSchema,
   lockAccessMutation,
@@ -142,7 +143,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
           must_change_password: false,
           temporary_expires_ms: null,
         });
-        const roleId = await recoveryRole(connection);
+        const roleId = await createInitialAdministratorRole(connection);
         await connection("dmmarket_auth_user_roles").insert({ user_id: id, role_id: roleId });
         await connection("dmmarket_auth_control").where("id", 1).update({ first_setup: "closed" });
         await audit(connection, id, id, "auth.initial_administrator_created", "server-local-initialization");
@@ -214,7 +215,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
             password_hash: credential.passwordHash,
             temporary_expires_ms: credential.expiresAtMs,
           });
-          const roleId = await recoveryRole(connection);
+          const roleId = await createInitialAdministratorRole(connection);
           await connection("dmmarket_auth_user_roles").insert({ user_id: id, role_id: roleId });
           await connection("dmmarket_auth_control").where("id", 1).update({ first_setup: "closed" });
           await audit(connection, null, id, "auth.local_bootstrap", motive);
