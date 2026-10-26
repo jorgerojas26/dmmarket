@@ -5,7 +5,7 @@ async function main() {
   const configuration = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
   if (
     configuration.DATABASE_HOST !== "127.0.0.1" ||
-    configuration.DATABASE_NAME !== "dmmarket_auth_test" ||
+    !/^dmmarket_test_[a-f0-9]{32}$/.test(configuration.DATABASE_NAME || "") ||
     Number(configuration.DATABASE_PORT) === 3306
   )
     throw new Error("El servidor de pruebas requiere su contenedor desechable.");

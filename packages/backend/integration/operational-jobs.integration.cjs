@@ -36,9 +36,21 @@ async function copy(who) {
 function importArchive(env, dump) {
   execFileSync(
     "docker",
-    ["exec", "-i", "-e", "MYSQL_PWD", env.container, "mysql", "--user=root", "--host=127.0.0.1", "dmmarket_auth_test"],
+    [
+      "exec",
+      "-i",
+      "-e",
+      "MYSQL_PWD",
+      env.container,
+      "mysql",
+      `--user=${env.configuration.DATABASE_USER}`,
+      "--host=127.0.0.1",
+      env.configuration.DATABASE_NAME,
+    ],
     {
-      input: dump,
+      input: dump
+        .toString("utf8")
+        .replaceAll(`\`${environment.configuration.DATABASE_NAME}\``, `\`${env.configuration.DATABASE_NAME}\``),
       env: { ...process.env, MYSQL_PWD: env.configuration.DATABASE_PASSWORD },
       stdio: ["pipe", "pipe", "pipe"],
     },
@@ -98,6 +110,7 @@ test("creación exige confirmación y reautenticación reciente antes del proces
 });
 
 test("respaldo transaccional rechaza tablas no transaccionales sin activar bloqueo global", async () => {
+  await environment.db.raw("ALTER TABLE bcv_tasas ENGINE=MyISAM");
   const who = await actor([grant("backups.read"), grant("backups.create")]);
   const result = await who.client.request("/api/backups", { method: "POST", body: { confirmed: true } });
   expect(result.status).toBe(202);
@@ -109,7 +122,7 @@ test("respaldo transaccional rechaza tablas no transaccionales sin activar bloqu
   await environment.db.raw("ALTER TABLE bcv_tasas ENGINE=InnoDB");
 });
 
-test("respaldo real con cliente MySQL5.0.24 genera archivo privado y registra quién lo solicitó", async () => {
+test("respaldo real con cliente MySQL de Compose genera archivo privado y registra quién lo solicitó", async () => {
   const who = await actor([grant("backups.read"), grant("backups.create")]);
   const { dump, file, operationId } = await copy(who);
   const sql = dump.toString("utf8");

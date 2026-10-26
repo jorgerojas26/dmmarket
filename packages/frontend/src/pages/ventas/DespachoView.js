@@ -51,7 +51,7 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
 
     // Pagination / sorting / search state
     const [page, setPage] = useState(1);
-    const [sortBy, setSortBy] = useState('createdAt');
+    const [sortBy, setSortBy] = useState('invoiceId');
     const [sortDir, setSortDir] = useState('desc');
     const [search, setSearch] = useState('');
     const [selectedRuta, setSelectedRuta] = useState(null);
@@ -77,7 +77,11 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     }, [dateRange.from, dateRange.to, selectedRuta]);
 
     // ── SWR hook ──
-    const { data: invoiceRes, isLoading } = useInvoiceList(
+    const {
+        data: invoiceRes,
+        isLoading,
+        mutate,
+    } = useInvoiceList(
         {
             from: dateRange.from,
             to: dateRange.to,
@@ -135,12 +139,13 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
             });
             const rows = res.data || [];
             setSelectedRows((prev) => unionSelection(prev, rows, (inv) => inv.invoiceId));
+            await mutate();
         } catch (error) {
             if (error.name !== 'AbortError') setSelectionError('No se pudo completar la selección autorizada.');
         } finally {
             setSelectAllLoading(false);
         }
-    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading]);
+    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading, mutate]);
 
     // "Deseleccionar todo": resta TODAS las facturas del filtro actual (todas las
     // páginas) de la selección acumulada; conserva las de otros filtros.
@@ -159,12 +164,13 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
             });
             const rows = res.data || [];
             setSelectedRows((prev) => diffSelection(prev, rows, (inv) => inv.invoiceId));
+            await mutate();
         } catch (error) {
             if (error.name !== 'AbortError') setSelectionError('No se pudo completar la selección autorizada.');
         } finally {
             setSelectAllLoading(false);
         }
-    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading]);
+    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading, mutate]);
 
     const handleRemoveSelectedInvoice = useCallback((invoiceId) => {
         setSelectedRows((prev) => prev.filter((inv) => inv.invoiceId !== invoiceId));

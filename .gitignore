@@ -27,3 +27,5 @@ bdsolser_md_nieto.dump
 
 test-results/
 playwright-report/
+.dev/
+.dev.local.json

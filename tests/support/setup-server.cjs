@@ -6,7 +6,7 @@ async function main() {
   const config = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
   if (
     config.DATABASE_HOST !== "127.0.0.1" ||
-    config.DATABASE_NAME !== "dmmarket_auth_test" ||
+    !/^dmmarket_test_[a-f0-9]{32}$/.test(config.DATABASE_NAME || "") ||
     Number(config.DATABASE_PORT) === 3306 ||
     fs.realpathSync(process.execPath) !== fs.realpathSync(config.EXPECTED_SETUP_EXECUTABLE)
   )

@@ -40,7 +40,7 @@ beforeEach(async () => {
   accounts = await createAccountService({ db: environment.db, sessions, now: () => clock });
 });
 
-test("MySQL 5.0.24 persiste todas las tablas propias en InnoDB/utf8_bin", async () => {
+test("MySQL de Compose persiste todas las tablas propias en InnoDB/utf8_bin", async () => {
   await migration.up(environment.db);
   const rows = await environment
     .db("information_schema.TABLES")

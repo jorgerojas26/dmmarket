@@ -65,7 +65,10 @@ test("edición de comisión confirma actor y no recalcula capturas históricas",
   expect(applied.rates.find((row) => row.groupId === "G").commission).toBe("15.2500");
   const record = await environment.db("dmmarket_commission_operations").first();
   expect(record.actor_id).toBe(user.id);
-  expect(JSON.parse(record.data).changes[0]).toMatchObject({ before: "10.0000", after: "15.2500" });
+  expect((typeof record.data === "string" ? JSON.parse(record.data) : record.data).changes[0]).toMatchObject({
+    before: "10.0000",
+    after: "15.2500",
+  });
   const history = await page.evaluate(
     async () => await (await fetch("/api/employees/sales/A?from=2026-12-01&to=2026-12-31")).json(),
   );

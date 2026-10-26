@@ -7,6 +7,18 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.12.0] - 2026-10-25
+
+### Mejoras
+
+- **Facturas más recientes primero**: Despacho y Desglose de Ventas muestran inicialmente las facturas por número descendente. En Despacho, la columna «Factura» aparece seguida de «Fecha», igual que en Desglose.
+- **Consultas actualizadas fuera de los tableros**: al volver a consultar despachos, listados y detalles, ya no se reutilizan resultados guardados durante una hora. Los tableros conservan esa optimización para las consultas más costosas.
+
+### Correcciones
+
+- **Orden correcto en Despacho**: las facturas respetan el orden elegido en los encabezados de la tabla.
+- **Selección completa al despachar**: «Seleccionar todo» incluye todas las facturas del filtro aunque se hayan registrado nuevos documentos desde que se cargó la tabla, y actualiza el total mostrado.
+
 ## [v1.11.1] - 2026-10-23
 
 ### Mejoras

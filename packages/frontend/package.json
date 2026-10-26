@@ -38,10 +38,12 @@
         "web-vitals": "1.1.2"
     },
     "scripts": {
-        "start": "DANGEROUSLY_DISABLE_HOST_CHECK=true SKIP_PREFLIGHT_CHECK=true NODE_OPTIONS='--openssl-legacy-provider' portless run --name dmmarket react-scripts start",
+        "start": "DANGEROUSLY_DISABLE_HOST_CHECK=true SKIP_PREFLIGHT_CHECK=true NODE_OPTIONS='--openssl-legacy-provider' react-scripts start",
         "build": "SKIP_PREFLIGHT_CHECK=true NODE_OPTIONS='--openssl-legacy-provider' react-scripts build",
         "test": "bun ../../tests/support/prepare.cjs && playwright test --config ../../playwright.config.cjs",
-        "eject": "react-scripts eject"
+        "eject": "react-scripts eject",
+        "test:e2e": "playwright test --config ../../playwright.config.cjs",
+        "test:integration": "CI=true SKIP_PREFLIGHT_CHECK=true NODE_OPTIONS=--openssl-legacy-provider react-scripts test --watchAll=false --runInBand --watchman=false --runTestsByPath src/pages/ventas/DespachoView.integration.test.js src/pages/ventas/DesgloseView.integration.test.js"
     },
     "browserslist": {
         "production": [
@@ -55,8 +57,8 @@
             "last 1 safari version"
         ]
     },
-    "proxy": "http://localhost:8000",
     "devDependencies": {
+        "http-proxy-middleware": "^2.0.9",
         "react-error-overlay": "6.0.9"
     }
 }

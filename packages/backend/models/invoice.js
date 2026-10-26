@@ -21,6 +21,7 @@ exports.GET_INVOICES = async ({
   sortDir = "desc",
   search,
   ruta,
+  all = false,
 }) => {
   const { masterTable, slaveTable, idInvoice } = showNoe;
   const offset = (Number(page) - 1) * Number(limit);
@@ -78,18 +79,21 @@ exports.GET_INVOICES = async ({
   }
 
   // Get paginated invoice IDs
-  const invoiceIdRows = await idQuery
-    .clone()
-    .orderByRaw(`?? ${sortDir === "asc" ? "ASC" : "DESC"}`, [dbSortColumn])
-    .limit(Number(limit))
-    .offset(offset);
+  const orderedQuery = idQuery.clone().orderByRaw(`?? ${sortDir === "asc" ? "ASC" : "DESC"}`, [dbSortColumn]);
+  if (!all) orderedQuery.limit(Number(limit)).offset(offset);
+  const invoiceIdRows = await orderedQuery;
 
   const invoiceIds = invoiceIdRows.map((r) => r.invoiceId);
+  const pagination = {
+    page: all ? 1 : Number(page),
+    limit: all ? invoiceIds.length : Number(limit),
+    total: all ? invoiceIds.length : Number(total),
+  };
 
   if (invoiceIds.length === 0) {
     return {
       data: [],
-      pagination: { page: Number(page), limit: Number(limit), total: Number(total) },
+      pagination,
       totals,
     };
   }
@@ -151,15 +155,11 @@ exports.GET_INVOICES = async ({
     );
   });
 
-  const invoicesArray = Object.keys(invoices).map((key) => invoices[key]);
+  const invoicesArray = invoiceIds.map((invoiceId) => invoices[invoiceId]);
 
   return {
     data: invoicesArray,
-    pagination: {
-      page: Number(page),
-      limit: Number(limit),
-      total: Number(total),
-    },
+    pagination,
     totals,
   };
 };

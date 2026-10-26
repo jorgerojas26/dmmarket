@@ -35,6 +35,7 @@ export const fetchInvoiceList = async ({
     sortDir = 'desc',
     search,
     ruta,
+    all = false,
 }) => {
     const params = new URLSearchParams();
     params.append('from', from);
@@ -46,6 +47,7 @@ export const fetchInvoiceList = async ({
     params.append('sortDir', sortDir);
     if (search) params.append('search', search);
     if (ruta) params.append('ruta', ruta);
+    if (all) params.append('all', 'true');
 
     return fetcher(`${BASE_URL}?${params.toString()}`);
 };

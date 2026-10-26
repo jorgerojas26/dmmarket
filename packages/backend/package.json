@@ -1,6 +1,6 @@
 {
   "name": "@dmmarket/backend",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "build": "bun run build:prepare && bun build --compile main.js --minify --external mysql --outfile dmmarket-app",
     "build:windows": "bun run build:prepare && bun build --compile --target=bun-windows-x64 main.js --minify --external mysql --outfile dmmarket-app.exe",
     "build:linux": "bun run build:prepare && bun build --compile --target=bun-linux-x64-baseline main.js --minify --external mysql --outfile dmmarket-app-linux",
-    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --config integration/jest.config.cjs --runInBand"
+    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --config integration/jest.config.cjs --runInBand",
+    "test:cache": "jest --config tests/report-cache.config.cjs --runInBand"
   },
   "jest": {
     "cache": false,

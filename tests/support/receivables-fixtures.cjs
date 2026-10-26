@@ -4,7 +4,7 @@ async function seedReceivables(db) {
     [
       "cxc_documentos",
       (table) => {
-        table.increments("IdDocumento");
+        table.specificType("IdDocumento", "INT NOT NULL AUTO_INCREMENT PRIMARY KEY");
         table.string("IdFactura", 32);
         table.string("IdCliente", 15);
         table.string("TipoDoc", 3);

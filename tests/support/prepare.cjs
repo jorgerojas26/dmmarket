@@ -5,14 +5,7 @@ const { pathToFileURL } = require("node:url");
 
 async function main() {
   const root = path.resolve(__dirname, "../..");
-  const image = "dmmarket/mysql:5.0.24";
-  try {
-    execFileSync("docker", ["image", "inspect", image], { stdio: "ignore" });
-  } catch {
-    execFileSync("docker", ["build", "--platform", "linux/amd64", "-t", image, path.join(root, "docker/mysql-5.0")], {
-      stdio: "inherit",
-    });
-  }
+  require("./test-database.cjs").prepareDatabase();
   const { prepareCaddy } = await import(pathToFileURL(path.join(root, "scripts/prepare-caddy.mjs")).href);
   await prepareCaddy(root, [`${process.platform}-${process.arch}`]);
   const versionFile = path.join(root, "packages/backend/version.js");

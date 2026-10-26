@@ -1,18 +1,18 @@
 #!/usr/bin/env bun
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFileSync, spawn } = require("node:child_process");
+const { spawn } = require("node:child_process");
 
 const container = process.env.DMMARKET_TEST_CONTAINER;
 if (
   !/^[a-f0-9]{12,64}$/.test(container || "") ||
   process.env.DATABASE_HOST !== "127.0.0.1" ||
-  process.env.DATABASE_NAME !== "dmmarket_auth_test" ||
+  !/^dmmarket_test_[a-f0-9]{32}$/.test(process.env.DATABASE_NAME || "") ||
   process.env.DATABASE_PORT === "3306"
 )
   throw new Error("El cliente de respaldo requiere el contenedor desechable autorizado.");
-const metadata = JSON.parse(execFileSync("docker", ["inspect", container], { encoding: "utf8" }))[0];
-if (metadata.Config.Labels["dmmarket.auth-test"] !== "true" || metadata.Config.Image !== "dmmarket/mysql:5.0.24")
+const metadata = require("./test-database.cjs").testContainer();
+if (metadata.Id !== container)
   throw new Error("Contenedor no autorizado.");
 const args = process.argv.slice(2);
 const defaults = args.find((value) => value.startsWith("--defaults-file="));

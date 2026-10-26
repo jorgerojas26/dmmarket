@@ -77,7 +77,7 @@ test("esquema validado y abono comparten transacción, usuario real e histórico
   ]);
   const row = await environment.db("cxc_operaciones").where("IdOperacion", body.requestId).first();
   expect(row.ActorId).toBe(operator.user.id);
-  expect(JSON.parse(row.Datos).actorId).toBe(operator.user.id);
+  expect((typeof row.Datos === "string" ? JSON.parse(row.Datos) : row.Datos).actorId).toBe(operator.user.id);
   expect(
     await environment
       .db("dmmarket_auth_events")

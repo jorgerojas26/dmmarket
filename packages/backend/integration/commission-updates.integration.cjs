@@ -59,7 +59,7 @@ test("cambia porcentajes actuales con actor, valores anterior/nuevo y auditoría
   ).toBe(10);
   const row = await environment.db("dmmarket_commission_operations").where("id", body.requestId).first();
   expect(row.actor_id).toBe(operator.user.id);
-  expect(JSON.parse(row.data).changes[0].before).toBe("10.0000");
+  expect((typeof row.data === "string" ? JSON.parse(row.data) : row.data).changes[0].before).toBe("10.0000");
   expect(
     await environment
       .db("dmmarket_auth_events")

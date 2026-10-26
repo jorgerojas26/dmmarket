@@ -16,6 +16,7 @@ const { createMfa } = backend("./auth/mfa");
 const { caddyFile } = backend("./web-config");
 const { NodeCryptoPlugin } = backend("@otplib/plugin-crypto-node");
 const root = path.resolve(__dirname, "../..");
+const { createFixtureDatabase, dropFixtureDatabase } = require("./test-database.cjs");
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const docker = (...args) =>
   execFileSync("docker", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
@@ -113,7 +114,7 @@ async function startEnvironment({
 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-auth-test-"));
   fs.chmodSync(directory, 0o700);
-  let container;
+  let fixture;
   let db;
   const children = [];
   let closed = false;
@@ -144,7 +145,7 @@ async function startEnvironment({
         if (db) await db.destroy();
       } finally {
         try {
-          if (container) docker("rm", "-f", "-v", container);
+          if (fixture) await dropFixtureDatabase(fixture.name);
         } finally {
           fs.rmSync(directory, { recursive: true, force: true });
         }
@@ -152,28 +153,8 @@ async function startEnvironment({
     },
   };
   try {
-    const password = randomBytes(32).toString("hex");
-    container = docker(
-      "run",
-      "-d",
-      "--label",
-      "dmmarket.auth-test=true",
-      "--platform",
-      "linux/amd64",
-      "--memory",
-      "768m",
-      "--cpus",
-      "1",
-      "--tmpfs",
-      "/var/lib/mysql:rw,size=268435456",
-      "-p",
-      "127.0.0.1::3306",
-      "-e",
-      `MYSQL_ROOT_PASSWORD=${password}`,
-      "-e",
-      "MYSQL_DATABASE=dmmarket_auth_test",
-      "dmmarket/mysql:5.0.24",
-    );
+    fixture = await createFixtureDatabase();
+    const container = fixture.container;
     environment.container = container;
     if (updateSource)
       environment.updateSource = await require("./update-source.cjs").startUpdateSource(
@@ -182,17 +163,14 @@ async function startEnvironment({
     if (rateSource) {
       environment.rateSource = await require("./rate-source.cjs").startRateSource();
     }
-    const metadata = JSON.parse(docker("inspect", container))[0];
-    const binding = metadata.NetworkSettings.Ports["3306/tcp"][0];
-    if (binding.HostIp !== "127.0.0.1" || binding.HostPort === "3306") throw new Error("Publicación MySQL no aislada.");
     const configuration = {
       HOST: "127.0.0.1",
       DMMARKET_SERVICE: service ? "1" : "0",
       DATABASE_HOST: "127.0.0.1",
-      DATABASE_PORT: binding.HostPort,
-      DATABASE_NAME: "dmmarket_auth_test",
-      DATABASE_USER: "root",
-      DATABASE_PASSWORD: password,
+      DATABASE_PORT: String(fixture.connection.port),
+      DATABASE_NAME: fixture.name,
+      DATABASE_USER: fixture.user,
+      DATABASE_PASSWORD: fixture.password,
       BACKUP_DIRECTORY: path.join(directory, "backups"),
       BACKUP_DUMP_COMMAND: path.join(__dirname, "mysql-dump.cjs"),
       DMMARKET_TEST_CONTAINER: container,
@@ -202,28 +180,20 @@ async function startEnvironment({
     };
     db = knex({
       client: MySql2Client,
-      connection: {
-        host: "127.0.0.1",
-        port: Number(binding.HostPort),
-        user: "root",
-        password,
-        database: configuration.DATABASE_NAME,
-        charset: "UTF8_GENERAL_CI",
-        connectTimeout: 1000,
-      },
+      connection: fixture.connection,
       pool: { min: 0, max: 6 },
       acquireConnectionTimeout: 2000,
     });
     await until(async () => {
       const [[version]] = await db.raw("SELECT VERSION() AS version");
-      if (String(version.version) !== "5.0.24") throw new Error("Se requiere MySQL 5.0.24 exacto.");
+      if (!String(version.version).startsWith("5.7.")) throw new Error("Se requiere MySQL 5.7 del servicio de tests.");
       return true;
     });
     const existing = await db("information_schema.TABLES")
       .whereRaw("TABLE_SCHEMA = DATABASE()")
       .count("* as total")
       .first();
-    if (Number(existing.total)) throw new Error("El contenedor debe tener una base vacía.");
+    if (Number(existing.total)) throw new Error("La suite debe tener una base vacía.");
     await migration.up(db);
     await backend("./migrations/20261025_add_auth_event_role").up(db);
     environment.db = db;
