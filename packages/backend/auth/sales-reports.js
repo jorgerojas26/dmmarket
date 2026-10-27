@@ -644,7 +644,7 @@ function createSalesReports({ sessions }) {
   router.get("/dashboard/sales", handle(dashboard, { compare: true, keys: chartKeys }));
   router.get("/groups", async (req, res, next) => {
     try {
-      const result = await sessions.withSession(req.sessionID, {}, async ({ transaction, access }) => {
+      const result = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access }) => {
         if (Object.keys(req.query).length) fail(400);
         if (
           !["sales.read", "purchases.read", "inventory.read", "commissions.read"].some((capability) => {

@@ -139,7 +139,7 @@ test("un reporte lento no bloquea la consulta de sesión y la revocación se obs
   await expect(sessions.status(active.sid)).rejects.toMatchObject({ status: 401 });
 });
 
-test("reportes de una sesión leen en paralelo y logout espera a que termine el reporte activo", async () => {
+test("una escritura activa conserva el bloqueo de sesión hasta terminar", async () => {
   const user = await environment.seedUser();
   const active = await login(user);
   let release;
@@ -329,3 +329,59 @@ test("no inicia acceso si falta una tabla y el rollback no borra identidades", a
   }
   await expect(migration.down(environment.db)).rejects.toThrow("No se elimina autenticación");
 });
+
+test("un reporte no retiene logout y descarta el resultado después de la revocación", async () => {
+  const user = await environment.seedUser();
+  const active = await login(user);
+  let entered;
+  let release;
+  const started = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const report = sessions.withSession(active.sid, { readOnly: true }, async ({ transaction }) => {
+    await transaction("dmmarket_auth_users").where("id", user.id).first();
+    entered();
+    await gate;
+    return "private-report";
+  });
+  const result = report.then(
+    (value) => ({ value }),
+    (error) => ({ status: error.status }),
+  );
+  let logout;
+  let timer;
+  try {
+    await started;
+    logout = sessions.logout(active.sid).then(() => true);
+    expect(
+      await Promise.race([
+        logout,
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(false), 1000);
+        }),
+      ]),
+    ).toBe(true);
+  } finally {
+    clearTimeout(timer);
+    release();
+    await Promise.allSettled([report, logout]);
+  }
+  expect(await result).toEqual({ status: 401 });
+});
+
+test.each([{ activity: true }, { recent: true }, { accessMutation: true }])(
+  "las operaciones protegidas no pueden omitir sus bloqueos: %j",
+  async (options) => {
+    const active = await login(await environment.seedUser());
+    let executed = false;
+    await expect(
+      sessions.withSession(active.sid, { ...options, readOnly: true }, async () => {
+        executed = true;
+      }),
+    ).rejects.toThrow();
+    expect(executed).toBe(false);
+  },
+);

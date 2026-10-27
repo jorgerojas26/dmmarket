@@ -114,9 +114,8 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
   async function useSession(
     sid,
     work,
-    { accessMutation = false, source = null, readOnly = false, shared = false } = {},
+    { accessMutation = false, source = null, readOnly = false, shared = false, sessionDb = db } = {},
   ) {
-    const sessionDb = readOnly ? statusDb : db;
     const hash = sessionHash(sid);
     const reference = hash
       ? await sessionDb("dmmarket_auth_session_state").where("sid_hash", hash).select("user_id").first()
@@ -262,14 +261,19 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
       );
     },
     async status(sid) {
-      return useSession(sid, async (_connection, context) => ({ value: publicContext(context) }), { readOnly: true });
+      return useSession(sid, async (_connection, context) => ({ value: publicContext(context) }), {
+        readOnly: true,
+        sessionDb: statusDb,
+      });
     },
     async withSession(
       sid,
-      { activity = false, recent = false, accessMutation = false } = {},
+      { activity = false, recent = false, accessMutation = false, readOnly = false } = {},
       work = async ({ user, stage, access }) => ({ user, stage, access }),
     ) {
-      return useSession(
+      if (readOnly && (activity || recent || accessMutation))
+        throw new TypeError("Las operaciones protegidas requieren bloquear la sesión.");
+      const value = await useSession(
         sid,
         async (connection, context) => {
           if (context.stage !== "ready") return denied(403);
@@ -297,8 +301,10 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
             return unwrap(denied(403, "RECENT_AUTH_REQUIRED"));
           return { value };
         },
-        { accessMutation, shared: !activity && !accessMutation },
+        { accessMutation, readOnly, shared: !activity && !accessMutation },
       );
+      if (readOnly) await service.status(sid);
+      return value;
     },
     async changePassword(sid, { currentPassword, newPassword, token, newSid } = {}, source) {
       if (!sessionHash(newSid) || newSid === sid) return unwrap(denied(400));

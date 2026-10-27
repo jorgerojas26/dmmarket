@@ -169,7 +169,7 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
   router.get(
     "/profile",
     handler(async (req, res) => {
-      const profile = await sessions.withSession(req.sessionID, {}, async ({ user, transaction }) => ({
+      const profile = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ user, transaction }) => ({
         roles: await transaction("dmmarket_auth_user_roles as ur")
           .join("dmmarket_auth_roles as r", "r.id", "ur.role_id")
           .where("ur.user_id", user.id)
@@ -196,7 +196,7 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
         error.status = 400;
         throw error;
       }
-      const result = await sessions.withSession(req.sessionID, {}, async ({ access, transaction }) => {
+      const result = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ access, transaction }) => {
         if (!access.hasGlobal("access.users")) forbidden();
         const rows = await transaction("dmmarket_auth_users")
           .select("id", "username", "display_name", "enabled", "must_change_password")
@@ -212,7 +212,7 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
   router.get(
     "/roles",
     handler(async (req, res) => {
-      const roles = await sessions.withSession(req.sessionID, {}, async ({ access, transaction }) => {
+      const roles = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ access, transaction }) => {
         if (!access.hasGlobal("access.roles")) forbidden();
         return transaction("dmmarket_auth_roles").select("id", "name").orderBy("name").limit(200);
       });

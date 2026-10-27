@@ -89,7 +89,7 @@ async function createAuthRuntime({ db, env = process.env, services = {} }) {
     router.use(createReceivablesReports({ sessions, security }));
     router.use((req, res, next) => {
       sessions
-        .withSession(req.sessionID, {}, async ({ access, transaction }) => {
+        .withSession(req.sessionID, { readOnly: true }, async ({ access, transaction }) => {
           if (
             req.method !== "GET" ||
             !["/currency_rates", "/currency_rates/"].includes(req.path) ||

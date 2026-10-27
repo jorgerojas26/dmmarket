@@ -223,3 +223,57 @@ test("limpiar la caché obliga a recalcular y una respuesta inválida no se guar
     expect(invalid.headers["x-report-cache"]).not.toBe("HIT");
   }
 });
+
+test.each(["logout", "disabled"])(
+  "un reporte SQL bloqueado permite revocar por %s y no devuelve ni cachea datos privados",
+  async (kind) => {
+    const { user, client } = await reader();
+    const connection = await environment.db.client.acquireConnection();
+    let locked = false;
+    let pending;
+    let revocation;
+    let timer;
+    try {
+      await environment.db.raw("LOCK TABLES slavefact WRITE").connection(connection);
+      locked = true;
+      pending = client.request(dashboard);
+      await require("../../../tests/support/auth-environment.cjs").until(async () => {
+        const [rows] = await environment.db.raw("SHOW FULL PROCESSLIST");
+        return rows.some((row) => String(row.State) === "Locked" && String(row.Info).includes("slavefact"));
+      }, 2000);
+      revocation =
+        kind === "logout"
+          ? client.request("/api/auth/logout", { method: "POST", body: {} })
+          : ownerClient.request(`/api/auth/users/${user.id}/enabled`, {
+              method: "POST",
+              body: { enabled: false, reason: "Revocacion con reporte en curso" },
+            });
+      const response = await Promise.race([
+        revocation,
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(null), 1000);
+        }),
+      ]);
+      expect(response?.status).toBe(200);
+      if (kind === "disabled") {
+        const role = await ownerClient.request("/api/auth/roles", {
+          method: "POST",
+          body: { name: `Concurrent role ${user.id}`, permissions: [] },
+        });
+        expect(role.status).toBe(201);
+      }
+    } finally {
+      clearTimeout(timer);
+      if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
+      await environment.db.client.releaseConnection(connection);
+      await revocation;
+    }
+    const denied = await pending;
+    expect(denied.status).toBe(401);
+    expect(denied.body).not.toHaveProperty("kpis");
+    if (kind === "logout") {
+      expect((await client.login(user)).body.stage).toBe("ready");
+      expect((await client.request(dashboard)).headers["x-report-cache"]).toBe("MISS");
+    }
+  },
+);

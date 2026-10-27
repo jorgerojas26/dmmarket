@@ -89,7 +89,7 @@ function createAuditReports({ sessions }) {
   router.get("/auth/audit", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
           if (!access.hasGlobal("audit.read")) fail(403);
           return audit(transaction, options(req.query));
         }),

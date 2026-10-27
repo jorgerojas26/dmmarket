@@ -29,7 +29,7 @@ function createReceivablesReports({ sessions, security }) {
   const handle = (work, keys) => async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
           requireReceivables(access);
           const query = options(req.query, keys);
           const service = createReceivablesService({

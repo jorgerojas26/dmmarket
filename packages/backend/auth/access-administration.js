@@ -66,7 +66,7 @@ function optionalReason(value) {
 async function createAccessAdministration({ db, sessions, now = Date.now }) {
   await assertAuthSchema(db);
   const administer = (sid, capability, recent, work) =>
-    sessions.withSession(sid, { recent, accessMutation: recent }, async (context) => {
+    sessions.withSession(sid, { recent, accessMutation: recent, readOnly: !recent }, async (context) => {
       if (!context.access.hasGlobal(capability)) fail(403, "Acceso no permitido.");
       return work(context.transaction, context.user.id);
     });

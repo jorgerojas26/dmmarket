@@ -89,7 +89,7 @@ function createCommissionUpdates({ sessions, security }) {
   router.get("/employees/commissionInfo/:employeeId/status", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, async ({ transaction, access }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access }) => {
           authorize(access, req.params.employeeId, false);
           if (Object.keys(req.query).length) fail(400);
           let writesAvailable = false;

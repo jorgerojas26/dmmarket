@@ -24,7 +24,7 @@ function createAccessDirectory(sessions) {
       const { page, search } = filters(query);
       const state = query.state || "all";
       if (!["all", "enabled", "disabled"].includes(state)) invalid();
-      return sessions.withSession(sid, {}, async ({ access, transaction }) => {
+      return sessions.withSession(sid, { readOnly: true }, async ({ access, transaction }) => {
         if (!["access.users", "access.roles", "access.links", "access.recover"].some((key) => access.hasGlobal(key)))
           forbidden();
         const directory = transaction("dmmarket_auth_users");
@@ -60,7 +60,7 @@ function createAccessDirectory(sessions) {
       const { page, search } = filters(query);
       const ids = query.ids === undefined ? null : typeof query.ids === "string" ? query.ids.split(",") : invalid();
       if (ids && (ids.length > 100 || ids.some((id) => !/^[\p{L}\p{N}._-]{1,32}$/u.test(id)))) invalid();
-      return sessions.withSession(sid, {}, async ({ access, transaction }) => {
+      return sessions.withSession(sid, { readOnly: true }, async ({ access, transaction }) => {
         if (!access.hasGlobal("access.links")) forbidden();
         const sellers = transaction("vendedores");
         if (ids) sellers.whereIn("idVend", ids);

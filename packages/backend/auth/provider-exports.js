@@ -69,7 +69,7 @@ function createProviderExports({ sessions }) {
         document = identifier(req.params.invoiceId);
       if (Object.keys(req.query).length) fail(400);
       res.json(
-        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
           if (!access.hasGlobal("providers.read") || !access.hasGlobal("purchases.export")) fail(403);
           const result = await purchaseDetail(transaction, access, {}, id, document);
           await appendEvent(transaction, {
@@ -96,7 +96,7 @@ function createProviderExports({ sessions }) {
           : ["from", "to", "showNoe", "employeeId", "clientId", "productId", "search", "sortBy", "sortDir"],
       });
       res.json(
-        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
           const result = await exportProvider(transaction, access, id, kind, query);
           await appendEvent(transaction, {
             actorId: user.id,

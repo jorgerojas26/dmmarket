@@ -97,7 +97,7 @@ function createInventoryReports({ sessions }) {
   router.get("/products", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) =>
+        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) =>
           inventory(transaction, access, options(req.query)),
         ),
       );

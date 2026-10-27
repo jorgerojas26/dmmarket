@@ -271,7 +271,7 @@ function createExportReports({ sessions, security }) {
         fail(400);
       if (req.query.documents !== undefined && !["all", "pending"].includes(req.query.documents)) fail(400);
       res.json(
-        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
           if (!access.hasGlobal("receivables.read") || !access.hasGlobal("receivables.export")) fail(403);
           const service = createReceivablesService({
             db: transaction,
@@ -301,7 +301,7 @@ function createExportReports({ sessions, security }) {
     try {
       if (!req.is("application/json")) fail(415);
       res.json(
-        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
           const result = await dispatchExport(transaction, access, req.body);
           await appendEvent(transaction, {
             actorId: user.id,
@@ -320,7 +320,7 @@ function createExportReports({ sessions, security }) {
     try {
       const query = parameters(req.query, { range: false, keys: ["showNoe", "proveedorId"] });
       res.json(
-        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
           const scope = access.scopeFor("sales.export");
           if (!scope.global && !scope.sellerIds.length) fail(403);
           const { base, invoice } = salesBase(transaction, access, query);
@@ -347,7 +347,7 @@ function createExportReports({ sessions, security }) {
   router.get("/exports/:resource", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, async ({ transaction, access, user }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
           const result = await dataset(req.params.resource, transaction, access, req.query);
           await appendEvent(transaction, {
             actorId: user.id,

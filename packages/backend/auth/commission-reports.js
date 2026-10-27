@@ -120,7 +120,7 @@ function createCommissionReports({ sessions }) {
     router.get(path, async (req, res, next) => {
       try {
         res.json(
-          await sessions.withSession(req.sessionID, {}, ({ transaction, access }) =>
+          await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) =>
             work(transaction, access, req.params.employeeId, req.query),
           ),
         );

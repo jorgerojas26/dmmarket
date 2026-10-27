@@ -31,7 +31,7 @@ function createOperationReports({ sessions, security, db, services = {} }) {
   const router = express.Router();
   const handle = (capability, work) => async (req, res, next) => {
     try {
-      const value = await sessions.withSession(req.sessionID, {}, async ({ transaction, access }) => {
+      const value = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access }) => {
         if (!access.hasGlobal(capability)) fail(403);
         return work(transaction, req);
       });
@@ -167,7 +167,7 @@ function createOperationReports({ sessions, security, db, services = {} }) {
   ])
     router.get(path, async (req, res, next) => {
       try {
-        await sessions.withSession(req.sessionID, {}, ({ access }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, ({ access }) => {
           if (!access.hasGlobal("updates.read")) fail(403);
           empty(req.query);
         });
@@ -182,7 +182,7 @@ function createOperationReports({ sessions, security, db, services = {} }) {
   ])
     router[method](path, ...(method === "post" ? [security.csrfProtection] : []), async (req, res, next) => {
       try {
-        await sessions.withSession(req.sessionID, {}, ({ access }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, ({ access }) => {
           if (!access.hasGlobal("updates.read")) fail(403);
           empty(req.query);
           if (method === "post") {

@@ -142,7 +142,7 @@ function createProviderReports({ sessions }) {
   const handle = (work, options) => async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
           if (!access.hasGlobal("providers.read")) fail(403);
           const query = parameters(req.query, options);
           const id = req.params.providerId ? identifier(req.params.providerId) : null;
@@ -167,7 +167,7 @@ function createProviderReports({ sessions }) {
   router.get("/providers/best", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) => {
+        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
           if (!access.hasGlobal("providers.read")) fail(403);
           const { mode = "ventas", ...input } = req.query;
           const query = parameters(input, { keys: ["from", "to", "showNoe", "employeeId", "categoryId"] });

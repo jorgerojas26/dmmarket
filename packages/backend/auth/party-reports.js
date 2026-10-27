@@ -555,7 +555,7 @@ function createPartyReports({ sessions }) {
   const catalog = (clients) => async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, {}, ({ transaction, access }) =>
+        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) =>
           directory(transaction, access, req.query, clients),
         ),
       );

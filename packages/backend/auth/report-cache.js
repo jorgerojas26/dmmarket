@@ -5,7 +5,7 @@ const { reportCache, isReportPath } = require("../middlewares/report-cache");
 async function withReportCache(req, res, sessions, work) {
   let prepared;
   try {
-    const value = await sessions.withSession(req.sessionID, {}, async (context) => {
+    const value = await sessions.withSession(req.sessionID, { readOnly: true }, async (context) => {
       if (req.method !== "GET" || !isReportPath(req.path)) return work(context);
       const url = new URL(req.originalUrl, "http://localhost");
       url.searchParams.sort();
