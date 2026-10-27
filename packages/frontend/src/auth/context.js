@@ -28,8 +28,8 @@ function verifiedSession(data) {
         typeof data.csrfToken !== 'string' ||
         !data.csrfToken ||
         (authenticated &&
-            (!Number.isSafeInteger(data.user?.id) ||
-                data.user.id <= 0 ||
+            (typeof data.user?.id !== 'string' ||
+                !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(data.user.id) ||
                 !Number.isSafeInteger(data.revision) ||
                 data.revision < 0 ||
                 typeof data.mfaEnabled !== 'boolean' ||
