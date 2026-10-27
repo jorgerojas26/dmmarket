@@ -132,7 +132,7 @@ function createReceivablesService({
   function documents(connection, clientId) {
     return connection("cxc_documentos as d")
       .leftJoin("masterfact as f", function () {
-        this.on(connection.raw("BINARY f.IdFactura = BINARY d.IdFactura"));
+        this.on("f.IdFactura", "d.IdFactura").andOn(connection.raw("BINARY f.IdFactura = BINARY d.IdFactura"));
       })
       .whereRaw("BINARY d.IdCliente <=> BINARY ?", [clientId])
       .where("d.TipoDoc", "FAC")
@@ -405,7 +405,7 @@ function createReceivablesService({
       "d.TipoDoc = 'FAC' AND d.MonedaOriginal = 'USD' AND d.Estatus <> 'ANULADO' AND f.Anulada = 0 AND BINARY f.IdCliente = BINARY d.IdCliente";
     const aggregates = db("cxc_documentos as d")
       .leftJoin("masterfact as f", function () {
-        this.on(db.raw("BINARY f.IdFactura = BINARY d.IdFactura"));
+        this.on("f.IdFactura", "d.IdFactura").andOn(db.raw("BINARY f.IdFactura = BINARY d.IdFactura"));
       })
       .where("d.TipoDoc", "FAC")
       .where("d.MonedaOriginal", "USD")

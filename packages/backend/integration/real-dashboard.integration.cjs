@@ -79,3 +79,18 @@ test.each(["/clients/list", "/sellers/list"])("%s pagina sin repetir agregados n
   expect(response.headers["x-report-cache"]).toBeUndefined();
   expect(elapsed).toBeLessThan(1800);
 });
+
+test("cartera y detalle usan los índices existentes sin depender de caché", async () => {
+  const start = Date.now();
+  const response = await client.request("/api/receivables?state=debt&due=all&page=1&sortBy=overdue&sortDir=desc");
+  expect(response.status).toBe(200);
+  expect(Date.now() - start).toBeLessThan(1500);
+  expect(response.headers["x-report-cache"]).toBeUndefined();
+  expect(response.body.total).toBeGreaterThan(0);
+  const account = response.body.data[0];
+  const detailStart = Date.now();
+  const detail = await client.request(`/api/receivables/${encodeURIComponent(account.id)}`);
+  expect(detail.status).toBe(200);
+  expect(Date.now() - detailStart).toBeLessThan(1500);
+  expect(detail.body.summary.balance).toBe(account.balance);
+});

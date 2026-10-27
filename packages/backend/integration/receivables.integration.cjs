@@ -87,6 +87,36 @@ test("filtros, páginas y consultas no pueden pedir alcance de vendedor ni activ
   expect((await client.request("/api/receivables/banks")).body).toEqual([{ id: "B1", name: "Banco sintético" }]);
 });
 
+test("el cruce indexado no cobra facturas con un identificador distinto por mayúsculas", async () => {
+  const client = await reader([grant("receivables.read")]);
+  await environment.db.raw(
+    "ALTER TABLE masterfact MODIFY IdFactura VARCHAR(32) CHARACTER SET utf8 COLLATE utf8_general_ci",
+  );
+  await environment.db("cxc_documentos").insert({
+    IdDocumento: 7,
+    IdFactura: "cxc-c2",
+    IdCliente: "CXC-C2",
+    TipoDoc: "FAC",
+    FechaEmision: "2026-01-01",
+    FechaVencimiento: "2026-01-05",
+    MonedaOriginal: "USD",
+    MontoOriginal: 900,
+    SaldoActual: 900,
+    Estatus: "PENDIENTE",
+  });
+  const result = await client.request("/api/receivables?state=debt");
+  expect(result.status).toBe(200);
+  expect(result.body.summary.balance).toBe("400.0000");
+  expect(result.body.data.find((account) => account.id === "CXC-C2").balance).toBe("75.0000");
+  const detail = await client.request("/api/receivables/CXC-C2?documents=all");
+  expect(detail.status).toBe(200);
+  expect(detail.body.summary.balance).toBe("75.0000");
+  expect(detail.body.documents.data.find((document) => document.id === 7)).toMatchObject({
+    eligible: false,
+    status: "Excluida",
+  });
+});
+
 test("identificadores exactos no mezclan deudas por colación y la lectura nunca recrea tablas", async () => {
   const client = await reader([grant("receivables.read")]);
   await environment.db.raw(
