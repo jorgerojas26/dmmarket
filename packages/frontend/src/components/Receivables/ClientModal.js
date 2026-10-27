@@ -16,6 +16,7 @@ import InlineOperationForm from './InlineOperationForm';
 import InvoiceDetailModal from './InvoiceDetailModal';
 import OperationForm from './OperationForm';
 import Pager from './Pager';
+import PaymentAvailability from './PaymentAvailability';
 import PaymentDrawer from './PaymentDrawer';
 import Summary from './Summary';
 import Timeline from './Timeline';
@@ -440,6 +441,7 @@ export default function ClientModal({
                             </div>
                         </div>
                         <div className="cxc-account-header-actions">
+                            <PaymentAvailability />
                             <Button
                                 ref={primary}
                                 className="cxc-payment-cta"

@@ -17,6 +17,7 @@ import { sortRows } from 'utils/sortRows';
 import { useReceivablesAccess } from './access';
 import ClientModal from './ClientModal';
 import { dateLabel, money } from './format';
+import PaymentAvailability from './PaymentAvailability';
 import PaymentDrawer from './PaymentDrawer';
 import Summary from './Summary';
 import './styles.css';
@@ -277,13 +278,16 @@ export default function Receivables() {
                 <div>
                     <h4 className="m-0 text-light">Cuentas por cobrar</h4>
                 </div>
-                <Button
-                    ref={paymentTrigger}
-                    disabled={!canOperate('payment') || !data || !!error}
-                    onClick={() => openPayment(null, null)}
-                >
-                    Registrar abono
-                </Button>
+                <div className="cxc-payment-actions">
+                    <PaymentAvailability />
+                    <Button
+                        ref={paymentTrigger}
+                        disabled={!canOperate('payment') || !data || !!error}
+                        onClick={() => openPayment(null, null)}
+                    >
+                        Registrar abono
+                    </Button>
+                </div>
             </header>
             {error && (
                 <Alert variant="danger" role="alert">

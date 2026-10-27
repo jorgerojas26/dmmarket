@@ -660,3 +660,44 @@
         padding: 0.8rem;
     }
 }
+
+.cxc-payment-actions,
+.cxc-payment-availability {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.cxc-availability-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 9px;
+    border: 1px solid #424954;
+    border-radius: 6px;
+    color: #adb5bd;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.cxc-availability-retry {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #424954;
+    border-radius: 6px;
+    background: transparent;
+    color: #c8d0dc;
+}
+
+.cxc-availability-retry:hover {
+    background: #303640;
+    color: #fff;
+}
+
+.cxc-availability-retry:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 3px;
+}

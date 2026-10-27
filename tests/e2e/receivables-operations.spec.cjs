@@ -179,3 +179,50 @@ test("abono original confirma identidad reciente sin perder formulario ni duplic
   await balance(environment, 295);
   expect(Number((await environment.db("cxc_operaciones").where("ActorId", user.id).count("* as n").first()).n)).toBe(1);
 });
+
+test("cartera sin permiso muestra un estado breve junto al registro bloqueado", async ({ page, environment }) => {
+  await enter(page, environment, [grant("receivables.read")]);
+  const account = page.getByRole("dialog");
+  await expect(account.getByRole("status", { name: "Disponibilidad de abonos", exact: true })).toHaveText(
+    "Sin permiso",
+  );
+  await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toBeDisabled();
+});
+
+test("esquema pendiente muestra solo lectura sin convertir tablas desde una consulta", async ({
+  page,
+  environment,
+}) => {
+  await environment.db.raw("ALTER TABLE cxc_cruces ENGINE=MyISAM");
+  try {
+    await enter(page, environment, [grant("receivables.read"), grant("receivables.payment")]);
+    const account = page.getByRole("dialog");
+    await expect(account.getByRole("status", { name: "Disponibilidad de abonos", exact: true })).toHaveText(
+      "Solo lectura",
+    );
+    await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toBeDisabled();
+    const [rows] = await environment.db.raw("SHOW TABLE STATUS LIKE 'cxc_cruces'");
+    expect(rows[0].Engine).toBe("MyISAM");
+  } finally {
+    await environment.db.raw("ALTER TABLE cxc_cruces ENGINE=InnoDB");
+  }
+});
+
+test("un fallo de disponibilidad ofrece reintento sin ocultar la cuenta", async ({ page, environment }) => {
+  await page.route("**/api/receivables/status", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { message: "No disponible." } }),
+    }),
+  );
+  await enter(page, environment, [grant("receivables.read"), grant("receivables.payment")]);
+  const account = page.getByRole("dialog");
+  await expect(account.getByRole("status", { name: "Disponibilidad de abonos", exact: true })).toHaveText(
+    "No disponible",
+  );
+  await page.unrouteAll({ behavior: "wait" });
+  await account.getByRole("button", { name: "Reintentar disponibilidad", exact: true }).click();
+  await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toBeEnabled();
+  await expect(account.getByRole("status", { name: "Disponibilidad de abonos", exact: true })).toHaveCount(0);
+});
