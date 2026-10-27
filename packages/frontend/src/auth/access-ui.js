@@ -127,7 +127,7 @@ export function LoadState({ error, loading, onRetry, children }) {
         return (
             <div role="alert" className="access-empty access-error">
                 <p>No se pudo cargar la información.</p>
-                <button type="button" className="btn btn-outline-light" onClick={onRetry}>
+                <button type="button" className="btn btn-outline-light" onClick={() => onRetry()}>
                     Reintentar
                 </button>
             </div>
@@ -141,10 +141,12 @@ export function LoadState({ error, loading, onRetry, children }) {
     return children;
 }
 
-export function Pagination({ page, total, onChange }) {
+export function Pagination({ page, total, onChange, limit = 100 }) {
     return (
         <div className="access-pagination">
-            <span>{total ? `${(page - 1) * 100 + 1}–${Math.min(page * 100, total)} de ${total}` : '0 resultados'}</span>
+            <span>
+                {total ? `${(page - 1) * limit + 1}–${Math.min(page * limit, total)} de ${total}` : '0 resultados'}
+            </span>
             <div>
                 <button
                     type="button"
@@ -159,7 +161,7 @@ export function Pagination({ page, total, onChange }) {
                     type="button"
                     className="btn btn-outline-light"
                     aria-label="Página siguiente"
-                    disabled={page * 100 >= total}
+                    disabled={page * limit >= total}
                     onClick={() => onChange(page + 1)}
                 >
                     ›

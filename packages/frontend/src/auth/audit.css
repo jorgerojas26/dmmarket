@@ -1,0 +1,471 @@
+.audit-layout {
+    min-width: 0;
+}
+
+.audit-header {
+    align-items: flex-end;
+}
+
+.audit-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.audit-header-actions .date-range-trigger {
+    min-height: 40px;
+    font-size: 13px;
+}
+
+.audit-header-actions .date-range-dropdown {
+    right: 0;
+    left: auto;
+    z-index: 30;
+}
+
+.audit-workspace .audit-refresh {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    padding: 8px;
+}
+
+.audit-toolbar {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 20px;
+    border-bottom: 1px solid #2d3138;
+}
+
+.audit-search {
+    position: relative;
+    flex: 1 1 260px;
+}
+
+.audit-search > svg {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    pointer-events: none;
+    color: #929ca9;
+}
+
+.audit-search .form-control {
+    padding-left: 38px;
+}
+
+.audit-filter-field {
+    display: flex;
+    flex: 0 1 250px;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.audit-filter-field label {
+    margin: 0;
+    color: #a3adbb;
+    font-size: 12px;
+}
+
+.audit-result-filter {
+    flex-basis: 190px;
+}
+
+.audit-results-heading {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    min-height: 52px;
+    padding: 12px 20px;
+    color: #a3adbb;
+    font-size: 12px;
+}
+
+.audit-results-heading > button {
+    margin-left: auto;
+    border: 0;
+    background: none;
+    color: #b5c9e4;
+    font-size: 12px;
+}
+
+.audit-focused-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 20px 16px;
+}
+
+.audit-focused-filters > button {
+    border: 1px solid #424954;
+    text-align: left;
+}
+
+.audit-table {
+    min-width: 790px;
+}
+
+.audit-table th:first-child {
+    width: 160px;
+}
+
+.audit-table th > span:not(.visually-hidden) {
+    margin-left: 4px;
+    color: #8c96a4;
+    font-size: 10px;
+}
+
+.audit-table th:nth-child(4) {
+    width: 130px;
+}
+
+.audit-timestamp time,
+.audit-timestamp > span,
+.audit-event-target,
+.audit-person-username {
+    display: block;
+}
+
+.audit-timestamp time {
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.audit-timestamp > span,
+.audit-event-target,
+.audit-person-username {
+    margin-top: 4px;
+    color: #a3adbb;
+    font-size: 12px;
+}
+
+.audit-event-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #e4e6ea;
+    font-size: 14px;
+    font-weight: 550;
+    text-align: left;
+}
+
+.audit-event-link:hover {
+    color: #b5d2fa;
+    text-decoration: underline;
+}
+
+.audit-person,
+.audit-event-target,
+.audit-person-username {
+    overflow-wrap: anywhere;
+}
+
+.audit-person {
+    font-size: 13px;
+}
+
+.audit-outcome {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 9px;
+    border: 1px solid #424954;
+    border-radius: 5px;
+    color: #c8d0dc;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.audit-outcome::before {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
+}
+
+.audit-outcome.is-success {
+    border-color: rgb(106 198 161 / 18%);
+    background: rgb(106 198 161 / 6%);
+    color: #92cbb2;
+}
+
+.audit-outcome.is-failure {
+    border-color: rgb(242 164 164 / 20%);
+    background: rgb(242 164 164 / 6%);
+    color: #e8a5a5;
+}
+
+.audit-open-detail {
+    width: 32px;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: #a3adbb;
+}
+
+.audit-open-detail:hover {
+    border-color: #424954;
+    background: #282e37;
+    color: #e4e6ea;
+}
+
+.audit-empty {
+    padding: 56px 24px;
+}
+
+.audit-empty > span {
+    display: block;
+    margin-bottom: 12px;
+    color: #7c8ca1;
+    font-size: 30px;
+}
+
+.audit-footnote {
+    margin: 16px 0 0;
+    color: #929ca9;
+    font-size: 12px;
+}
+
+.audit-detail-heading {
+    padding-bottom: 24px;
+    border-bottom: 1px solid #2d3138;
+}
+
+.audit-detail-heading h3 {
+    margin: 0 0 12px;
+    color: #e4e6ea;
+    font-size: 22px;
+    letter-spacing: -0.4px;
+}
+
+.audit-detail-heading > p {
+    margin: 12px 0 0;
+    color: #a3adbb;
+    font-size: 12px;
+}
+
+.audit-detail-fields {
+    margin: 0;
+}
+
+.audit-detail-fields > div {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 16px;
+    padding: 18px 0;
+    border-bottom: 1px solid #2d3138;
+}
+
+.audit-detail-fields dt {
+    color: #a3adbb;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.audit-detail-fields dd {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 0;
+    color: #d6dce5;
+    overflow-wrap: anywhere;
+}
+
+.audit-detail-fields dd > strong {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.audit-detail-fields dd > span,
+.audit-detail-fields code {
+    color: #a3adbb;
+    font-size: 12px;
+}
+
+.audit-reason {
+    white-space: pre-wrap;
+}
+
+.audit-detail-note {
+    margin: 16px 0 24px;
+    font-size: 12px;
+}
+
+.audit-detail-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.audit-detail-filters h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.audit-detail-filters > button {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    padding: 10px 0;
+    border: 0;
+    background: none;
+    color: #b5c9e4;
+    font-size: 13px;
+    text-align: left;
+}
+
+.audit-detail-filters > button:hover {
+    color: #e4e6ea;
+}
+
+.audit-technical {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #2d3138;
+    color: #a3adbb;
+    font-size: 12px;
+}
+
+.audit-technical summary {
+    cursor: pointer;
+}
+
+.audit-technical .audit-detail-fields > div:last-child {
+    border-bottom: 0;
+}
+
+@media (max-width: 767.98px) {
+    .audit-header-actions {
+        width: 100%;
+    }
+
+    .audit-header-actions .date-range-picker-wrapper {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .audit-header-actions .date-range-trigger {
+        justify-content: space-between;
+        width: 100%;
+    }
+
+    .audit-header-actions .date-range-dropdown {
+        left: 0;
+        right: auto;
+        width: calc(100vw - 32px);
+        min-width: 0;
+        max-height: 65vh;
+        overflow: auto;
+    }
+
+    .audit-header-actions .rdrDefinedRangesWrapper {
+        display: none;
+    }
+
+    .audit-header-actions .rdrDateRangePickerWrapper,
+    .audit-header-actions .rdrCalendarWrapper,
+    .audit-header-actions .rdrMonths,
+    .audit-header-actions .rdrMonth {
+        width: 100%;
+    }
+
+    .audit-toolbar {
+        gap: 14px 12px;
+        padding: 16px;
+    }
+
+    .audit-search {
+        flex-basis: 100%;
+    }
+
+    .audit-filter-field {
+        flex: 1 1 160px;
+        min-width: 0;
+    }
+
+    .audit-result-filter {
+        flex-basis: 130px;
+    }
+
+    .audit-results-heading {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
+    .audit-table {
+        display: block;
+        min-width: 0;
+    }
+
+    .audit-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+    }
+
+    .audit-table tbody {
+        display: block;
+    }
+
+    .audit-table tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px 12px;
+        padding: 16px;
+        border-top: 1px solid #2d3138;
+    }
+
+    .audit-table td,
+    .audit-table td:last-child {
+        width: auto;
+        padding: 0;
+        border: 0;
+    }
+
+    .audit-table td:first-child {
+        display: flex;
+        grid-column: 1 / -1;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .audit-timestamp > span {
+        margin: 0;
+    }
+
+    .audit-table td:nth-child(2) {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .audit-table td:nth-child(3) {
+        grid-column: 1;
+        grid-row: 3;
+    }
+
+    .audit-table td:nth-child(4) {
+        grid-column: 2;
+        grid-row: 3;
+        align-self: end;
+    }
+
+    .audit-table td:last-child {
+        grid-column: 2;
+        grid-row: 2;
+        align-self: center;
+    }
+
+    .audit-detail-fields > div {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+}

@@ -16,7 +16,10 @@ beforeAll(async () => {
   environment = await startEnvironment({ web: true });
   actor = await environment.seedUser();
   target = await environment.seedUser();
+  await environment.db("dmmarket_auth_users").where("id", actor.id).update({ display_name: "Ana Pérez" });
+  await environment.db("dmmarket_auth_users").where("id", target.id).update({ display_name: "Carlos Díaz" });
   roleId = (await environment.db("dmmarket_auth_user_roles").where("user_id", actor.id).first()).role_id;
+  await environment.db("dmmarket_auth_roles").where("id", roleId).update({ name: "Equipo de ventas" });
   await appendEvent(environment.db, {
     actorId: actor.id,
     targetId: target.id,
@@ -36,6 +39,7 @@ beforeAll(async () => {
     targetId: target.id,
     action: "auth.login_failed",
     outcome: "failure",
+    reason: "Control 50%_ verificado",
     occurredMs: Date.parse("2026-01-31T23:59:59.999Z"),
   });
   await appendEvent(environment.db, {
@@ -71,7 +75,21 @@ test("rango inclusivo, orden estable y páginas conservan el total filtrado", as
   expect(second.body.total).toBe(3);
   expect(second.body.data[0].action).toBe("auth.user_disabled");
   expect(Object.keys(second.body.data[0]).sort()).toEqual(
-    ["action", "actorId", "id", "occurredMs", "outcome", "reason", "roleId", "targetId"].sort(),
+    [
+      "action",
+      "actorId",
+      "actorName",
+      "actorUsername",
+      "id",
+      "occurredMs",
+      "outcome",
+      "reason",
+      "roleId",
+      "roleName",
+      "targetId",
+      "targetName",
+      "targetUsername",
+    ].sort(),
   );
 });
 
@@ -101,6 +119,44 @@ test("el historial de login real no entrega contraseñas, hashes o secretos de s
   expect((await client.request("/api/auth/users")).status).toBe(403);
 });
 
+test("el lector de auditoría obtiene nombres actuales sin permisos de administración", async () => {
+  const { client } = await reader([grant("audit.read")]);
+  const result = await client.request(`/api/auth/audit?${range}&roleId=${roleId}`);
+  expect(result.status).toBe(200);
+  expect(result.body.data[0]).toMatchObject({
+    actorId: actor.id,
+    actorName: "Ana Pérez",
+    actorUsername: actor.username,
+    targetId: target.id,
+    targetName: "Carlos Díaz",
+    targetUsername: target.username,
+    roleId,
+    roleName: "Equipo de ventas",
+  });
+  expect((await client.request("/api/auth/directory")).status).toBe(403);
+  expect((await client.request("/api/auth/roles")).status).toBe(403);
+});
+
+test("buscar nombres, usuarios, roles o motivos filtra antes del conteo y trata comodines literalmente", async () => {
+  const { client } = await reader([grant("audit.read")]);
+  for (const [search, total] of [
+    ["ANA PÉREZ", 2],
+    [target.username, 3],
+    ["Equipo de ventas", 1],
+    ["50%_", 1],
+    ["no-existe", 0],
+  ]) {
+    const result = await client.request(`/api/auth/audit?${range}&search=${encodeURIComponent(search)}&limit=1`);
+    expect(result.status).toBe(200);
+    expect(result.body.total).toBe(total);
+    expect(result.body.data).toHaveLength(Math.min(1, total));
+  }
+  const combined = await client.request(`/api/auth/audit?${range}&search=Ana&outcome=failure`);
+  expect(combined.body.total).toBe(0);
+  const fallback = await client.request(`/api/auth/audit?${range}&outcome=failure`);
+  expect(fallback.body.data[0]).toMatchObject({ actorId: null, actorName: null, roleName: null });
+});
+
 test("filtros y parámetros inválidos no abren búsquedas libres ni exportaciones", async () => {
   const { client } = await reader([grant("audit.read")]);
   for (const suffix of [
@@ -111,7 +167,8 @@ test("filtros y parámetros inválidos no abren búsquedas libres ni exportacion
     "roleId=abc",
     "action=auth.%25",
     "outcome=any",
-    "search=secret",
+    `search=${"a".repeat(129)}`,
+    "search[]=name",
     "export=true",
     "sortBy=reason",
   ])

@@ -1154,13 +1154,17 @@ test("auditoría permite consultar login real sin dar administración de cuentas
   await login(page, environment, user);
   await openModule(page, "Auditoría");
   const report = page.getByRole("region", { name: "Consulta autorizada de auditoría", exact: true });
-  await report.getByLabel("ID de cuenta objetivo de auditoría", { exact: true }).fill(user.id);
-  await report.getByLabel("Acción exacta de auditoría", { exact: true }).fill("auth.login_succeeded");
-  await report.getByRole("button", { name: "Consultar auditoría", exact: true }).click();
-  await expect(report.getByText("Eventos autorizados: 1", { exact: true })).toBeVisible();
-  const table = report.getByRole("table", { name: "Historial autorizado", exact: true });
-  await expect(table.getByRole("cell", { name: "auth.login_succeeded", exact: true })).toBeVisible();
-  await expect(table.getByRole("cell", { name: user.id, exact: true })).toHaveCount(2);
+  await report.getByRole("searchbox", { name: "Buscar en el historial", exact: true }).fill(user.id);
+  await report.getByLabel("Actividad", { exact: true }).selectOption("auth.login_succeeded");
+  await expect(report.getByText("1 evento", { exact: true })).toBeVisible();
+  const table = report.getByRole("table", { name: "Historial de actividad", exact: true });
+  await expect(table.getByRole("button", { name: "Inicio de sesión", exact: true })).toBeVisible();
+  await table.getByRole("button", { name: "Inicio de sesión", exact: true }).click();
+  const detail = page.getByRole("dialog", { name: "Detalle del evento", exact: true });
+  await detail.getByText("Referencia técnica", { exact: true }).click();
+  await expect(detail.getByText("auth.login_succeeded", { exact: true })).toBeVisible();
+  await expect(detail.getByText(user.id, { exact: true })).toHaveCount(2);
+  await detail.getByRole("button", { name: "Cerrar", exact: true }).click();
   await expect(
     page
       .getByRole("navigation", { name: "Módulos disponibles", exact: true })

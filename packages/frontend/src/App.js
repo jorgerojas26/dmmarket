@@ -234,6 +234,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                           '/proveedores',
                           '/configuracion',
                           '/acceso',
+                          '/auditoria',
                       ].includes(path) ? (
                         view.content
                     ) : view ? (
