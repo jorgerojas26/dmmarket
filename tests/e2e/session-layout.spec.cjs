@@ -220,7 +220,7 @@ test("el marco y la sesión funcionan sin acceso a almacenamiento persistente de
   expect(errors).toEqual([]);
 });
 
-test("cambiar de módulo valida acceso antes de reutilizar datos privados de la caché", async ({
+test("navegar dentro de una sesión validada no bloquea el marco ni reinicia la referencia", async ({
   page,
   environment,
 }) => {
@@ -234,28 +234,20 @@ test("cambiar de módulo valida acceso antes de reutilizar datos privados de la 
   });
   await login(page, environment, user);
   await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
-  let release;
-  const gate = new Promise((resolve) => {
-    release = resolve;
+  await page.evaluate(() => {
+    window.navigationReference = document.querySelector(".app-navbar-ref");
   });
-  let waiting = false;
-  await page.route("**/api/auth/session", async (route) => {
-    const response = await sessionReply(page, environment);
-    waiting = true;
-    await gate;
-    await route.fulfill(response).catch(() => {});
+  const requests = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (["/api/auth/session", "/api/currency_rates"].includes(path)) requests.push(path);
   });
-  try {
-    await page.getByRole("link", { name: "Configuración", exact: true }).click();
-    await expect.poll(() => waiting).toBe(true);
-    await expect(page.getByRole("main", { name: "Validando acceso", exact: true })).toBeVisible({ timeout: 1500 });
-    await expect(page.getByRole("table")).toHaveCount(0);
-    release();
-    await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
-  } finally {
-    release();
-    await page.unrouteAll({ behavior: "wait" });
-  }
+  await page.getByRole("link", { name: "Configuración", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Tasas BCV", exact: true })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Validando acceso", exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => document.contains(window.navigationReference))).toBe(true);
+  await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
+  expect(requests).toEqual([]);
 });
 
 test("una respuesta de sesión ilegible no deja datos privados visibles por el fallback de SWR", async ({

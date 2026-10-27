@@ -57,7 +57,7 @@ export default function UserMenu({ onLogout, onNavigate, administration }) {
         .join('')
         .toLocaleUpperCase();
     const roleNames = data?.roles.map((role) => role.name).join(' · ');
-    const roleText = error ? 'Rol no disponible' : data ? roleNames || 'Sin rol asignado' : 'Cargando rol…';
+    const roleText = data ? roleNames || 'Sin rol asignado' : error ? 'Rol no disponible' : 'Cargando rol…';
     return (
         <Dropdown align="end" className="user-menu">
             <Dropdown.Toggle

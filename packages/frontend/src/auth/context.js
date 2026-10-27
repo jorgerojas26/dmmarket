@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useHistory, useLocation } from 'react-router-dom';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import useSWR from 'swr';
 import { authRequest, authTransportGeneration, clearAuthTransport, setCsrfToken } from './transport';
 
@@ -8,8 +8,6 @@ export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }) {
     const history = useHistory();
-    const location = useLocation();
-    const previousLocation = useRef(location);
     const [session, setSession] = useState(null);
     const [checking, setChecking] = useState(true);
     const [failure, setFailure] = useState('');
@@ -173,24 +171,6 @@ export function AuthProvider({ children }) {
         },
         [apply, check, notify, history, mutateSession],
     );
-
-    useLayoutEffect(() => {
-        const previous = previousLocation.current;
-        previousLocation.current = location;
-        const changed =
-            previous.pathname !== location.pathname ||
-            previous.search !== location.search ||
-            previous.hash !== location.hash;
-        const homeRedirect = previous.pathname === '/' && history.action === 'REPLACE';
-        if (
-            !busy.current &&
-            current.current?.stage === 'ready' &&
-            changed &&
-            !homeRedirect &&
-            (previous.pathname !== location.pathname || history.action === 'POP')
-        )
-            void check();
-    }, [location.pathname, location.search, location.hash, history.action, check]);
 
     useEffect(() => {
         const restore = (event) => {

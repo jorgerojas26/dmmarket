@@ -76,37 +76,30 @@ test("URL directa y rutas pendientes no montan formularios ni consultas protegid
   expect(requested.filter((path) => !path.startsWith("/api/auth/session"))).toEqual([]);
 });
 
-test("volver atrás revalida en MySQL antes de mostrar el módulo y no recupera resultados privados", async ({
+test("volver atrás reutiliza los datos de la misma sesión sin bloquear por otra validación", async ({
   page,
   environment,
 }) => {
   const user = await inventoryUser(environment, [grant("inventory.read"), grant("rates.read")]);
   await login(page, environment, user);
   const inventory = page.getByRole("region", { name: "Inventario", exact: true });
-  await inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true }).fill("Inventario sintético");
   await expect(inventory.getByRole("cell", { name: "I-A", exact: true })).toBeVisible();
+  await expect(page.locator(".user-menu-role")).not.toHaveText("Cargando rol…");
   await openModule(page, "Configuración", "Tasas BCV");
   await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
-  const connection = await environment.db.client.acquireConnection();
-  let locked = false;
-  try {
-    await environment.db.raw("LOCK TABLES dmmarket_auth_users WRITE").connection(connection);
-    locked = true;
-    await page.goBack();
-    await expect(page.getByRole("main", { name: "Validando acceso", exact: true })).toHaveAttribute(
-      "aria-busy",
-      "true",
-    );
-    await expect(page.getByRole("table")).toHaveCount(0);
-    await expect(page.getByRole("cell", { name: "I-A", exact: true })).toHaveCount(0);
-    await environment.db.raw("UNLOCK TABLES").connection(connection);
-    locked = false;
-    await expect(inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true })).toHaveValue("");
-    await expect(inventory.getByRole("cell", { name: "I-A", exact: true })).toBeVisible();
-  } finally {
-    if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
-    await environment.db.client.releaseConnection(connection);
-  }
+  await page.evaluate(() => {
+    window.previousAccountMenu = document.querySelector(".user-menu-trigger");
+  });
+  let validations = 0;
+  await page.route("**/api/auth/session", (route) => {
+    validations++;
+    return route.continue();
+  });
+  await page.goBack();
+  await expect(inventory.getByRole("cell", { name: "I-A", exact: true })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Validando acceso", exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => document.contains(window.previousAccountMenu))).toBe(true);
+  expect(validations).toBe(0);
 });
 
 test("móvil abre y cierra navegación y cambiar de cuenta no conserva el módulo anterior", async ({
