@@ -231,7 +231,7 @@ test("revalidar con reportes bloqueados no expulsa una sesión válida ni agota 
     }, 5000);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(reference).toBeVisible({ timeout: 7000 });
-    await expect(page.getByRole("alert").filter({ hasText: "No se puede validar la sesión" })).toHaveCount(0);
+    await expect(page.locator(".auth-recovery-page")).toHaveCount(0);
   } finally {
     if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
     await environment.db.client.releaseConnection(connection);
@@ -308,13 +308,13 @@ test("MySQL realmente suspendido oculta datos sin fallback anónimo y recupera",
   docker("pause", environment.container);
   try {
     await page.reload();
-    await expect(page.getByRole("alert").filter({ hasText: "No se puede validar la sesión" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Conexión interrumpida", exact: true })).toBeVisible();
     await expect(page.getByRole("table")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toHaveCount(0);
   } finally {
     docker("unpause", environment.container);
   }
-  await page.getByRole("button", { name: "Reintentar validación" }).click();
+  await page.getByRole("button", { name: "Reintentar", exact: true }).click();
   await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
 });
 

@@ -1,6 +1,7 @@
 let originalFetch;
 let generation = 0;
 let csrfToken = null;
+let unavailable = false;
 const pending = new Set();
 
 export function authTransportGeneration() {
@@ -12,6 +13,10 @@ export function clearAuthTransport() {
     csrfToken = null;
     for (const controller of pending) controller.abort();
     pending.clear();
+}
+
+export function setAuthUnavailable(value) {
+    unavailable = value;
 }
 
 export function setCsrfToken(value) {
@@ -55,6 +60,12 @@ export function installAuthTransport() {
         );
         const headers = new Headers(init.headers || (typeof resource !== 'string' ? resource.headers : undefined));
         const method = (init.method || (typeof resource !== 'string' ? resource.method : 'GET')).toUpperCase();
+        if (unavailable && !['GET', 'HEAD', 'OPTIONS'].includes(method) && url.pathname !== '/api/auth/logout') {
+            cleanup();
+            const error = new Error('La conexión está interrumpida.');
+            error.status = 503;
+            throw error;
+        }
         if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) headers.set('x-csrf-token', csrfToken);
         try {
             const response = await originalFetch(resource, {
@@ -105,7 +116,17 @@ export async function authRequest(path, body, method = 'POST') {
                   body: JSON.stringify(body),
               },
     );
-    const result = await response.json();
+    let result;
+    try {
+        result = await response.json();
+    } catch (error) {
+        if (['AbortError', 'TimeoutError'].includes(error.name)) throw error;
+        if (response.ok) {
+            const invalid = new Error('No se pudo verificar la respuesta del servidor.');
+            invalid.code = 'INVALID_RESPONSE';
+            throw invalid;
+        }
+    }
     if (!response.ok) {
         const error = new Error(result?.error?.message || 'No se pudo completar el acceso.');
         error.status = response.status;

@@ -9,10 +9,11 @@ import { fetcher, swrConfig } from 'swr-config';
 import App from '../App';
 import { AuthProvider, useAuth } from './context';
 import { EnrollmentForm, InitialAccountForm, LoginForm, MfaForm, PasswordForm, ReauthenticationDialog } from './forms';
+import SessionRecovery, { ConnectionNotice } from './recovery';
 import { authTransportGeneration } from './transport';
 
 function BoundaryContent() {
-    const { session, checking, failure, epoch, action, check } = useAuth();
+    const { session, checking, failure, degraded, retrying, restartLogin, epoch, action, check } = useAuth();
     const [logoutError, setLogoutError] = useState('');
     const generation = authTransportGeneration();
     const cache = useMemo(() => new Map(), [epoch, generation]);
@@ -24,26 +25,40 @@ function BoundaryContent() {
             setLogoutError('No se pudo confirmar la salida en el servidor. Vuelve a intentarlo.');
         }
     };
-    if (checking || (!failure && session?.stage === 'ready')) {
+    if (failure)
         return (
-            <SidebarProvider>
-                <SWRConfig
-                    key={`${epoch}:${generation}:ready`}
-                    value={{
-                        ...swrConfig,
-                        fetcher,
-                        provider: () => cache,
-                        isPaused: () => generation !== authTransportGeneration(),
-                    }}
-                >
-                    <CurrencyRateProvider>
-                        <UpdateProvider>
-                            <App pending={checking} onLogout={signOut} logoutError={logoutError} />
-                        </UpdateProvider>
-                        {!checking && <ReauthenticationDialog />}
-                    </CurrencyRateProvider>
-                </SWRConfig>
-            </SidebarProvider>
+            <SessionRecovery reason={failure} retrying={retrying} onRetry={() => check(false)} onLeave={restartLogin} />
+        );
+    if (checking || session?.stage === 'ready') {
+        return (
+            <>
+                <ConnectionNotice
+                    visible={degraded}
+                    retrying={retrying}
+                    onRetry={() => check(false)}
+                    onLeave={restartLogin}
+                />
+                <div className="auth-session-content" inert={degraded ? '' : undefined}>
+                    <SidebarProvider>
+                        <SWRConfig
+                            key={`${epoch}:${generation}:ready`}
+                            value={{
+                                ...swrConfig,
+                                fetcher,
+                                provider: () => cache,
+                                isPaused: () => generation !== authTransportGeneration(),
+                            }}
+                        >
+                            <CurrencyRateProvider>
+                                <UpdateProvider>
+                                    <App pending={checking} onLogout={signOut} logoutError={logoutError} />
+                                </UpdateProvider>
+                                {!checking && <ReauthenticationDialog />}
+                            </CurrencyRateProvider>
+                        </SWRConfig>
+                    </SidebarProvider>
+                </div>
+            </>
         );
     }
     return (
@@ -72,33 +87,22 @@ function BoundaryContent() {
                         {logoutError}
                     </p>
                 )}
-                {failure ? (
-                    <section>
-                        <p role="alert">{failure}</p>
-                        <button type="button" className="btn btn-primary" onClick={() => check()}>
-                            Reintentar validación
-                        </button>
-                    </section>
-                ) : (
-                    <div key={`${epoch}:${session?.stage}`}>
-                        {session?.stage === 'first-user' && <InitialAccountForm />}
-                        {session?.stage === 'setup-required' && (
-                            <section>
-                                <h2 className="h4">Configuración inicial pendiente</h2>
-                                <p>
-                                    Completa la creación del primer administrador desde el propio servidor de DMMarket.
-                                </p>
-                                <button type="button" className="btn btn-primary" onClick={() => check()}>
-                                    Actualizar estado
-                                </button>
-                            </section>
-                        )}
-                        {session?.stage === 'anonymous' && <LoginForm />}
-                        {session?.stage === 'password' && <PasswordForm />}
-                        {session?.stage === 'mfa' && <MfaForm />}
-                        {session?.stage === 'mfa-enrollment' && <EnrollmentForm />}
-                    </div>
-                )}
+                <div key={`${epoch}:${session?.stage}`}>
+                    {session?.stage === 'first-user' && <InitialAccountForm />}
+                    {session?.stage === 'setup-required' && (
+                        <section>
+                            <h2 className="h4">Configuración inicial pendiente</h2>
+                            <p>Completa la creación del primer administrador desde el propio servidor de DMMarket.</p>
+                            <button type="button" className="btn btn-primary" onClick={() => check()}>
+                                Actualizar estado
+                            </button>
+                        </section>
+                    )}
+                    {session?.stage === 'anonymous' && <LoginForm />}
+                    {session?.stage === 'password' && <PasswordForm />}
+                    {session?.stage === 'mfa' && <MfaForm />}
+                    {session?.stage === 'mfa-enrollment' && <EnrollmentForm />}
+                </div>
             </div>
         </main>
     );

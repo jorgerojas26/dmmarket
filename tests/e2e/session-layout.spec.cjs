@@ -142,7 +142,11 @@ for (const [width, collapsed, fontSize = 16] of [
   });
 }
 
-test("un error de sesión no conserva datos privados como fallback de SWR", async ({ page, environment }) => {
+test("una interrupción prolongada elimina los datos privados y permite recuperar la sesión", async ({
+  page,
+  environment,
+}) => {
+  await page.clock.install();
   await openSales(page, environment);
   await page.route("**/api/auth/session", (route) =>
     route.fulfill({
@@ -153,11 +157,12 @@ test("un error de sesión no conserva datos privados como fallback de SWR", asyn
   );
   await page.waitForTimeout(1100);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByRole("alert")).toContainText("No se puede validar la sesión.");
+  await page.clock.runFor(61000);
+  await expect(page.getByRole("heading", { name: "Conexión interrumpida", exact: true })).toBeVisible();
   await expect(page.locator(".dashboard-kpi-card")).toHaveCount(0);
   await expect(page.getByRole("table")).toHaveCount(0);
   await page.unrouteAll({ behavior: "wait" });
-  await page.getByRole("button", { name: "Reintentar validación", exact: true }).click();
+  await page.getByRole("button", { name: "Reintentar", exact: true }).click();
   await expect(page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" })).toContainText("$100,00");
 });
 
@@ -260,7 +265,9 @@ test("una respuesta de sesión ilegible no deja datos privados visibles por el f
   );
   await page.waitForTimeout(1100);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.getByRole("alert")).toContainText("No se puede validar la sesión.", { timeout: 2000 });
+  await expect(page.getByRole("heading", { name: "No pudimos validar tu acceso", exact: true })).toBeVisible({
+    timeout: 2000,
+  });
   await expect(page.locator(".dashboard-kpi-card")).toHaveCount(0);
   await expect(page.getByRole("table")).toHaveCount(0);
 });
