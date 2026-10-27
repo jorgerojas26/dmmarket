@@ -75,8 +75,13 @@ test("sin permiso específico no se inicia descarga BCV ni respaldo", async () =
   expect(environment.rateSource.requests()).toBe(before);
 });
 
-test("sincronización autorizada usa HTTP y XLS reales, audita actor y no cambia REF", async () => {
+test("sincronización BCV no exige reautenticación reciente, audita actor y no cambia REF", async () => {
   const who = await actor([grant("rates.read"), grant("rates.sync")]);
+  await environment
+    .db("dmmarket_auth_session_state")
+    .where("user_id", who.user.id)
+    .update({ password_ms: Date.now() - 300001, mfa_ms: Date.now() - 300001 });
+  expect((await who.client.request("/api/auth/session")).body.stage).toBe("ready");
   const result = await who.client.request("/api/currency_rates/bcv/sync", {
     method: "POST",
     body: { confirmed: true },
@@ -96,6 +101,28 @@ test("sincronización autorizada usa HTTP y XLS reales, audita actor y no cambia
   ).toBeTruthy();
 });
 
+test("consulta BCV conserva CSRF, confirmación y validación de entradas sin autenticación reciente", async () => {
+  const who = await actor([grant("rates.read"), grant("rates.sync")]);
+  await environment
+    .db("dmmarket_auth_session_state")
+    .where("user_id", who.user.id)
+    .update({ password_ms: Date.now() - 300001, mfa_ms: Date.now() - 300001 });
+  const before = environment.rateSource.requests();
+  const endpoint = "/api/currency_rates/bcv/sync";
+  expect((await who.client.request(endpoint, { method: "POST", body: { confirmed: true }, csrf: "bad" })).status).toBe(
+    403,
+  );
+  expect((await who.client.request(endpoint, { method: "POST", body: { confirmed: false } })).status).toBe(400);
+  expect((await who.client.request(endpoint, { method: "POST", body: { confirmed: true, tasa: 1 } })).status).toBe(400);
+  expect(environment.rateSource.requests()).toBe(before);
+  expect(
+    await environment
+      .db("dmmarket_auth_events")
+      .where({ actor_id: who.user.id, action: "rates.sync_requested" })
+      .first(),
+  ).toBeUndefined();
+});
+
 test("creación exige confirmación y reautenticación reciente antes del proceso externo", async () => {
   const who = await actor([grant("backups.read"), grant("backups.create")]);
   expect((await who.client.request("/api/backups", { method: "POST", body: { confirmed: false } })).status).toBe(400);
@@ -106,7 +133,9 @@ test("creación exige confirmación y reautenticación reciente antes del proces
     .db("dmmarket_auth_session_state")
     .where("user_id", who.user.id)
     .update({ password_ms: Date.now() - 300001 });
-  expect((await who.client.request("/api/backups", { method: "POST", body: { confirmed: true } })).status).toBe(403);
+  const denied = await who.client.request("/api/backups", { method: "POST", body: { confirmed: true } });
+  expect(denied.status).toBe(403);
+  expect(denied.body.error.code).toBe("RECENT_AUTH_REQUIRED");
 });
 
 test("respaldo transaccional rechaza tablas no transaccionales sin activar bloqueo global", async () => {

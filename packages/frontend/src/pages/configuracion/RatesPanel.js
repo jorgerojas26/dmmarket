@@ -127,7 +127,7 @@ const TasaDelDia = ({ vigente, buscada, buscando, error }) => {
 };
 
 const RatesPanel = () => {
-    const { can, runPrivileged } = useAuth();
+    const { can } = useAuth();
     const readable = can('rates.read');
     const [requestId, setRequestId] = useState(null);
     const {
@@ -159,7 +159,7 @@ const RatesPanel = () => {
         setSyncError(null);
         setSyncMessage(null);
         try {
-            const resultado = await runPrivileged(() => syncBcvRates());
+            const resultado = await syncBcvRates();
             setRequestId(resultado.operationId);
             setSyncMessage('Consulta del BCV solicitada.');
             if (readable) await refreshStatus();

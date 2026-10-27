@@ -249,7 +249,7 @@ function createOperationReports({ sessions, security, db, services = {} }) {
         const operationId = randomUUID();
         const actorId = await sessions.withSession(
           req.sessionID,
-          { recent: true },
+          { recent: service === "backup" },
           async ({ transaction, access, user }) => {
             if (!access.hasGlobal(capability)) fail(403);
             empty(req.query);
