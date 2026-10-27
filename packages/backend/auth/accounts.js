@@ -184,6 +184,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
       const motive = validateReason(reason);
       return administrator(sid, "access.users", async (connection, actorId) => {
         await targetUser(connection, id);
+        if (!enabled && id === actorId) fail(409, "No puedes deshabilitar tu propia cuenta.");
         await connection("dmmarket_auth_users").where("id", id).update({ enabled });
         await invalidateUser(connection, id, time(), "account-status");
         if (!enabled) await assertAdministratorRemains(connection);

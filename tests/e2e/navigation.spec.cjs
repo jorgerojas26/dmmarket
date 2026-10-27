@@ -1,4 +1,4 @@
-const { test, expect, login, openModule } = require("./fixtures.cjs");
+const { test, expect, login, openModule, logout } = require("./fixtures.cjs");
 
 async function inventoryUser(environment, permissions) {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
@@ -121,7 +121,7 @@ test("móvil abre y cierra navegación y cambiar de cuenta no conserva el módul
   await expect(page.getByRole("region", { name: "Inventario", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();
-  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  await logout(page);
   await login(page, environment, second);
   await expect(page).toHaveURL(`${environment.origin}/configuracion#tasas`);
   await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();

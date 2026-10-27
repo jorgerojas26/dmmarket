@@ -1,5 +1,5 @@
 const { randomBytes } = require("node:crypto");
-const { test: base, expect } = require("./fixtures.cjs");
+const { test: base, expect, logout } = require("./fixtures.cjs");
 const { startEnvironment } = require("../support/auth-environment.cjs");
 const { startCompiledSetupSandbox } = require("../support/setup-sandbox.cjs");
 const { seedSales } = require("../support/sales-fixtures.cjs");
@@ -74,7 +74,7 @@ test("primera apertura tras instalador compilado crea administrador y completa M
     const ready = await setup.request("status");
     expect(ready.body.administratorReady).toBe(true);
     expect(ready.body.bootstrapInstructions).not.toContain("--bootstrap-access");
-    await page.getByRole("button", { name: "Salir", exact: true }).click();
+    await logout(page);
     await expect(page.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
     expect(Number((await environment.db("dmmarket_auth_users").count("* as n").first()).n)).toBe(1);
     expect((await environment.db("dmmarket_auth_control").first()).first_setup).toBe("closed");

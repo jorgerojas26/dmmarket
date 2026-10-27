@@ -167,6 +167,19 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
     }),
   );
   router.get(
+    "/profile",
+    handler(async (req, res) => {
+      const profile = await sessions.withSession(req.sessionID, {}, async ({ user, transaction }) => ({
+        roles: await transaction("dmmarket_auth_user_roles as ur")
+          .join("dmmarket_auth_roles as r", "r.id", "ur.role_id")
+          .where("ur.user_id", user.id)
+          .select("r.id", "r.name")
+          .orderBy("r.name"),
+      }));
+      res.json(profile);
+    }),
+  );
+  router.get(
     "/directory",
     handler(async (req, res) => res.json(await directory.users(req.sessionID, req.query))),
   );

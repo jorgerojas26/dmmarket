@@ -1,5 +1,5 @@
 const { randomBytes } = require("node:crypto");
-const { test, expect, login, openModule, setNoe, setCalendarMonth } = require("./fixtures.cjs");
+const { test, expect, login, openModule, setNoe, setCalendarMonth, logout } = require("./fixtures.cjs");
 const { docker } = require("../support/auth-environment.cjs");
 const ownerPermissions = ["access.users", "access.roles", "access.links", "access.recover"].map((capability) => ({
   capability,
@@ -31,7 +31,7 @@ test("login incorrecto/correcto, permisos, cookies y cambio propio sin MFA", asy
   const password = randomBytes(24).toString("base64url");
   await changePassword(page, user.password, password);
   await expect(page.getByRole("heading", { name: "Cambiar mi contraseña", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  await logout(page);
   await login(page, environment, { ...user, password });
   await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
 });
@@ -140,10 +140,11 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await changePassword(reader, replacement, randomBytes(24).toString("base64url"));
     await expect(reader.getByRole("status", { name: "Usuario conectado" })).toHaveText(username);
     await page.getByRole("button", { name: `Administrar ${username}`, exact: true }).click();
-    await page.getByRole("button", { name: "Bloquear cuenta", exact: true }).click();
-    await page.getByRole("textbox", { name: "Motivo de la operación" }).fill("Bloqueo real de prueba");
-    await page.getByRole("button", { name: "Confirmar operación", exact: true }).click();
-    await expect(page.getByRole("row").filter({ hasText: username })).toContainText("Bloqueado");
+    await page.getByRole("button", { name: "Deshabilitar usuario", exact: true }).click();
+    const disable = page.getByRole("dialog", { name: "Deshabilitar usuario", exact: true });
+    await disable.getByRole("textbox", { name: "Motivo de la operación" }).fill("Bloqueo real de prueba");
+    await disable.getByRole("button", { name: "Deshabilitar usuario", exact: true }).click();
+    await expect(page.getByRole("row").filter({ hasText: username })).toContainText("Deshabilitado");
     expect(await reader.evaluate(async () => (await fetch("/api/currency_rates")).status)).toBe(401);
     await expect(reader.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   } finally {
@@ -158,7 +159,7 @@ test("logout y expiración eliminan datos en dos pestañas y al volver atrás", 
   const second = await context.newPage();
   await second.goto(environment.origin);
   await expect(second.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  await logout(page);
   await expect(second.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   await second.goto(`${environment.origin}/history-check`);
   await second.goBack();
@@ -181,7 +182,7 @@ test("cambiar cuenta no reutiliza caché SWR mientras SQL está bloqueado", asyn
   const second = await environment.seedUser();
   await login(page, environment, first);
   await expect(page.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  await logout(page);
   await expect(page.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   const connection = await environment.db.client.acquireConnection();
   let locked = false;
@@ -394,7 +395,6 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
     await expect(page.getByLabel(retired, { exact: true })).toHaveCount(0);
   await page.getByLabel("Ver costos y utilidad de ventas", { exact: true }).selectOption("assigned");
   await page.getByLabel("Consultar tasas de cambio", { exact: true }).selectOption("global");
-  await page.getByRole("textbox", { name: "Motivo del cambio de rol" }).fill("Crear rol real desde interfaz");
   const createdResponse = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/roles") && response.request().method() === "POST",
   );
@@ -407,7 +407,6 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   await expect(page.getByLabel("Consultar ventas", { exact: true })).toHaveValue("assigned");
   await expect(page.getByLabel("Ver costos y utilidad de ventas", { exact: true })).toHaveValue("assigned");
   await page.getByLabel("Consultar ventas", { exact: true }).selectOption("global");
-  await page.getByRole("textbox", { name: "Motivo del cambio de rol" }).fill("Cambiar alcance real del rol");
   const updatedResponse = page.waitForResponse(
     (response) => response.url().endsWith(`/api/auth/roles/${role.id}`) && response.request().method() === "PUT",
   );
@@ -418,7 +417,6 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   await page.getByLabel("Buscar usuarios", { exact: true }).fill(user.username);
   await page.getByRole("button", { name: `Administrar ${user.username}`, exact: true }).click();
   await page.getByRole("checkbox", { name, exact: true }).check();
-  await page.getByRole("textbox", { name: "Motivo de asignación de roles" }).fill("Asignar rol real desde interfaz");
   await page.getByRole("button", { name: "Guardar roles del usuario", exact: true }).click();
   await expect(page.getByText("Roles asignados y sesiones del usuario revocadas.", { exact: true })).toBeVisible();
   const context = await browser.newContext();
@@ -854,7 +852,7 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
     expect(payload.products.map((row) => row.rawProfit)).toEqual([100, 80]);
     expect(JSON.stringify(payload)).not.toMatch(/netProfit|inventoryValue|cumulativeProfit|profitPercent/);
   }
-  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  await logout(page);
   const user = await environment.seedUser({
     permissions: ["sales.read", "sales.financial"]
       .map((capability) => ({ capability, scope: "assigned" }))

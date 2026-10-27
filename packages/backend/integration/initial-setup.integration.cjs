@@ -117,7 +117,7 @@ test("primera cuenta es superusuario global con contraseña elegida, SID nuevo y
     .join("dmmarket_auth_user_roles as ur", "ur.role_id", "r.id")
     .where("ur.user_id", user.id)
     .first("r.name");
-  expect(role.name).toBe("Superusuario inicial");
+  expect(role.name).toBe("Superusuario");
   expect((await client.request("/api/currency_rates")).status).toBe(403);
   expect((await client.request("/api/auth/users")).status).toBe(403);
   expect((await environment.db("dmmarket_auth_control").first()).first_setup).toBe("closed");

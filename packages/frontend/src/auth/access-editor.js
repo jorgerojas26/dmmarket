@@ -18,12 +18,11 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
     const { check } = useAuth();
     const [name, setName] = useState(role?.name || '');
     const [grants, setGrants] = useState(() => grantsFor(role));
-    const [reason, setReason] = useState('');
     const [busy, setBusy] = useState(false);
     const changed =
         name !== (role?.name || '') ||
         catalog.some(({ capability }) => (grants[capability] || '') !== (grantsFor(role)[capability] || ''));
-    const dirty = changed || Boolean(reason);
+    const dirty = changed;
     const { requestClose, confirmation } = useDiscardChanges(dirty);
     useEffect(() => {
         onDirtyChange(dirty);
@@ -33,6 +32,25 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
         <>
             <div className="access-header">
                 <div>
+                    <button
+                        type="button"
+                        className="access-back"
+                        disabled={busy}
+                        onClick={() => requestClose(onCancel)}
+                    >
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            aria-hidden="true"
+                        >
+                            <path d="m12 5-7 7 7 7M5 12h14" />
+                        </svg>
+                        Volver a roles
+                    </button>
                     <span className="access-eyebrow">Acceso / Roles</span>
                     <h2>{role ? 'Editar rol' : 'Crear rol'}</h2>
                     <p>Define qué puede hacer este perfil y sobre qué datos.</p>
@@ -54,7 +72,6 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
                                 permissions: Object.entries(grants)
                                     .filter(([, scope]) => scope)
                                     .map(([capability, scope]) => ({ capability, scope })),
-                                reason,
                             },
                             role ? 'PUT' : 'POST',
                         );
@@ -123,13 +140,6 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
                             Los permisos limitados necesitan vendedores vinculados al usuario. Al modificar un rol se
                             cerrarán las sesiones de sus usuarios.
                         </p>
-                        <Field
-                            label="Motivo del cambio de rol"
-                            value={reason}
-                            onChange={setReason}
-                            minLength={5}
-                            maxLength={64}
-                        />
                     </div>
                 </ManagementForm>
             </div>
@@ -248,18 +258,17 @@ function RolesAssignment({ id, initial, roles, onDirtyChange, onBusyChange, onSa
     const { check } = useAuth();
     const [selected, setSelected] = useState(initial);
     const [saved, setSaved] = useState(initial);
-    const [reason, setReason] = useState('');
     const [message, setMessage] = useState('');
     const changed = [...selected].sort().join(',') !== [...saved].sort().join(',');
     useEffect(() => {
-        if (!changed && !reason) {
+        if (!changed) {
             setSelected(initial);
             setSaved(initial);
         }
-    }, [initial, changed, reason]);
+    }, [initial, changed]);
     useEffect(() => {
-        onDirtyChange(changed || Boolean(reason));
-    }, [changed, reason, onDirtyChange]);
+        onDirtyChange(changed);
+    }, [changed, onDirtyChange]);
     return (
         <section className="access-assignment" aria-label="Roles del usuario">
             <h3>Roles</h3>
@@ -269,10 +278,9 @@ function RolesAssignment({ id, initial, roles, onDirtyChange, onBusyChange, onSa
                 disabled={!changed}
                 onBusyChange={onBusyChange}
                 onSubmit={async () => {
-                    await authRequest(`users/${id}/roles`, { roleIds: selected, reason }, 'PUT');
+                    await authRequest(`users/${id}/roles`, { roleIds: selected }, 'PUT');
                     await onSaved(selected);
                     setSaved(selected);
-                    setReason('');
                     setMessage('Roles asignados y sesiones del usuario revocadas.');
                     await check(false);
                 }}
@@ -299,13 +307,6 @@ function RolesAssignment({ id, initial, roles, onDirtyChange, onBusyChange, onSa
                     )}
                 </fieldset>
                 <p className="access-muted">Guardar los cambios cerrará las sesiones de este usuario.</p>
-                <Field
-                    label="Motivo de asignación de roles"
-                    value={reason}
-                    onChange={setReason}
-                    minLength={5}
-                    maxLength={64}
-                />
                 {message && (
                     <p role="status" className="access-success">
                         {message}

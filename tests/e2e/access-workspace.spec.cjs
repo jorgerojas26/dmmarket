@@ -1,5 +1,5 @@
 const { randomUUID } = require("node:crypto");
-const { test, expect, login } = require("./fixtures.cjs");
+const { test, expect, login, logout } = require("./fixtures.cjs");
 
 const permissions = ["access.users", "access.roles", "access.links", "access.recover"].map((capability) => ({
   capability,
@@ -50,7 +50,7 @@ test("directorio filtra en servidor, pagina y muestra roles sin formularios perm
   await expect(page.getByText("1–1 de 1", { exact: true })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: rows[104].username });
   await expect(row).toContainText("Ventas de prueba");
-  await expect(row).toContainText("Bloqueado");
+  await expect(row).toContainText("Deshabilitado");
   await page.getByLabel("Buscar usuarios", { exact: true }).fill("sin-coincidencias");
   await expect(page.getByText("No se encontraron usuarios.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Página siguiente", exact: true })).toBeDisabled();
@@ -105,13 +105,13 @@ test("roles usan lenguaje humano, conservan cambios y persisten alcances", async
   await page.getByLabel("Consultar ventas", { exact: true }).selectOption("assigned");
   await page.getByLabel("Ver costos y utilidad de ventas", { exact: true }).selectOption("assigned");
   await expect(page.getByText("sales.financial", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Cancelar", exact: true }).click();
+  await page.getByRole("button", { name: "Volver a roles", exact: true }).click();
   await page
     .getByRole("dialog", { name: "¿Descartar los cambios?", exact: true })
     .getByRole("button", { name: "Seguir editando", exact: true })
     .click();
   await expect(page.getByLabel("Consultar ventas", { exact: true })).toHaveValue("assigned");
-  await page.getByLabel("Motivo del cambio de rol", { exact: true }).fill("Crear un perfil de ventas limitado");
+  await expect(page.getByLabel("Motivo del cambio de rol", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Rol guardado" })).toBeVisible();
   await page.getByRole("button", { name: "Editar Ventas limitadas", exact: true }).click();
@@ -194,7 +194,7 @@ test("vincula vendedores por nombre sin conceder lectura de negocio", async ({ p
   await expect(page.getByRole("button", { name: "Crear usuario", exact: true })).toHaveCount(0);
   await expect(page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true })).toHaveCount(0);
   const panel = await openUser(page, target.username);
-  await expect(panel.getByRole("button", { name: "Bloquear cuenta", exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Deshabilitar usuario", exact: true })).toHaveCount(0);
   await panel.getByLabel("Buscar vendedores", { exact: true }).fill("Vendedora del selector");
   await panel.getByRole("checkbox", { name: "Vendedora del selector · SELECTOR", exact: true }).check();
   await panel.getByLabel("Motivo del cambio de vínculos", { exact: true }).fill("Vincular por nombre desde el panel");
@@ -229,7 +229,7 @@ test("APIs del directorio deniegan lectores y validan filtros", async ({ page, e
       async () => (await fetch(`/api/auth/seller-options?ids=${Array(101).fill("A").join(",")}`)).status,
     ),
   ).toBe(400);
-  await page.getByRole("button", { name: "Salir", exact: true }).click();
+  await logout(page);
   await login(page, environment, await environment.seedUser());
   for (const endpoint of ["directory", "seller-options"]) {
     expect(await page.evaluate(async (endpoint) => (await fetch(`/api/auth/${endpoint}`)).status, endpoint)).toBe(403);
@@ -249,4 +249,124 @@ test("Acceso móvil mantiene navegación, paneles y permisos sin desbordar", asy
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   await expect(page.getByLabel("Consultar ventas", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("menú de usuario muestra avatar y rol real y contiene la salida con iconos", async ({ page, environment }) => {
+  const user = await environment.seedUser();
+  const assignment = await environment.db("dmmarket_auth_user_roles").where("user_id", user.id).first();
+  await environment.db("dmmarket_auth_roles").where("id", assignment.role_id).update({ name: "Consulta de ventas" });
+  await environment.db("dmmarket_auth_users").where("id", user.id).update({ display_name: "Ana Pérez" });
+  await login(page, environment, user);
+  const trigger = page.getByRole("button", { name: "Menú de cuenta", exact: true });
+  await expect(trigger.locator(".user-menu-avatar")).toHaveText("AP");
+  await expect(trigger).toContainText("Ana Pérez");
+  await expect(trigger).toContainText("Consulta de ventas");
+  await expect(trigger.locator(".user-menu-chevron")).toHaveCount(1);
+  await page.addStyleTag({ content: ".dropdown-toggle::after { display: inline-block; }" });
+  expect(await trigger.evaluate((element) => getComputedStyle(element, "::after").display)).toBe("none");
+  await expect(page.getByRole("button", { name: "Salir", exact: true })).toHaveCount(0);
+  await trigger.click();
+  const menu = page.locator(".user-menu-dropdown");
+  await expect(menu).toContainText(`@${user.username}`);
+  await expect(menu.getByRole("link", { name: "Mi cuenta", exact: true }).locator("svg")).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Salir", exact: true }).locator("svg")).toBeVisible();
+  await expect(menu.getByRole("link", { name: "Acceso", exact: true })).toHaveCount(0);
+  await menu.getByRole("button", { name: "Salir", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
+});
+
+test("Crear rol permite volver desde arriba y asignar roles no exige un motivo", async ({ page, environment }) => {
+  const target = await environment.seedUser({ permissions: [] });
+  const roleId = randomUUID();
+  await environment.db("dmmarket_auth_roles").insert({ id: roleId, name: "Asignación sin motivo" });
+  await enter(page, environment);
+  await page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true }).click();
+  await page.getByRole("button", { name: "Crear rol", exact: true }).click();
+  const back = page.getByRole("button", { name: "Volver a roles", exact: true });
+  await expect(back).toBeVisible();
+  expect((await back.boundingBox()).y).toBeLessThan(250);
+  await back.click();
+  await expect(page.getByRole("button", { name: "Crear rol", exact: true })).toBeVisible();
+  await page.locator(".clients-sidebar").getByRole("button", { name: "Usuarios", exact: true }).click();
+  const panel = await openUser(page, target.username);
+  await panel.getByRole("checkbox", { name: "Asignación sin motivo", exact: true }).check();
+  await expect(panel.getByLabel("Motivo de asignación de roles", { exact: true })).toHaveCount(0);
+  await panel.getByRole("button", { name: "Guardar roles del usuario", exact: true }).click();
+  await expect(panel.getByRole("status").filter({ hasText: "Roles asignados" })).toBeVisible();
+  expect(await environment.db("dmmarket_auth_user_roles").where({ user_id: target.id, role_id: roleId })).toHaveLength(
+    1,
+  );
+});
+
+test("el menú de la fila deshabilita, confirma y permite rehabilitar sin ocultar la propia protección", async ({
+  page,
+  environment,
+}) => {
+  const target = await environment.seedUser({ permissions: [] });
+  const owner = await enter(page, environment);
+  await page.getByLabel("Buscar usuarios", { exact: true }).fill(target.username);
+  await page.getByRole("button", { name: `Opciones de ${target.username}`, exact: true }).click();
+  await page.getByRole("button", { name: "Deshabilitar usuario", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Deshabilitar usuario", exact: true });
+  await expect(dialog).toContainText("se cerrarán sus sesiones");
+  await dialog.getByLabel("Motivo de la operación", { exact: true }).fill("Deshabilitación desde el directorio");
+  await dialog.getByRole("button", { name: "Deshabilitar usuario", exact: true }).click();
+  await expect(page.getByRole("row").filter({ hasText: target.username })).toContainText("Deshabilitado");
+  await page.getByRole("button", { name: `Opciones de ${target.username}`, exact: true }).click();
+  await page.getByRole("button", { name: "Habilitar usuario", exact: true }).click();
+  const enable = page.getByRole("dialog", { name: "Habilitar usuario", exact: true });
+  await enable.getByLabel("Motivo de la operación", { exact: true }).fill("Rehabilitación desde el directorio");
+  await enable.getByRole("button", { name: "Habilitar usuario", exact: true }).click();
+  await expect(page.getByRole("row").filter({ hasText: target.username })).toContainText("Habilitado");
+  await page.getByLabel("Buscar usuarios", { exact: true }).fill(owner.username);
+  await page.getByRole("button", { name: `Opciones de ${owner.username}`, exact: true }).click();
+  await expect(page.getByRole("button", { name: "Deshabilitar usuario", exact: true })).toBeDisabled();
+  await expect(page.getByText("No puedes deshabilitar tu propia cuenta.", { exact: true })).toBeVisible();
+});
+
+test("Crear rol conserva la geometría del marco al cargar el catálogo y en aperturas posteriores", async ({
+  page,
+  environment,
+}) => {
+  await enter(page, environment);
+  for (const width of [1512, 1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    let release;
+    let requested;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const catalogRequested = new Promise((resolve) => {
+      requested = resolve;
+    });
+    const pattern = "**/api/auth/roles/catalog";
+    await page.route(pattern, async (route) => {
+      const response = await route.fetch({ ignoreHTTPSErrors: true });
+      requested();
+      await gate;
+      await route.fulfill({ response });
+    });
+    try {
+      await page.goto(`${environment.origin}/acceso?layout=${width}#roles`);
+      await catalogRequested;
+      const navbar = page.locator(".app-navbar");
+      const workspace = page.locator(".access-workspace");
+      const initialHeader = await navbar.boundingBox();
+      const initialContent = await workspace.boundingBox();
+      for (const cold of [true, false]) {
+        await page.getByRole("button", { name: "Crear rol", exact: true }).click();
+        if (cold) release();
+        await expect(page.getByLabel("Nombre del rol", { exact: true })).toBeVisible();
+        const header = await navbar.boundingBox();
+        const content = await workspace.boundingBox();
+        expect(Math.abs(header.height - initialHeader.height)).toBeLessThan(0.5);
+        expect(Math.abs(content.y - initialContent.y)).toBeLessThan(0.5);
+        expect(Math.abs(content.width - initialContent.width)).toBeLessThan(0.5);
+        await page.getByRole("button", { name: "Volver a roles", exact: true }).click();
+      }
+    } finally {
+      release();
+      await page.unroute(pattern);
+    }
+  }
 });

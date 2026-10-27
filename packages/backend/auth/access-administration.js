@@ -59,6 +59,10 @@ function sellerIds(value) {
   return [...new Set(value)].sort();
 }
 
+function optionalReason(value) {
+  return value === undefined || value === null || value === "" ? null : validateReason(value);
+}
+
 async function createAccessAdministration({ db, sessions, now = Date.now }) {
   await assertAuthSchema(db);
   const administer = (sid, capability, recent, work) =>
@@ -99,7 +103,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
     createRole(sid, input) {
       const name = roleName(input.name);
       const grants = permissions(input.permissions);
-      const reason = validateReason(input.reason);
+      const reason = optionalReason(input.reason);
       return administer(sid, "access.roles", true, async (connection, actorId) => {
         if (await connection("dmmarket_auth_roles").where("name", name).first())
           fail(409, "Ya existe un rol con ese nombre.");
@@ -114,7 +118,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
     updateRole(sid, id, input) {
       const name = roleName(input.name);
       const grants = permissions(input.permissions);
-      const reason = validateReason(input.reason);
+      const reason = optionalReason(input.reason);
       return administer(sid, "access.roles", true, async (connection, actorId) => {
         await target(connection, "dmmarket_auth_roles", id);
         if (await connection("dmmarket_auth_roles").where("name", name).whereNot("id", id).first())
@@ -146,7 +150,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
     },
     setRoles(sid, id, input) {
       const ids = roleIds(input.roleIds);
-      const reason = validateReason(input.reason);
+      const reason = optionalReason(input.reason);
       return administer(sid, "access.roles", true, async (connection, actorId) => {
         await target(connection, "dmmarket_auth_users", id);
         const rows = ids.length ? await connection("dmmarket_auth_roles").whereIn("id", ids).select("id") : [];

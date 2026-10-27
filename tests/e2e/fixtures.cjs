@@ -45,6 +45,17 @@ async function login(page, environment, user) {
   await (await response).finished();
 }
 
+async function logout(page) {
+  const exit = page.getByRole("button", { name: "Salir", exact: true });
+  if (!(await exit.isVisible())) {
+    const menu = page.getByRole("button", { name: "Menú de cuenta", exact: true });
+    const navigation = page.getByRole("button", { name: "Abrir navegación", exact: true });
+    if (!(await menu.isVisible()) && (await navigation.isVisible())) await navigation.click();
+    await menu.click();
+  }
+  await exit.click();
+}
+
 async function openModule(page, name, view) {
   if (name === "Cartera") {
     name = "Clientes";
@@ -89,4 +100,4 @@ async function setCalendarMonth(page, scope, year, month) {
   await days.filter({ has: page.getByText(String(last), { exact: true }) }).click();
   await scope.locator(".date-range-footer").getByRole("button", { name: "Listo", exact: true }).click();
 }
-module.exports = { test, expect, login, openModule, setNoe, setCalendarMonth };
+module.exports = { test, expect, login, logout, openModule, setNoe, setCalendarMonth };

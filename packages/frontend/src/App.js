@@ -1,11 +1,11 @@
 import UpdateToast from 'components/UpdateToast';
+import UserMenu from 'components/UserMenu';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { useSidebar } from 'context/sidebar';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import { useContext, useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
-import Dropdown from 'react-bootstrap/Dropdown';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Link, NavLink, Redirect, useLocation } from 'react-router-dom';
@@ -181,77 +181,13 @@ export default function App({ onLogout, logoutError, pending = false }) {
                                             </div>
                                         )}
                                         <div className="app-navbar-account-actions">
-                                            <Dropdown align="end">
-                                                <Dropdown.Toggle
-                                                    id="account-menu"
-                                                    variant="link"
-                                                    className="nav-link app-navbar-icon app-navbar-account-toggle"
-                                                    aria-label="Menú de cuenta"
-                                                    title="Cuenta y administración"
-                                                >
-                                                    <svg
-                                                        width="20"
-                                                        height="20"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="2"
-                                                        aria-hidden="true"
-                                                    >
-                                                        <circle cx="12" cy="8" r="4" />
-                                                        <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
-                                                    </svg>
-                                                    <span
-                                                        className="visually-hidden"
-                                                        role="status"
-                                                        aria-label="Usuario conectado"
-                                                    >
-                                                        {session.user.username}
-                                                    </span>
-                                                </Dropdown.Toggle>
-                                                <Dropdown.Menu variant="dark">
-                                                    <Dropdown.Header>{session.user.username}</Dropdown.Header>
-                                                    <Dropdown.Item
-                                                        as={NavLink}
-                                                        to="/cuenta"
-                                                        onClick={() => setExpanded(false)}
-                                                    >
-                                                        Mi cuenta
-                                                    </Dropdown.Item>
-                                                    {modules
-                                                        .filter((item) => ['/acceso', '/auditoria'].includes(item.path))
-                                                        .map((item) => (
-                                                            <Dropdown.Item
-                                                                key={item.path}
-                                                                as={NavLink}
-                                                                to={item.path}
-                                                                onClick={() => setExpanded(false)}
-                                                            >
-                                                                {item.label}
-                                                            </Dropdown.Item>
-                                                        ))}
-                                                </Dropdown.Menu>
-                                            </Dropdown>
-                                            <button
-                                                type="button"
-                                                data-auth-logout="true"
-                                                className="btn btn-link nav-link app-navbar-icon"
-                                                aria-label="Salir"
-                                                title="Salir"
-                                                onClick={onLogout}
-                                            >
-                                                <svg
-                                                    width="20"
-                                                    height="20"
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="2"
-                                                    aria-hidden="true"
-                                                >
-                                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-                                                </svg>
-                                            </button>
+                                            <UserMenu
+                                                onLogout={onLogout}
+                                                onNavigate={() => setExpanded(false)}
+                                                administration={modules.filter((item) =>
+                                                    ['/acceso', '/auditoria'].includes(item.path),
+                                                )}
+                                            />
                                         </div>
                                     </div>
                                 </Navbar.Collapse>

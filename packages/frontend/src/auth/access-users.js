@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import Dropdown from 'react-bootstrap/Dropdown';
+import { createPortal } from 'react-dom';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { Assignments } from './access-editor';
@@ -137,60 +139,70 @@ function UserOperation({ user, operation, onClose, onDone }) {
     const [reason, setReason] = useState('');
     const [resetMfa, setResetMfa] = useState(false);
     const [busy, setBusy] = useState(false);
+    const { requestClose, confirmation } = useDiscardChanges(Boolean(reason || resetMfa));
+    const close = () => requestClose(onClose);
     const title =
-        operation === 'reset' ? 'Recuperar acceso' : operation === 'enable' ? 'Habilitar cuenta' : 'Bloquear cuenta';
+        operation === 'reset'
+            ? 'Recuperar acceso'
+            : operation === 'enable'
+              ? 'Habilitar usuario'
+              : 'Deshabilitar usuario';
     return (
-        <AccessDialog title={title} onClose={onClose} dirty={Boolean(reason || resetMfa)} busy={busy}>
-            <p>
-                {title} de <strong>{user.display_name}</strong> <span className="access-muted">@{user.username}</span>
-            </p>
-            <p className="access-notice">
-                {operation === 'reset'
-                    ? 'Se emitirá una nueva contraseña temporal y se cerrarán las sesiones del usuario. La contraseña anterior dejará de funcionar.'
-                    : operation === 'disable'
-                      ? 'El usuario no podrá ingresar y se cerrarán sus sesiones activas.'
-                      : 'El usuario podrá volver a ingresar. Sus sesiones anteriores no se restaurarán.'}
-            </p>
-            <ManagementForm
-                button="Confirmar operación"
-                onBusyChange={setBusy}
-                onSubmit={async () => {
-                    const result =
-                        operation === 'reset'
-                            ? await authRequest(`users/${user.id}/reset`, { resetMfa, reason })
-                            : await authRequest(`users/${user.id}/enabled`, {
-                                  enabled: operation === 'enable',
-                                  reason,
-                              });
-                    onDone(result);
-                }}
-            >
-                {operation === 'reset' && (
-                    <>
-                        <label className="access-check">
-                            <input
-                                type="checkbox"
-                                checked={resetMfa}
-                                onChange={(event) => setResetMfa(event.target.checked)}
-                            />
-                            <span>Restablecer también MFA</span>
-                        </label>
-                        <p className="access-muted">
-                            {resetMfa
-                                ? 'Deberá configurar de nuevo su autenticador si su acceso exige MFA.'
-                                : 'Se conservará el autenticador actual.'}
-                        </p>
-                    </>
-                )}
-                <Field
-                    label="Motivo de la operación"
-                    value={reason}
-                    onChange={setReason}
-                    minLength={5}
-                    maxLength={64}
-                />
-            </ManagementForm>
-        </AccessDialog>
+        <>
+            <AccessDialog title={title} onClose={close} busy={busy}>
+                <p>
+                    <strong>{user.display_name}</strong> <span className="access-muted">@{user.username}</span>
+                </p>
+                <p className="access-notice">
+                    {operation === 'reset'
+                        ? 'Se emitirá una nueva contraseña temporal y se cerrarán las sesiones del usuario. La contraseña anterior dejará de funcionar.'
+                        : operation === 'disable'
+                          ? 'El usuario no podrá ingresar y se cerrarán sus sesiones activas. Sus datos y permisos se conservarán para que puedas habilitarlo de nuevo.'
+                          : 'El usuario podrá volver a ingresar con sus permisos actuales. Sus sesiones anteriores no se restaurarán.'}
+                </p>
+                <ManagementForm
+                    button={operation === 'reset' ? 'Confirmar operación' : title}
+                    onCancel={close}
+                    onBusyChange={setBusy}
+                    onSubmit={async () => {
+                        const result =
+                            operation === 'reset'
+                                ? await authRequest(`users/${user.id}/reset`, { resetMfa, reason })
+                                : await authRequest(`users/${user.id}/enabled`, {
+                                      enabled: operation === 'enable',
+                                      reason,
+                                  });
+                        await onDone(result);
+                    }}
+                >
+                    {operation === 'reset' && (
+                        <>
+                            <label className="access-check">
+                                <input
+                                    type="checkbox"
+                                    checked={resetMfa}
+                                    onChange={(event) => setResetMfa(event.target.checked)}
+                                />
+                                <span>Restablecer también MFA</span>
+                            </label>
+                            <p className="access-muted">
+                                {resetMfa
+                                    ? 'Deberá configurar de nuevo su autenticador si su acceso exige MFA.'
+                                    : 'Se conservará el autenticador actual.'}
+                            </p>
+                        </>
+                    )}
+                    <Field
+                        label="Motivo de la operación"
+                        value={reason}
+                        onChange={setReason}
+                        minLength={5}
+                        maxLength={64}
+                    />
+                </ManagementForm>
+            </AccessDialog>
+            {confirmation}
+        </>
     );
 }
 
@@ -225,22 +237,13 @@ function UserPanel({ user, onClose, onDone, onDirtyChange }) {
                         </p>
                     </div>
                     <span className={`access-status ${Number(user.enabled) ? 'is-enabled' : ''}`}>
-                        {Number(user.enabled) ? 'Habilitado' : 'Bloqueado'}
+                        {Number(user.enabled) ? 'Habilitado' : 'Deshabilitado'}
                     </span>
                 </div>
-                <fieldset disabled={busy}>
-                    <Assignments id={user.id} onDirtyChange={setDirty} onBusyChange={setBusy} />
-                </fieldset>
-                {!can('access.roles') && !can('access.links') && (
-                    <p className="access-muted">
-                        Desde aquí puedes administrar el estado y la recuperación de esta cuenta, según tus permisos.
-                    </p>
-                )}
-                {user.id !== session.user.id && (can('access.users') || can('access.recover')) && (
-                    <section className="access-assignment">
-                        <h3>Acciones de la cuenta</h3>
+                {(can('access.users') || can('access.recover')) && (
+                    <section className="access-account-actions" aria-label="Acciones de la cuenta">
                         <div className="access-inline-actions">
-                            {can('access.recover') && (
+                            {can('access.recover') && user.id !== session.user.id && (
                                 <button
                                     type="button"
                                     className="btn btn-outline-light"
@@ -254,16 +257,27 @@ function UserPanel({ user, onClose, onDone, onDirtyChange }) {
                                 <button
                                     type="button"
                                     className={`btn ${Number(user.enabled) ? 'btn-outline-danger' : 'btn-outline-light'}`}
-                                    disabled={busy}
+                                    disabled={busy || user.id === session.user.id}
                                     onClick={() =>
                                         requestClose(() => setOperation(Number(user.enabled) ? 'disable' : 'enable'))
                                     }
                                 >
-                                    {Number(user.enabled) ? 'Bloquear cuenta' : 'Habilitar cuenta'}
+                                    {Number(user.enabled) ? 'Deshabilitar usuario' : 'Habilitar usuario'}
                                 </button>
                             )}
                         </div>
+                        {can('access.users') && user.id === session.user.id && (
+                            <p className="access-muted">No puedes deshabilitar tu propia cuenta.</p>
+                        )}
                     </section>
+                )}
+                <fieldset disabled={busy}>
+                    <Assignments id={user.id} onDirtyChange={setDirty} onBusyChange={setBusy} />
+                </fieldset>
+                {!can('access.roles') && !can('access.links') && (
+                    <p className="access-muted">
+                        Desde aquí puedes administrar el estado y la recuperación de esta cuenta, según tus permisos.
+                    </p>
                 )}
             </AccessDialog>
             {operation && (
@@ -275,11 +289,12 @@ function UserPanel({ user, onClose, onDone, onDirtyChange }) {
 }
 
 export default function Users({ onDirtyChange }) {
-    const { can } = useAuth();
+    const { can, session } = useAuth();
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
     const [state, setState] = useState('all');
     const [creating, setCreating] = useState(false);
+    const [operation, setOperation] = useState(null);
     const [selected, setSelected] = useState(null);
     const [credential, setCredential] = useState(null);
     const [message, setMessage] = useState('');
@@ -290,12 +305,20 @@ export default function Users({ onDirtyChange }) {
     const done = async (result) => {
         setCreating(false);
         setSelected(null);
+        setOperation(null);
         if (result.temporaryPassword) {
             setCredential(result);
             setSearch(result.username);
             setState('all');
             setPage(1);
-        } else setMessage('Estado de la cuenta actualizado. Se cerraron sus sesiones anteriores.');
+        } else {
+            setPage(1);
+            setMessage(
+                result.enabled
+                    ? 'Usuario habilitado. Ya puede volver a ingresar.'
+                    : 'Usuario deshabilitado. Se cerraron sus sesiones activas.',
+            );
+        }
         await mutate();
     };
     return (
@@ -347,7 +370,7 @@ export default function Users({ onDirtyChange }) {
                     >
                         <option value="all">Todos los estados</option>
                         <option value="enabled">Habilitados</option>
-                        <option value="disabled">Bloqueados</option>
+                        <option value="disabled">Deshabilitados</option>
                     </select>
                 </div>
                 <LoadState error={error} loading={!data} onRetry={mutate}>
@@ -395,18 +418,75 @@ export default function Users({ onDirtyChange }) {
                                                 <span
                                                     className={`access-status ${Number(user.enabled) ? 'is-enabled' : ''}`}
                                                 >
-                                                    {Number(user.enabled) ? 'Habilitado' : 'Bloqueado'}
+                                                    {Number(user.enabled) ? 'Habilitado' : 'Deshabilitado'}
                                                 </span>
                                             </td>
                                             <td>
-                                                <button
-                                                    type="button"
-                                                    className="access-more"
-                                                    aria-label={`Opciones de ${user.username}`}
-                                                    onClick={() => setSelected(user)}
-                                                >
-                                                    ⋯
-                                                </button>
+                                                <Dropdown align="end" className="access-row-dropdown">
+                                                    <Dropdown.Toggle
+                                                        variant="link"
+                                                        className="access-more"
+                                                        aria-label={`Opciones de ${user.username}`}
+                                                    >
+                                                        ⋯
+                                                    </Dropdown.Toggle>
+                                                    {createPortal(
+                                                        <Dropdown.Menu
+                                                            variant="dark"
+                                                            className="access-row-menu"
+                                                            popperConfig={{ strategy: 'fixed' }}
+                                                        >
+                                                            <Dropdown.Item
+                                                                as="button"
+                                                                onClick={() => setSelected(user)}
+                                                            >
+                                                                Administrar acceso
+                                                            </Dropdown.Item>
+                                                            {(can('access.users') ||
+                                                                (can('access.recover') &&
+                                                                    user.id !== session.user.id)) && (
+                                                                <Dropdown.Divider />
+                                                            )}
+                                                            {can('access.recover') && user.id !== session.user.id && (
+                                                                <Dropdown.Item
+                                                                    as="button"
+                                                                    onClick={() =>
+                                                                        setOperation({ user, kind: 'reset' })
+                                                                    }
+                                                                >
+                                                                    Recuperar acceso
+                                                                </Dropdown.Item>
+                                                            )}
+                                                            {can('access.users') && (
+                                                                <Dropdown.Item
+                                                                    as="button"
+                                                                    className={
+                                                                        Number(user.enabled) ? 'access-menu-danger' : ''
+                                                                    }
+                                                                    disabled={user.id === session.user.id}
+                                                                    onClick={() =>
+                                                                        setOperation({
+                                                                            user,
+                                                                            kind: Number(user.enabled)
+                                                                                ? 'disable'
+                                                                                : 'enable',
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    {Number(user.enabled)
+                                                                        ? 'Deshabilitar usuario'
+                                                                        : 'Habilitar usuario'}
+                                                                </Dropdown.Item>
+                                                            )}
+                                                            {can('access.users') && user.id === session.user.id && (
+                                                                <Dropdown.Header className="access-menu-hint">
+                                                                    No puedes deshabilitar tu propia cuenta.
+                                                                </Dropdown.Header>
+                                                            )}
+                                                        </Dropdown.Menu>,
+                                                        document.body,
+                                                    )}
+                                                </Dropdown>
                                             </td>
                                         </tr>
                                     ))}
@@ -441,6 +521,14 @@ export default function Users({ onDirtyChange }) {
                     }}
                     onDone={done}
                     onDirtyChange={onDirtyChange}
+                />
+            )}
+            {operation && (
+                <UserOperation
+                    user={operation.user}
+                    operation={operation.kind}
+                    onClose={() => setOperation(null)}
+                    onDone={done}
                 />
             )}
             {credential && <TemporaryCredential credential={credential} onClose={() => setCredential(null)} />}

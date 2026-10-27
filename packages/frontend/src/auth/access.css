@@ -578,6 +578,101 @@
 
 .access-content {
     padding: 28px;
+    scrollbar-gutter: stable;
+}
+
+.access-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: #a3adbb;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.access-back:hover {
+    color: #e4e6ea;
+}
+
+.access-account-actions {
+    margin-bottom: 24px;
+}
+
+.access-account-actions .access-inline-actions {
+    margin-top: 0;
+}
+
+.access-account-actions p {
+    margin: 10px 0 0;
+}
+
+.access-row-dropdown .access-more.btn {
+    padding: 0;
+    border: 0;
+    color: #a3adbb;
+    font-size: 24px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.access-row-dropdown .access-more.btn:hover,
+.access-row-dropdown .access-more.btn[aria-expanded="true"] {
+    background: #303640;
+    color: #e4e6ea;
+}
+
+.access-more.dropdown-toggle::after {
+    display: none;
+}
+
+.access-row-menu.dropdown-menu {
+    width: 240px;
+    max-width: calc(100vw - 24px);
+    padding: 6px;
+    border: 1px solid #424954;
+    border-radius: 8px;
+    background: #1e2126;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+
+.access-row-menu .dropdown-item {
+    min-height: 40px;
+    padding: 10px 12px;
+    border-radius: 5px;
+    color: #d6dce5;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.access-row-menu .dropdown-item:hover,
+.access-row-menu .dropdown-item:focus {
+    background: #303640;
+    color: #fff;
+}
+
+.access-row-menu .access-menu-danger {
+    color: #f2a4a4;
+}
+
+.access-row-menu .dropdown-item:disabled {
+    background: transparent;
+    color: #8b92a0;
+}
+
+.access-row-menu .access-menu-hint {
+    padding: 6px 12px;
+    color: #a3adbb;
+    font-size: 11px;
+    white-space: normal;
+}
+
+.access-row-menu .dropdown-item:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: -2px;
 }
 
 @media (max-width: 767.98px) {
