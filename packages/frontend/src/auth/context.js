@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
+import useSWR from 'swr';
 import { authRequest, authTransportGeneration, clearAuthTransport, setCsrfToken } from './transport';
 
 const AuthContext = createContext(null);
@@ -15,7 +16,8 @@ export function AuthProvider({ children }) {
     const [epoch, setEpoch] = useState(0);
     const current = useRef(null);
     const sequence = useRef(0);
-    const validation = useRef(null);
+    const cacheMutation = useRef(null);
+    const forceValidation = useRef(false);
     const channel = useRef(null);
     const busy = useRef(false);
     const pendingReauthentication = useRef(null);
@@ -53,7 +55,10 @@ export function AuthProvider({ children }) {
     }, []);
 
     const notify = useCallback(() => {
-        channel.current?.postMessage({ type: 'changed' });
+        if (channel.current) {
+            channel.current.postMessage({ type: 'changed' });
+            return;
+        }
         try {
             localStorage.setItem('dmmarket:auth-change', `${Date.now()}:${Math.random()}`);
         } catch {}
@@ -65,7 +70,8 @@ export function AuthProvider({ children }) {
             if (
                 previous?.user?.id !== data.user?.id ||
                 previous?.revision !== data.revision ||
-                previous?.stage !== data.stage
+                previous?.stage !== data.stage ||
+                JSON.stringify(previous?.permissions) !== JSON.stringify(data.permissions)
             ) {
                 clearAuthTransport();
                 setEpoch((value) => value + 1);
@@ -79,39 +85,60 @@ export function AuthProvider({ children }) {
         [notify],
     );
 
+    const fetchSession = useCallback(async () => {
+        const ticket = ++sequence.current;
+        try {
+            const data = await authRequest('session');
+            return { data, ticket };
+        } catch (error) {
+            if (ticket !== sequence.current || error.name === 'AbortError')
+                return { data: current.current ?? undefined, ticket, canceled: true };
+            error.sessionTicket = ticket;
+            throw error;
+        }
+    }, []);
+    const { mutate: mutateSession } = useSWR('/api/auth/session', fetchSession, {
+        dedupingInterval: 1000,
+        focusThrottleInterval: 1000,
+        refreshInterval: 30000,
+        revalidateOnFocus: true,
+        revalidateOnReconnect: true,
+        shouldRetryOnError: false,
+        isPaused: () => busy.current && !forceValidation.current,
+        onSuccess: (result) => {
+            if (result.canceled || result.ticket !== sequence.current) return;
+            apply(result.data);
+            setFailure('');
+        },
+        onError: (error) => {
+            if (error.sessionTicket !== undefined && error.sessionTicket !== sequence.current) return;
+            clearAuthTransport();
+            current.current = null;
+            setSession(null);
+            setChecking(false);
+            setFailure('No se puede validar la sesión. No se mostrarán datos hasta recuperar el acceso.');
+            void cacheMutation.current?.(undefined, false);
+        },
+    });
+    cacheMutation.current = mutateSession;
+
     const check = useCallback(
         async (hide = true) => {
-            if (validation.current?.ticket === sequence.current) {
-                if (hide) setChecking(true);
-                return validation.current.promise;
-            }
-            const ticket = ++sequence.current;
+            sequence.current += 1;
             if (hide) {
                 clearAuthTransport();
                 setChecking(true);
             }
-            const promise = (async () => {
-                try {
-                    const data = await authRequest('session');
-                    if (ticket !== sequence.current) return;
-                    if (validation.current?.ticket === ticket) validation.current = null;
-                    apply(data);
-                    setFailure('');
-                } catch (error) {
-                    if (ticket !== sequence.current || error.name === 'AbortError') return;
-                    clearAuthTransport();
-                    current.current = null;
-                    setSession(null);
-                    setChecking(false);
-                    setFailure('No se puede validar la sesión. No se mostrarán datos hasta recuperar el acceso.');
-                } finally {
-                    if (validation.current?.ticket === ticket) validation.current = null;
-                }
-            })();
-            validation.current = { ticket, promise };
-            return promise;
+            forceValidation.current = true;
+            try {
+                return await mutateSession();
+            } catch {
+                return undefined;
+            } finally {
+                forceValidation.current = false;
+            }
         },
-        [apply],
+        [mutateSession],
     );
 
     const action = useCallback(
@@ -125,11 +152,14 @@ export function AuthProvider({ children }) {
                     current.current = null;
                     setSession(null);
                     setChecking(true);
+                    await mutateSession(undefined, false);
                     notify();
                     await check();
                 } else if (data.user) {
                     const entering = current.current?.user?.id !== data.user.id || current.current?.stage !== 'ready';
+                    sequence.current += 1;
                     apply(data);
+                    await mutateSession({ data, ticket: sequence.current }, false);
                     if (entering && data.stage === 'ready') history.replace('/');
                 }
                 return data;
@@ -141,7 +171,7 @@ export function AuthProvider({ children }) {
                 busy.current = false;
             }
         },
-        [apply, check, notify, history],
+        [apply, check, notify, history, mutateSession],
     );
 
     useLayoutEffect(() => {
@@ -163,27 +193,13 @@ export function AuthProvider({ children }) {
     }, [location.pathname, location.search, location.hash, history.action, check]);
 
     useEffect(() => {
-        void check();
-        const refresh = () => {
-            if (!busy.current && current.current) void check(current.current.stage === 'ready');
-        };
         const restore = (event) => {
-            if (event.persisted) {
-                sequence.current += 1;
-                void check();
-            }
+            if (event.persisted) void check();
         };
         const changed = () => {
-            if (!busy.current) {
-                sequence.current += 1;
-                void check();
-            }
-        };
-        const focus = () => {
-            if (!busy.current && current.current) void check(false);
+            if (!busy.current) void check();
         };
         const lost = () => {
-            sequence.current += 1;
             void check();
         };
         const hide = () => {
@@ -193,10 +209,6 @@ export function AuthProvider({ children }) {
             }
             setChecking(true);
         };
-        const visible = () => {
-            if (document.visibilityState === 'visible') refresh();
-            else if (current.current?.stage === 'ready') hide();
-        };
         const storage = (event) => {
             if (event.key === 'dmmarket:auth-change') changed();
         };
@@ -204,26 +216,18 @@ export function AuthProvider({ children }) {
             channel.current = new BroadcastChannel('dmmarket-auth');
             channel.current.onmessage = changed;
         }
-        const timer = setInterval(() => {
-            if (!busy.current && current.current && document.visibilityState === 'visible') void check(false);
-        }, 30000);
         window.addEventListener('dmmarket:access-lost', lost);
         window.addEventListener('pageshow', restore);
         window.addEventListener('pagehide', hide);
-        window.addEventListener('focus', focus);
         window.addEventListener('storage', storage);
-        document.addEventListener('visibilitychange', visible);
         return () => {
             sequence.current += 1;
-            clearInterval(timer);
             clearAuthTransport();
             channel.current?.close();
             window.removeEventListener('dmmarket:access-lost', lost);
             window.removeEventListener('pageshow', restore);
             window.removeEventListener('pagehide', hide);
-            window.removeEventListener('focus', focus);
             window.removeEventListener('storage', storage);
-            document.removeEventListener('visibilitychange', visible);
         };
     }, [check]);
 
@@ -252,6 +256,8 @@ export function AuthProvider({ children }) {
     }, [checking, session?.stage, check]);
 
     const can = (capability) =>
+        !checking &&
+        !failure &&
         session?.permissions?.some((grant) => grant.capability === capability && grant.scope === 'global');
     return (
         <AuthContext.Provider

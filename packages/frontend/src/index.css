@@ -1147,7 +1147,6 @@ input[type="search"] {
 .noselect {
     -webkit-touch-callout: none; /* iOS Safari */
     -webkit-user-select: none; /* Safari */
-    -khtml-user-select: none; /* Konqueror HTML */
     -moz-user-select: none; /* Old versions of Firefox */
     -ms-user-select: none; /* Internet Explorer/Edge */
     user-select: none; /* Non-prefixed version, currently
@@ -1215,6 +1214,7 @@ input:checked + .slider:before {
 }
 
 .app-navbar {
+    min-height: 3.5rem;
     background-color: #1a1d21;
     position: relative;
 }

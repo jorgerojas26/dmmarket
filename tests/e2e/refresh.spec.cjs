@@ -80,6 +80,7 @@ test("un cierre de sesión invalida una comprobación anterior que todavía est�
       .catch(() => {});
   });
   try {
+    await page.waitForTimeout(1100);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect.poll(() => waiting).toBe(true);
     expect((await client.request("/api/auth/logout", { method: "POST", body: {} })).status).toBe(200);

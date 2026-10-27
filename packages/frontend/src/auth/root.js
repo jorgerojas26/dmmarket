@@ -14,8 +14,8 @@ import { authTransportGeneration } from './transport';
 function BoundaryContent() {
     const { session, checking, failure, epoch, action, check } = useAuth();
     const [logoutError, setLogoutError] = useState('');
-    const cache = useMemo(() => new Map(), [epoch]);
     const generation = authTransportGeneration();
+    const cache = useMemo(() => new Map(), [epoch, generation]);
     const signOut = async () => {
         setLogoutError('');
         try {
@@ -24,41 +24,28 @@ function BoundaryContent() {
             setLogoutError('No se pudo confirmar la salida en el servidor. Vuelve a intentarlo.');
         }
     };
-    if (!checking && !failure && session?.stage === 'ready') {
+    if (checking || (!failure && session?.stage === 'ready')) {
         return (
-            <SWRConfig
-                key={`${epoch}:ready`}
-                value={{
-                    ...swrConfig,
-                    fetcher,
-                    provider: () => cache,
-                    isPaused: () => generation !== authTransportGeneration(),
-                }}
-            >
-                <CurrencyRateProvider>
-                    <SidebarProvider>
+            <SidebarProvider>
+                <SWRConfig
+                    key={`${epoch}:${generation}:ready`}
+                    value={{
+                        ...swrConfig,
+                        fetcher,
+                        provider: () => cache,
+                        isPaused: () => generation !== authTransportGeneration(),
+                    }}
+                >
+                    <CurrencyRateProvider>
                         <UpdateProvider>
-                            <App onLogout={signOut} logoutError={logoutError} />
+                            <App pending={checking} onLogout={signOut} logoutError={logoutError} />
                         </UpdateProvider>
-                        <ReauthenticationDialog />
-                    </SidebarProvider>
-                </CurrencyRateProvider>
-            </SWRConfig>
+                        {!checking && <ReauthenticationDialog />}
+                    </CurrencyRateProvider>
+                </SWRConfig>
+            </SidebarProvider>
         );
     }
-    if (checking)
-        return (
-            <main className="App bg-dark text-light" aria-busy="true" aria-label="Validando acceso">
-                <div id="main" className="m-0 p-0 vh-100 d-flex flex-column">
-                    <header className="navbar navbar-dark app-navbar">
-                        <div className="container-fluid app-navbar-inner">
-                            <span className="navbar-brand app-navbar-brand">SISTEMA DE REPORTES</span>
-                        </div>
-                    </header>
-                    <div className="flex-grow-1" />
-                </div>
-            </main>
-        );
     return (
         <main className="bg-dark text-light" style={{ height: '100vh', overflowY: 'auto' }}>
             <div className="container py-4" style={{ maxWidth: 1000 }}>
@@ -127,11 +114,15 @@ function Boundary() {
 }
 
 export default function AuthRoot() {
+    const sessionCache = useMemo(() => new Map(), []);
+    const sessionConfig = useMemo(() => ({ provider: () => sessionCache }), [sessionCache]);
     return (
-        <BrowserRouter>
-            <AuthProvider>
-                <Boundary />
-            </AuthProvider>
-        </BrowserRouter>
+        <SWRConfig value={sessionConfig}>
+            <BrowserRouter>
+                <AuthProvider>
+                    <Boundary />
+                </AuthProvider>
+            </BrowserRouter>
+        </SWRConfig>
     );
 }

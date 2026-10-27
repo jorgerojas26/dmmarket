@@ -117,6 +117,7 @@ test("una comprobación de sesión en segundo plano no borra el autocompletado v
   const password = page.getByRole("textbox", { name: "Contraseña", exact: true });
   await autofill(username, user.username);
   await autofill(password, user.password);
+  await page.waitForTimeout(1100);
   const checked = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/session");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await (await checked).finished();
