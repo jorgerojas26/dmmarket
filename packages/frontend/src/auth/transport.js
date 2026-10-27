@@ -56,7 +56,13 @@ export function installAuthTransport() {
                 controller.abort();
                 cleanup();
             },
-            url.pathname === '/api/auth/session' ? 5000 : url.pathname.startsWith('/api/auth/') ? 10000 : 60000,
+            url.pathname === '/api/auth/session'
+                ? 5000
+                : url.pathname.startsWith('/api/auth/')
+                  ? 10000
+                  : url.pathname === '/api/update/download'
+                    ? 660000
+                    : 60000,
         );
         const headers = new Headers(init.headers || (typeof resource !== 'string' ? resource.headers : undefined));
         const method = (init.method || (typeof resource !== 'string' ? resource.method : 'GET')).toUpperCase();
