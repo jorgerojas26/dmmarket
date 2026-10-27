@@ -140,6 +140,17 @@ test("la reautenticación usa contraseña y MFA autocompletados sin reutilizar e
   await page.getByLabel("Código MFA", { exact: true }).fill(used);
   await submit(page, "mfa", "Verificar código", { token: used });
   await expect(page.getByRole("heading", { name: "Administración de usuarios", exact: true })).toBeVisible();
+  await environment
+    .db("dmmarket_auth_session_state")
+    .where("user_id", user.id)
+    .whereNull("revoked_ms")
+    .update({ password_ms: Date.now() - 300001 });
+  await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Crear usuario", exact: true });
+  await panel.getByLabel("Usuario nuevo", { exact: true }).fill("autofill-verified");
+  await panel.getByLabel("Nombre visible", { exact: true }).fill("Persona autofill");
+  await panel.getByLabel("Motivo del alta", { exact: true }).fill("Alta con identidad confirmada");
+  await panel.getByRole("button", { name: "Crear usuario", exact: true }).click();
   let token;
   await expect
     .poll(
@@ -153,5 +164,5 @@ test("la reautenticación usa contraseña y MFA autocompletados sin reutilizar e
   await autofill(page.getByLabel("Contraseña de reautenticación", { exact: true }), user.password);
   await autofill(page.getByLabel("Código MFA de reautenticación", { exact: true }), token);
   await submit(page, "reauthenticate", "Confirmar identidad", { password: user.password, token });
-  await expect(page.getByText("Identidad confirmada.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Credencial temporal", exact: true })).toBeVisible();
 });

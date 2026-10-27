@@ -104,10 +104,14 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
   await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Administración de usuarios" })).toBeVisible();
   const username = `created-${randomBytes(4).toString("hex")}`;
+  await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await page.getByRole("textbox", { name: "Usuario nuevo" }).fill(username);
   await page.getByRole("textbox", { name: "Nombre visible" }).fill("Usuario sintético E2E");
   await page.getByRole("textbox", { name: "Motivo del alta" }).fill("Alta de integración real");
-  await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Crear usuario", exact: true })
+    .getByRole("button", { name: "Crear usuario", exact: true })
+    .click();
   const credential = page.getByRole("textbox", { name: "Contraseña temporal emitida" });
   await expect(credential).toBeVisible();
   const temporaryPassword = await credential.inputValue();
@@ -119,12 +123,14 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await expect(reader.getByRole("heading", { name: "Cambiar contraseña temporal" })).toBeVisible();
     await changePassword(reader, temporaryPassword, randomBytes(24).toString("base64url"));
     await expect(reader.getByRole("status", { name: "Usuario conectado" })).toHaveText(username);
-    await page.getByRole("button", { name: `Recuperar ${username}`, exact: true }).click();
+    await page.getByRole("button", { name: `Administrar ${username}`, exact: true }).click();
+    await page.getByRole("button", { name: "Recuperar acceso", exact: true }).click();
     await page.getByRole("textbox", { name: "Motivo de la operación" }).fill("Recuperación real de prueba");
     await page.getByRole("button", { name: "Confirmar operación", exact: true }).click();
     await expect(credential).toBeVisible();
     const replacement = await credential.inputValue();
     expect(replacement).not.toBe(temporaryPassword);
+    await page.getByRole("button", { name: "Cerrar credencial temporal", exact: true }).click();
     await reader.reload();
     await expect(reader.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
     await login(reader, environment, { username, password: temporaryPassword });
@@ -133,12 +139,11 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await expect(reader.getByRole("heading", { name: "Cambiar contraseña temporal" })).toBeVisible();
     await changePassword(reader, replacement, randomBytes(24).toString("base64url"));
     await expect(reader.getByRole("status", { name: "Usuario conectado" })).toHaveText(username);
-    await page.getByRole("button", { name: `Cambiar estado de ${username}`, exact: true }).click();
+    await page.getByRole("button", { name: `Administrar ${username}`, exact: true }).click();
+    await page.getByRole("button", { name: "Bloquear cuenta", exact: true }).click();
     await page.getByRole("textbox", { name: "Motivo de la operación" }).fill("Bloqueo real de prueba");
     await page.getByRole("button", { name: "Confirmar operación", exact: true }).click();
-    await expect(
-      page.getByRole("row").filter({ has: page.getByRole("cell", { name: username, exact: true }) }),
-    ).toContainText("Bloqueado");
+    await expect(page.getByRole("row").filter({ hasText: username })).toContainText("Bloqueado");
     expect(await reader.evaluate(async () => (await fetch("/api/currency_rates")).status)).toBe(401);
     await expect(reader.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   } finally {
@@ -328,6 +333,17 @@ test("MFA de login y reautenticación se verifican antes de administrar", async 
   await page.getByRole("textbox", { name: "Código MFA", exact: true }).fill(token);
   await page.getByRole("button", { name: "Verificar código", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Administración de usuarios" })).toBeVisible();
+  await environment
+    .db("dmmarket_auth_session_state")
+    .where("user_id", user.id)
+    .whereNull("revoked_ms")
+    .update({ password_ms: Date.now() - 300001 });
+  await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Crear usuario", exact: true });
+  await panel.getByLabel("Usuario nuevo", { exact: true }).fill(`verified-${randomBytes(4).toString("hex")}`);
+  await panel.getByLabel("Nombre visible", { exact: true }).fill("Persona verificada");
+  await panel.getByLabel("Motivo del alta", { exact: true }).fill("Alta con verificación real");
+  await panel.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await page.getByRole("textbox", { name: "Contraseña de reautenticación" }).fill(user.password);
   await page.getByRole("textbox", { name: "Código MFA de reautenticación" }).fill(token);
   await page.getByRole("button", { name: "Confirmar identidad", exact: true }).click();
@@ -345,7 +361,7 @@ test("MFA de login y reautenticación se verifican antes de administrar", async 
   await page.getByRole("textbox", { name: "Contraseña de reautenticación" }).fill(user.password);
   await page.getByRole("textbox", { name: "Código MFA de reautenticación" }).fill(fresh);
   await page.getByRole("button", { name: "Confirmar identidad", exact: true }).click();
-  await expect(page.getByText("Identidad confirmada.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Credencial temporal", exact: true })).toBeVisible();
 });
 
 test("editor crea rol, cambia alcance y administra vínculos revocando sesiones reales", async ({
@@ -359,23 +375,25 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
       table.charset("utf8");
       table.collate("utf8_bin");
       table.string("idVend", 32).primary();
+      table.string("Empresa", 128);
     });
-    await environment.db("vendedores").insert({ idVend: "A" });
+    await environment.db("vendedores").insert({ idVend: "A", Empresa: "Vendedor A" });
   }
   const owner = await environment.seedUser({ permissions: ownerPermissions, enrolled: true });
   const user = await environment.seedUser();
   await login(page, environment, owner);
   await page.getByRole("textbox", { name: "Código MFA", exact: true }).fill(await environment.token(owner.secret));
   await page.getByRole("button", { name: "Verificar código", exact: true }).click();
-  await page.getByRole("button", { name: "Administrar roles y vínculos", exact: true }).click();
+  await page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true }).click();
+  await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   const name = `Rol E2E ${randomBytes(4).toString("hex")}`;
   await page.getByRole("textbox", { name: "Nombre del rol", exact: true }).fill(name);
-  await page.getByLabel("sales.read", { exact: true }).selectOption("assigned");
-  await expect(page.getByLabel("sales.financial", { exact: true })).toBeVisible();
+  await page.getByLabel("Consultar ventas", { exact: true }).selectOption("assigned");
+  await expect(page.getByLabel("Ver costos y utilidad de ventas", { exact: true })).toBeVisible();
   for (const retired of ["sales.costs", "sales.profit", "providers.personal"])
     await expect(page.getByLabel(retired, { exact: true })).toHaveCount(0);
-  await page.getByLabel("sales.financial", { exact: true }).selectOption("assigned");
-  await page.getByLabel("rates.read", { exact: true }).selectOption("global");
+  await page.getByLabel("Ver costos y utilidad de ventas", { exact: true }).selectOption("assigned");
+  await page.getByLabel("Consultar tasas de cambio", { exact: true }).selectOption("global");
   await page.getByRole("textbox", { name: "Motivo del cambio de rol" }).fill("Crear rol real desde interfaz");
   const createdResponse = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/roles") && response.request().method() === "POST",
@@ -385,18 +403,21 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   expect(created.status()).toBe(201);
   const role = await created.json();
   await expect(page.getByText("Rol guardado.", { exact: false })).toBeVisible();
-  await page.getByLabel("Rol para editar", { exact: true }).selectOption(role.id);
-  await expect(page.getByLabel("sales.read", { exact: true })).toHaveValue("assigned");
-  await expect(page.getByLabel("sales.financial", { exact: true })).toHaveValue("assigned");
-  await page.getByLabel("sales.read", { exact: true }).selectOption("global");
+  await page.getByRole("button", { name: `Editar ${name}`, exact: true }).click();
+  await expect(page.getByLabel("Consultar ventas", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Ver costos y utilidad de ventas", { exact: true })).toHaveValue("assigned");
+  await page.getByLabel("Consultar ventas", { exact: true }).selectOption("global");
   await page.getByRole("textbox", { name: "Motivo del cambio de rol" }).fill("Cambiar alcance real del rol");
   const updatedResponse = page.waitForResponse(
     (response) => response.url().endsWith(`/api/auth/roles/${role.id}`) && response.request().method() === "PUT",
   );
   await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
   expect((await updatedResponse).status()).toBe(200);
-  await page.getByLabel("ID del usuario para asignaciones", { exact: true }).fill(user.id);
-  await page.getByLabel("Roles asignados", { exact: true }).selectOption([role.id]);
+  await expect(page.getByText("Rol guardado.", { exact: false })).toBeVisible();
+  await page.locator(".clients-sidebar").getByRole("button", { name: "Usuarios", exact: true }).click();
+  await page.getByLabel("Buscar usuarios", { exact: true }).fill(user.username);
+  await page.getByRole("button", { name: `Administrar ${user.username}`, exact: true }).click();
+  await page.getByRole("checkbox", { name, exact: true }).check();
   await page.getByRole("textbox", { name: "Motivo de asignación de roles" }).fill("Asignar rol real desde interfaz");
   await page.getByRole("button", { name: "Guardar roles del usuario", exact: true }).click();
   await expect(page.getByText("Roles asignados y sesiones del usuario revocadas.", { exact: true })).toBeVisible();
@@ -406,7 +427,8 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
     await login(reader, environment, user);
     await openModule(reader, "Configuración", "Tasas BCV");
     await expect(reader.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
-    await page.getByRole("textbox", { name: "IDs de vendedores vinculados", exact: true }).fill("A");
+    await page.getByRole("searchbox", { name: "Buscar vendedores", exact: true }).fill("A");
+    await page.getByRole("checkbox", { name: "Vendedor A · A", exact: true }).check();
     await page.getByRole("textbox", { name: "Motivo del cambio de vínculos" }).fill("Vincular vendedor real desde UI");
     await page.getByRole("button", { name: "Guardar vendedores vinculados", exact: true }).click();
     await expect(page.getByText("Vínculos guardados y sesiones del usuario revocadas.", { exact: true })).toBeVisible();
@@ -415,7 +437,7 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
     expect(await environment.db("dmmarket_auth_user_sellers").where("user_id", user.id).pluck("seller_id")).toEqual([
       "A",
     ]);
-    await page.getByRole("textbox", { name: "IDs de vendedores vinculados", exact: true }).fill("");
+    await page.getByRole("checkbox", { name: "Vendedor A · A", exact: true }).uncheck();
     await page
       .getByRole("textbox", { name: "Motivo del cambio de vínculos" })
       .fill("Quitar todos los vínculos desde UI");

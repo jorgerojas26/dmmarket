@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { useAuth } from './context';
 
-export function AccessForm({ title, onSubmit, children, button = 'Continuar' }) {
+export function AccessForm({ title, onSubmit, children, button = 'Continuar', embedded = false }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const submit = async (event) => {
@@ -26,8 +26,8 @@ export function AccessForm({ title, onSubmit, children, button = 'Continuar' }) 
         }
     };
     return (
-        <section className="card bg-dark text-light border-secondary p-4 my-3">
-            <h2 className="h4">{title}</h2>
+        <section className={embedded ? 'access-embedded-form' : 'card bg-dark text-light border-secondary p-4 my-3'}>
+            {!embedded && <h2 className="h4">{title}</h2>}
             <form method="post" onSubmit={submit}>
                 <fieldset disabled={busy}>
                     {children}
@@ -307,6 +307,7 @@ export function EnrollmentForm() {
 export function ReauthenticationForm({
     title = 'Confirmar identidad para administrar acceso',
     onConfirmed,
+    embedded = false,
     description = 'Las acciones de acceso exigen contraseña y MFA comprobados en los últimos cinco minutos.',
 } = {}) {
     const { action } = useAuth();
@@ -314,6 +315,7 @@ export function ReauthenticationForm({
     return (
         <AccessForm
             title={title}
+            embedded={embedded}
             button="Confirmar identidad"
             onSubmit={async ({ password, token }) => {
                 setConfirmed(false);
@@ -350,12 +352,14 @@ export function ReauthenticationDialog() {
             centered
             backdrop="static"
             aria-labelledby="auth-reauthentication-title"
+            className="access-surface access-verification"
         >
-            <Modal.Header closeButton>
+            <Modal.Header closeButton closeLabel="Cerrar">
                 <Modal.Title id="auth-reauthentication-title">Confirmar identidad</Modal.Title>
             </Modal.Header>
             <Modal.Body>
                 <ReauthenticationForm
+                    embedded
                     title="Verificar contraseña y MFA"
                     description="Para continuar esta operación, confirma de nuevo tu identidad."
                     onConfirmed={finishReauthentication}

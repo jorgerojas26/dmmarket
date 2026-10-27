@@ -35,6 +35,22 @@ const frontend = net.createServer((socket) => {
 const proxies = [];
 let fixture;
 let runtime;
+let urlPanel;
+let panelOutput = "";
+let panelReader;
+
+function panelFrame() {
+  return panelOutput.split("\u001b[2J\u001b[H").at(-1);
+}
+
+async function expectPanel(text) {
+  const deadline = Date.now() + 5000;
+  while (!panelFrame().includes(text)) {
+    assert.equal(urlPanel.exitCode, null, "El panel HTTPS debe seguir activo.");
+    assert.ok(Date.now() < deadline, `El panel HTTPS no mostró: ${text}`);
+    await Bun.sleep(50);
+  }
+}
 
 async function listen(server) {
   server.listen(0, "127.0.0.1");
@@ -90,6 +106,15 @@ async function webSocketHandshake(proxy) {
 }
 
 try {
+  urlPanel = Bun.spawn(["bun", path.join(root, "scripts/dev-url.mjs"), path.join(directory, "https.json")], {
+    stdout: "pipe",
+    stderr: "inherit",
+  });
+  panelReader = (async () => {
+    const decoder = new TextDecoder();
+    for await (const chunk of urlPanel.stdout) panelOutput += decoder.decode(chunk, { stream: true });
+  })();
+  await expectPanel("HTTPS detenido");
   const { startDevelopmentHttps } = await import("./dev-https.mjs");
   const backendPort = await listen(backend);
   const frontendPort = await listen(frontend);
@@ -105,6 +130,8 @@ try {
   };
   const proxy = await startDevelopmentHttps(options);
   proxies.push(proxy);
+  await expectPanel(proxy.env.AUTH_PUBLIC_ORIGIN);
+  assert.ok(panelFrame().includes("HTTP son internos"));
   const security = createHttpSecurity(proxy.env.AUTH_PUBLIC_ORIGIN);
   const express = load("express");
   const app = express();
@@ -173,13 +200,20 @@ try {
   await runtime.close();
   runtime = null;
   await proxy.close();
+  await expectPanel("HTTPS detenido");
   const restarted = await startDevelopmentHttps(options);
   proxies.push(restarted);
+  await expectPanel(restarted.env.AUTH_PUBLIC_ORIGIN);
   assert.equal(restarted.env.AUTH_SESSION_SECRET, proxy.env.AUTH_SESSION_SECRET);
   assert.equal(restarted.env.AUTH_MFA_KEY, proxy.env.AUTH_MFA_KEY);
   assert.equal(readFileSync(restarted.certificate, "utf8"), readFileSync(proxy.certificate, "utf8"));
   const isolated = await startDevelopmentHttps({ ...options, directory: path.join(directory, "isolated") });
   proxies.push(isolated);
+  await Bun.sleep(1100);
+  assert.ok(panelFrame().includes(restarted.env.AUTH_PUBLIC_ORIGIN));
+  assert.ok(!panelFrame().includes(isolated.env.AUTH_PUBLIC_ORIGIN));
+  const mprocs = readFileSync(path.join(root, "mprocs.yaml"), "utf8");
+  assert.ok(mprocs.startsWith('procs:\n  https:\n    cmd: ["bun", "scripts/dev-url.mjs"]'));
   assert.notEqual(isolated.env.AUTH_SESSION_SECRET, proxy.env.AUTH_SESSION_SECRET);
   assert.notEqual(isolated.env.AUTH_MFA_KEY, proxy.env.AUTH_MFA_KEY);
   assert.notEqual(isolated.env.AUTH_PUBLIC_ORIGIN, restarted.env.AUTH_PUBLIC_ORIGIN);
@@ -187,6 +221,11 @@ try {
     "HTTPS de desarrollo: API, cookies seguras, CSRF, frontend, WebSockets, persistencia y aislamiento verificados.",
   );
 } finally {
+  if (urlPanel?.exitCode === null) {
+    urlPanel.kill("SIGTERM");
+    await urlPanel.exited;
+  }
+  await panelReader;
   for (const proxy of proxies.reverse()) await proxy.close();
   if (runtime) await runtime.close();
   if (fixture) await fixture.close();

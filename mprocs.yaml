@@ -1,4 +1,8 @@
 procs:
+  https:
+    cmd: ["bun", "scripts/dev-url.mjs"]
+    cwd: <CONFIG_DIR>
+    stop: SIGTERM
   backend:
     cmd: ["bun", "run", "dev:backend"]
     autostart: false

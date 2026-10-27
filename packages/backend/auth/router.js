@@ -2,6 +2,7 @@ const express = require("express");
 const { CAPABILITIES } = require("./capabilities");
 const { newSessionId, replaceSession } = require("./http-security");
 const { requestSource } = require("./attempts");
+const { createAccessDirectory } = require("./access-directory");
 
 function forbidden() {
   const error = new Error("Acceso no permitido.");
@@ -26,6 +27,7 @@ function sessionView(context) {
 
 function createAuthRouter({ sessions, accounts, administration, security }) {
   const router = express.Router();
+  const directory = createAccessDirectory(sessions);
   const handler = (work) => (req, res, next) =>
     Promise.resolve()
       .then(() => work(req, res))
@@ -163,6 +165,14 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
       res.clearCookie("__Host-dmmarket.sid", { path: "/", secure: true, httpOnly: true, sameSite: "lax" });
       res.json({ ok: true });
     }),
+  );
+  router.get(
+    "/directory",
+    handler(async (req, res) => res.json(await directory.users(req.sessionID, req.query))),
+  );
+  router.get(
+    "/seller-options",
+    handler(async (req, res) => res.json(await directory.sellers(req.sessionID, req.query))),
   );
   router.get(
     "/users",

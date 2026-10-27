@@ -84,6 +84,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                             '/vendedores',
                             '/inventario',
                             '/configuracion',
+                            '/acceso',
                         ].some((route) => pathname.includes(route))
                             ? ' has-clients-sidebar'
                             : '')
@@ -275,6 +276,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                                     '/vendedores',
                                     '/inventario',
                                     '/configuracion',
+                                    '/acceso',
                                 ].includes(path) && (
                                     <aside
                                         aria-hidden="true"
@@ -295,6 +297,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                           '/vendedores',
                           '/proveedores',
                           '/configuracion',
+                          '/acceso',
                       ].includes(path) ? (
                         view.content
                     ) : view ? (

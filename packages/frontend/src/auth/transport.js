@@ -94,13 +94,13 @@ export function installAuthTransport() {
     };
 }
 
-export async function authRequest(path, body) {
+export async function authRequest(path, body, method = 'POST') {
     const response = await fetch(
         `/api/auth/${path}`,
         body === undefined
             ? {}
             : {
-                  method: 'POST',
+                  method,
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(body),
               },
@@ -109,6 +109,7 @@ export async function authRequest(path, body) {
     if (!response.ok) {
         const error = new Error(result?.error?.message || 'No se pudo completar el acceso.');
         error.status = response.status;
+        error.code = result?.error?.code;
         error.retryAfter = Number(response.headers.get('Retry-After')) || 0;
         throw error;
     }
