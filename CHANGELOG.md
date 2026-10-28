@@ -7,6 +7,17 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.13.0] - 2026-10-28
+
+### Nuevas funciones
+
+- **Moneda del negocio en Preferencias**: desde Configuración puedes elegir dólares o bolívares y ver una muestra antes de guardar. La elección se conserva para el negocio y se aplica a los reportes en pantalla y sus exportaciones. Las instalaciones nuevas comienzan en dólares; no se convierten importes ni se modifican los datos originales o la cobranza.
+
+### Correcciones
+
+- **La misma moneda al consultar e imprimir**: los reportes respetan la moneda elegida para el negocio, sin presentar importes en bolívares como dólares ni aplicar conversiones adicionales al imprimir.
+- **Orden correcto por costo promedio en Compras**: los productos respetan el orden ascendente o descendente elegido para esa columna.
+
 ## [v1.12.0] - 2026-10-25
 
 ### Mejoras
