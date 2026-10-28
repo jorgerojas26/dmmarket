@@ -337,7 +337,7 @@ const GET_PRODUCTS = async (req, res) => {
       case "quantity":
         return knex.raw("SUM(sc.Cantidad)");
       case "avgUnitCost":
-        return knex.raw("SUM(sc.Precio * sc.Cantidad) / NULLIF(SUM(sc.Cantidad), 0)");
+        return "avgUnitCost";
       default:
         return knex.raw("SUM(sc.Precio * sc.Cantidad)");
     }
