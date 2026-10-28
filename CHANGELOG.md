@@ -7,6 +7,12 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.13.2] - 2026-10-28
+
+### Correcciones
+
+- **Estado claro de cobranza no habilitada**: cuando el negocio todavía no tiene preparada su cartera, Cuentas por cobrar muestra un mensaje breve y centrado con un icono, en lugar de un error genérico de conexión. No se muestran saldos vacíos, controles de cobro ni botones para reintentar una consulta que requiere habilitación previa. El resto del sistema sigue disponible.
+
 ## [v1.13.1] - 2026-10-28
 
 ### Correcciones
