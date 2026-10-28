@@ -1,5 +1,5 @@
-const { salesBase, financialFields } = require("./sales-reports");
-const { purchaseBase, metrics } = require("./purchase-reports");
+const { salesBase, financialFields } = require("./sales");
+const { purchaseBase, metrics } = require("./purchases");
 const { reportId } = require("../utils/report-identity");
 
 const identityKey = (value) => JSON.stringify(value == null ? null : String(value));

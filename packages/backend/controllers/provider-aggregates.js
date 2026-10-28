@@ -1,6 +1,6 @@
-const { salesBase, financialFields } = require("./sales-reports");
-const { purchaseBase, metrics } = require("./purchase-reports");
-const { sellerSalesScope } = require("./party-reports");
+const { salesBase, financialFields } = require("./sales");
+const { purchaseBase, metrics } = require("./purchases");
+const { sellerSalesScope } = require("./parties");
 const { reportId } = require("../utils/report-identity");
 function fail(status) {
   throw Object.assign(new Error("El agregado de proveedores no está permitido."), { status });

@@ -1,13 +1,13 @@
 const express = require("express");
 const { randomUUID } = require("node:crypto");
-const { parameters } = require("./sales-reports");
-const { appendEvent } = require("./identity");
-const { fechaEnCaracas, bcvRateService } = require("../bcv");
+const { appendEvent } = require("../auth/identity");
+const { bcvRateService } = require("../bcv");
 const { backupService } = require("../backups");
 const { driveBackupService } = require("../drive-backups");
 const updates = require("../controllers/update");
 const { allowedReleaseAssets } = require("../utils/update-assets");
 const { reportCache } = require("../middlewares/report-cache");
+const { currentRates, rateHistory, latestRate, rateStatus, rateForDate } = require("../controllers/currency_rates");
 
 function fail(status) {
   throw Object.assign(new Error("Operación no permitida."), { status });
@@ -15,14 +15,8 @@ function fail(status) {
 function empty(input) {
   if (Object.keys(input).length) fail(400);
 }
-function asRate(row) {
-  if (!row) return null;
-  if (!Number.isFinite(Number(row.Venta)) || Number(row.Venta) <= 0) fail(503);
-  return { fecha: row.Fecha, tasa: Number(row.Venta) };
-}
-const dateColumn = (tx) => tx.raw("CAST(DATE_FORMAT(Fecha, '%Y-%m-%d') AS CHAR)");
 
-function createOperationReports({ sessions, security, db, services = {} }) {
+function createOperationRoutes({ sessions, security, db, services = {} }) {
   const rateService = services.rates || bcvRateService;
   const updateReader = services.updateReader || updates;
   const updateInstaller = services.updateInstaller || updates;
@@ -40,82 +34,14 @@ function createOperationReports({ sessions, security, db, services = {} }) {
       next(error);
     }
   };
-  router.get(
-    "/currency_rates/bcv",
-    handle("rates.read", async (tx, req) => {
-      const end = req.query.to || fechaEnCaracas();
-      const from =
-        req.query.from ||
-        (Number.isFinite(Date.parse(end))
-          ? new Date(Date.parse(end) - 89 * 86400000).toISOString().slice(0, 10)
-          : "invalid");
-      const query = parameters({ ...req.query, from, to: end }, { keys: ["from", "to"] });
-      const rows = await tx("bcv_tasas")
-        .whereBetween("Fecha", [query.from, query.to])
-        .select({ Fecha: dateColumn(tx), Venta: "Venta" })
-        .orderBy("Fecha")
-        .limit(368);
-      if (rows.length > 367) fail(413);
-      return rows.map(asRate);
-    }),
-  );
-  router.get(
-    "/currency_rates/bcv/latest",
-    handle("rates.read", async (tx, req) => {
-      empty(req.query);
-      const row = await tx("bcv_tasas")
-        .where("Fecha", "<=", fechaEnCaracas())
-        .select({ Fecha: dateColumn(tx), Venta: "Venta" })
-        .orderBy("Fecha", "desc")
-        .first();
-      if (!row) fail(404);
-      return asRate(row);
-    }),
-  );
+  router.get(["/currency_rates", "/currency_rates/"], handle("rates.read", currentRates));
+  router.get("/currency_rates/bcv", handle("rates.read", rateHistory));
+  router.get("/currency_rates/bcv/latest", handle("rates.read", latestRate));
   router.get(
     "/currency_rates/bcv/status",
-    handle("rates.read", async (tx, req) => {
-      empty(req.query);
-      const disponible = await tx.schema.hasTable("bcv_tasas");
-      if (!disponible) return { disponible: false, ultimaTasa: null, ultimaPublicada: null, publicadaHasta: null };
-      const current = await tx("bcv_tasas")
-        .where("Fecha", "<=", fechaEnCaracas())
-        .select({ Fecha: dateColumn(tx), Venta: "Venta" })
-        .orderBy("Fecha", "desc")
-        .first();
-      const newest = await tx("bcv_tasas")
-        .select({ Fecha: dateColumn(tx), Venta: "Venta" })
-        .orderBy("Fecha", "desc")
-        .first();
-      const operational = typeof rateService.estado === "function" ? await rateService.estado() : {};
-      return {
-        disponible: true,
-        lastRequest: lastSync,
-        sincronizando: lastSync?.outcome === "running" || operational.sincronizando === true,
-        ultimaSincronizacion: operational.ultimaSincronizacion || lastSync?.completedAt || null,
-        intervaloMinutos: operational.intervaloMinutos || null,
-        ultimaTasa: asRate(current),
-        ultimaPublicada: asRate(newest),
-        publicadaHasta: newest?.Fecha || null,
-      };
-    }),
+    handle("rates.read", (tx, req) => rateStatus(tx, req, rateService, lastSync)),
   );
-  router.get(
-    "/currency_rates/bcv/:date",
-    handle("rates.read", async (tx, req) => {
-      empty(req.query);
-      const date = req.params.date;
-      parameters({ from: date, to: date });
-      if (date > fechaEnCaracas()) fail(400);
-      const row = await tx("bcv_tasas")
-        .where("Fecha", "<=", date)
-        .select({ Fecha: dateColumn(tx), Venta: "Venta" })
-        .orderBy("Fecha", "desc")
-        .first();
-      if (!row) fail(404);
-      return { ...asRate(row), solicitada: date, exacta: row.Fecha === date };
-    }),
-  );
+  router.get("/currency_rates/bcv/:date", handle("rates.read", rateForDate));
   router.get(
     "/backups",
     handle("backups.read", async (_tx, req) => {
@@ -350,4 +276,4 @@ function createOperationReports({ sessions, security, db, services = {} }) {
   return router;
 }
 
-module.exports = { createOperationReports };
+module.exports = { createOperationRoutes };

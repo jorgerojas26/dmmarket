@@ -1,8 +1,8 @@
 const { backend } = require("../../../tests/support/auth-environment.cjs");
 const { realDatabase } = require("../../../tests/support/test-database.cjs");
 const { CAPABILITIES, createAccess } = backend("./auth/capabilities");
-const { salesBase } = backend("./auth/sales-reports");
-const { purchaseBase } = backend("./auth/purchase-reports");
+const { salesBase } = backend("./controllers/sales");
+const { purchaseBase } = backend("./controllers/purchases");
 const access = createAccess(
   Object.keys(CAPABILITIES).map((capability) => ({ capability, scope: "global" })),
   [],

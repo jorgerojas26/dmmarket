@@ -1,97 +1,94 @@
-const knex = require("../database");
+const { parameters } = require("./sales");
 
-// Whitelist de columnas ordenables (la del navegador no toca el SQL).
-const SORT_COLUMNS = {
-  IdProducto: "productos.IdProducto",
-  Descripcion: "productos.Descripcion",
-  Grupo: "grupos.Descripcion",
-  Proveedor: "proveedores.Empresa",
-  PrecioA: "productos.PrecioA",
-  Existencia: "productos.Existencia",
-};
+function fail(status) {
+  const error = new Error("La consulta de inventario no está permitida.");
+  error.status = status;
+  throw error;
+}
 
-// Lista de productos con su categoría (grupos) y proveedor, con búsqueda,
-// filtros de categoría/proveedor, orden y paginación server-side. Sin `limit`
-// devuelve todas las filas que matchean (para imprimir el set filtrado completo).
-const GET_PRODUCTS = async (req, res) => {
-  const {
-    search,
-    categoryId,
-    proveedorId,
-    stockOnly,
-    page = 1,
-    limit,
-    sortBy = "Descripcion",
-    sortDir = "asc",
-  } = req.query;
+function options(input) {
+  if (input.stockOnly !== undefined && !["true", "false"].includes(input.stockOnly)) fail(400);
+  const query = parameters(Object.fromEntries(Object.entries(input).filter(([key]) => key !== "stockOnly")), {
+    range: false,
+    keys: ["search", "categoryId", "proveedorId", "page", "limit", "sortBy", "sortDir"],
+  });
+  return { ...query, stockOnly: input.stockOnly === "true" };
+}
 
-  try {
-    const pageNum = Math.max(1, Number(page) || 1);
-    const limitNum = Math.max(1, Number(limit));
-
-    const applyFilters = (query) => {
-      if (search) query.where("productos.Descripcion", "like", `%${search}%`);
-      if (categoryId) query.where("productos.Grupo", categoryId);
-      if (proveedorId) query.where("productos.Proveedor", proveedorId);
-      if (stockOnly === "true") query.where("productos.Existencia", ">", 0);
-    };
-
-    const countQuery = knex
-      .countDistinct({ total: "productos.IdProducto" })
-      .from("productos")
-      .leftJoin("grupos", "grupos.IdGrupo", "productos.Grupo")
-      .leftJoin("proveedores", "proveedores.IdProveedor", "productos.Proveedor");
-    applyFilters(countQuery);
-
-    const dataQuery = knex
-      .select(
-        "productos.IdProducto",
-        "productos.Descripcion",
-        "productos.Peso",
-        "productos.PrecioA",
-        "productos.Existencia",
-        "grupos.Descripcion as Grupo",
-        "proveedores.Empresa as Proveedor",
-      )
-      .from("productos")
-      .leftJoin("grupos", "grupos.IdGrupo", "productos.Grupo")
-      .leftJoin("proveedores", "proveedores.IdProveedor", "productos.Proveedor");
-    applyFilters(dataQuery);
-
-    const sortColumn = SORT_COLUMNS[sortBy] || "productos.Descripcion";
-    const direction = String(sortDir).toUpperCase() === "DESC" ? "desc" : "asc";
-    dataQuery.orderBy(sortColumn, direction);
-
-    if (limit) {
-      dataQuery.limit(limitNum).offset((pageNum - 1) * limitNum);
-    }
-
-    const [{ total }] = await countQuery;
-    const data = await dataQuery;
-
-    // Totals: sumas de TODA la data filtrada (independientes de la página), para
-    // que el pie de la tabla no dependa de la página visible.
-    const totalsQuery = knex
-      .select(knex.raw("ROUND(SUM(productos.Existencia), 2) as existencia"))
-      .from("productos")
-      .leftJoin("grupos", "grupos.IdGrupo", "productos.Grupo")
-      .leftJoin("proveedores", "proveedores.IdProveedor", "productos.Proveedor");
-    applyFilters(totalsQuery);
-    const [totals] = await totalsQuery;
-
-    res.status(200).json({
-      data,
-      total: Number(total),
-      page: limit ? pageNum : 1,
-      limit: limit ? limitNum : null,
-      totals,
+async function inventory(transaction, access, query) {
+  if (!access.hasGlobal("inventory.read")) fail(403);
+  const monetary = access.hasGlobal("inventory.costs");
+  const providers = access.hasGlobal("providers.read");
+  const sortBy = query.sortBy || "Descripcion";
+  if (["PrecioA", "inventoryValue"].includes(sortBy) && !monetary) fail(403);
+  if ((sortBy === "Proveedor" || query.proveedorId) && !providers) fail(403);
+  const value = transaction.raw("ROUND(p.PrecioA * p.Existencia, 2)");
+  const sort = {
+    IdProducto: "p.IdProducto",
+    Descripcion: "p.Descripcion",
+    Grupo: "g.Descripcion",
+    Peso: "p.Peso",
+    Existencia: "p.Existencia",
+    ...(monetary ? { PrecioA: "p.PrecioA", inventoryValue: value } : {}),
+    ...(providers ? { Proveedor: "v.Empresa" } : {}),
+  };
+  if (!Object.hasOwn(sort, sortBy)) fail(400);
+  const source = transaction("productos as p").leftJoin("grupos as g", function () {
+    this.on(transaction.raw("g.IdGrupo = p.Grupo AND BINARY g.IdGrupo = BINARY p.Grupo"));
+  });
+  if (providers)
+    source.leftJoin("proveedores as v", function () {
+      this.on(transaction.raw("v.IdProveedor = p.Proveedor AND BINARY v.IdProveedor = BINARY p.Proveedor"));
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
+  if (query.search)
+    source.where(function () {
+      this.where("p.Descripcion", "like", `%${query.search}%`).orWhere("p.IdProducto", "like", `%${query.search}%`);
+    });
+  if (query.categoryId) source.whereRaw("BINARY p.Grupo = ?", [query.categoryId]);
+  if (query.proveedorId) source.whereRaw("BINARY p.Proveedor = ?", [query.proveedorId]);
+  if (query.stockOnly) source.where("p.Existencia", ">", 0);
+  const [{ total }] = await source.clone().count("* as total");
+  const data = await source
+    .clone()
+    .select({
+      IdProducto: "p.IdProducto",
+      Descripcion: "p.Descripcion",
+      Peso: "p.Peso",
+      Existencia: "p.Existencia",
+      categoryId: "p.Grupo",
+      Grupo: transaction.raw(
+        "COALESCE(NULLIF(g.Descripcion, ''), CONCAT('Grupo no registrado (', COALESCE(p.Grupo, 'sin ID'), ')'))",
+      ),
+      ...(monetary ? { PrecioA: "p.PrecioA", inventoryValue: value } : {}),
+      ...(providers
+        ? {
+            proveedorId: "p.Proveedor",
+            Proveedor: transaction.raw(
+              "COALESCE(NULLIF(v.Empresa, ''), CONCAT('Proveedor no registrado (', COALESCE(p.Proveedor, 'sin ID'), ')'))",
+            ),
+          }
+        : {}),
+    })
+    .orderBy(sort[sortBy], query.sortDir)
+    .orderBy("p.IdProducto")
+    .limit(query.limit)
+    .offset((query.page - 1) * query.limit);
+  const totals = await source
+    .clone()
+    .select({
+      existencia: transaction.raw(
+        "CASE WHEN COUNT(p.Existencia) = COUNT(*) THEN ROUND(COALESCE(SUM(p.Existencia), 0), 3) END",
+      ),
+      ...(monetary
+        ? {
+            inventoryValue: transaction.raw(
+              "CASE WHEN COUNT(p.PrecioA * p.Existencia) = COUNT(*) THEN ROUND(COALESCE(SUM(p.PrecioA * p.Existencia), 0), 2) END",
+            ),
+          }
+        : {}),
+    })
+    .first();
+  return { data, total: Number(total), page: query.page, limit: query.limit, totals };
+}
 
-module.exports = {
-  GET_PRODUCTS,
-};
+module.exports = { inventory, options };

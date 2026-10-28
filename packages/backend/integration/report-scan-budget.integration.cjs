@@ -1,8 +1,8 @@
 const { backend } = require("../../../tests/support/auth-environment.cjs");
 const { realDatabase } = require("../../../tests/support/test-database.cjs");
 const { CAPABILITIES, createAccess } = backend("./auth/capabilities");
-const { createSalesReports } = backend("./auth/sales-reports");
-const { createPartyReports } = backend("./auth/party-reports");
+const { createSalesRoutes } = backend("./routes/sales");
+const { createPartyRoutes } = backend("./routes/parties");
 const access = createAccess(
   Object.keys(CAPABILITIES).map((capability) => ({ capability, scope: "global" })),
   [],
@@ -17,10 +17,10 @@ afterAll(async () => {
 
 for (const showNoe of ["false", "true"]) {
   test.each([
-    ["/dashboard/sales", createSalesReports, 3],
-    ["/sellers/dashboard", createPartyReports, 2],
-    ["/clients/list", createPartyReports, 1],
-    ["/sellers/list", createPartyReports, 1],
+    ["/dashboard/sales", createSalesRoutes, 3],
+    ["/sellers/dashboard", createPartyRoutes, 2],
+    ["/clients/list", createPartyRoutes, 1],
+    ["/sellers/list", createPartyRoutes, 1],
   ])(`%s mantiene el presupuesto de escaneos sin caché con NOE=${showNoe}`, async (path, createRouter, budget) => {
     let scans = 0;
     const table = showNoe === "true" ? "slavenoe" : "slavefact";

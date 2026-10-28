@@ -1,276 +1,229 @@
-const knex = require("../../database");
+const { reportId, missingName } = require("../../utils/report-identity");
+const { financialFields, parameters } = require("../sales");
+const { salesDocuments } = require("../sales-documents");
 
-// ── Helpers ──
+const key = (value) => JSON.stringify(value == null ? null : String(value));
+const round = (value) => Math.round(value * 100) / 100;
+const sum = (rows, field) => rows.reduce((total, row) => total + Number(row[field] || 0), 0);
 
-/**
- * Returns { from, to } strings for the matching-length period
- * immediately before [from, to].
- */
-const getPreviousPeriod = (from, to) => {
-  const days = Math.round((new Date(to) - new Date(from)) / (1000 * 60 * 60 * 24));
-  const prevFrom = new Date(from);
-  prevFrom.setDate(prevFrom.getDate() - days);
-  const prevTo = new Date(from);
-  prevTo.setDate(prevTo.getDate() - 1);
+function bounded(rows, limit) {
+  if (rows.length > limit) {
+    const error = new Error("La consulta de clientes supera el límite permitido.");
+    error.status = 413;
+    throw error;
+  }
+  return rows;
+}
 
-  return {
-    from: prevFrom.toISOString().split("T")[0],
-    to: prevTo.toISOString().split("T")[0],
+function abc(rows, field, percentKey) {
+  const sorted = [...rows].sort((a, b) => b[field] - a[field] || key(a.clientId).localeCompare(key(b.clientId)));
+  const total = sum(sorted, field);
+  const valid = total > 0 && sorted.every((row) => row[field] >= 0);
+  let cumulative = 0;
+  const classes = {
+    A: { count: 0, [percentKey]: valid || !rows.length ? 0 : null },
+    B: { count: 0, [percentKey]: valid || !rows.length ? 0 : null },
+    C: { count: 0, [percentKey]: valid || !rows.length ? 0 : null },
   };
-};
-
-// ── Pure domain functions (operate on already-fetched revenue rows) ──
-
-const computeConcentration = (sortedRevenues, grandTotal) => {
-  const concentration = { top5: 0, top10: 0, top20: 0 };
-  let cumulative = 0;
-  sortedRevenues.forEach((r, i) => {
-    cumulative += Number(r.total_usd || 0);
-    const pct = grandTotal > 0 ? Math.round((cumulative / grandTotal) * 1000) / 10 : 0;
-    if (i === 4) concentration.top5 = pct;
-    if (i === 9) concentration.top10 = pct;
-    if (i === 19) concentration.top20 = pct;
-  });
-  if (sortedRevenues.length <= 5 && !concentration.top5) concentration.top5 = grandTotal > 0 ? 100 : 0;
-  if (sortedRevenues.length <= 10 && !concentration.top10) concentration.top10 = grandTotal > 0 ? 100 : 0;
-  if (sortedRevenues.length <= 20 && !concentration.top20) concentration.top20 = grandTotal > 0 ? 100 : 0;
-  return concentration;
-};
-
-const computeAbc = (sortedRevenues, grandTotal, valueKey = "total_usd", summaryValueKey = "revenuePercent") => {
-  let cumulative = 0;
-  const abcClients = sortedRevenues.map((r, i) => {
-    cumulative += Number(r[valueKey] || 0);
-    const pct = grandTotal > 0 ? Math.round((cumulative / grandTotal) * 10000) / 100 : 0;
+  const clients = sorted.map((row, index) => {
+    cumulative += row[field];
+    const percentage = valid ? (cumulative / total) * 100 : null;
+    const abcClass = valid ? (percentage <= 80 ? "A" : percentage <= 95 ? "B" : "C") : null;
+    if (abcClass) {
+      classes[abcClass].count++;
+      classes[abcClass][percentKey] += (row[field] / total) * 100;
+    }
     return {
-      name: r.name,
-      total_usd: Number(r.total_usd),
-      [valueKey]: Number(r[valueKey] || 0),
-      rank: i + 1,
-      cumulativePercent: pct,
-      abcClass: pct <= 80 ? "A" : pct <= 95 ? "B" : "C",
+      clientId: reportId(row.clientId),
+      name: row.name,
+      total_usd: row.total_usd,
+      [field]: row[field],
+      rank: index + 1,
+      cumulativePercent: percentage == null ? null : round(percentage),
+      abcClass,
     };
   });
+  for (const item of Object.values(classes)) if (item[percentKey] != null) item[percentKey] = round(item[percentKey]);
+  return { clients, summary: { totalClients: rows.length, classA: classes.A, classB: classes.B, classC: classes.C } };
+}
 
-  const classA = abcClients.filter((d) => d.abcClass === "A");
-  const classB = abcClients.filter((d) => d.abcClass === "B");
-  const classC = abcClients.filter((d) => d.abcClass === "C");
-
-  const lastA = classA.length > 0 ? classA[classA.length - 1].cumulativePercent : 0;
-  const lastB = classB.length > 0 ? classB[classB.length - 1].cumulativePercent : lastA;
-
+async function clientDashboard(transaction, access, query) {
+  salesDocuments(transaction, access, query);
+  const span = Date.parse(query.to) - Date.parse(query.from) + 86400000;
+  const previousRange = {
+    from: new Date(Date.parse(query.from) - span).toISOString().slice(0, 10),
+    to: new Date(Date.parse(query.from) - 86400000).toISOString().slice(0, 10),
+  };
+  parameters(previousRange);
+  const financial = financialFields(access, query);
+  const catalogQuery = transaction("clientes as c")
+    .leftJoin("rutas as r", function () {
+      this.on(transaction.raw("r.Id_Ruta = c.Ruta AND BINARY r.Id_Ruta = BINARY c.Ruta"));
+    })
+    .select({
+      clientId: "c.IdCliente",
+      name: "c.Empresa",
+      routeId: "c.Ruta",
+      routeName: transaction.raw("COALESCE(r.Nombre, c.Ruta)"),
+    });
+  if (query.ruta) catalogQuery.whereRaw("BINARY c.Ruta = ?", [query.ruta]);
+  const catalog = bounded(await catalogQuery.orderBy("c.IdCliente").limit(5001), 5000);
+  const catalogById = new Map(catalog.map((row) => [key(row.clientId), row]));
+  const documents = (range) => {
+    const result = salesDocuments(transaction, access, range);
+    result.base.whereBetween("mf.Fecha", [range.from, range.to]);
+    if (query.ruta)
+      result.base
+        .join("clientes as c", function () {
+          this.on(transaction.raw("c.IdCliente = mf.IdCliente AND BINARY c.IdCliente = BINARY mf.IdCliente"));
+        })
+        .whereRaw("BINARY c.Ruta = ?", [query.ruta]);
+    return result;
+  };
+  const revenues = async (range) => {
+    const { base, slave, invoice } = documents(range);
+    const rows = bounded(
+      await base
+        .leftJoin(`${slave} as sf`, `sf.${invoice}`, `mf.${invoice}`)
+        .select({
+          clientId: "mf.IdCliente",
+          total_usd: transaction.raw("ROUND(COALESCE(SUM(sf.Precio * sf.Cantidad), 0), 2)"),
+          invoice_count: transaction.raw("COUNT(DISTINCT ??)", [`mf.${invoice}`]),
+          ...(financial
+            ? { utilidad: transaction.raw("ROUND(COALESCE(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 0), 2)") }
+            : {}),
+        })
+        .groupByRaw("BINARY mf.IdCliente")
+        .limit(5001),
+      5000,
+    );
+    return rows.map((row) => ({
+      ...row,
+      name: catalogById.get(key(row.clientId))?.name || missingName("Cliente", row.clientId),
+      total_usd: Number(row.total_usd),
+      invoice_count: Number(row.invoice_count),
+      ...(financial ? { utilidad: Number(row.utilidad) } : {}),
+    }));
+  };
+  const current = (await revenues(query)).sort(
+    (a, b) => b.total_usd - a.total_usd || key(a.clientId).localeCompare(key(b.clientId)),
+  );
+  const previous = await revenues({ ...query, ...previousRange });
+  const active = new Set(current.map((row) => key(row.clientId)));
+  const before = new Set(previous.map((row) => key(row.clientId)));
+  const knownActive = catalog.filter((row) => active.has(key(row.clientId))).length;
+  const retained = current.filter((row) => before.has(key(row.clientId))).length;
+  const previousSales = sum(previous, "total_usd");
+  const retainedSales = sum(
+    previous.filter((row) => active.has(key(row.clientId))),
+    "total_usd",
+  );
+  const totalSales = sum(current, "total_usd");
+  const concentration = Object.fromEntries(
+    [5, 10, 20].map((count) => [
+      `top${count}`,
+      totalSales > 0 && current.every((row) => row.total_usd >= 0)
+        ? round((sum(current.slice(0, count), "total_usd") / totalSales) * 100)
+        : current.length
+          ? null
+          : 0,
+    ]),
+  );
+  const { base: activity } = documents(query);
+  const months = bounded(
+    await activity
+      .select({ clientId: "mf.IdCliente", month: transaction.raw("CAST(DATE_FORMAT(mf.Fecha, '%Y-%m') AS CHAR)") })
+      .groupByRaw("BINARY mf.IdCliente, DATE_FORMAT(mf.Fecha, '%Y-%m')")
+      .orderBy("month")
+      .limit(70001),
+    70000,
+  );
+  const byMonth = new Map();
+  for (const row of months) {
+    const entry = byMonth.get(row.month) || { month: row.month, count: 0, unregistered: 0 };
+    if (catalogById.has(key(row.clientId))) entry.count++;
+    else entry.unregistered++;
+    byMonth.set(row.month, entry);
+  }
+  const routeMap = new Map();
+  for (const row of catalog) {
+    if (row.routeId == null || row.routeId === "") continue;
+    const entry = routeMap.get(key(row.routeId)) || {
+      Id_Ruta: row.routeId,
+      Nombre: row.routeName,
+      asignados: 0,
+      activos: 0,
+    };
+    entry.asignados++;
+    if (active.has(key(row.clientId))) entry.activos++;
+    routeMap.set(key(row.routeId), entry);
+  }
+  const segments = new Map();
+  const thresholds = [
+    ["A: >100K", 100000],
+    ["B: 20K-100K", 20000],
+    ["C: 5K-20K", 5000],
+    ["D: 1K-5K", 1000],
+    ["E: <1K", -Infinity],
+  ];
+  for (const row of current) {
+    const [segment] = thresholds.find(([, min]) => row.total_usd >= min);
+    const entry = segments.get(segment) || { segment, num_clients: 0, revenue: 0, invoices: 0 };
+    entry.num_clients++;
+    entry.revenue += row.total_usd;
+    entry.invoices += row.invoice_count;
+    segments.set(segment, entry);
+  }
   return {
-    clients: abcClients,
-    summary: {
-      totalClients: abcClients.length,
-      classA: { count: classA.length, [summaryValueKey]: lastA },
-      classB: { count: classB.length, [summaryValueKey]: Math.round((lastB - lastA) * 100) / 100 },
-      classC: { count: classC.length, [summaryValueKey]: 100 - lastB },
+    kpis: {
+      totalClients: catalog.length,
+      activeClients: knownActive,
+      unregisteredActiveClients: current.length - knownActive,
+      activePercent: catalog.length ? round((knownActive / catalog.length) * 100) : 0,
+      sinFacturar: catalog.length - knownActive,
+      withoutRoute: catalog.filter((row) => row.routeId == null || row.routeId === "").length,
+      concentration,
+      retention: {
+        retainedRevenue: round(retainedSales),
+        prevPeriodRevenue: round(previousSales),
+        rate: previousSales > 0 ? round((retainedSales / previousSales) * 100) : null,
+      },
+      avgFrequency: current.length ? round(sum(current, "invoice_count") / current.length) : 0,
+    },
+    monthlyActive: [...byMonth.values()],
+    revenueBySegment: thresholds
+      .filter(([name]) => segments.has(name))
+      .map(([name]) => {
+        const row = segments.get(name);
+        return {
+          segment: name,
+          num_clients: row.num_clients,
+          revenue: round(row.revenue),
+          revenue_pct: totalSales > 0 ? round((row.revenue / totalSales) * 100) : null,
+          avg_invoices: round(row.invoices / row.num_clients),
+        };
+      }),
+    waterfall: {
+      retained,
+      lost: before.size - retained,
+      gained: active.size - retained,
+      previous: before.size,
+      current: active.size,
+    },
+    treemapTop50: current
+      .slice(0, 50)
+      .map((row) => ({ clientId: reportId(row.clientId), name: row.name, value: row.total_usd })),
+    abc: abc(current, "total_usd", "revenuePercent"),
+    ...(financial ? { abcUtility: abc(current, "utilidad", "utilityPercent") } : {}),
+    coverage: {
+      totalClients: catalog.length,
+      routes: [...routeMap.values()].map((row) => ({
+        ...row,
+        coberturaPct: round((row.activos / row.asignados) * 100),
+        sharePct: catalog.length ? round((row.asignados / catalog.length) * 100) : 0,
+      })),
     },
   };
-};
+}
 
-const computeSegments = (revenues, grandTotal) => {
-  const SEGMENT_THRESHOLDS = [
-    { key: "A: >100K", min: 100000 },
-    { key: "B: 20K-100K", min: 20000 },
-    { key: "C: 5K-20K", min: 5000 },
-    { key: "D: 1K-5K", min: 1000 },
-    { key: "E: <1K", min: -Infinity },
-  ];
-
-  const map = new Map();
-  SEGMENT_THRESHOLDS.forEach((s) => {
-    map.set(s.key, { segment: s.key, num_clients: 0, revenue: 0, total_invoices: 0 });
-  });
-
-  revenues.forEach((r) => {
-    const totalUsd = Number(r.total_usd);
-    const seg = SEGMENT_THRESHOLDS.find((t) => totalUsd >= t.min);
-    if (!seg) return;
-    const entry = map.get(seg.key);
-    entry.num_clients += 1;
-    entry.revenue += totalUsd;
-    entry.total_invoices += Number(r.invoice_count);
-  });
-
-  return Array.from(map.values())
-    .map((s) => ({
-      segment: s.segment,
-      num_clients: s.num_clients,
-      revenue: Math.round(s.revenue * 100) / 100,
-      revenue_pct: grandTotal > 0 ? Math.round((s.revenue / grandTotal) * 100 * 10) / 10 : 0,
-      avg_invoices: s.num_clients > 0 ? Math.round((s.total_invoices / s.num_clients) * 10) / 10 : 0,
-    }))
-    .filter((s) => s.num_clients > 0);
-};
-
-const GET_CLIENTS_DASHBOARD = async (req, res) => {
-  const { from, to, ruta } = req.query;
-  const { masterTable, slaveTable, idInvoice } = req.locals.showNoe;
-
-  if (!from || !to) {
-    return res.status(400).json({ error: "from and to are required" });
-  }
-
-  try {
-    const clients = await knex("clientes as c")
-      .select(
-        knex.raw("LOWER(c.IdCliente) as clientId"),
-        "c.Ruta as routeId",
-        knex.raw("LOWER(c.Ruta) as routeKey"),
-        knex.raw("COALESCE(rutas.Nombre, c.Ruta) as routeName"),
-        ruta ? knex.raw("c.Ruta = ? as in_route", [ruta]) : knex.raw("1 as in_route"),
-      )
-      .leftJoin("rutas", "rutas.Id_Ruta", "c.Ruta")
-      .orderBy("c.Ruta", "asc");
-    const scopedClients = clients.filter((c) => Number(c.in_route) === 1);
-    const scopedClientIds = new Set(scopedClients.map((c) => c.clientId));
-
-    const currentActivity = await knex(`${masterTable} as mf`)
-      .select(
-        knex.raw("LOWER(COALESCE(c.IdCliente, mf.IdCliente)) as clientId"),
-        knex.raw("CAST(DATE_FORMAT(mf.Fecha, '%Y-%m') AS CHAR) as month"),
-        knex.raw("COUNT(*) as invoice_count"),
-      )
-      .leftJoin("clientes as c", "c.IdCliente", "mf.IdCliente")
-      .whereBetween("mf.Fecha", [from, to])
-      .andWhere("mf.Anulada", 0)
-      .groupBy("mf.IdCliente", knex.raw("DATE_FORMAT(mf.Fecha, '%Y-%m')"));
-
-    const prevPeriod = getPreviousPeriod(from, to);
-    const previousActivityQuery = knex(`${masterTable} as mf`)
-      .select(
-        knex.raw("LOWER(COALESCE(c.IdCliente, mf.IdCliente)) as clientId"),
-        knex.raw("SUM(sf.Precio * sf.Cantidad) as total_usd"),
-      )
-      .leftJoin("clientes as c", "c.IdCliente", "mf.IdCliente")
-      .leftJoin(`${slaveTable} as sf`, `sf.${idInvoice}`, `mf.${idInvoice}`)
-      .whereBetween("mf.Fecha", [prevPeriod.from, prevPeriod.to])
-      .andWhere("mf.Anulada", 0)
-      .groupBy("mf.IdCliente");
-    if (ruta) previousActivityQuery.where("c.Ruta", ruta);
-    const previousActivity = await previousActivityQuery;
-
-    const allClientsRevenueQuery = knex
-      .select(
-        knex.raw(
-          "CASE WHEN NULLIF(mf.IdCliente, '') IS NULL THEN 'Cliente no registrado (sin ID)' ELSE COALESCE(NULLIF(clientes.Empresa, ''), NULLIF(MAX(mf.Nombre), ''), CONCAT('Cliente no registrado (', mf.IdCliente, ')')) END as name",
-        ),
-        "mf.IdCliente",
-        knex.raw("COUNT(DISTINCT mf.??) as invoice_count", [idInvoice]),
-        knex.raw("SUM(sf.Precio * sf.Cantidad) as total_usd"),
-        knex.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad) as utilidad"),
-      )
-      .from(`${slaveTable} as sf`)
-      .innerJoin(`${masterTable} as mf`, function () {
-        this.on(`mf.${idInvoice}`, `sf.${idInvoice}`).andOn("mf.Anulada", 0);
-      })
-      .leftJoin("clientes", "clientes.IdCliente", "mf.IdCliente")
-      .whereBetween("mf.Fecha", [from, to])
-      .groupBy("mf.IdCliente")
-      .orderBy("total_usd", "desc");
-    if (ruta) allClientsRevenueQuery.where("clientes.Ruta", ruta);
-    const allClientsRevenue = await allClientsRevenueQuery;
-
-    const currentClients = new Set();
-    const globalCurrentClients = new Set();
-    const clientsByMonth = new Map();
-    let currentInvoices = 0;
-    for (const row of currentActivity) {
-      const monthClients = clientsByMonth.get(row.month) || new Set();
-      if (row.clientId != null) {
-        monthClients.add(row.clientId);
-        globalCurrentClients.add(row.clientId);
-      }
-      clientsByMonth.set(row.month, monthClients);
-      if (!ruta || scopedClientIds.has(row.clientId)) {
-        currentInvoices += Number(row.invoice_count || 0);
-        if (row.clientId != null) currentClients.add(row.clientId);
-      }
-    }
-
-    const previousClients = new Set();
-    let previousSales = 0;
-    let retainedSales = 0;
-    for (const row of previousActivity) {
-      if (row.clientId != null) previousClients.add(row.clientId);
-      const sales = Number(row.total_usd || 0);
-      previousSales += sales;
-      if (currentClients.has(row.clientId)) retainedSales += sales;
-    }
-    previousSales = Number(previousSales.toFixed(2));
-    retainedSales = Number(retainedSales.toFixed(2));
-    const retained = [...currentClients].filter((id) => previousClients.has(id)).length;
-    const waterfall = {
-      retained,
-      lost: previousClients.size - retained,
-      gained: currentClients.size - retained,
-      previous: previousClients.size,
-      current: currentClients.size,
-    };
-
-    const routeMap = new Map();
-    for (const client of clients) {
-      if (client.routeId == null) continue;
-      const route = routeMap.get(client.routeKey) || {
-        Id_Ruta: client.routeId,
-        Nombre: client.routeName,
-        asignados: 0,
-        activos: 0,
-      };
-      route.asignados++;
-      if (globalCurrentClients.has(client.clientId)) route.activos++;
-      routeMap.set(client.routeKey, route);
-    }
-    const coverage = {
-      totalClients: clients.length,
-      routes: [...routeMap.values()]
-        .map((r) => ({
-          ...r,
-          coberturaPct: Math.round((r.activos / r.asignados) * 1000) / 10,
-          sharePct: Math.round((r.asignados / clients.length) * 1000) / 10,
-        }))
-        .sort((a, b) => b.asignados - a.asignados),
-    };
-
-    const grandTotal = allClientsRevenue.reduce((sum, r) => sum + Number(r.total_usd || 0), 0);
-    const utilityClients = [...allClientsRevenue].sort((a, b) => Number(b.utilidad || 0) - Number(a.utilidad || 0));
-    const grandUtility = utilityClients.reduce((sum, r) => sum + Number(r.utilidad || 0), 0);
-
-    res.status(200).json({
-      kpis: {
-        totalClients: scopedClients.length,
-        activeClients: currentClients.size,
-        activePercent: scopedClients.length ? Math.round((currentClients.size / scopedClients.length) * 1000) / 10 : 0,
-        sinFacturar: scopedClients.filter((c) => !currentClients.has(c.clientId)).length,
-        withoutRoute: clients.filter((c) => c.routeId == null).length,
-        concentration: computeConcentration(allClientsRevenue, grandTotal),
-        retention: {
-          retainedRevenue: retainedSales,
-          prevPeriodRevenue: previousSales,
-          rate: previousSales > 0 ? Math.round((retainedSales / previousSales) * 10000) / 100 : 0,
-        },
-        avgFrequency: currentClients.size ? Math.round((currentInvoices * 10) / currentClients.size) / 10 : 0,
-      },
-      monthlyActive: [...clientsByMonth]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, ids]) => ({
-          month,
-          count: ruta ? [...ids].filter((id) => scopedClientIds.has(id)).length : ids.size,
-        }))
-        .filter((row) => !ruta || row.count > 0),
-      revenueBySegment: computeSegments(allClientsRevenue, grandTotal),
-      waterfall,
-      treemapTop50: allClientsRevenue.slice(0, 50).map((r) => ({ name: r.name, value: Number(r.total_usd) })),
-      abc: computeAbc(allClientsRevenue, grandTotal),
-      abcUtility: computeAbc(utilityClients, grandUtility, "utilidad", "utilityPercent"),
-      coverage,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-module.exports = { GET_CLIENTS_DASHBOARD, computeAbc };
+module.exports = { clientDashboard };

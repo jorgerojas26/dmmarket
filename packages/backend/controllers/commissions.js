@@ -1,5 +1,4 @@
-const express = require("express");
-const { parameters, salesBase, financialFields } = require("./sales-reports");
+const { parameters, salesBase, financialFields } = require("./sales");
 
 function fail(status) {
   const error = new Error("La consulta de comisiones no está permitida.");
@@ -111,24 +110,4 @@ async function sales(transaction, access, id, input) {
   return { data, pagination: { page: query.page, limit: query.limit, total: Number(total) } };
 }
 
-function createCommissionReports({ sessions }) {
-  const router = express.Router();
-  for (const [path, work] of [
-    ["/employees/commissionInfo/:employeeId", rates],
-    ["/employees/sales/:employeeId", sales],
-  ])
-    router.get(path, async (req, res, next) => {
-      try {
-        res.json(
-          await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) =>
-            work(transaction, access, req.params.employeeId, req.query),
-          ),
-        );
-      } catch (error) {
-        next(error);
-      }
-    });
-  return router;
-}
-
-module.exports = { createCommissionReports };
+module.exports = { rates, sales };

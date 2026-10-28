@@ -1,4 +1,4 @@
-const { salesBase, invoiceList } = require("./sales-reports");
+const { salesBase, invoiceList } = require("./sales");
 
 function fail(status) {
   throw Object.assign(new Error("La selección no está autorizada para exportar."), { status });

@@ -1,6 +1,6 @@
 const { createHash } = require("node:crypto");
-const { CAPABILITIES } = require("./capabilities");
-const { reportCache, isReportPath } = require("../middlewares/report-cache");
+const { CAPABILITIES } = require("../auth/capabilities");
+const { reportCache, isReportPath } = require("./report-cache");
 
 async function withReportCache(req, res, sessions, work) {
   let prepared;

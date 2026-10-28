@@ -1,5 +1,4 @@
-const express = require("express");
-const { parameters } = require("./sales-reports");
+const { parameters } = require("./sales");
 
 function fail(status) {
   const error = new Error("La consulta de auditoría no está permitida.");
@@ -84,21 +83,4 @@ async function audit(transaction, query) {
   return { data, total: Number(total), page: query.page, limit: query.limit };
 }
 
-function createAuditReports({ sessions }) {
-  const router = express.Router();
-  router.get("/auth/audit", async (req, res, next) => {
-    try {
-      res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
-          if (!access.hasGlobal("audit.read")) fail(403);
-          return audit(transaction, options(req.query));
-        }),
-      );
-    } catch (error) {
-      next(error);
-    }
-  });
-  return router;
-}
-
-module.exports = { createAuditReports };
+module.exports = { audit, options, fail };

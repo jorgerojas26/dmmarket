@@ -33,28 +33,14 @@ const EXT_MIME = {
   ".txt": "text/plain",
 };
 
-const clients_routes = require("./routes/clients");
-const receivables_routes = require("./routes/receivables");
-const groups_routes = require("./routes/groups");
-const invoices_routes = require("./routes/invoices");
-const products_routes = require("./routes/products");
-const employees_routes = require("./routes/employees");
-const sellers_routes = require("./routes/sellers");
-const currency_rates_routes = require("./routes/currency_rates");
-const providers_routes = require("./routes/providers");
-const dashboard_routes = require("./routes/dashboard");
-const sales_routes = require("./routes/sales");
-const purchases_routes = require("./routes/purchases");
-const update_routes = require("./routes/update");
-const backups_routes = require("./routes/backups");
 const { backupService } = require("./backups");
-const drive_backups_routes = require("./routes/drive-backups");
 const { driveBackupService } = require("./drive-backups");
 const { bcvRateService } = require("./bcv");
 
 let authRuntime = null;
 const { createAuthRuntime, validateAuthConfig } = require("./auth/runtime");
-const { trustLocalProxy } = require("./auth/http-security");
+const { trustLocalProxy, authErrorHandler } = require("./auth/http-security");
+const { createBusinessRouter } = require("./routes");
 app.set("trust proxy", trustLocalProxy);
 app.get("/api/health", (_req, res) =>
   res
@@ -67,11 +53,21 @@ app.use("/api", (req, res, next) => {
   if (!authRuntime) return res.status(503).json({ error: { message: "El servicio de acceso no está disponible." } });
   return authRuntime.middleware(req, res, next);
 });
-const { reportCache } = require("./middlewares/report-cache");
 
 async function initializeAuth(env = process.env, services = {}) {
   if (authRuntime) throw new Error("El servicio de acceso ya está iniciado.");
-  authRuntime = await createAuthRuntime({ db: require("./database"), env, services });
+  const db = require("./database");
+  const runtime = await createAuthRuntime({ db, env });
+  try {
+    const middleware = express.Router();
+    middleware.use(runtime.middleware);
+    middleware.use(createBusinessRouter({ sessions: runtime.sessions, security: runtime.security, db, services }));
+    middleware.use(authErrorHandler);
+    authRuntime = { ...runtime, middleware };
+  } catch (error) {
+    await runtime.close();
+    throw error;
+  }
   return authRuntime;
 }
 
@@ -80,35 +76,6 @@ async function closeAuth() {
   authRuntime = null;
   if (current) await current.close();
 }
-
-app.post("/api/cache/clear", (_req, res) => {
-  reportCache.clear();
-  res.json({ cleared: true });
-});
-
-app.use("/api/clients", clients_routes);
-app.use("/api/receivables", receivables_routes);
-app.use("/api/groups", groups_routes);
-app.use("/api/invoices", invoices_routes);
-app.use("/api/products", products_routes);
-app.use("/api/employees", employees_routes);
-app.use("/api/sellers", sellers_routes);
-app.use("/api/currency_rates", currency_rates_routes);
-app.use("/api/providers", providers_routes);
-app.use("/api/dashboard", dashboard_routes);
-app.use("/api/sales", sales_routes);
-app.use("/api/purchases", purchases_routes);
-app.use("/api/update", update_routes);
-app.use("/api/backups/drive", drive_backups_routes);
-app.use("/api/backups", backups_routes);
-
-app.use("/api/*", (req, res) => {
-  res.status(404).json({
-    error: {
-      message: `El servidor no encontró ningún recurso en la URL ${req.baseUrl}`,
-    },
-  });
-});
 
 // En el binario compilado los assets viven embebidos en el ejecutable (ver scripts/generate-assets.js).
 // En dev se sirven desde disco como siempre.

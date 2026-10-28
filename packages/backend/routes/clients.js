@@ -1,18 +1,59 @@
-const router = require("express").Router();
-const controller = require("../controllers/clients");
-const showNoe = require("../middlewares/showNoe");
+const express = require("express");
+const { withReportCache } = require("../middlewares/authorized-report-cache");
+const { parameters } = require("../controllers/sales");
+const { clientDashboard } = require("../controllers/clients/dashboard");
+const { inactiveClients, monthly, bestProduct, fail } = require("../controllers/clients");
 
-router.route("/").get(controller.GET_CLIENTS);
-router.route("/best").get(showNoe, controller.GET_BEST_CLIENTS);
-router.route("/best/product/:productId").get(showNoe, controller.GET_BEST_CLIENTS_PER_PRODUCT);
-router.route("/average/month/:clientId").get(showNoe, controller.MONTHLY_AVERAGE);
+function createClientRoutes({ sessions }) {
+  const router = express.Router();
+  const handle = (work, options) => async (req, res, next) => {
+    try {
+      res.json(
+        await withReportCache(req, res, sessions, ({ transaction, access }) => {
+          if (!access.hasGlobal("clients.read")) fail(403);
+          return work(transaction, access, parameters(req.query, options), req.params);
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+  router.get(
+    "/clients/average/month/:clientId",
+    handle((transaction, access, query, params) => monthly(transaction, access, query, params.clientId), {
+      keys: ["from", "to", "showNoe"],
+    }),
+  );
+  router.get(
+    "/clients/best/product/:productId",
+    handle((transaction, access, query, params) => bestProduct(transaction, access, query, params.productId), {
+      keys: ["from", "to", "showNoe", "employeeId", "ruta"],
+    }),
+  );
+  router.get(
+    "/clients/sin-facturar",
+    handle(inactiveClients, {
+      keys: ["from", "to", "showNoe", "search", "ruta", "employeeId", "sortBy", "sortDir", "page", "limit"],
+    }),
+  );
+  router.get("/clients/dashboard", handle(clientDashboard, { keys: ["from", "to", "showNoe", "ruta", "employeeId"] }));
+  router.get(
+    "/clients/routes",
+    handle(
+      async (transaction) => {
+        const rows = await transaction("clientes as c")
+          .join("rutas as r", "r.Id_Ruta", "c.Ruta")
+          .select({ Id_Ruta: "c.Ruta", Nombre: "r.Nombre", clientes: transaction.raw("COUNT(*)") })
+          .groupBy("c.Ruta", "r.Nombre")
+          .orderBy("c.Ruta")
+          .limit(501);
+        if (rows.length > 500) fail(413);
+        return rows;
+      },
+      { range: false, keys: [] },
+    ),
+  );
+  return router;
+}
 
-router.route("/:clientId/sales").get(showNoe, controller.GET_CLIENT_SALES);
-router.route("/:clientId/summary").get(showNoe, controller.GET_CLIENT_SUMMARY);
-
-router.route("/dashboard").get(showNoe, controller.GET_CLIENTS_DASHBOARD);
-router.route("/sin-facturar").get(showNoe, controller.GET_CLIENTS_SIN_FACTURAR);
-router.route("/list").get(showNoe, controller.GET_CLIENTS_LIST);
-router.route("/routes").get(showNoe, controller.GET_CLIENT_ROUTES);
-
-module.exports = router;
+module.exports = { createClientRoutes };

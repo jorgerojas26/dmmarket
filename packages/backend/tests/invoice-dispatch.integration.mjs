@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import database from "../database.js";
-import model from "../models/invoice.js";
+import { invoiceList } from "../controllers/sales.js";
+import { createAccess } from "../auth/capabilities.js";
+
+const access = createAccess(
+  ["sales.read", "sales.financial", "sales.export"].map((capability) => ({ capability, scope: "global" })),
+  [],
+);
 
 assert.ok(process.env.DATABASE_HOST);
 assert.ok(process.env.DATABASE_NAME);
@@ -27,15 +33,37 @@ try {
         .orderBy(`${masterTable}.${idInvoice}`, sortDir)
         .limit(50);
       assert.ok(expected.length > 0, `No hay datos para ${masterTable}`);
-      const result = await model.GET_INVOICES({ from, to, showNoe, sortBy: "invoiceId", sortDir, limit: 50 });
+      const result = await invoiceList(database, access, {
+        from,
+        to,
+        showNoe: String(masterTable === "masternoe"),
+        sortBy: "invoiceId",
+        sortDir,
+        page: 1,
+        limit: 50,
+      });
       assert.deepEqual(
         result.data.map((row) => row.invoiceId),
         expected.map((row) => row.invoiceId),
         `${masterTable}: ID ${sortDir}`,
       );
     }
-    const paginated = await model.GET_INVOICES({ from, to, showNoe, limit: 1 });
-    const all = await model.GET_INVOICES({ from, to, showNoe, limit: 1, all: true });
+    const paginated = await invoiceList(database, access, {
+      from,
+      to,
+      showNoe: String(masterTable === "masternoe"),
+      page: 1,
+      limit: 1,
+      sortDir: "desc",
+    });
+    const all = await invoiceList(database, access, {
+      from,
+      to,
+      showNoe: String(masterTable === "masternoe"),
+      page: 1,
+      limit: 5001,
+      sortDir: "desc",
+    });
     assert.ok(paginated.pagination.total > 0);
     assert.equal(paginated.data.length, 1);
     assert.equal(all.data.length, paginated.pagination.total, `${masterTable}: selección sin límite obsoleto`);
