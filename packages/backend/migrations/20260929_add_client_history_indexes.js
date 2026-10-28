@@ -1,3 +1,5 @@
+exports.retired = {};
+
 // Cover client history and per-client activity windows in both billing modes.
 // InnoDB includes the invoice primary key in each secondary index, so the
 // header scan can also join invoice lines without reading the header rows.
@@ -35,5 +37,8 @@ async function changeIndexes(knex, add) {
 
 // MySQL DDL commits implicitly; use a dedicated connection, not a transaction.
 exports.config = { transaction: false };
-exports.up = (knex) => changeIndexes(knex, true);
-exports.down = (knex) => changeIndexes(knex, false);
+exports.retired.up = (knex) => changeIndexes(knex, true);
+exports.retired.down = (knex) => changeIndexes(knex, false);
+
+exports.up = async () => {};
+exports.down = async () => {};
