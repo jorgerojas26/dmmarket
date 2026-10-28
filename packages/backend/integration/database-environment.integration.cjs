@@ -1,4 +1,7 @@
 const { execFileSync } = require("node:child_process");
+const { createHash } = require("node:crypto");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { startEnvironment } = require("../../../tests/support/auth-environment.cjs");
 const { testContainer, dropFixtureDatabase, realDatabase } = require("../../../tests/support/test-database.cjs");
@@ -40,14 +43,36 @@ test("las credenciales de una suite no pueden leer otra base ni borrar la copia 
 test("detener desarrollo conserva el contenedor, los fixtures y la copia real de tests", async () => {
   first = await startEnvironment();
   const user = await first.seedUser();
-  execFileSync("bun", ["run", "dev:down"], { cwd: path.resolve(__dirname, "../../.."), stdio: "pipe" });
-  expect(testContainer().Id).toBe(first.container);
-  expect(await first.db("dmmarket_auth_users").where("id", user.id)).toHaveLength(1);
-  const db = realDatabase();
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-dev-isolation-")));
+  const project = `dmmarket-${path.basename(root).toLowerCase().slice(0, 30)}-${createHash("sha256").update(root).digest("hex").slice(0, 8)}`;
+  const compose = ["compose", "--project-name", project, "--file", path.join(root, "docker-compose.yml")];
+  const env = { ...process.env, DMMARKET_DEV_ROOT: root, DMMARKET_DEV_DUMP: path.join(root, "bdsolser_md_nieto.dump") };
+  const source = path.resolve(__dirname, "../../..");
+  const docker = (args) => execFileSync("docker", [...compose, ...args], { cwd: root, env, stdio: "pipe" });
   try {
-    expect(Number((await db("masterfact").count("* as total").first()).total)).toBeGreaterThan(0);
+    fs.mkdirSync(path.join(root, "scripts"));
+    for (const file of ["dev.mjs", "dev-https.mjs", "prepare-caddy.mjs"])
+      fs.copyFileSync(path.join(source, "scripts", file), path.join(root, "scripts", file));
+    fs.copyFileSync(path.join(source, "docker-compose.yml"), path.join(root, "docker-compose.yml"));
+    fs.writeFileSync(env.DMMARKET_DEV_DUMP, "SELECT 1;\n");
+    docker(["create", "mysql"]);
+    expect(docker(["ps", "--all", "--quiet", "mysql"]).toString().trim()).toBeTruthy();
+    execFileSync("bun", ["scripts/dev.mjs", "down"], { cwd: root, stdio: "pipe" });
+    expect(docker(["ps", "--all", "--quiet", "mysql"]).toString().trim()).toBe("");
+    expect(testContainer().Id).toBe(first.container);
+    expect(await first.db("dmmarket_auth_users").where("id", user.id)).toHaveLength(1);
+    const db = realDatabase();
+    try {
+      expect(Number((await db("masterfact").count("* as total").first()).total)).toBeGreaterThan(0);
+    } finally {
+      await db.destroy();
+    }
   } finally {
-    await db.destroy();
+    try {
+      docker(["down", "--volumes", "--remove-orphans"]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 
