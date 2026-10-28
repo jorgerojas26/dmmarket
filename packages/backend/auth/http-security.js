@@ -86,7 +86,7 @@ function createHttpSecurity(publicOrigin) {
   });
 }
 
-function authErrorHandler(error, _req, res, next) {
+function authErrorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
   const messages = {
     400: "La solicitud de acceso no es válida.",
@@ -98,7 +98,39 @@ function authErrorHandler(error, _req, res, next) {
     415: "El formato de la solicitud no está permitido.",
     429: "Demasiados intentos de acceso. Vuelve a intentarlo más tarde.",
   };
-  const status = Object.hasOwn(messages, error.status) ? Number(error.status) : 503;
+  const knownStatus = Object.hasOwn(messages, error.status);
+  const status = knownStatus ? Number(error.status) : 503;
+  if (!knownStatus && error.status !== 503) {
+    const route = Array.isArray(req.route?.path) ? req.route.path[0] : req.route?.path;
+    const types = [
+      "Error",
+      "TypeError",
+      "RangeError",
+      "ReferenceError",
+      "SyntaxError",
+      "URIError",
+      "EvalError",
+      "KnexTimeoutError",
+    ];
+    console.error(
+      JSON.stringify({
+        event: "api.request_failed",
+        method: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT", "TRACE"].includes(req.method)
+          ? req.method
+          : "UNKNOWN",
+        route: typeof route === "string" ? route : undefined,
+        status,
+        error: {
+          type: types.includes(error.name) ? error.name : "Error",
+          code:
+            typeof error.code === "string" && /^(?:ER_|ERR_|E[A-Z])[A-Z0-9_]{1,60}$/.test(error.code)
+              ? error.code
+              : undefined,
+          errno: Number.isSafeInteger(error.errno) ? error.errno : undefined,
+        },
+      }),
+    );
+  }
   res.set("Cache-Control", "no-store");
   if (
     status === 429 ||
