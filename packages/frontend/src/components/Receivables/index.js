@@ -264,6 +264,36 @@ export default function Receivables() {
         setPage(1);
         setSort(next === 'history' ? { sortBy: 'name', sortDir: 'asc' } : { sortBy: 'overdue', sortDir: 'desc' });
     };
+    if (error?.code === 'CXC_SCHEMA_UNAVAILABLE') {
+        return (
+            <section className="cxc-page cxc-page-unavailable" ref={pageElement}>
+                <header className="clients-content-wrapper report-page-header">
+                    <h4 className="m-0 text-light">Cuentas por cobrar</h4>
+                </header>
+                <div className="cxc-unavailable" role="status">
+                    <div className="cxc-unavailable__icon" aria-hidden="true">
+                        <svg
+                            width="28"
+                            height="28"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <title>Cobranza pendiente de habilitación</title>
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <path d="M14 2v6h6M8 12h8M8 16h4" />
+                        </svg>
+                    </div>
+                    <h2>Cobranza no habilitada</h2>
+                    <p>La cartera de este negocio necesita prepararse antes de gestionar deudas y abonos.</p>
+                    <span className="cxc-unavailable__note">Puedes seguir usando el resto del sistema.</span>
+                </div>
+            </section>
+        );
+    }
     return (
         <section className="cxc-page" ref={pageElement}>
             <header className="clients-content-wrapper report-page-header">

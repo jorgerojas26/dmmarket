@@ -8,6 +8,7 @@ async function request(path, options) {
             body?.error?.message || 'No se pudo comunicar con cuentas por cobrar. Vuelve a intentar.',
         );
         error.status = response.status;
+        error.code = body?.error?.code;
         throw error;
     }
     if (!body) throw new Error('La respuesta de cuentas por cobrar no es válida.');

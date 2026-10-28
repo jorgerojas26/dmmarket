@@ -14,6 +14,7 @@ function createReceivablesRouter(service) {
       if (!error.status) console.error("Cuentas por cobrar:", error.message);
       res.status(error.status || 500).json({
         error: {
+          ...(error.code === "CXC_SCHEMA_UNAVAILABLE" ? { code: error.code } : {}),
           message: error.status
             ? error.message
             : "No se pudo consultar o actualizar la cartera. Revisa la conexión y la migración de cuentas por cobrar.",

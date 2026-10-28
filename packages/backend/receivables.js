@@ -116,7 +116,12 @@ function createReceivablesService({ db, now = () => new Date() }) {
   async function requireSchema() {
     const status = await readiness();
     if (!status.available)
-      fail("Cuentas por cobrar requiere su esquema y migración. Consulta la guía de habilitación.", 503);
+      throw Object.assign(
+        new Error(
+          "La cobranza no está habilitada para esta base de datos: faltan las tablas necesarias para gestionar deudas y abonos.",
+        ),
+        { status: 503, code: "CXC_SCHEMA_UNAVAILABLE" },
+      );
     return status;
   }
 
