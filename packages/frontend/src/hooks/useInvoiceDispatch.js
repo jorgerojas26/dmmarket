@@ -23,9 +23,10 @@ export const useInvoiceDispatch = (selectedRows) => {
                     };
                 }
                 products[product.productId].quantity += product.quantity;
-                products[product.productId].peso = Number(
-                    (products[product.productId].peso + product.quantity * (product.peso || 0)).toFixed(3),
-                );
+                products[product.productId].peso =
+                    product.peso == null || products[product.productId].peso == null
+                        ? null
+                        : Number((products[product.productId].peso + product.quantity * product.peso).toFixed(3));
                 products[product.productId].utilidad = Number(
                     (
                         products[product.productId].utilidad +

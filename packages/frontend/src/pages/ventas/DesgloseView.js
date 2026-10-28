@@ -20,7 +20,7 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
-import { formatCurrency, formatMoney } from 'utils/format';
+import { formatCurrency, formatMoney, formatWeight as formatPeso, sumWeights } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -503,13 +503,7 @@ const DesgloseView = ({ isActive }) => {
                 const data = sortRows(result?.data || [], config?.sortBy);
                 const totalBruto = data.reduce((s, r) => s + (r.rawProfit || 0), 0);
                 const totalUtilidad = data.reduce((s, r) => s + (r.netProfit || 0), 0);
-                const totalPeso = data.reduce((s, r) => s + (r.peso || 0), 0);
-                const formatPeso = (value) => {
-                    const num = Number(value);
-                    return Number.isNaN(num) || num === 0
-                        ? ''
-                        : num.toLocaleString(undefined, { maximumFractionDigits: 3 });
-                };
+                const totalPeso = sumWeights(data);
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
                 // Column metadata for the PDF, keyed by accessor (order defines layout).

@@ -1,4 +1,5 @@
 const knex = require("../database");
+const { productWeightColumn } = require("../product-weight");
 
 const buildSortColumn = (sortBy, masterTable, idInvoice) => {
   const map = {
@@ -99,6 +100,7 @@ exports.GET_INVOICES = async ({
   }
 
   // ── Step 2: Get line items for those invoice IDs ──
+  const weightColumn = await productWeightColumn();
   const response = await knex
     .select(
       `${masterTable}.${idInvoice} as invoiceId`,
@@ -111,7 +113,7 @@ exports.GET_INVOICES = async ({
       `${slaveTable}.Precio`,
       `${slaveTable}.Costo`,
       "grupos.Descripcion as group",
-      "productos.Peso as peso",
+      knex.raw(`${weightColumn} AS peso`),
     )
     .from(masterTable)
     .innerJoin(slaveTable, `${slaveTable}.${idInvoice}`, `${masterTable}.${idInvoice}`)
@@ -140,7 +142,7 @@ exports.GET_INVOICES = async ({
       price: Number(invoice.Precio),
       cost: Number(invoice.Costo != null ? invoice.Costo : 0),
       group: invoice.group,
-      peso: Number(invoice.peso != null ? invoice.peso : 0),
+      peso: invoice.peso != null ? Number(invoice.peso) : null,
     });
   });
 

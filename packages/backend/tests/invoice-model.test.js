@@ -56,6 +56,7 @@ describe("GET_INVOICES", () => {
       if (table === "slavefact as summary_sf") return totalsQuery;
       throw new Error(`Unexpected table: ${table}`);
     });
+    knex.schema = { hasColumn: jest.fn().mockResolvedValue(true) };
     knex.raw = jest.fn((sql) => sql);
     knex.count = jest.fn(() => makeBuilder([{ total: 8 }]));
     knex.select = jest.fn().mockReturnValueOnce(idQuery).mockReturnValueOnce(lineItemsQuery);

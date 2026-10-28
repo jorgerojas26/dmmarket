@@ -45,6 +45,7 @@ describe("GET_PRODUCTS", () => {
 
     // countDistinct resuelve primero (await countQuery), luego las filas.
     db = makeBuilder(() => [{ total: dataResult.length }, ...dataResult]);
+    db.schema = { hasColumn: jest.fn().mockResolvedValue(true) };
     jest.doMock("../database", () => db);
     controller = require("../controllers/products");
 

@@ -3,7 +3,7 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Card } from 'react-bootstrap';
-import { formatCurrency, formatQuantity, getReportCurrency } from 'utils/format';
+import { formatCurrency, formatQuantity, formatWeight, getReportCurrency, sumWeights } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import pdf from './pdf';
 
@@ -52,8 +52,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
     }, [data]);
 
     const pesoTotal = useMemo(() => {
-        if (!data) return 0;
-        return data.reduce((acc, item) => acc + (item.peso || 0), 0);
+        return sumWeights(data || []);
     }, [data]);
 
     const utilidadTotal = useMemo(() => {
@@ -70,7 +69,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
             {
                 Header: 'Peso',
                 accessor: 'peso',
-                Cell: ({ value }) => formatQuantity(value),
+                Cell: ({ value }) => formatWeight(value),
             },
             { Header: 'Total', accessor: 'total' },
             {
@@ -85,7 +84,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
     const summaries = useMemo(
         () => ({
             quantity: quantityTotal ? formatQuantity(quantityTotal) : '',
-            peso: formatQuantity(pesoTotal),
+            peso: formatWeight(pesoTotal),
             total: totalSummary != null ? formatCurrency(totalSummary) : '',
             utilidad: utilidadTotal ? formatCurrency(utilidadTotal) : '',
         }),

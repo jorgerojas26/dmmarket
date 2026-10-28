@@ -5,7 +5,7 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from 'react-bootstrap';
-import { formatCurrency, getReportCurrency } from 'utils/format';
+import { formatCurrency, formatWeight, getReportCurrency } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import pdf from './pdf';
 
@@ -89,6 +89,7 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
             { Header: 'Categoría', accessor: 'Grupo', sortType: textSortType },
             { Header: 'Producto', accessor: 'Descripcion', sortType: textSortType },
             { Header: 'Proveedor', accessor: 'Proveedor', sortType: textSortType },
+            { Header: 'Peso', accessor: 'Peso', Cell: ({ value }) => formatWeight(value), disableSortBy: true },
             { Header: 'Precio', accessor: 'PrecioA', Cell: ({ value }) => formatPrice(value) },
             { Header: 'Stock', accessor: 'Existencia', Cell: ({ value }) => formatStock(value) },
         ],

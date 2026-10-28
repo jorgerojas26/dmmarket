@@ -35,6 +35,14 @@ export const formatQuantity = (val) => {
     return num.toLocaleString('es-VE', { maximumFractionDigits: 3 });
 };
 
+export const formatWeight = (value) =>
+    value == null || value === '' || !Number.isFinite(Number(value))
+        ? 'N/A'
+        : Number(value).toLocaleString('es-VE', { maximumFractionDigits: 3 });
+
+export const sumWeights = (rows) =>
+    rows.some((row) => row.peso == null) ? null : rows.reduce((total, row) => total + Number(row.peso), 0);
+
 export const formatPercent = (val) => `${Number(val).toFixed(1)}%`;
 
 export const computeComparison = (current, previous) => {

@@ -1,4 +1,5 @@
 const knex = require("../database");
+const { productWeightColumn } = require("../product-weight");
 
 // Base de las queries de ventas: joins + rango de fechas. Todas las queries de
 // un mismo endpoint (count, data, totals) comparten esta base para que nunca se
@@ -166,7 +167,7 @@ const GET_PRODUCTOS = async (req, res) => {
       case "quantity":
         return knex.raw("SUM(sf.Cantidad)");
       case "peso":
-        return knex.raw("CASE WHEN COUNT(productos.Peso) = COUNT(*) THEN SUM(sf.Cantidad * productos.Peso) END");
+        return "peso";
       case "rawProfit":
         return knex.raw("SUM(sf.Precio * sf.Cantidad)");
       case "netProfit":
@@ -184,6 +185,8 @@ const GET_PRODUCTOS = async (req, res) => {
   const filters = { clientId, categoryId, employeeId, ruta, proveedorId, search };
 
   try {
+    const weightColumn = await productWeightColumn();
+    const weightTotal = `CASE WHEN COUNT(${weightColumn}) = COUNT(*) THEN ROUND(SUM(sf.Cantidad * ${weightColumn}), 3) END as peso`;
     // La búsqueda de productos solo filtra por descripción.
     const searchExpr = search ? (q) => q.andWhere("productos.Descripcion", "like", `%${search}%`) : null;
 
@@ -200,9 +203,7 @@ const GET_PRODUCTOS = async (req, res) => {
           "Producto no registrado (",
         ]),
         knex.raw("ROUND(SUM(sf.Cantidad), 3) as quantity"),
-        knex.raw(
-          "CASE WHEN COUNT(productos.Peso) = COUNT(*) THEN ROUND(SUM(sf.Cantidad * productos.Peso), 3) END as peso",
-        ),
+        knex.raw(weightTotal),
         knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as rawProfit"),
         knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as netProfit"),
         knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent"),
@@ -219,9 +220,7 @@ const GET_PRODUCTOS = async (req, res) => {
     const [totals] = await knex
       .select(
         knex.raw("ROUND(SUM(sf.Cantidad), 3) as quantity"),
-        knex.raw(
-          "CASE WHEN COUNT(productos.Peso) = COUNT(*) THEN ROUND(SUM(sf.Cantidad * productos.Peso), 3) END as peso",
-        ),
+        knex.raw(weightTotal),
         knex.raw("ROUND(SUM(sf.Precio * sf.Cantidad), 2) as rawProfit"),
         knex.raw("ROUND(SUM((sf.Precio - sf.Costo) * sf.Cantidad), 2) as netProfit"),
         knex.raw("ROUND(AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100), 2) as averageProfitPercent"),

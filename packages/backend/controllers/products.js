@@ -1,4 +1,5 @@
 const knex = require("../database");
+const { productWeightColumn } = require("../product-weight");
 
 // Whitelist de columnas ordenables (la del navegador no toca el SQL).
 const SORT_COLUMNS = {
@@ -43,11 +44,12 @@ const GET_PRODUCTS = async (req, res) => {
       .leftJoin("proveedores", "proveedores.IdProveedor", "productos.Proveedor");
     applyFilters(countQuery);
 
+    const weightColumn = await productWeightColumn();
     const dataQuery = knex
       .select(
         "productos.IdProducto",
         "productos.Descripcion",
-        "productos.Peso",
+        knex.raw(`${weightColumn} AS Peso`),
         "productos.PrecioA",
         "productos.Existencia",
         "grupos.Descripcion as Grupo",

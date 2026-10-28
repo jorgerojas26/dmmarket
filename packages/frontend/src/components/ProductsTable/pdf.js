@@ -1,10 +1,5 @@
 import { DateTime } from 'luxon';
-
-const formatPeso = (value) => {
-    const num = Number(value);
-    if (Number.isNaN(num) || num === 0) return '';
-    return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
-};
+import { formatWeight as formatPeso } from 'utils/format';
 
 /**
  * Builds the products PDF. `config` comes from the print config dialog:
