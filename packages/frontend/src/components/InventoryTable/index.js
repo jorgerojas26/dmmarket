@@ -1,11 +1,11 @@
 import { fetchProducts } from 'api/products';
 import Table from 'components/Table';
+import { useProducts } from 'hooks/useProducts';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { CurrencyRateContext } from 'context/currency_rate';
-import { useProducts } from 'hooks/useProducts';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card } from 'react-bootstrap';
+import { formatCurrency, getReportCurrency } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import pdf from './pdf';
 
@@ -16,7 +16,7 @@ const LIMIT = 20;
 const formatPrice = (value) => {
     const num = Number(value);
     if (Number.isNaN(num)) return '';
-    return `$${num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return formatCurrency(num);
 };
 
 const formatStock = (value) => {
@@ -41,7 +41,6 @@ const textSortType = (rowA, rowB, columnId) => {
  * @param {string|number} [props.proveedorId] - Provider filter (server-side).
  */
 const InventoryTable = ({ categoryId, proveedorId }) => {
-    const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState({ sortBy: 'Descripcion', sortDir: 'asc' });
@@ -103,9 +102,6 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
         [stockTotal],
     );
 
-    // Print: re-fetches the FULL filtered set server-side (no pagination), with
-    // the stock-only toggle applied as a server filter when enabled, then
-    // converts prices to the chosen currency and applies the dialog sort.
     const handlePrint = useCallback(
         async (config) => {
             try {
@@ -119,15 +115,6 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
                 });
                 let productsData = result?.data || [];
 
-                const rate = currencyRate?.Cambio;
-                const currency = config?.currency;
-                if (currency === 'Bs' && rate) {
-                    productsData = productsData.map((p) => ({
-                        ...p,
-                        PrecioA: Number(p.PrecioA * rate).toFixed(2),
-                    }));
-                }
-
                 productsData = sortRows(productsData, config?.sortBy);
 
                 const printedStockTotal = productsData.reduce((acc, p) => acc + Number(p.Existencia || 0), 0);
@@ -138,7 +125,7 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
 
                 const pdfData = pdf(
                     productsData,
-                    { stockTotal: printedStockTotal, valueTotal, currency: currency || 'USD' },
+                    { stockTotal: printedStockTotal, valueTotal, currency: getReportCurrency() },
                     config,
                 );
 
@@ -147,7 +134,7 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
                 console.error('Failed to print inventory:', err);
             }
         },
-        [search, categoryId, proveedorId, sort, currencyRate?.Cambio],
+        [search, categoryId, proveedorId, sort],
     );
 
     const totalPages = Math.ceil(total / LIMIT);

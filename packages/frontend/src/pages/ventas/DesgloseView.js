@@ -7,9 +7,9 @@ import facturasColumns from 'components/FacturasTable/columns';
 import FilterBar from 'components/FilterBar';
 import GroupSearch from 'components/GroupSearch';
 import ProveedorSearch from 'components/ProveedorSearch';
+import RouteFilter from 'components/RouteFilter';
 import SaleReportTable from 'components/SaleReportTable';
 import productosColumns from 'components/SaleReportTable/productosColumns';
-import RouteFilter from 'components/RouteFilter';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import EmployeeSearch from 'employees/Search/EmployeeSearch';
@@ -20,18 +20,12 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
-import { formatMoney } from 'utils/format';
+import { formatCurrency, formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 const PAGE_SIZE = 50;
-
-const formatCurrency = (value) => {
-    const num = Number(value);
-    if (Number.isNaN(num)) return '$0.00';
-    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-};
 
 const DesgloseView = ({ isActive }) => {
     const { showNoe } = useContext(ShowNoeContext);

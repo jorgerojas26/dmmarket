@@ -24,11 +24,11 @@ const SEGMENT_COLUMNS = [
 ];
 
 const SEGMENT_DESCRIPTIONS = {
-    'A: >100K': 'Clientes que compraron más de $100K en el periodo',
-    'B: 20K-100K': 'Clientes que compraron entre $20K y $100K',
-    'C: 5K-20K': 'Clientes que compraron entre $5K y $20K',
-    'D: 1K-5K': 'Clientes que compraron entre $1K y $5K',
-    'E: <1K': 'Clientes que compraron menos de $1K',
+    'A: >100K': 'Clientes que compraron más de 100K en el periodo',
+    'B: 20K-100K': 'Clientes que compraron entre 20K y 100K',
+    'C: 5K-20K': 'Clientes que compraron entre 5K y 20K',
+    'D: 1K-5K': 'Clientes que compraron entre 1K y 5K',
+    'E: <1K': 'Clientes que compraron menos de 1K',
 };
 
 const nivoTheme = {
@@ -356,14 +356,14 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                 accent="orange"
                                 help={{
                                     que: 'Qué porcentaje de las ventas del periodo viene de los 5 clientes que más compran.',
-                                    leer: '40% = 5 clientes generan 40 de cada 100 dólares vendidos.',
+                                    leer: '40% = 5 clientes generan 40 de cada 100 unidades monetarias vendidas.',
                                     servir: 'Mide la dependencia: número alto = la empresa depende de pocos clientes (frágil); número bajo = cartera más repartida y sana.',
                                 }}
                             />
                         </div>
                         <div>
                             <KpiCard
-                                label="Retención ($)"
+                                label="Retención monetaria"
                                 value={formatPercent(kpis?.retention?.rate)}
                                 icon="percent"
                                 accent="purple"
@@ -507,8 +507,8 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                         <PanelHelpTitle
                             title="Revenue por Segmento"
                             help={{
-                                que: 'Reparte las ventas del periodo según el tamaño de cada cliente: A (>$100K), B ($20K-$100K), C ($5K-$20K), D ($1K-$5K), E (<$1K).',
-                                leer: 'Cada porción es un segmento; cuanto más grande, más dinero aporta. Una porción del 60% = ese segmento genera 60 de cada 100 dólares vendidos. Pasa el cursor por una porción para ver cuántos clientes tiene y cuánto vende en promedio cada uno.',
+                                que: 'Reparte las ventas del periodo según el tamaño de cada cliente: A (>100K), B (20K-100K), C (5K-20K), D (1K-5K), E (<1K).',
+                                leer: 'Cada porción es un segmento; cuanto más grande, más dinero aporta. Una porción del 60% = ese segmento genera 60 de cada 100 unidades monetarias vendidas. Pasa el cursor por una porción para ver cuántos clientes tiene y cuánto vende en promedio cada uno.',
                                 servir: 'Ver de dónde viene el dinero: si la torta depende de un solo segmento, la cartera es frágil.',
                             }}
                         />

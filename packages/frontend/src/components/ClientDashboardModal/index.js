@@ -1,16 +1,16 @@
 import { ResponsiveLine } from '@nivo/line';
 import { fetchClientSales } from 'api/clients';
-import { CurrencyRateContext } from 'context/currency_rate';
-import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
-import DateRangePicker from 'components/DateRangePicker';
-import Table from 'components/Table';
 import { fetchInvoiceDetail } from 'api/invoice';
+import DateRangePicker from 'components/DateRangePicker';
+import Modal from 'components/Modal';
+import Table from 'components/Table';
+import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
 import { useClientSales, useClientSummary } from 'hooks/useClients';
 import { DateTime } from 'luxon';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import Modal from 'components/Modal';
 import { Alert, Badge, Spinner } from 'react-bootstrap';
 import { formatCurrency, formatMoney, formatReportId } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
@@ -406,7 +406,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                             tickRotation: 0,
                             legend: '',
                             legendOffset: -40,
-                            format: (v) => `$${Number(v).toLocaleString('en-US')}`,
+                            format: (v) => formatCurrency(v),
                         }}
                         enableGridX={false}
                         colors={['#0d6efd']}

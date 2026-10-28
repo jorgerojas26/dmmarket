@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
-
-const formatCurrency = (value) => `$${Number(value).toLocaleString()}`;
+import { formatCurrency } from 'utils/format';
 
 const ProviderReportTable = ({ data }) => {
     const maxMonto = useMemo(() => Math.max(...data.map((row) => row.monto || 0), 0), [data]);
@@ -28,7 +27,12 @@ const ProviderReportTable = ({ data }) => {
                                     <div className="provider-report__bar" style={{ width: `${percentage}%` }} />
                                 </div>
                             </div>
-                            <span className="provider-report__amount">{formatCurrency(row.monto)}</span>
+                            <span className="provider-report__amount">
+                                {formatCurrency(row.monto, 'en-US', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 3,
+                                })}
+                            </span>
                         </div>
                     </li>
                 );

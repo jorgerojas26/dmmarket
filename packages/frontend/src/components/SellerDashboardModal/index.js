@@ -23,6 +23,7 @@ import {
     formatNumber,
     formatPercent,
     formatReportId,
+    getReportCurrency,
 } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import './styles.css';
@@ -82,7 +83,7 @@ const nivoTheme = {
 };
 
 const axisMoney = (value) =>
-    Number(value) >= 1000 ? `$${(Number(value) / 1000).toFixed(0)}k` : `$${formatNumber(Number(value))}`;
+    Number(value) >= 1000 ? `${getReportCurrency()} ${(Number(value) / 1000).toFixed(0)}k` : formatCurrency(value);
 
 const SellerDashboardModal = ({ show, onClose, seller, initialDateRange }) => {
     const { showNoe } = useContext(ShowNoeContext);

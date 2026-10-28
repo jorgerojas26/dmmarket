@@ -1,18 +1,19 @@
-import { useState } from 'react';
-import Modal from 'components/Modal';
-import { Button, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
-import Select from 'react-select';
-import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import {
+    arrayMove,
     SortableContext,
     sortableKeyboardCoordinates,
     useSortable,
     verticalListSortingStrategy,
-    arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import Modal from 'components/Modal';
 import { darkSelectStyles } from 'components/selectStyles';
 import useLocalStorage from 'hooks/useLocalStorage';
+import { useState } from 'react';
+import { Button, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
+import Select from 'react-select';
+import { getReportCurrency } from 'utils/format';
 import './PrintConfigModal.css';
 
 /**
@@ -261,6 +262,7 @@ const PrintConfigModal = ({
     show,
     columns = [],
     initialOrientation = 'portrait',
+    currencyConversion = true,
     storageKey,
     filters = [],
     onClose,
@@ -350,7 +352,7 @@ const PrintConfigModal = ({
         onPrint({
             columns: selectedColumns,
             orientation,
-            currency,
+            currency: currencyConversion ? currency : getReportCurrency(),
             // Only rules on still-selected columns (defensive — the UI already drops them).
             sortBy: sortRules
                 .filter((rule) => selectedKeys.has(rule.key))
@@ -516,20 +518,28 @@ const PrintConfigModal = ({
                                 </div>
                                 <div>
                                     <span className="pc-section-title">Moneda</span>
-                                    <ToggleButtonGroup
-                                        type="radio"
-                                        name="print-currency"
-                                        value={currency}
-                                        onChange={(v) => updateConfig({ ...config, currency: v })}
-                                        className="pc-segmented"
-                                    >
-                                        <ToggleButton id="print-currency-usd" value="USD" variant="outline-secondary">
-                                            $ USD
-                                        </ToggleButton>
-                                        <ToggleButton id="print-currency-bs" value="Bs" variant="outline-secondary">
-                                            Bs
-                                        </ToggleButton>
-                                    </ToggleButtonGroup>
+                                    {currencyConversion ? (
+                                        <ToggleButtonGroup
+                                            type="radio"
+                                            name="print-currency"
+                                            value={currency}
+                                            onChange={(v) => updateConfig({ ...config, currency: v })}
+                                            className="pc-segmented"
+                                        >
+                                            <ToggleButton
+                                                id="print-currency-usd"
+                                                value="USD"
+                                                variant="outline-secondary"
+                                            >
+                                                $ USD
+                                            </ToggleButton>
+                                            <ToggleButton id="print-currency-bs" value="Bs" variant="outline-secondary">
+                                                Bs
+                                            </ToggleButton>
+                                        </ToggleButtonGroup>
+                                    ) : (
+                                        <div>{getReportCurrency()} · Sin conversión</div>
+                                    )}
                                 </div>
                             </div>
                         </section>

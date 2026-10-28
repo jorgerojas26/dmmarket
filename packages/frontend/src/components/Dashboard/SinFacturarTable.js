@@ -7,7 +7,7 @@ import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatMoney, formatNumber } from 'utils/format';
+import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -172,7 +172,7 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
             {
                 Header: 'Revenue Histórico',
                 accessor: 'revenue_historico',
-                Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
+                Cell: ({ value }) => formatCurrency(value),
             },
         ],
         [],

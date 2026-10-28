@@ -1,12 +1,22 @@
-export const formatCurrency = (val) =>
-    `$${Number(val).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+let reportCurrency = 'USD';
+
+export const setReportCurrency = (currency) => {
+    reportCurrency = currency === 'Bs' ? 'Bs' : 'USD';
+};
+
+export const getReportCurrency = () => reportCurrency;
+
+export const formatCurrency = (val, locale = 'es-VE', options = {}) =>
+    `${reportCurrency === 'Bs' ? 'Bs ' : '$'}${Number(val ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2, ...options })}`;
+
+export const formatMoney = (val) => formatCurrency(val);
 
 /**
  * Formats a USD amount in the requested currency for PDFs/prints.
  * `currency` is 'USD' or 'Bs'; when 'Bs', the amount is converted with `rate` (Bs per USD).
  * If 'Bs' is requested but no valid rate is available, falls back to USD.
  */
-export const formatMoney = (val, currency = 'USD', rate) => {
+export const formatUsdMoney = (val, currency = 'USD', rate) => {
     const useBs = currency === 'Bs' && rate != null && !Number.isNaN(Number(rate));
     const amount = useBs ? Number(val) * Number(rate) : Number(val);
     const formatted = amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

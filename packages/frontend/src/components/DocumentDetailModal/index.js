@@ -1,19 +1,14 @@
+import Modal from 'components/Modal';
 import Table from 'components/Table';
 import { DateTime } from 'luxon';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Modal from 'components/Modal';
 import { Alert, Button, Form, Spinner } from 'react-bootstrap';
+import { formatCurrency as formatReportCurrency } from 'utils/format';
 import './styles.css';
 
 const EMPTY_PRODUCTS = [];
 const SEARCH_THRESHOLD = 15;
-const formatCurrency = (value) => {
-    const amount = Number(value);
-    return `$${(Number.isFinite(amount) ? amount : 0).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    })}`;
-};
+const formatCurrency = (value) => formatReportCurrency(Number.isFinite(Number(value)) ? value : 0, 'en-US');
 
 const DocumentDetailModal = ({
     show,

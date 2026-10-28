@@ -1,11 +1,10 @@
 import Table from 'components/Table';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
-import { useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Card } from 'react-bootstrap';
-import { formatCurrency, formatQuantity } from 'utils/format';
+import { formatCurrency, formatQuantity, getReportCurrency } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
-import { CurrencyRateContext } from '../../context/currency_rate';
 import pdf from './pdf';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -26,7 +25,6 @@ const normalizeSearch = (value) =>
         .trim();
 
 const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, printStorageKey }) => {
-    const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const searchTerm = normalizeSearch(search);
 
@@ -94,37 +92,18 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
         [quantityTotal, pesoTotal, totalSummary, utilidadTotal],
     );
 
-    // Print: convert totals to the currency chosen in the print config dialog.
     const handlePrint = useCallback(
         (config) => {
-            let productsData = sortedRowsRef.current;
-            const rate = currencyRate?.Cambio;
-            const currency = config?.currency;
-            let utilidadTotalPdf = utilidadTotal;
-
-            if (currency === 'Bs' && rate) {
-                productsData = productsData.map((item) => ({
-                    ...item,
-                    total: Number(item.price * item.quantity * rate).toFixed(2),
-                    utilidad: Number((item.utilidad || 0) * rate).toFixed(2),
-                }));
-                utilidadTotalPdf = Number(utilidadTotal * rate).toFixed(2);
-            }
-
-            productsData = sortRows(productsData, config?.sortBy);
-
-            const convertedSummary =
-                currency === 'Bs' && rate && totalSummary != null ? Number(totalSummary) * rate : totalSummary;
-
+            const productsData = sortRows(sortedRowsRef.current, config?.sortBy);
             const pdfData = pdf(
                 productsData,
-                { quantityTotal, totalSummary: convertedSummary, pesoTotal, currency, utilidadTotal: utilidadTotalPdf },
+                { quantityTotal, totalSummary, pesoTotal, currency: getReportCurrency(), utilidadTotal },
                 config,
             );
 
             pdfMake.createPdf(pdfData).open();
         },
-        [currencyRate?.Cambio, quantityTotal, pesoTotal, totalSummary, utilidadTotal],
+        [quantityTotal, pesoTotal, totalSummary, utilidadTotal],
     );
 
     return (

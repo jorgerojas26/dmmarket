@@ -11,7 +11,7 @@ import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Select from 'react-select';
-import { formatMoney } from 'utils/format';
+import { formatUsdMoney as formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import ClientModal from './ClientModal';
 import { dateLabel, money } from './format';
@@ -412,6 +412,7 @@ export default function Receivables() {
                         print={{
                             enabled: true,
                             onGlobalPrint: handlePrint,
+                            currencyConversion: true,
                             columns: columns.filter((column) => column.id !== 'actions'),
                             storageKey: isHistory ? 'cuentas-por-cobrar-historial' : 'cuentas-por-cobrar',
                             defaultOrientation: 'landscape',

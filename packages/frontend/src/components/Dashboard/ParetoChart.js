@@ -1,15 +1,15 @@
 import { ResponsiveBar } from '@nivo/bar';
 import ChartTooltip from 'components/ChartTooltip';
 import Table from 'components/Table';
-import PanelHelpTitle from './PanelHelpTitle';
 import { CurrencyRateContext } from 'context/currency_rate';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Popover from 'react-bootstrap/Popover';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
+import { formatCurrency, formatMoney, formatNumber, getReportCurrency } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
+import PanelHelpTitle from './PanelHelpTitle';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -725,7 +725,8 @@ const ParetoChart = ({
                     axisLeft={{
                         tickSize: 0,
                         tickPadding: 8,
-                        format: (v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`),
+                        format: (v) =>
+                            v >= 1000 ? `${getReportCurrency()} ${(v / 1000).toFixed(0)}k` : formatCurrency(v),
                         legend: cfg.valueAxisLabel,
                         legendPosition: 'middle',
                         legendOffset: -55,

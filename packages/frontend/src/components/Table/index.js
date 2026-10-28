@@ -902,6 +902,7 @@ const Table = ({
                     show={showPrintConfig}
                     columns={print?.columns || columns}
                     initialOrientation={print?.defaultOrientation}
+                    currencyConversion={print?.currencyConversion === true}
                     storageKey={print?.storageKey}
                     filters={print?.filters || []}
                     onClose={() => setShowPrintConfig(false)}

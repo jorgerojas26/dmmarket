@@ -66,6 +66,7 @@ app.post("/api/cache/clear", (_req, res) => {
   res.json({ cleared: true });
 });
 
+app.use("/api/settings", require("./routes/settings"));
 app.use("/api/clients", clients_routes);
 app.use("/api/receivables", receivables_routes);
 app.use("/api/groups", groups_routes);
