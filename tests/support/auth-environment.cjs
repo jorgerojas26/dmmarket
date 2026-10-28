@@ -111,6 +111,7 @@ async function startEnvironment({
   service = false,
   executablePath = null,
   proxyClientAddress = null,
+  seedCurrency = true,
 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-auth-test-"));
   fs.chmodSync(directory, 0o700);
@@ -239,15 +240,17 @@ async function startEnvironment({
     if (!web) return environment;
     if (!fs.existsSync(path.join(root, "packages/backend/client/build/index.html")))
       throw new Error("Ejecuta bun --filter @dmmarket/backend build:prepare antes de las suites web.");
-    await db.schema.createTable("divisas", (table) => {
-      table.engine("InnoDB");
-      table.charset("utf8");
-      table.collate("utf8_bin");
-      table.string("Simbolo", 8).primary();
-      table.decimal("Cambio", 18, 6);
-      table.string("PrivateFixture", 64);
-    });
-    await db("divisas").insert({ Simbolo: "BsS", Cambio: "42.125", PrivateFixture: "must-not-leak" });
+    if (seedCurrency) {
+      await db.schema.createTable("divisas", (table) => {
+        table.engine("InnoDB");
+        table.charset("utf8");
+        table.collate("utf8_bin");
+        table.string("Simbolo", 8).primary();
+        table.decimal("Cambio", 18, 6);
+        table.string("PrivateFixture", 64);
+      });
+      await db("divisas").insert({ Simbolo: "BsS", Cambio: "42.125", PrivateFixture: "must-not-leak" });
+    }
     environment.httpsPort = await port();
     environment.internalPort = await port();
     environment.origin = `https://auth-probe.localhost:${environment.httpsPort}`;

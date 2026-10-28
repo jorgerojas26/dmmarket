@@ -3,7 +3,7 @@ const { realDatabase } = require("./test-database.cjs");
 
 async function startRealReportsEnvironment() {
   const source = realDatabase();
-  const environment = await startEnvironment({ web: true });
+  const environment = await startEnvironment({ web: true, seedCurrency: false });
   const configuration = environment.configuration;
   const admin = backend("knex")({
     client: backend("knex/lib/dialects/mysql2"),

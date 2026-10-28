@@ -93,4 +93,11 @@ test("cartera y detalle usan los índices existentes sin depender de caché", as
   expect(detail.status).toBe(200);
   expect(Date.now() - detailStart).toBeLessThan(1500);
   expect(detail.body.summary.balance).toBe(account.balance);
+  expect(detail.body).toHaveProperty("rate");
+  const columns = await environment
+    .db("information_schema.COLUMNS")
+    .whereRaw("TABLE_SCHEMA = DATABASE()")
+    .where({ TABLE_NAME: "divisas" })
+    .pluck("COLUMN_NAME");
+  expect(columns).toContain("IdDivisa");
 });
