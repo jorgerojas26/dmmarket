@@ -7,6 +7,13 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.13.1] - 2026-10-28
+
+### Correcciones
+
+- **Inventario disponible aunque el negocio no registre pesos**: los productos vuelven a cargar sin necesidad de modificar los datos del negocio. La columna Peso se conserva y muestra «N/A» cuando no hay información.
+- **Pesos faltantes claros en Ventas y Despacho**: las consultas y sus impresiones mantienen la columna Peso con «N/A» en lugar de fallar o mostrar un cero. Si falta el peso de algún producto, el total también indica «N/A» para no presentar una suma incompleta como definitiva. Los pesos registrados se siguen mostrando normalmente.
+
 ## [v1.13.0] - 2026-10-28
 
 ### Nuevas funciones
