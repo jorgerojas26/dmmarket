@@ -14,6 +14,7 @@ exports.up = async (knex) => {
   const fractional = version >= (maria ? 50300 : 50604);
   if (!(await knex.schema.hasTable("cxc_operaciones"))) {
     await knex.schema.createTable("cxc_operaciones", (table) => {
+      table.engine("InnoDB");
       table.charset("utf8");
       table.collate("utf8_general_ci");
       table.string("IdOperacion", 36).primary();
@@ -31,6 +32,7 @@ exports.up = async (knex) => {
   }
   if (!(await knex.schema.hasTable("cxc_cierres"))) {
     await knex.schema.createTable("cxc_cierres", (table) => {
+      table.engine("InnoDB");
       table.charset("utf8");
       table.collate("utf8_general_ci");
       table.increments("IdCierre").primary();
