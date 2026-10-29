@@ -143,7 +143,10 @@ function authErrorHandler(error, req, res, next) {
   return res.status(status).json({
     error: {
       message: messages[status] || "El servicio de acceso no está disponible.",
-      ...(status === 403 && error.code === "RECENT_AUTH_REQUIRED" ? { code: error.code } : {}),
+      ...((status === 403 && error.code === "RECENT_AUTH_REQUIRED") ||
+      (status === 503 && error.code === "CXC_SCHEMA_UNAVAILABLE")
+        ? { code: error.code }
+        : {}),
     },
   });
 }

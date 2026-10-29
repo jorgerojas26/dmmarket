@@ -1,11 +1,6 @@
 import { DateTime } from 'luxon';
 
-const formatPeso = (value) => {
-    if (value == null) return 'No disponible';
-    const num = Number(value);
-    if (Number.isNaN(num) || num === 0) return '';
-    return num.toLocaleString(undefined, { maximumFractionDigits: 3 });
-};
+import { formatWeight as formatPeso } from 'utils/format';
 
 /**
  * Builds the products PDF. `config` comes from the print config dialog:
@@ -19,7 +14,12 @@ const pdfschema = (productList, { quantityTotal, totalSummary, pesoTotal, curren
         { accessor: 'product', label: 'PRODUCTO', width: '*', render: (p) => p.product },
         { accessor: 'quantity', label: 'CANTIDAD', width: 'auto', render: (p) => p.quantity },
         { accessor: 'peso', label: 'PESO', width: 'auto', render: (p) => formatPeso(p.peso) },
-        { accessor: 'total', label: `TOTAL (${currency})`, width: 'auto', render: (p) => p.total },
+        {
+            accessor: 'total',
+            label: `TOTAL (${currency})`,
+            width: 'auto',
+            render: (p) => (p.total == null ? 'No disponible' : Number(p.total).toFixed(2)),
+        },
         {
             accessor: 'utilidad',
             label: 'UTILIDAD',
@@ -53,7 +53,7 @@ const pdfschema = (productList, { quantityTotal, totalSummary, pesoTotal, curren
                             if (col.accessor === 'peso') return { text: formatPeso(pesoTotal), bold: true };
                             if (col.accessor === 'total')
                                 return {
-                                    text: totalSummary == null ? 'No disponible' : `${currency} ${totalSummary}`,
+                                    text: totalSummary == null ? 'No disponible' : `${currency} ${Number(totalSummary).toFixed(2)}`,
                                     bold: true,
                                 };
                             if (col.accessor === 'utilidad') {

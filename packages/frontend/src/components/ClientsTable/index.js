@@ -8,7 +8,7 @@ import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatMoney, formatNumber, formatReportId } from 'utils/format';
+import { formatCurrency, formatMoney, formatNumber, formatReportId } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -174,7 +174,7 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                       {
                           Header: 'Total Ventas',
                           accessor: 'total_ventas',
-                          Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
+                          Cell: ({ value }) => formatCurrency(value),
                       },
                   ]
                 : []),
@@ -183,7 +183,7 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                       {
                           Header: 'Utilidad',
                           accessor: 'utilidad',
-                          Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
+                          Cell: ({ value }) => formatCurrency(value),
                       },
                   ]
                 : []),

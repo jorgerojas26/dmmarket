@@ -1,3 +1,5 @@
+import { formatCurrency } from 'utils/format';
+
 const columns = [
     {
         Header: 'Cliente',
@@ -7,7 +9,7 @@ const columns = [
         Header: 'Total',
         accessor: 'total_USD',
         Cell: ({ value }) => {
-            return `$${value.toLocaleString()}`;
+            return formatCurrency(value);
         },
     },
 ];

@@ -8,7 +8,7 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Popover from 'react-bootstrap/Popover';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { formatCurrency as money, formatMoney as convertMoney, formatNumber } from 'utils/format';
+import { formatCurrency as money, formatMoney as convertMoney, formatNumber, getReportCurrency } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -745,7 +745,8 @@ const ParetoChart = ({
                     axisLeft={{
                         tickSize: 0,
                         tickPadding: 8,
-                        format: (v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`),
+                        format: (v) =>
+                            v >= 1000 ? `${getReportCurrency()} ${(v / 1000).toFixed(0)}k` : formatCurrency(v),
                         legend: cfg.valueAxisLabel,
                         legendPosition: 'middle',
                         legendOffset: -55,

@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import { formatWeight } from 'utils/format';
 
 const formatPrice = (value) => {
     if (value == null) return 'No disponible';
@@ -33,6 +34,7 @@ const pdfschema = (productList, { stockTotal, valueTotal, currency }, config = {
             width: 'auto',
             render: (p) => (p.PrecioA != null ? formatPrice(p.PrecioA) : ''),
         },
+        { accessor: 'Peso', label: 'PESO', width: 'auto', render: (p) => formatWeight(p.Peso) },
         { accessor: 'Existencia', label: 'STOCK', width: 'auto', render: (p) => formatStock(p.Existencia) },
     ];
 

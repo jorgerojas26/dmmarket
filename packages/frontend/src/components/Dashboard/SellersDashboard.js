@@ -6,7 +6,7 @@ import Table from 'components/Table';
 import { useSellersDashboard } from 'hooks/useSellers';
 import { DateTime } from 'luxon';
 import { useMemo } from 'react';
-import { computeComparison, formatCurrency, formatNumber, formatPercent } from 'utils/format';
+import { computeComparison, formatCurrency, formatNumber, formatPercent, getReportCurrency } from 'utils/format';
 import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
 
@@ -29,7 +29,7 @@ const nivoTheme = {
 };
 
 const axisMoney = (value) =>
-    Number(value) >= 1000 ? `$${(Number(value) / 1000).toFixed(0)}k` : `$${formatNumber(Number(value))}`;
+    Number(value) >= 1000 ? `${getReportCurrency()} ${(Number(value) / 1000).toFixed(0)}k` : formatCurrency(value);
 
 const INACTIVE_COLUMNS = [
     { Header: 'Vendedor', accessor: 'name' },
@@ -198,7 +198,7 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
                                 accent="amber"
                                 help={{
                                     que: 'Qué parte de las ventas generan los 3 vendedores que más venden.',
-                                    leer: '60% = 3 vendedores explican 60 de cada 100 dólares vendidos.',
+                                    leer: '60% = 3 vendedores explican 60 de cada 100 unidades monetarias vendidas.',
                                     servir: 'Medir dependencia del equipo: si es muy alto, el negocio descansa en pocas personas.',
                                 }}
                             />

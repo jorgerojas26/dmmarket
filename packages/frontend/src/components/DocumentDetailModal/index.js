@@ -1,3 +1,4 @@
+import { formatCurrency as formatReportCurrency } from 'utils/format';
 import Table from 'components/Table';
 import { DateTime } from 'luxon';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -9,11 +10,7 @@ const EMPTY_PRODUCTS = [];
 const SEARCH_THRESHOLD = 15;
 const formatCurrency = (value) => {
     if (value == null) return 'No disponible';
-    const amount = Number(value);
-    return `$${(Number.isFinite(amount) ? amount : 0).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    })}`;
+    return formatReportCurrency(Number.isFinite(Number(value)) ? value : 0, 'en-US');
 };
 
 const DocumentDetailModal = ({

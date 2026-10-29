@@ -14,10 +14,12 @@ const { createCommissionUpdateRoutes } = require("./commission-updates");
 const { createReceivablesRoutes } = require("./receivables");
 const { forbidden } = require("../auth/router");
 const { createPreferenceRoutes } = require("./preferences");
+const { createSettingsRoutes } = require("./settings");
 
 function createBusinessRouter({ sessions, security, db, services }) {
   const router = express.Router();
   router.use(createPreferenceRoutes({ sessions, security }));
+  router.use(createSettingsRoutes({ sessions, security }));
   router.use(createSalesRoutes({ sessions }));
   router.use(createPartyRoutes({ sessions }));
   router.use(createClientRoutes({ sessions }));

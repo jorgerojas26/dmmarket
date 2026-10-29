@@ -413,7 +413,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                             tickRotation: 0,
                             legend: '',
                             legendOffset: -40,
-                            format: (v) => `$${Number(v).toLocaleString('en-US')}`,
+                            format: (v) => formatCurrency(v),
                         }}
                         enableGridX={false}
                         colors={['#0d6efd']}

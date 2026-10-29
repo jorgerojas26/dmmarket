@@ -23,6 +23,7 @@ const test = base.extend({
           document_type: "invoices",
           revision: environment.db.raw("revision + 1"),
         });
+      await environment.db("dmmarket_settings").where("name", "reportCurrency").update({ value: "USD" });
       await use();
     },
     { auto: true },

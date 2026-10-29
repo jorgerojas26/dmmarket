@@ -4,7 +4,14 @@ import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
 import { Card } from 'react-bootstrap';
-import { formatCurrency, formatQuantity } from 'utils/format';
+import {
+    convertReportAmount,
+    formatCurrency,
+    formatQuantity,
+    formatWeight,
+    getReportCurrency,
+    sumWeights,
+} from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import { CurrencyRateContext } from '../../context/currency_rate';
 import pdf from './pdf';
@@ -54,8 +61,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
     }, [data]);
 
     const pesoTotal = useMemo(() => {
-        if (!data) return 0;
-        return data.some((item) => item.peso == null) ? null : data.reduce((acc, item) => acc + item.peso, 0);
+        return sumWeights(data || []);
     }, [data]);
 
     const utilidadTotal = useMemo(() => {
@@ -72,7 +78,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
             {
                 Header: 'Peso',
                 accessor: 'peso',
-                Cell: ({ value }) => formatQuantity(value),
+                Cell: ({ value }) => formatWeight(value),
             },
             { Header: 'Total', accessor: 'total' },
             ...(financial
@@ -91,7 +97,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
     const summaries = useMemo(
         () => ({
             quantity: quantityTotal ? formatQuantity(quantityTotal) : '',
-            peso: pesoTotal == null ? 'No disponible' : formatQuantity(pesoTotal),
+            peso: formatWeight(pesoTotal),
             total: totalSummary != null ? formatCurrency(totalSummary) : '',
             ...(financial ? { utilidad: utilidadTotal == null ? 'No disponible' : formatCurrency(utilidadTotal) } : {}),
         }),
@@ -121,18 +127,19 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                 let totalSummary = sum('total');
                 let utilidadTotalPdf = sum('utilidad');
                 const rate = currencyRate?.Cambio;
-                const currency = config.currency;
-                if (currency === 'Bs') {
-                    productsData = productsData.map((item) => ({
-                        ...item,
-                        total: item.total == null ? null : item.total * rate,
-                        ...(Object.hasOwn(item, 'utilidad')
-                            ? { utilidad: item.utilidad == null ? null : item.utilidad * rate }
-                            : {}),
-                    }));
-                    totalSummary = totalSummary == null ? null : totalSummary * rate;
-                    utilidadTotalPdf = utilidadTotalPdf == null ? null : utilidadTotalPdf * rate;
-                }
+                const sourceCurrency = getReportCurrency();
+                const currency = config.currency || sourceCurrency;
+                if (currency !== sourceCurrency && !can('rates.read'))
+                    throw new Error('No se dispone de una tasa autorizada.');
+                productsData = productsData.map((item) => ({
+                    ...item,
+                    total: convertReportAmount(item.total, currency, rate),
+                    ...(Object.hasOwn(item, 'utilidad')
+                        ? { utilidad: convertReportAmount(item.utilidad, currency, rate) }
+                        : {}),
+                }));
+                totalSummary = convertReportAmount(totalSummary, currency, rate);
+                utilidadTotalPdf = convertReportAmount(utilidadTotalPdf, currency, rate);
                 productsData = sortRows(productsData, config.sortBy);
                 const columns = config.columns.filter(
                     (column) =>
@@ -149,7 +156,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                 if (error.name !== 'AbortError') setPrintError('No se pudo imprimir la selección autorizada.');
             }
         },
-        [exportData, search, currencyRate?.Cambio],
+        [exportData, search, currencyRate?.Cambio, can],
     );
 
     return (

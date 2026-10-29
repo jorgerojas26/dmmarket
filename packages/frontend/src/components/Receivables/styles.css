@@ -701,3 +701,54 @@
     outline: 2px solid #93c5fd;
     outline-offset: 3px;
 }
+
+.cxc-page-unavailable {
+    flex: 1;
+    min-height: calc(100dvh - 150px);
+}
+
+.cxc-unavailable {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    width: 100%;
+    padding: 48px 20px 80px;
+    color: #9aa2ad;
+    text-align: center;
+}
+
+.cxc-unavailable__icon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    margin-bottom: 24px;
+    border: 1px solid #343a40;
+    border-radius: 20px;
+    background: #ffffff03;
+    color: #8b96a5;
+}
+
+.cxc-unavailable h2 {
+    margin: 0 0 10px;
+    color: #e8eaed;
+    font-size: 21px;
+    font-weight: 500;
+    letter-spacing: -0.4px;
+}
+
+.cxc-unavailable p {
+    max-width: 360px;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.cxc-unavailable__note {
+    margin-top: 28px;
+    color: #77818e;
+    font-size: 12px;
+}

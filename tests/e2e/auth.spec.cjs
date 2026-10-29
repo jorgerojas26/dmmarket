@@ -566,7 +566,7 @@ test("clientes originales no convierten ventas propias en globales ni permiten i
   const customer = report
     .getByRole("row")
     .filter({ has: page.getByRole("cell", { name: "Cliente sintético", exact: true }) });
-  await expect(customer.getByRole("cell", { name: "$100.00", exact: true })).toBeVisible();
+  await expect(customer.getByRole("cell", { name: "$100,00", exact: true })).toBeVisible();
   await expect(report.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
   await report
     .getByRole("row")
@@ -577,7 +577,7 @@ test("clientes originales no convierten ventas propias en globales ni permiten i
   await expect(modal.getByText(/PRIVATE/)).toHaveCount(0);
   await modal.getByRole("button", { name: "Close", exact: true }).click();
   await setNoe(page, true, environment);
-  await expect(customer.getByRole("cell", { name: "$200.00", exact: true })).toBeVisible();
+  await expect(customer.getByRole("cell", { name: "$200,00", exact: true })).toBeVisible();
 });
 
 test("modal original y consultas mensuales conservan alcance y año en ambos sistemas", async ({
@@ -736,8 +736,8 @@ test("clientes sin documentos conservan tabla original y sólo histórico autori
   await login(page, environment, user);
   await page.goto(`${environment.origin}/clientes?view=dashboard&from=2026-02-01&to=2026-02-28`);
   for (const [noe, amount] of [
-    [false, "$110.00"],
-    [true, "$210.00"],
+    [false, "$110,00"],
+    [true, "$210,00"],
   ]) {
     await setNoe(page, noe, environment);
     const row = page
@@ -747,7 +747,7 @@ test("clientes sin documentos conservan tabla original y sólo histórico autori
     const other = page
       .getByRole("row")
       .filter({ has: page.getByRole("cell", { name: "Cliente exclusivo de B", exact: true }) });
-    await expect(other.getByRole("cell", { name: "$0.00", exact: true })).toBeVisible();
+    await expect(other.getByRole("cell", { name: "$0,00", exact: true })).toBeVisible();
   }
   const observed = await page.evaluate(
     async () =>

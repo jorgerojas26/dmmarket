@@ -20,17 +20,36 @@ module.exports = {
     min: 1,
     max: 1,
     afterCreate(connection, done) {
-      const database = String(connection.config.database || "").toLowerCase();
-      const name = `dmmarket:migrations:${createHash("sha256").update(database).digest("hex").slice(0, 40)}`;
-      console.log("Esperando acceso exclusivo para preparar la base de datos...");
-      connection.query("SELECT GET_LOCK(?, 30) AS acquired", [name], (error, rows) => {
-        if (error || Number(rows?.[0]?.acquired) !== 1) {
-          connection.destroy();
-          done(error || new Error("Otra instancia está preparando la base de datos. Espera a que termine."));
-          return;
+      const prepare = async () => {
+        const sql = connection.promise();
+        const [engines] = await sql.query("SHOW ENGINES");
+        if (
+          !engines.some(
+            (engine) =>
+              String(engine.Engine).toUpperCase() === "INNODB" && ["YES", "DEFAULT"].includes(String(engine.Support)),
+          )
+        )
+          throw new Error("InnoDB debe estar disponible para preparar las tablas de DMMarket.");
+        try {
+          await sql.query("SET SESSION default_storage_engine = 'InnoDB'");
+        } catch (error) {
+          if (error.code !== "ER_UNKNOWN_SYSTEM_VARIABLE") throw error;
+          await sql.query("SET SESSION storage_engine = 'InnoDB'");
         }
-        done(null, connection);
-      });
+        const database = String(connection.config.database || "").toLowerCase();
+        const name = `dmmarket:migrations:${createHash("sha256").update(database).digest("hex").slice(0, 40)}`;
+        console.log("Esperando acceso exclusivo para preparar la base de datos...");
+        const [[lock]] = await sql.query("SELECT GET_LOCK(?, 30) AS acquired", [name]);
+        if (Number(lock?.acquired) !== 1)
+          throw new Error("Otra instancia está preparando la base de datos. Espera a que termine.");
+      };
+      prepare().then(
+        () => done(null, connection),
+        (error) => {
+          connection.destroy();
+          done(error);
+        },
+      );
     },
   },
   seeds: { directory: require("node:path").join(__dirname, "seeds") },

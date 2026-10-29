@@ -1,4 +1,5 @@
 import { ShowNoeContext } from 'context/show_noe';
+import { ReportCurrencyGate } from 'context/report_settings';
 import { SWRConfig } from 'hooks/swr-wrapper';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import './preferences-recovery.css';
@@ -16,7 +17,7 @@ export function DocumentPreferenceGate({ children, onLeave, logoutError }) {
         );
     return (
         <SWRConfig key={revision} value={{ provider: () => cache }}>
-            {children}
+            <ReportCurrencyGate>{children}</ReportCurrencyGate>
         </SWRConfig>
     );
 }

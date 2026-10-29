@@ -1,4 +1,5 @@
 import { CurrencyRateProvider } from 'context/currency_rate';
+import { ReportSettingsProvider } from 'context/report_settings';
 import { ShowNoesProvider } from 'context/show_noe';
 import { SidebarProvider } from 'context/sidebar';
 import { UpdateProvider } from 'context/update';
@@ -50,13 +51,15 @@ function BoundaryContent() {
                                 isPaused: () => generation !== authTransportGeneration(),
                             }}
                         >
-                            <ShowNoesProvider enabled={!checking}>
-                                <CurrencyRateProvider>
-                                    <UpdateProvider>
-                                        <App pending={checking} onLogout={signOut} logoutError={logoutError} />
-                                    </UpdateProvider>
-                                </CurrencyRateProvider>
-                            </ShowNoesProvider>
+                            <ReportSettingsProvider enabled={!checking}>
+                                <ShowNoesProvider enabled={!checking}>
+                                    <CurrencyRateProvider>
+                                        <UpdateProvider>
+                                            <App pending={checking} onLogout={signOut} logoutError={logoutError} />
+                                        </UpdateProvider>
+                                    </CurrencyRateProvider>
+                                </ShowNoesProvider>
+                            </ReportSettingsProvider>
                             {!checking && <ReauthenticationDialog />}
                         </SWRConfig>
                     </SidebarProvider>

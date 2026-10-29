@@ -7,6 +7,7 @@ import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from 'react-bootstrap';
 import { fetcher } from 'swr-config';
+import { convertReportAmount, formatCurrency, formatWeight, getReportCurrency } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import pdf from './pdf';
 
@@ -18,7 +19,7 @@ const formatPrice = (value) => {
     if (value == null) return 'No disponible';
     const num = Number(value);
     if (Number.isNaN(num)) return '';
-    return `$${num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return formatCurrency(num);
 };
 
 const formatStock = (value) => {
@@ -103,6 +104,7 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
             { Header: 'Categoría', accessor: 'Grupo', sortType: textSortType },
             { Header: 'Producto', accessor: 'Descripcion', sortType: textSortType },
             ...(providers ? [{ Header: 'Proveedor', accessor: 'Proveedor', sortType: textSortType }] : []),
+            { Header: 'Peso', accessor: 'Peso', Cell: ({ value }) => formatWeight(value), disableSortBy: true },
             ...(monetary ? [{ Header: 'Precio', accessor: 'PrecioA', Cell: ({ value }) => formatPrice(value) }] : []),
             { Header: 'Stock', accessor: 'Existencia', Cell: ({ value }) => formatStock(value) },
         ],
@@ -135,17 +137,15 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
                 let productsData = result.data;
 
                 const rate = currencyRate?.Cambio;
-                const currency = config?.currency;
-                if (currency === 'Bs' && (!can('rates.read') || !Number.isFinite(Number(rate)) || Number(rate) <= 0))
+                const sourceCurrency = getReportCurrency();
+                const currency = config?.currency || sourceCurrency;
+                if (currency !== sourceCurrency && !can('rates.read'))
                     throw new Error('No se dispone de una tasa autorizada.');
-                if (currency === 'Bs') {
-                    productsData = productsData.map((p) => ({
-                        ...p,
-                        ...(monetary
-                            ? { PrecioA: p.PrecioA == null ? null : Number(p.PrecioA * rate).toFixed(2) }
-                            : {}),
+                if (monetary)
+                    productsData = productsData.map((product) => ({
+                        ...product,
+                        PrecioA: convertReportAmount(product.PrecioA, currency, rate, sourceCurrency),
                     }));
-                }
 
                 productsData = sortRows(productsData, config?.sortBy);
 
@@ -164,7 +164,7 @@ const InventoryTable = ({ categoryId, proveedorId }) => {
 
                 const pdfData = pdf(
                     productsData,
-                    { stockTotal: printedStockTotal, valueTotal, currency: currency || 'USD' },
+                    { stockTotal: printedStockTotal, valueTotal, currency },
                     { ...config, columns },
                 );
 

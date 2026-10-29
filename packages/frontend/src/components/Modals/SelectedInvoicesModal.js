@@ -1,8 +1,9 @@
+import Modal from 'components/Modal';
 import Table from 'components/Table';
 import dayjs from 'dayjs';
 import { useMemo } from 'react';
-import Modal from 'components/Modal';
 import { Button } from 'react-bootstrap';
+import { formatCurrency } from 'utils/format';
 import './SelectedInvoicesModal.css';
 
 /**
@@ -19,7 +20,7 @@ const SelectedInvoicesModal = ({ show, invoices = [], totalSummary = 0, onRemove
             {
                 Header: 'Total',
                 accessor: 'total',
-                Cell: ({ value }) => (value != null ? `$${Number(value).toFixed(2)}` : ''),
+                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
             },
             { Header: 'Fecha', accessor: 'createdAt', Cell: ({ value }) => dayjs(value).format('MMM DD, YYYY') },
             {

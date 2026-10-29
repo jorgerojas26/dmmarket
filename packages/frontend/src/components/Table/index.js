@@ -919,6 +919,8 @@ const Table = ({
                     show={showPrintConfig}
                     columns={print?.columns || columns}
                     initialOrientation={print?.defaultOrientation}
+                    currencyConversion={print?.currencyConversion !== false}
+                    baseCurrency={print?.baseCurrency}
                     storageKey={print?.storageKey}
                     filters={print?.filters || []}
                     onClose={() => setShowPrintConfig(false)}

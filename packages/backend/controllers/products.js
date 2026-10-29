@@ -1,4 +1,5 @@
 const { parameters } = require("./sales");
+const { productWeightColumn } = require("../product-weight");
 
 function fail(status) {
   const error = new Error("La consulta de inventario no está permitida.");
@@ -22,12 +23,13 @@ async function inventory(transaction, access, query) {
   const sortBy = query.sortBy || "Descripcion";
   if (["PrecioA", "inventoryValue"].includes(sortBy) && !monetary) fail(403);
   if ((sortBy === "Proveedor" || query.proveedorId) && !providers) fail(403);
+  const weight = transaction.raw(await productWeightColumn(transaction, "p"));
   const value = transaction.raw("ROUND(p.PrecioA * p.Existencia, 2)");
   const sort = {
     IdProducto: "p.IdProducto",
     Descripcion: "p.Descripcion",
     Grupo: "g.Descripcion",
-    Peso: "p.Peso",
+    Peso: weight,
     Existencia: "p.Existencia",
     ...(monetary ? { PrecioA: "p.PrecioA", inventoryValue: value } : {}),
     ...(providers ? { Proveedor: "v.Empresa" } : {}),
@@ -53,7 +55,7 @@ async function inventory(transaction, access, query) {
     .select({
       IdProducto: "p.IdProducto",
       Descripcion: "p.Descripcion",
-      Peso: "p.Peso",
+      Peso: weight,
       Existencia: "p.Existencia",
       categoryId: "p.Grupo",
       Grupo: transaction.raw(

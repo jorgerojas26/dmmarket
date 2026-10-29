@@ -105,7 +105,13 @@ const sidebarItems = [
     },
 ];
 
-const VIEWS = { '#preferencias': 'preferences', '#acercade': 'about', '#respaldos': 'backups', '#tasas': 'rates' };
+const VIEWS = {
+    '#reportes': 'preferences',
+    '#preferencias': 'preferences',
+    '#acercade': 'about',
+    '#respaldos': 'backups',
+    '#tasas': 'rates',
+};
 const HASHES = { preferences: '#preferencias', about: '#acercade', backups: '#respaldos', rates: '#tasas' };
 
 const ConfiguracionPage = () => {

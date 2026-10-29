@@ -38,7 +38,7 @@ function environment(extra = {}) {
     DATABASE_HOST: "127.0.0.1",
     DATABASE_USER: "root",
     DATABASE_PASSWORD: "root",
-    DATABASE_NAME: "bdsolser_md_nieto",
+    DATABASE_NAME: settings.database || "bdsolser_md_nieto",
     BACKUP_DIRECTORY: path.join(directory, "backups"),
     BACKUP_DUMP_COMMAND: path.join(root, "scripts/dev-mysqldump.sh"),
     BACKUP_CONSISTENCY: "locked",

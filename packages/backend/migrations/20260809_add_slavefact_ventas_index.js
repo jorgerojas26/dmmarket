@@ -1,3 +1,5 @@
+exports.retired = {};
+
 // Índice cubriente (IdFactura, Precio, Cantidad, Costo) en slavefact.
 //
 // El desglose de clientes agrega SUM(Precio*Cantidad) / SUM((Precio-Costo)*Cantidad)
@@ -7,7 +9,7 @@
 // scan index-only: full history 4.3s -> 1.3s en la réplica local. Como arranca con
 // IdFactura, también cubre los joins existentes por factura.
 
-exports.up = async (knex) => {
+exports.retired.up = async (knex) => {
   // Igual que en masterfact: relaja NO_ZERO_DATE para poder ALTER TABLE slavefact.
   await knex.raw("SET SESSION sql_mode = ''");
 
@@ -22,6 +24,9 @@ exports.up = async (knex) => {
   }
 };
 
-exports.down = async (knex) => {
+exports.retired.down = async (knex) => {
   await knex.raw("ALTER TABLE slavefact DROP INDEX idx_slavefact_ventas");
 };
+
+exports.up = async () => {};
+exports.down = async () => {};

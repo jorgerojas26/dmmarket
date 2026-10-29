@@ -9,7 +9,11 @@ async function loginEditor(page, environment) {
   });
   await login(page, environment, user);
   await page.getByLabel("Código MFA", { exact: true }).fill(await environment.token(user.secret));
+  const verified = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/api/auth/mfa" && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Verificar código", exact: true }).click();
+  await (await verified).finished();
   await page.goto(`${environment.origin}/configuracion#preferencias`);
   await expect(page.getByRole("heading", { name: "Preferencias del sistema" })).toBeVisible();
   return user;
@@ -22,7 +26,11 @@ test("preferencias autoriza lectura y edición sin mostrar el switch del navbar"
   await expect(page.getByRole("radio", { name: "Facturas", exact: true })).toBeChecked();
   await expect(page.getByRole("radio", { name: "Notas de entrega", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Guardar cambios", exact: true })).toHaveCount(0);
-  await expect(page.getByText("Solo lectura", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Preferencias del sistema", exact: true })
+      .getByText("Solo lectura", { exact: true }),
+  ).toBeVisible();
   await expect(page.locator(".app-navbar-switch")).toHaveCount(0);
   await expect(page.locator(".clients-sidebar").getByRole("button", { name: /Respaldos|Tasas BCV/ })).toHaveCount(0);
 });

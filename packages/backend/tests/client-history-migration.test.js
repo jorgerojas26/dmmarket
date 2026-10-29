@@ -1,4 +1,4 @@
-const migration = require("../migrations/20260929_add_client_history_indexes");
+const migration = require("../migrations/20260929_add_client_history_indexes").retired;
 
 const makeDb = (exists = false, failAlter = false) => {
   const connection = {};

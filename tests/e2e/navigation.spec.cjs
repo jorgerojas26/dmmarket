@@ -75,7 +75,8 @@ test("URL directa y rutas pendientes no montan formularios ni consultas protegid
   }
   expect(
     requested.filter(
-      (path) => !["/api/auth/session", "/api/auth/profile", "/api/preferences/effective"].includes(path),
+      (path) =>
+        !["/api/auth/session", "/api/auth/profile", "/api/preferences/effective", "/api/settings"].includes(path),
     ),
   ).toEqual([]);
 });

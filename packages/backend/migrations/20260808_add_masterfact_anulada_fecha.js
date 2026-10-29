@@ -1,3 +1,5 @@
+exports.retired = {};
+
 // Índice compuesto (Anulada, Fecha) en masterfact.
 //
 // Los reportes filtran con `Anulada = 0 AND Fecha BETWEEN ...`. El índice
@@ -7,7 +9,7 @@
 // dashboard el cuello real estaba en los escaneos repetidos de slavefact
 // (refactor en controllers/dashboard.js), no en este índice.
 
-exports.up = async (knex) => {
+exports.retired.up = async (knex) => {
   // El dump de Solser trae columnas `DEFAULT '0000-00-00'`. Con el sql_mode estricto
   // por defecto (NO_ZERO_DATE) cualquier ALTER TABLE falla con error 1067. El docker
   // local corre con --sql-mode=""; acá se relaja la sesión de esta migración nomás.
@@ -24,6 +26,9 @@ exports.up = async (knex) => {
   }
 };
 
-exports.down = async (knex) => {
+exports.retired.down = async (knex) => {
   await knex.raw("ALTER TABLE masterfact DROP INDEX idx_masterfact_anulada_fecha");
 };
+
+exports.up = async () => {};
+exports.down = async () => {};

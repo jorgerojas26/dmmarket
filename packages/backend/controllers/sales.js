@@ -1,3 +1,4 @@
+const { productWeightColumn } = require("../product-weight");
 const { exactKey, groupRows, sumValues, roundAmount, descendingAmount } = require("../utils/report-aggregation");
 const { canExportSales } = require("./sales-export");
 const { filterIdentity } = require("../utils/report-identity");
@@ -138,12 +139,15 @@ async function listSales(transaction, access, query, kind) {
     "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)/NULLIF(sf.Precio,0)) THEN ROUND(AVG((sf.Precio-sf.Costo)/NULLIF(sf.Precio,0)*100),2) END",
   );
   const quantity = raw("CASE WHEN COUNT(*)=COUNT(sf.Cantidad) THEN ROUND(COALESCE(SUM(sf.Cantidad),0),3) END");
-  const weight = raw("CASE WHEN COUNT(p.Peso) = COUNT(*) THEN ROUND(SUM(sf.Cantidad * p.Peso), 3) END");
+  const weightColumn = await productWeightColumn(transaction, "p");
+  const weight = raw(
+    `CASE WHEN COUNT(${weightColumn}) = COUNT(*) THEN ROUND(SUM(sf.Cantidad * ${weightColumn}), 3) END`,
+  );
   const sort = products
     ? {
         product: "p.Descripcion",
         quantity,
-        peso: weight,
+        peso: "peso",
         rawProfit: amount,
         netProfit: profit,
         averageProfitPercent: percent,
@@ -226,6 +230,7 @@ async function invoiceList(transaction, access, query) {
     base.where(function () {
       this.where("c.Empresa", "like", `%${query.search}%`).orWhere(`mf.${invoice}`, "like", `%${query.search}%`);
     });
+  const weightColumn = await productWeightColumn(transaction, "p");
   const ids = summary.data.map((row) => row.invoiceId);
   base.leftJoin("grupos as dispatchGroup", function () {
     this.on(transaction.raw("dispatchGroup.IdGrupo = p.Grupo AND BINARY dispatchGroup.IdGrupo = BINARY p.Grupo"));
@@ -240,7 +245,7 @@ async function invoiceList(transaction, access, query) {
           group: "dispatchGroup.Descripcion",
           quantity: "sf.Cantidad",
           price: "sf.Precio",
-          peso: "p.Peso",
+          peso: transaction.raw(weightColumn),
           ...(financial ? { cost: "sf.Costo" } : {}),
           ...(personal ? { rif: "mf.Rif" } : {}),
         })
@@ -452,6 +457,7 @@ async function dashboard(transaction, access, query) {
     ...(financial ? { compareNetProfit: compare?.totalNetProfit ?? null } : {}),
   });
   const { base: productBase } = salesBase(transaction, access, query, { clients: false, sellers: false });
+  const weightColumn = await productWeightColumn(transaction, "p");
   const products = await productBase
     .select({
       productId: "sf.IdProducto",
@@ -459,7 +465,9 @@ async function dashboard(transaction, access, query) {
       groupId: "p.Grupo",
       groupAmount: transaction.raw("SUM(sf.Precio * sf.Cantidad)"),
       quantity: transaction.raw("CASE WHEN COUNT(*)=COUNT(sf.Cantidad) THEN ROUND(COALESCE(SUM(sf.Cantidad),0),3) END"),
-      peso: transaction.raw("CASE WHEN COUNT(p.Peso)=COUNT(*) THEN ROUND(SUM(sf.Cantidad * p.Peso),3) END"),
+      peso: transaction.raw(
+        `CASE WHEN COUNT(${weightColumn})=COUNT(*) THEN ROUND(SUM(sf.Cantidad * ${weightColumn}),3) END`,
+      ),
       rawProfit: transaction.raw(
         "CASE WHEN COUNT(*)=COUNT(sf.Precio*sf.Cantidad) THEN ROUND(COALESCE(SUM(sf.Precio*sf.Cantidad),0),2) END",
       ),

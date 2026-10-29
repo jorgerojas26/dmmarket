@@ -51,7 +51,7 @@ test("detener desarrollo conserva el contenedor, los fixtures y la copia real de
   const docker = (args) => execFileSync("docker", [...compose, ...args], { cwd: root, env, stdio: "pipe" });
   try {
     fs.mkdirSync(path.join(root, "scripts"));
-    for (const file of ["dev.mjs", "dev-https.mjs", "prepare-caddy.mjs"])
+    for (const file of ["dev.mjs", "dev-processes.mjs", "dev-https.mjs", "prepare-caddy.mjs"])
       fs.copyFileSync(path.join(source, "scripts", file), path.join(root, "scripts", file));
     fs.copyFileSync(path.join(source, "docker-compose.yml"), path.join(root, "docker-compose.yml"));
     fs.writeFileSync(env.DMMARKET_DEV_DUMP, "SELECT 1;\n");

@@ -16,6 +16,7 @@ import { CurrencyRateContext } from 'context/currency_rate';
 import { Button, ToggleButton, ToggleButtonGroup } from 'react-bootstrap';
 import Select from 'react-select';
 import './PrintConfigModal.css';
+import { getReportCurrency } from 'utils/format';
 
 /**
  * Config dialog shown before every global print in `Table`.
@@ -217,7 +218,7 @@ const SortRuleItem = ({ rule, label, onToggleDirection, onRemove }) => {
 
 // Normaliza lo guardado (o los defaults) contra las columnas ACTUALES de la
 // tabla: descarta keys que ya no existen y valida orientación/moneda/orden.
-const normalizeConfig = (saved, columns, initialOrientation, filters = []) => {
+const normalizeConfig = (saved, columns, initialOrientation, filters = [], baseCurrency = getReportCurrency()) => {
     const validKeys = columns.map(getColumnKey);
     const allKeys = new Set(validKeys);
 
@@ -235,7 +236,7 @@ const normalizeConfig = (saved, columns, initialOrientation, filters = []) => {
         return {
             columns: columnsSet,
             orientation: saved.orientation === 'landscape' ? 'landscape' : 'portrait',
-            currency: saved.currency === 'Bs' ? 'Bs' : 'USD',
+            currency: ['USD', 'Bs'].includes(saved.currency) ? saved.currency : baseCurrency,
             sortRules: savedSort,
             extra: Object.fromEntries(filters.map((f) => [f.key, Boolean(saved.extra?.[f.key])])),
         };
@@ -243,7 +244,7 @@ const normalizeConfig = (saved, columns, initialOrientation, filters = []) => {
     return {
         columns: allKeys,
         orientation: initialOrientation === 'landscape' ? 'landscape' : 'portrait',
-        currency: 'USD',
+        currency: baseCurrency,
         sortRules: [],
         extra: Object.fromEntries(filters.map((f) => [f.key, false])),
     };
@@ -264,20 +265,24 @@ const PrintConfigModal = ({
     columns = [],
     initialOrientation = 'portrait',
     storageKey,
+    currencyConversion = true,
+    baseCurrency = getReportCurrency(),
     filters = [],
     onClose,
     onPrint,
 }) => {
     const { can } = useAuth();
     const { currencyRate } = useContext(CurrencyRateContext);
-    const canUseBs =
+    const canConvert =
         can('rates.read') && Number.isFinite(Number(currencyRate?.Cambio)) && Number(currencyRate.Cambio) > 0;
     // Configuración guardada de ESTA tabla (per-table, keyed por `storageKey`).
     // Sin storageKey → no persiste nada. El modal se REMONTA en cada apertura
     // (Table le cambia el `key`), así que el estado inicial se lee de
     // localStorage de forma determinista, sin efectos.
     const [savedConfig, setSavedConfig] = useLocalStorage(storageKey ? `print-config:${storageKey}` : null, null);
-    const [config, setConfig] = useState(() => normalizeConfig(savedConfig, columns, initialOrientation, filters));
+    const [config, setConfig] = useState(() =>
+        normalizeConfig(savedConfig, columns, initialOrientation, filters, baseCurrency),
+    );
     const [columnQuery, setColumnQuery] = useState('');
 
     // Único punto de escritura: estado + localStorage en el mismo handler.
@@ -294,7 +299,7 @@ const PrintConfigModal = ({
     );
 
     const { columns: selectedKeys, orientation, sortRules, extra } = config;
-    const currency = canUseBs ? config.currency : 'USD';
+    const currency = currencyConversion && canConvert ? config.currency : baseCurrency;
 
     const toggleColumn = (key) => {
         if (selectedKeys.has(key)) {
@@ -523,25 +528,34 @@ const PrintConfigModal = ({
                                 </div>
                                 <div>
                                     <span className="pc-section-title">Moneda</span>
-                                    <ToggleButtonGroup
-                                        type="radio"
-                                        name="print-currency"
-                                        value={currency}
-                                        onChange={(v) => updateConfig({ ...config, currency: v })}
-                                        className="pc-segmented"
-                                    >
-                                        <ToggleButton id="print-currency-usd" value="USD" variant="outline-secondary">
-                                            $ USD
-                                        </ToggleButton>
-                                        <ToggleButton
-                                            id="print-currency-bs"
-                                            value="Bs"
-                                            variant="outline-secondary"
-                                            disabled={!canUseBs}
+                                    {currencyConversion ? (
+                                        <ToggleButtonGroup
+                                            type="radio"
+                                            name="print-currency"
+                                            value={currency}
+                                            onChange={(v) => updateConfig({ ...config, currency: v })}
+                                            className="pc-segmented"
                                         >
-                                            Bs
-                                        </ToggleButton>
-                                    </ToggleButtonGroup>
+                                            <ToggleButton
+                                                id="print-currency-usd"
+                                                value="USD"
+                                                variant="outline-secondary"
+                                                disabled={baseCurrency !== 'USD' && !canConvert}
+                                            >
+                                                $ USD
+                                            </ToggleButton>
+                                            <ToggleButton
+                                                id="print-currency-bs"
+                                                value="Bs"
+                                                variant="outline-secondary"
+                                                disabled={baseCurrency !== 'Bs' && !canConvert}
+                                            >
+                                                Bs
+                                            </ToggleButton>
+                                        </ToggleButtonGroup>
+                                    ) : (
+                                        <div>{baseCurrency} · Sin conversión</div>
+                                    )}
                                 </div>
                             </div>
                         </section>

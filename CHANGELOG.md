@@ -7,6 +7,37 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.13.3] - 2026-10-28
+
+### Correcciones
+
+- **Primer inicio compatible con bases de datos antiguas**: se corrige un problema que impedía completar la preparación inicial al instalar DMMarket por primera vez.
+- **Respaldos compatibles con ventas en curso en instalaciones nuevas**: la información auxiliar de DMMarket se prepara de forma compatible con los respaldos sin bloqueo global de escrituras. No se convierten tablas existentes ni se cambian los datos o índices del negocio.
+
+## [v1.13.2] - 2026-10-28
+
+### Correcciones
+
+- **Estado claro de cobranza no habilitada**: cuando el negocio todavía no tiene preparada su cartera, Cuentas por cobrar muestra un mensaje breve y centrado con un icono, en lugar de un error genérico de conexión. No se muestran saldos vacíos, controles de cobro ni botones para reintentar una consulta que requiere habilitación previa. El resto del sistema sigue disponible.
+
+## [v1.13.1] - 2026-10-28
+
+### Correcciones
+
+- **Inventario disponible aunque el negocio no registre pesos**: los productos vuelven a cargar sin necesidad de modificar los datos del negocio. La columna Peso se conserva y muestra «N/A» cuando no hay información.
+- **Pesos faltantes claros en Ventas y Despacho**: las consultas y sus impresiones mantienen la columna Peso con «N/A» en lugar de fallar o mostrar un cero. Si falta el peso de algún producto, el total también indica «N/A» para no presentar una suma incompleta como definitiva. Los pesos registrados se siguen mostrando normalmente.
+
+## [v1.13.0] - 2026-10-28
+
+### Nuevas funciones
+
+- **Moneda del negocio en Preferencias**: desde Configuración puedes elegir dólares o bolívares y ver una muestra antes de guardar. La elección se conserva para el negocio y se aplica a los reportes en pantalla y sus exportaciones. Las instalaciones nuevas comienzan en dólares; no se convierten importes ni se modifican los datos originales o la cobranza.
+
+### Correcciones
+
+- **La misma moneda al consultar e imprimir**: los reportes respetan la moneda elegida para el negocio, sin presentar importes en bolívares como dólares ni aplicar conversiones adicionales al imprimir.
+- **Orden correcto por costo promedio en Compras**: los productos respetan el orden ascendente o descendente elegido para esa columna.
+
 ## [v1.12.0] - 2026-10-25
 
 ### Mejoras

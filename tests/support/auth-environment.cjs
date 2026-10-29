@@ -198,6 +198,7 @@ async function startEnvironment({
     await migration.up(db);
     await backend("./migrations/20261025_add_auth_event_role").up(db);
     await backend("./migrations/20261101_add_system_preferences").up(db);
+    await backend("./migrations/20261028_add_report_settings").up(db);
     await backend("./migrations/20261102_add_user_mfa_requirement").up(db);
     environment.db = db;
     environment.configuration = configuration;

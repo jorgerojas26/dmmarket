@@ -45,9 +45,15 @@ test("MySQL de Compose persiste todas las tablas propias en InnoDB/utf8_bin", as
   const rows = await environment
     .db("information_schema.TABLES")
     .whereRaw("TABLE_SCHEMA = DATABASE()")
-    .select("ENGINE", "TABLE_COLLATION");
-  expect(rows).toHaveLength(migration.tables.length + 1);
-  expect(rows.every((row) => String(row.ENGINE) === "InnoDB" && String(row.TABLE_COLLATION) === "utf8_bin")).toBe(true);
+    .select("TABLE_NAME", "ENGINE", "TABLE_COLLATION");
+  expect(rows).toHaveLength(migration.tables.length + 2);
+  expect(
+    rows.every(
+      (row) =>
+        String(row.ENGINE) === "InnoDB" &&
+        String(row.TABLE_COLLATION) === (row.TABLE_NAME === "dmmarket_settings" ? "utf8_general_ci" : "utf8_bin"),
+    ),
+  ).toBe(true);
 });
 
 test("un guardado tardío del store no resucita una sesión revocada", async () => {

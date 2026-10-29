@@ -1,6 +1,7 @@
 import UpdateToast from 'components/UpdateToast';
 import UserMenu from 'components/UserMenu';
 import { CurrencyRateContext } from 'context/currency_rate';
+import { ReportCurrencyGate } from 'context/report_settings';
 import { useSidebar } from 'context/sidebar';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import { useContext, useEffect, useState } from 'react';
@@ -208,6 +209,8 @@ export default function App({ onLogout, logoutError, pending = false }) {
                             <DocumentPreferenceGate key={pathname} onLeave={onLogout} logoutError={logoutError}>
                                 {view.content}
                             </DocumentPreferenceGate>
+                        ) : ['/compras', '/inventario'].includes(path) ? (
+                            <ReportCurrencyGate>{view.content}</ReportCurrencyGate>
                         ) : (
                             view.content
                         )
