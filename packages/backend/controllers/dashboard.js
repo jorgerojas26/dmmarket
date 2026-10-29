@@ -88,15 +88,18 @@ const buildDashboardSql = ({ masterTable, slaveTable, idInvoice, hasCompare }) =
 // ── Lookups de nombres (tablas pequeñas) ────────────────────────────────────
 
 const fetchNameLookups = async () => {
-  const [vendedores, clientes, grupos] = await Promise.all([
+  const [vendedores, clientes, grupos, rutas] = await Promise.all([
     knex.select("idVend as id", "Empresa as name").from("vendedores"),
-    knex.select("IdCliente as id", "Empresa as name").from("clientes"),
+    knex.select("IdCliente as id", "Empresa as name", "Ruta as routeId").from("clientes"),
     knex.select("idGrupo as id", "Descripcion as name").from("grupos"),
+    knex.select("Id_Ruta as id", "Nombre as name").from("rutas"),
   ]);
   return {
     vendName: new Map(vendedores.map((v) => [identityKey(v.id), v.name])),
     clientName: new Map(clientes.map((c) => [identityKey(c.id), c.name])),
     groupName: new Map(grupos.map((g) => [identityKey(g.id), g.name])),
+    clientRoute: new Map(clientes.map((c) => [identityKey(c.id), c.routeId])),
+    routeName: new Map(rutas.map((r) => [identityKey(r.id), r.name])),
   };
 };
 
@@ -132,6 +135,24 @@ const computeBestEmployee = (invoices, nameLookups) => {
   }
   const best = [...byVendor.values()].sort((a, b) => b.totalSales - a.totalSales)[0];
   return best ? { ...best, totalSales: round2(best.totalSales) } : null;
+};
+
+const computeRouteSales = (invoices, nameLookups) => {
+  const byRoute = new Map();
+  for (const row of invoices) {
+    const routeId = nameLookups.clientRoute.get(identityKey(row.clientId));
+    const hasRoute = routeId != null && String(routeId).trim() !== "";
+    const key = hasRoute ? identityKey(routeId) : "__unassigned__";
+    if (!hasRoute || !nameLookups.routeName.has(key)) continue;
+    const name = nameLookups.routeName.get(key) || String(routeId);
+    const entry = byRoute.get(key) || { id: key, name, sales: 0, profit: 0 };
+    entry.sales += Number(row.rawProfit || 0);
+    entry.profit += Number(row.netProfit || 0);
+    byRoute.set(key, entry);
+  }
+  return [...byRoute.values()]
+    .sort((a, b) => b.sales - a.sales || a.name.localeCompare(b.name))
+    .map((row) => ({ ...row, sales: round2(row.sales), profit: round2(row.profit) }));
 };
 
 const computeTopClients = (invoices, nameLookups) => {
@@ -229,6 +250,7 @@ const GET_DASHBOARD_SALES = async (req, res) => {
       topProducts: computeTopProducts(products),
       topClients: computeTopClients(invoices, nameLookups),
       groupSalesChart: computeGroupSales(products, nameLookups),
+      routeSalesChart: computeRouteSales(invoices, nameLookups),
     };
 
     res.status(200).json(response);

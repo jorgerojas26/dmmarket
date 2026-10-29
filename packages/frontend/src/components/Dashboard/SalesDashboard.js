@@ -8,6 +8,7 @@ import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
 import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
+import RouteSalesChart from './RouteSalesChart';
 
 const SALES_PARETO_CONFIG = { inventoryValueKey: 'inventoryValue' };
 
@@ -312,6 +313,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                             {PARETO_MODES.map(({ key, label, color }) => (
                                 <button
+                                    type="button"
                                     key={key}
                                     onClick={() => handleParetoModeChange(key)}
                                     style={{
@@ -335,6 +337,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                         </div>
                     </div>
                     <ParetoChart
+                        compact
                         products={paretoData?.products || []}
                         newProducts={paretoData?.newProducts || []}
                         newProductsTable={{
@@ -364,6 +367,8 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                     />
                 </div>
             </div>
+
+            <RouteSalesChart routes={data?.routeSalesChart} />
 
             <div className="row g-3 mb-4">
                 <div className="col-12 col-lg-6">

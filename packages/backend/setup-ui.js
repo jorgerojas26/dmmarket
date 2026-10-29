@@ -271,7 +271,7 @@ async function checkStartup() {
   byId('retry-button').hidden = true;
   byId('result-title').textContent = 'Comprobando tu servidor…';
   byId('installation-result').className = 'notice';
-  byId('installation-result').textContent = 'El servicio está registrado. La primera preparación de la base de datos puede tardar varios minutos mientras se crean los índices. Mantén abierta la ventana del instalador…';
+  byId('installation-result').textContent = 'El servicio está registrado. La primera preparación de la base de datos puede tardar varios minutos. Mantén abierta la ventana del instalador…';
   try {
     const deadline = Date.now() + 10 * 60 * 1000;
     let result;
