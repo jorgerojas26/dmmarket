@@ -9,6 +9,7 @@ import { fetcher, swrConfig } from 'swr-config';
 import App from '../App';
 import { AuthProvider, useAuth } from './context';
 import { EnrollmentForm, InitialAccountForm, LoginForm, MfaForm, PasswordForm, ReauthenticationDialog } from './forms';
+import AuthPresentation from './presentation';
 import SessionRecovery, { ConnectionNotice } from './recovery';
 import { authTransportGeneration } from './transport';
 
@@ -61,6 +62,13 @@ function BoundaryContent() {
             </>
         );
     }
+    if (session?.stage === 'first-user') {
+        return (
+            <AuthPresentation setup>
+                <InitialAccountForm />
+            </AuthPresentation>
+        );
+    }
     return (
         <main className="bg-dark text-light" style={{ height: '100vh', overflowY: 'auto' }}>
             <div className="container py-4" style={{ maxWidth: 1000 }}>
@@ -88,7 +96,6 @@ function BoundaryContent() {
                     </p>
                 )}
                 <div key={`${epoch}:${session?.stage}`}>
-                    {session?.stage === 'first-user' && <InitialAccountForm />}
                     {session?.stage === 'setup-required' && (
                         <section>
                             <h2 className="h4">Configuración inicial pendiente</h2>

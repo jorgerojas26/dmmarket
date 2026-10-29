@@ -2,8 +2,16 @@ import Modal from 'components/Modal';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { useAuth } from './context';
+import { AuthIcon } from './presentation';
 
-export function AccessForm({ title, onSubmit, children, button = 'Continuar', embedded = false }) {
+export function AccessForm({
+    title,
+    onSubmit,
+    children,
+    button = 'Continuar',
+    pendingButton = 'Procesando…',
+    embedded = false,
+}) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const submit = async (event) => {
@@ -37,7 +45,7 @@ export function AccessForm({ title, onSubmit, children, button = 'Continuar', em
                         </p>
                     )}
                     <button className="btn btn-primary mt-3" type="submit">
-                        {busy ? 'Procesando…' : button}
+                        {busy ? pendingButton : button}
                     </button>
                 </fieldset>
             </form>
@@ -60,6 +68,7 @@ export function Field({
     autoCapitalize,
     spellCheck,
     className = 'my-3',
+    describedBy,
     required = true,
 }) {
     const id = `auth-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
@@ -82,6 +91,7 @@ export function Field({
                 pattern={pattern}
                 autoCapitalize={autoCapitalize}
                 spellCheck={spellCheck}
+                aria-describedby={describedBy}
                 required={required}
                 onChange={onChange ? (event) => onChange(event.target.value) : undefined}
             />
@@ -91,28 +101,74 @@ export function Field({
 
 export function InitialAccountForm() {
     const { action } = useAuth();
+    const [visible, setVisible] = useState({});
     return (
-        <AccessForm
-            title="Crear primer administrador"
-            button="Crear administrador"
-            onSubmit={async ({ displayName, username, password, confirmation }) => {
-                if (password !== confirmation) throw new Error('Las contraseñas no coinciden.');
-                await action('first-user', { displayName, username, password, confirmation });
-            }}
-        >
-            <p>Bienvenido a DMMarket. Esta cuenta administrará el acceso. Podrás activar MFA desde Mi cuenta.</p>
-            <Field label="Nombre" name="displayName" maxLength={128} autoComplete="name" />
-            <Field label="Usuario" name="username" maxLength={64} autoComplete="username" />
-            <Field label="Contraseña" name="password" type="password" minLength={15} autoComplete="new-password" />
-            <Field
-                label="Confirmar contraseña"
-                name="confirmation"
-                type="password"
-                minLength={15}
-                autoComplete="new-password"
-            />
-            <p>Usa al menos 15 caracteres. No se crean usuarios ni contraseñas predeterminadas.</p>
-        </AccessForm>
+        <div className="auth-initial-form">
+            <span className="auth-initial-eyebrow">Configuración inicial</span>
+            <h1>Crear administrador</h1>
+            <AccessForm
+                embedded
+                button="Crear administrador"
+                pendingButton="Creando cuenta…"
+                onSubmit={async ({ displayName, username, password, confirmation }) => {
+                    setVisible({});
+                    if (password !== confirmation) throw new Error('Las contraseñas no coinciden.');
+                    await action('first-user', { displayName, username, password, confirmation });
+                }}
+            >
+                <Field
+                    label="Nombre"
+                    name="displayName"
+                    className="auth-initial-field"
+                    maxLength={128}
+                    autoComplete="name"
+                    placeholder="Jorge Rojas"
+                />
+                <Field
+                    label="Username"
+                    name="username"
+                    className="auth-initial-field"
+                    maxLength={64}
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    pattern={'[a-zA-Z0-9._\\-]+'}
+                    placeholder="jorgerojas26"
+                />
+                {[
+                    ['password', 'Contraseña', 'contraseña'],
+                    ['confirmation', 'Confirmar contraseña', 'confirmación'],
+                ].map(([name, label, toggleLabel]) => (
+                    <div key={name} className="auth-initial-field">
+                        <div className="auth-initial-password">
+                            <Field
+                                label={label}
+                                name={name}
+                                className="auth-initial-password-field"
+                                type={visible[name] ? 'text' : 'password'}
+                                minLength={15}
+                                autoComplete="new-password"
+                                describedBy={name === 'password' ? 'initial-password-help' : undefined}
+                            />
+                            <button
+                                type="button"
+                                className="auth-entry-password-toggle"
+                                aria-label={`${visible[name] ? 'Ocultar' : 'Mostrar'} ${toggleLabel}`}
+                                aria-pressed={Boolean(visible[name])}
+                                onClick={() => setVisible((current) => ({ ...current, [name]: !current[name] }))}
+                            >
+                                <AuthIcon kind="eye" />
+                            </button>
+                        </div>
+                        {name === 'password' && (
+                            <p id="initial-password-help" className="auth-initial-hint">
+                                Mínimo 15 caracteres.
+                            </p>
+                        )}
+                    </div>
+                ))}
+            </AccessForm>
+        </div>
     );
 }
 

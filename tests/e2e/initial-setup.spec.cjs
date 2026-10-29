@@ -39,9 +39,9 @@ test("primera apertura tras instalador compilado crea administrador sin obligar 
     const status = await setup.request("status");
     expect(status.body.bootstrapInstructions).toContain("desde el propio servidor");
     await page.goto(environment.origin);
-    await expect(page.getByRole("heading", { name: "Crear primer administrador", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Crear administrador", exact: true })).toBeVisible();
     await page.getByLabel("Nombre", { exact: true }).fill("Responsable inicial");
-    await page.getByLabel("Usuario", { exact: true }).fill(user.username);
+    await page.getByLabel("Username", { exact: true }).fill(user.username);
     await page.getByLabel("Contraseña", { exact: true }).fill(user.password);
     await page.getByLabel("Confirmar contraseña", { exact: true }).fill(user.password);
     await page.getByRole("button", { name: "Crear administrador", exact: true }).click();
@@ -76,6 +76,6 @@ test("móvil muestra login y no alta inicial después de configurar", async ({ p
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto(environment.origin);
   await expect(page.getByRole("heading", { name: "Iniciar sesión", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Crear primer administrador", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Crear administrador", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
