@@ -135,9 +135,22 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
                                 </div>
                                 <div>
                                     <dt>Saldo pendiente · USD</dt>
-                                    <dd>{money(result.balanceAfter)}</dd>
+                                    <dd>
+                                        {money(
+                                            result.balanceAfter,
+                                            'USD',
+                                            result.residualAmount && !result.residualClosure ? 4 : 2,
+                                        )}
+                                    </dd>
                                 </div>
                             </dl>
+                            {result.residualClosure && (
+                                <Alert variant="info">
+                                    Se cerró un saldo residual de {money(result.residualClosure.base, 'USD', 4)} USD. El
+                                    cierre quedó registrado por separado en el historial, sin registrar dinero recibido
+                                    adicional.
+                                </Alert>
+                            )}
                             {Number(result.excess) > 0 && (
                                 <Alert variant="warning">
                                     Excedente no aplicado: {money(result.excess)}. No genera saldo a favor ni

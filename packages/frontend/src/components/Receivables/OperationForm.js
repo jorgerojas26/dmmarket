@@ -62,6 +62,7 @@ export default function OperationForm({
         bank: '',
         notes: '',
         reason: '',
+        closeResidual: false,
     });
     const [preview, setPreview] = useState(null);
     const [showNotes, setShowNotes] = useState(false);
@@ -139,6 +140,7 @@ export default function OperationForm({
         setFields((current) => ({
             ...current,
             [key]: value,
+            closeResidual: false,
             ...(key === 'method' && value === 'EFECTIVO' ? { reference: '', bank: '' } : {}),
         }));
         setPreview(null);
@@ -146,6 +148,7 @@ export default function OperationForm({
         id.current = requestId();
     };
     const edit = () => {
+        setFields((current) => ({ ...current, closeResidual: false }));
         setPreview(null);
         setError('');
         id.current = requestId();
@@ -224,6 +227,31 @@ export default function OperationForm({
               rate: fields.currency === 'BsS' && fields.rate !== '' ? fields.rate : undefined,
           }
         : { type: action.type, id: action.id, reason: clientClosure ? fields.reason.trim() : fields.reason };
+    const changeResidualClosure = async (checked) => {
+        if (inFlight.current || disabled) return;
+        inFlight.current = true;
+        setBusy(true);
+        onBusyChange(true);
+        setError('');
+        try {
+            const updated = await previewReceivableOperation(client.id, { ...payload, closeResidual: checked });
+            setFields((current) => ({ ...current, closeResidual: checked }));
+            setPreview(updated);
+            id.current = requestId();
+            onDirtyChange(true);
+        } catch (failure) {
+            setError(failure.message);
+            if (failure.status === 409) {
+                setPreview(null);
+                setFields((current) => ({ ...current, closeResidual: false }));
+                id.current = requestId();
+            }
+        } finally {
+            inFlight.current = false;
+            if (mounted.current) setBusy(false);
+            onBusyChange(false);
+        }
+    };
     const submit = async (event) => {
         event.preventDefault();
         if (inFlight.current || disabled || (clientClosure && !fields.reason.trim())) return;
@@ -234,7 +262,12 @@ export default function OperationForm({
         try {
             if (!preview) {
                 onDirtyChange(true);
-                setPreview(await previewReceivableOperation(client.id, payload));
+                let reviewed = await previewReceivableOperation(client.id, payload);
+                if (payment && reviewed.residualAmount) {
+                    reviewed = await previewReceivableOperation(client.id, { ...payload, closeResidual: true });
+                    setFields((current) => ({ ...current, closeResidual: true }));
+                }
+                setPreview(reviewed);
             } else {
                 const result = await executeReceivableOperation(client.id, {
                     ...payload,
@@ -247,6 +280,7 @@ export default function OperationForm({
             setError(failure.message);
             if (failure.status === 409) {
                 setPreview(null);
+                setFields((current) => ({ ...current, closeResidual: false }));
                 id.current = requestId();
             }
         } finally {
@@ -572,11 +606,7 @@ export default function OperationForm({
                                 </div>
                                 {!compact && fields.currency === 'BsS' && rateInfo}
                                 {compact ? (
-                                    <div
-                                        className="cxc-form-grid cxc-payment-fields"
-                                        role="group"
-                                        aria-label="Datos del pago"
-                                    >
+                                    <fieldset className="cxc-form-grid cxc-payment-fields" aria-label="Datos del pago">
                                         {methodField}
                                         {fields.method !== 'EFECTIVO' && (
                                             <>
@@ -585,7 +615,7 @@ export default function OperationForm({
                                             </>
                                         )}
                                         {dateField}
-                                    </div>
+                                    </fieldset>
                                 ) : (
                                     <>
                                         <div className="cxc-form-grid">
@@ -792,11 +822,31 @@ export default function OperationForm({
                                     </li>
                                 ))}
                             </ul>
+                            {payment && preview.residualAmount && (
+                                <Alert variant="info">
+                                    <p>
+                                        Saldo residual: <strong>{money(preview.residualAmount, 'USD', 4)} USD</strong>.
+                                    </p>
+                                    <Form.Check
+                                        id="cxc-close-residual"
+                                        type="checkbox"
+                                        label="Registrar cierre de deuda"
+                                        checked={fields.closeResidual}
+                                        onChange={(event) => changeResidualClosure(event.target.checked)}
+                                    />
+                                </Alert>
+                            )}
                             <div className="cxc-resulting-balance">
                                 <span>
                                     Saldo del cliente después <small>USD</small>
                                 </span>
-                                <strong>{money(preview.balanceAfter)}</strong>
+                                <strong>
+                                    {money(
+                                        preview.balanceAfter,
+                                        'USD',
+                                        payment && preview.residualAmount && !fields.closeResidual ? 4 : 2,
+                                    )}
+                                </strong>
                             </div>
                             {payment && Number(preview.excess) > 0 && (
                                 <Alert variant="warning">
@@ -844,7 +894,11 @@ export default function OperationForm({
                                     <Spinner animation="border" size="sm" aria-hidden="true" /> Procesando…
                                 </>
                             ) : preview ? (
-                                confirmations[action.type]
+                                payment && fields.closeResidual ? (
+                                    'Confirmar abono y cierre'
+                                ) : (
+                                    confirmations[action.type]
+                                )
                             ) : compact ? (
                                 'Revisar abono'
                             ) : (

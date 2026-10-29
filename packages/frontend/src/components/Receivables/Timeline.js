@@ -38,6 +38,7 @@ export default function Timeline({
             {events.map((event) => {
                 const payment = event.type === 'payment';
                 const converted = payment && event.currency !== 'USD';
+                const closurePrecision = event.type === 'CIERRE' && event.data?.paymentOperationId ? 4 : 2;
                 const open = expanded === event.eventId;
                 const { notes, retentions } = parseNotes(event.notes);
                 const method = payment ? methods[event.method] || event.method : null;
@@ -61,13 +62,15 @@ export default function Timeline({
                             aria-expanded={open}
                             aria-controls={detailId}
                             disabled={locked}
-                            aria-label={`${open ? 'Ocultar' : 'Ver'} detalles: ${title}, ${payment ? money(event.amount, event.currency) : money(event.data?.base)}${converted ? `, equivalente ${money(event.base)} USD` : ''}, del ${dateLabel(event.date)}${method ? `, ${method}` : ''}${event.reference ? `, referencia ${event.reference}` : ''}`}
+                            aria-label={`${open ? 'Ocultar' : 'Ver'} detalles: ${title}, ${payment ? money(event.amount, event.currency) : money(event.data?.base, 'USD', closurePrecision)}${converted ? `, equivalente ${money(event.base)} USD` : ''}, del ${dateLabel(event.date)}${method ? `, ${method}` : ''}${event.reference ? `, referencia ${event.reference}` : ''}`}
                             onClick={() => setExpanded(open ? null : event.eventId)}
                         >
                             <span className="cxc-event-kind">{title}</span>
                             <span className="cxc-event-amounts">
                                 <span className="cxc-event-amount">
-                                    {payment ? money(event.amount, event.currency) : money(event.data?.base)}
+                                    {payment
+                                        ? money(event.amount, event.currency)
+                                        : money(event.data?.base, 'USD', closurePrecision)}
                                 </span>
                                 {converted && (
                                     <>
@@ -190,7 +193,9 @@ export default function Timeline({
                                                                 {application.sale}
                                                             </Button>
                                                         </span>
-                                                        <strong>{money(application.amount)}</strong>
+                                                        <strong>
+                                                            {money(application.amount, 'USD', closurePrecision)}
+                                                        </strong>
                                                     </li>
                                                 );
                                             })}

@@ -1,5 +1,5 @@
 const { reportId, missingName } = require("./utils/report-identity");
-const { createHash } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 const { Money, fail, decimal, fixed, total, allocate } = require("./utils/receivables-money");
 
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -61,6 +61,11 @@ function rateInput(value) {
 function input(body, today) {
   if (!Object.hasOwn(types, body.type)) fail("Operación de cobranza no válida.");
   const result = { type: body.type };
+  if (body.closeResidual !== undefined) {
+    if (body.type !== "payment" || typeof body.closeResidual !== "boolean")
+      fail("El cierre residual requiere una selección válida al registrar un abono.");
+    if (body.closeResidual) result.closeResidual = true;
+  }
   if (body.type === "payment") {
     result.amount = fixed(decimal(body.amount, 4, true));
     if (!["USD", "BsS"].includes(body.currency)) fail("Selecciona USD o bolívares.");
@@ -207,6 +212,34 @@ function createReceivablesService({ db, now = () => new Date() }) {
       const base = decimal(new Money(payload.amount).div(rate).toFixed(4), 4, true);
       result = { ...payload, rate, rateSource, base: fixed(base), ...allocate(valid, base) };
       result.balanceAfter = fixed(balance.minus(result.applied));
+      const residualApplications = valid
+        .map((document) => ({
+          id: document.IdDocumento,
+          sale: document.IdFactura,
+          amount: fixed(
+            new Money(document.SaldoActual).minus(
+              result.applications.find((application) => application.id === document.IdDocumento)?.amount || 0,
+            ),
+          ),
+        }))
+        .filter((application) => new Money(application.amount).gt(0));
+      const residual = total(residualApplications.map((application) => application.amount));
+      if (residual.gt(0) && residual.lt("0.005") && residual.eq(result.balanceAfter)) {
+        result.residualAmount = fixed(residual);
+        if (payload.closeResidual) {
+          result.residualClosure = {
+            type: "close",
+            reason: "Cierre de saldo residual aceptado al registrar abono",
+            base: fixed(residual),
+            balanceBefore: fixed(residual),
+            balanceAfter: fixed(0),
+            applications: residualApplications,
+          };
+          result.balanceAfter = fixed(0);
+        }
+      } else if (payload.closeResidual) {
+        fail("Solo puedes cerrar un saldo residual positivo menor de USD 0,005.");
+      }
     } else if (payload.type === "close") {
       const selected = valid.filter(
         (d) => new Money(d.SaldoActual).gt(0) && (!payload.id || d.IdDocumento === payload.id),
@@ -311,6 +344,11 @@ function createReceivablesService({ db, now = () => new Date() }) {
         fail("La deuda o la tasa cambió. Vuelve a revisar la previsualización antes de confirmar.", 409);
       result.operationId = body.requestId;
       result.registeredAt = timestamp(now());
+      if (result.residualClosure) {
+        result.residualClosure.operationId = randomUUID();
+        result.residualClosure.paymentOperationId = result.operationId;
+        result.residualClosure.registeredAt = result.registeredAt;
+      }
       if (payload.type === "payment") {
         const [movementId] = await connection("cxc_movimientos").insert({
           Fecha: payload.date === localDate(now()) ? result.registeredAt.slice(0, 19) : `${payload.date} 00:00:00`,
@@ -345,6 +383,26 @@ function createReceivablesService({ db, now = () => new Date() }) {
         Datos: JSON.stringify(result),
         FechaRegistro: result.registeredAt,
       });
+      if (result.residualClosure) {
+        const closure = result.residualClosure;
+        await connection("cxc_operaciones").insert({
+          IdOperacion: closure.operationId,
+          IdCliente: clientId,
+          Tipo: types.close,
+          Referencia: null,
+          Huella: hash(closure),
+          Motivo: closure.reason,
+          Datos: JSON.stringify(closure),
+          FechaRegistro: result.registeredAt,
+        });
+        await connection("cxc_cierres").insert(
+          closure.applications.map((application) => ({
+            IdOperacion: closure.operationId,
+            IdDocumento: application.id,
+            Monto: application.amount,
+          })),
+        );
+      }
       if (payload.type === "close") {
         await connection("cxc_cierres").insert(
           result.applications.map((a) => ({ IdOperacion: body.requestId, IdDocumento: a.id, Monto: a.amount })),
@@ -353,18 +411,20 @@ function createReceivablesService({ db, now = () => new Date() }) {
       if (payload.type === "reopen") {
         await connection("cxc_cierres").whereIn("IdCierre", result.closureIds).update({ Reapertura: body.requestId });
       }
-      for (const application of result.applications) {
-        const document = state.docs.find((d) => d.IdDocumento === application.id);
+      const applications = [...result.applications, ...(result.residualClosure?.applications || [])];
+      for (const documentId of new Set(applications.map((application) => application.id))) {
+        const document = state.docs.find((d) => d.IdDocumento === documentId);
+        const applied = total(applications.filter((application) => application.id === documentId).map((a) => a.amount));
         const balanceAfter = ["payment", "close"].includes(payload.type)
-          ? new Money(document.SaldoActual).minus(application.amount)
-          : new Money(document.SaldoActual).plus(application.amount);
+          ? new Money(document.SaldoActual).minus(applied)
+          : new Money(document.SaldoActual).plus(applied);
         const status = balanceAfter.eq(0)
           ? "PAGADO"
           : balanceAfter.eq(document.MontoOriginal)
             ? "PENDIENTE"
             : "PARCIAL";
         await connection("cxc_documentos")
-          .where("IdDocumento", application.id)
+          .where("IdDocumento", documentId)
           .update({ SaldoActual: fixed(balanceAfter), Estatus: status });
       }
       return result;
