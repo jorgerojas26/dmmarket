@@ -7,6 +7,12 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.15.0] - 2026-10-29
+
+### Nuevas funciones
+
+- **Cierre de pequeñas diferencias al abonar**: al revisar un abono, si queda un saldo menor a medio centavo de dólar, se ofrece «Registrar cierre de deuda», marcado inicialmente. Puedes desmarcarlo para conservar el saldo pendiente. La diferencia se muestra con cuatro decimales y el cierre queda registrado por separado en el historial, sin contarlo como dinero recibido, y puede reabrirse.
+
 ## [v1.14.0] - 2026-10-29
 
 ### Nuevas funciones
