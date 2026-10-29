@@ -12,6 +12,7 @@ export default function ReportCurrencyPanel() {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const currency = draft || settings.reportCurrency;
+    const changed = currency !== settings.reportCurrency;
     const save = async (event) => {
         event.preventDefault();
         if (!editable || saving || !draft) return;
@@ -36,80 +37,78 @@ export default function ReportCurrencyPanel() {
         }
     };
     return (
-        <section className="dashboard-panel system-preferences mt-4" aria-labelledby="report-currency-title">
-            <header className="dashboard-panel-header">
-                <h3 id="report-currency-title">Moneda del negocio</h3>
-                {!editable && <span className="system-preferences-badge">Solo lectura</span>}
-            </header>
-            <div className="dashboard-panel-body system-preferences-body">
-                {settings.error ? (
-                    <div role="alert">
-                        <p>No se pudo cargar la moneda.</p>
-                        <button type="button" className="btn btn-outline-light" onClick={settings.refreshSettings}>
-                            Reintentar
-                        </button>
+        <section className="report-settings__section" aria-labelledby="report-currency-title">
+            <form onSubmit={save}>
+                <div className="report-settings__row">
+                    <div>
+                        <h2 id="report-currency-title">Moneda del negocio</h2>
+                        <p id="report-currency-help">La moneda en la que registras precios y costos.</p>
                     </div>
-                ) : settings.loading ? (
-                    <p role="status">Cargando moneda…</p>
-                ) : (
-                    <form onSubmit={save}>
-                        <fieldset disabled={!editable || saving}>
-                            <legend className="visually-hidden">Moneda del negocio</legend>
-                            <div className="system-document-options">
-                                {[
-                                    ['USD', 'Dólares'],
-                                    ['Bs', 'Bolívares'],
-                                ].map(([value, label]) => (
-                                    <label
-                                        key={value}
-                                        className={`system-document-option${currency === value ? ' is-selected' : ''}`}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="report-currency"
-                                            value={value}
-                                            checked={currency === value}
-                                            onChange={() => {
-                                                setDraft(value);
-                                                setMessage('');
-                                                setError('');
-                                            }}
-                                        />
-                                        <span>
-                                            {value} {label}
-                                        </span>
-                                    </label>
-                                ))}
-                            </div>
-                            <p className="system-preferences-description mt-3">
-                                Define la moneda de los importes originales. No modifica datos ni la cobranza; la
-                                conversión al imprimir es opcional.
-                            </p>
+                    {settings.error ? (
+                        <div role="alert">
+                            <p>No se pudo cargar la moneda.</p>
+                            <button
+                                type="button"
+                                className="btn btn-outline-light btn-sm"
+                                onClick={settings.refreshSettings}
+                            >
+                                Reintentar
+                            </button>
+                        </div>
+                    ) : settings.loading ? (
+                        <p role="status">Cargando moneda…</p>
+                    ) : (
+                        <fieldset
+                            className="report-settings__currencies"
+                            disabled={!editable || saving}
+                            aria-busy={saving}
+                            aria-labelledby="report-currency-title"
+                            aria-describedby="report-currency-help"
+                        >
+                            {[
+                                ['USD', 'Dólares'],
+                                ['Bs', 'Bolívares'],
+                            ].map(([value, label]) => (
+                                <label className="report-settings__option" key={value}>
+                                    <input
+                                        type="radio"
+                                        name="report-currency"
+                                        value={value}
+                                        checked={currency === value}
+                                        onChange={() => {
+                                            setDraft(value);
+                                            setMessage('');
+                                            setError('');
+                                        }}
+                                    />
+                                    <span>
+                                        <strong>{value}</strong>
+                                        <small>{label}</small>
+                                    </span>
+                                </label>
+                            ))}
                         </fieldset>
-                        {editable && (
-                            <div className="system-preferences-actions">
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={saving || !draft || draft === settings.reportCurrency}
-                                >
+                    )}
+                </div>
+                {!settings.error && !settings.loading && editable && (
+                            <footer className="report-settings__footer">
+                                <button type="submit" className="btn btn-primary btn-sm" disabled={saving || !changed}>
                                     {saving ? 'Guardando…' : 'Guardar moneda'}
                                 </button>
-                            </div>
-                        )}
-                    </form>
+                                {changed && <span>Cambios sin guardar</span>}
+                            </footer>
                 )}
                 {message && (
-                    <p role="status" className="system-preferences-success">
+                    <p role="status" className="report-settings__success">
                         {message}
                     </p>
                 )}
                 {error && (
-                    <p role="alert" className="system-preferences-error">
+                    <p role="alert" className="report-settings__error">
                         {error}
                     </p>
                 )}
-            </div>
+            </form>
         </section>
     );
 }

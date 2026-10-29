@@ -10,11 +10,11 @@ test("Preferencias conserva tipo de documento y moneda con los permisos de esta 
   await login(page, environment, user);
   await expect(page.getByRole("heading", { name: "Preferencias del sistema", exact: true })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Facturas", exact: true })).toBeVisible();
-  await page.getByRole("radio", { name: "Bs Bolívares", exact: true }).check();
+  await page.getByText("Bolívares", { exact: true }).click();
   await page.getByRole("button", { name: "Guardar moneda", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Moneda guardada" })).toBeVisible();
   expect((await environment.db("dmmarket_settings").where("name", "reportCurrency").first()).value).toBe("Bs");
-  await page.getByRole("radio", { name: "Notas de entrega", exact: true }).check();
+  await page.getByText("Notas de entrega", { exact: true }).click();
   await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Preferencias guardadas" })).toBeVisible();
   expect((await environment.db("dmmarket_preferences").where("id", 1).first()).document_type).toBe("delivery-notes");

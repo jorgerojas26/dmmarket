@@ -53,7 +53,7 @@ test("guardar actualiza todas las sesiones y persiste al recargar sin mezclar re
     await expect(viewer.getByRole("link", { name: "Configuración", exact: true })).toHaveCount(0);
     await loginEditor(page, environment);
     await expect(page.getByRole("button", { name: "Guardar cambios", exact: true })).toBeDisabled();
-    await page.getByRole("radio", { name: "Notas de entrega", exact: true }).check();
+    await page.getByText("Notas de entrega", { exact: true }).click();
     expect((await environment.db("dmmarket_preferences").where("id", 1).first()).document_type).toBe("invoices");
     await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
     await expect(page.getByRole("radio", { name: "Notas de entrega", exact: true })).toBeChecked();
@@ -73,6 +73,41 @@ test("guardar actualiza todas las sesiones y persiste al recargar sin mezclar re
 });
 
 for (const width of [390, 1280]) {
+  test(`preferencias reutiliza el diseño de moneda de main a ${width}px`, async ({ page, environment }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const user = await environment.seedUser({ permissions: grants("preferences.read", "preferences.update") });
+    await login(page, environment, user);
+    const preferences = page.getByRole("region", { name: "Preferencias del sistema", exact: true });
+    await expect(preferences).toBeVisible();
+    await expect(preferences).not.toHaveClass(/dashboard-panel/);
+    await expect(preferences.locator(".report-settings__currencies")).toHaveCount(2);
+    for (const group of await preferences.locator(".report-settings__currencies").all()) {
+      await expect(group).toHaveCSS("display", "flex");
+      await expect(group).toHaveCSS("border-radius", "10px");
+    }
+    const currency = preferences.getByRole("region", { name: "Moneda del negocio", exact: true });
+    await currency.getByRole("radio", { name: "USD Dólares", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(currency.getByRole("radio", { name: "Bs Bolívares", exact: true })).toBeChecked();
+    await expect(currency.getByText("Bs 1.234,56", { exact: true })).toBeVisible();
+    await expect(currency.getByText("Cambios sin guardar", { exact: true })).toBeVisible();
+    expect((await environment.db("dmmarket_settings").where("name", "reportCurrency").first()).value).toBe("USD");
+    await currency.getByRole("button", { name: "Guardar moneda", exact: true }).click();
+    await expect(currency.getByRole("status").filter({ hasText: "Moneda guardada" })).toBeVisible();
+    await preferences.getByRole("radio", { name: "Facturas", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(preferences.getByRole("radio", { name: "Notas de entrega", exact: true })).toBeChecked();
+    await expect(preferences.getByText("Cambios sin guardar", { exact: true })).toBeVisible();
+    await preferences.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+    await expect(preferences.getByRole("status").filter({ hasText: "Preferencias guardadas" })).toBeVisible();
+    await page.reload();
+    await expect(preferences.getByRole("radio", { name: "Notas de entrega", exact: true })).toBeChecked();
+    await expect(currency.getByRole("radio", { name: "Bs Bolívares", exact: true })).toBeChecked();
+    await expect(preferences.getByText("Cambios sin guardar", { exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await preferences.screenshot({ path: `/tmp/dmmarket-preferences-main-${width}.png` });
+  });
+
   test(`preferencias tiene presentación adaptable a ${width}px`, async ({ page, environment }) => {
     await page.setViewportSize({ width, height: 900 });
     await loginEditor(page, environment);
