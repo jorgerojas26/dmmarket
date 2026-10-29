@@ -298,18 +298,10 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             display: 'flex',
                             flexWrap: 'wrap',
                             gap: 8,
-                            justifyContent: 'space-between',
+                            justifyContent: 'flex-end',
                             marginBottom: 12,
                         }}
                     >
-                        <PanelHelpTitle
-                            title="Modos del Pareto"
-                            help={{
-                                que: 'Ambos modos parten de productos comprados en el período. Ganancia (Ventas) incluye los que también se vendieron; Compras sin vender incluye los que no tuvieron ventas en ese período.',
-                                leer: 'Son grupos distintos: un producto no puede aparecer en ambos modos para el mismo rango. «Sin vender» no significa que nunca se haya vendido; pudo tener ventas antes del período.',
-                                servir: 'Separar la ganancia de los productos vendidos de la inversión en los que aún no se vendieron.',
-                            }}
-                        />
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                             {PARETO_MODES.map(({ key, label, color }) => (
                                 <button

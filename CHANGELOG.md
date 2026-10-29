@@ -7,6 +7,17 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.14.0] - 2026-10-29
+
+### Nuevas funciones
+
+- **Ventas y utilidad por ruta**: el tablero de Ventas incorpora, debajo del Pareto, un gráfico de barras horizontales apiladas para comparar las rutas por ventas totales y utilidad del período seleccionado. Muestra solo rutas registradas, igual que los selectores, y permite consultar ambos montos al pasar el cursor.
+
+### Mejoras
+
+- **Tableros más compactos**: los Pareto de Ventas, Compras y Clientes ocupan menos altura. El gráfico de rutas ajusta su tamaño y el espacio para los nombres, sin desplazamiento vertical interno.
+- **Mensaje de instalación más claro**: durante el primer inicio se informa que la preparación puede tardar varios minutos, sin indicar que se crearán índices del negocio.
+
 ## [v1.13.3] - 2026-10-28
 
 ### Correcciones

@@ -31,10 +31,9 @@ const RouteSalesChart = ({ routes }) => {
             <PanelHelpTitle
                 title="Ventas y Utilidad por Ruta"
                 help={{
-                    que: 'Ventas totales y utilidad del período agrupadas por la ruta actual de cada cliente, de mayor a menor venta.',
-                    leer: 'Azul = ventas totales; verde = utilidad, apiladas como en el ranking de vendedores. La utilidad ya está incluida en las ventas: el largo combinado no representa ventas adicionales.',
-                    servir: 'Comparar el volumen de ventas y la rentabilidad entre rutas.',
-                    accion: 'Pasa el cursor para ver los montos. Solo se muestran rutas registradas, igual que en los selectores.',
+                    que: 'Ventas y utilidad por ruta en el período.',
+                    leer: 'Azul: ventas. Verde: utilidad, ya incluida en las ventas.',
+                    servir: 'Comparar el aporte de cada ruta.',
                 }}
             />
             <div style={{ height: Math.max(200, chartData.length * 28 + 55) }}>

@@ -93,16 +93,43 @@ describe('SalesDashboard', () => {
     it('muestra el valor total del inventario filtrado y solicita ordenamiento al servidor', async () => {
         dashboardApi.fetchDashboardPareto.mockResolvedValue({
             products: [
-                { product: 'Pareto A', rank: 1, netProfit: 200, quantity: 2, inventoryValue: 125, cumulativePercent: 70, abcClass: 'A' },
-                { product: 'Pareto B', rank: 2, netProfit: 100, quantity: 1, inventoryValue: 75, cumulativePercent: 100, abcClass: 'C' },
+                {
+                    product: 'Pareto A',
+                    rank: 1,
+                    netProfit: 200,
+                    quantity: 2,
+                    inventoryValue: 125,
+                    cumulativePercent: 70,
+                    abcClass: 'A',
+                },
+                {
+                    product: 'Pareto B',
+                    rank: 2,
+                    netProfit: 100,
+                    quantity: 1,
+                    inventoryValue: 75,
+                    cumulativePercent: 100,
+                    abcClass: 'C',
+                },
             ],
             newProducts: [
-                { product: 'Pareto Nuevo', netProfit: 50, quantity: 1, inventoryValue: 30, firstPurchaseDate: '2026-07-20' },
+                {
+                    product: 'Pareto Nuevo',
+                    netProfit: 50,
+                    quantity: 1,
+                    inventoryValue: 30,
+                    firstPurchaseDate: '2026-07-20',
+                },
             ],
             newProductsCount: 1,
             newProductsTotal: 1,
             newProductsInventoryTotal: 30,
-            summary: { classA: { count: 1, profitPercent: 70 }, classB: { count: 0, profitPercent: 0 }, classC: { count: 1, profitPercent: 30 }, totalProducts: 2 },
+            summary: {
+                classA: { count: 1, profitPercent: 70 },
+                classB: { count: 0, profitPercent: 0 },
+                classC: { count: 1, profitPercent: 30 },
+                totalProducts: 2,
+            },
         });
         render(<SalesDashboard dateRange={{ from: '2026-07-01', to: '2026-07-27' }} showNoe={false} />, {
             wrapper: swrWrapper,
@@ -112,17 +139,16 @@ describe('SalesDashboard', () => {
         expect(within(table.querySelector('tfoot')).getByText('$200,00')).toBeInTheDocument();
         expect(screen.getByText('Productos nuevos (1)')).toBeInTheDocument();
         expect(screen.getByText('Pareto Nuevo')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Ayuda sobre Modos del Pareto' }));
-        expect(screen.getByText(/un producto no puede aparecer en ambos modos/)).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: 'Ayuda sobre Modos del Pareto' }));
         fireEvent.click(screen.getByRole('button', { name: 'Ayuda sobre Productos nuevos (1)' }));
         expect(screen.getByText(/Por eso cada modo muestra productos nuevos distintos/)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Clase A' }));
         expect(within(table.querySelector('tfoot')).getByText('$125,00')).toBeInTheDocument();
         fireEvent.click(within(table).getByText('Valor inventario'));
-        await waitFor(() => expect(dashboardApi.fetchDashboardPareto).toHaveBeenCalledWith(
-            expect.objectContaining({ sortBy: 'inventoryValue', sortDir: 'asc' }),
-        ));
+        await waitFor(() =>
+            expect(dashboardApi.fetchDashboardPareto).toHaveBeenCalledWith(
+                expect.objectContaining({ sortBy: 'inventoryValue', sortDir: 'asc' }),
+            ),
+        );
     });
 
     it('muestra los productos nuevos aun cuando no haya productos maduros', async () => {
@@ -144,11 +170,27 @@ describe('SalesDashboard', () => {
     });
 
     it('busca y ordena nuevos en el servidor e imprime todos los resultados, no solo la página', async () => {
-        const first = { product: 'Nuevo A', netProfit: 10, quantity: 1, inventoryValue: 30, firstPurchaseDate: '2026-07-20' };
-        const second = { product: 'Nuevo B', netProfit: 20, quantity: 2, inventoryValue: 40, firstPurchaseDate: '2026-07-21' };
+        const first = {
+            product: 'Nuevo A',
+            netProfit: 10,
+            quantity: 1,
+            inventoryValue: 30,
+            firstPurchaseDate: '2026-07-20',
+        };
+        const second = {
+            product: 'Nuevo B',
+            netProfit: 20,
+            quantity: 2,
+            inventoryValue: 40,
+            firstPurchaseDate: '2026-07-21',
+        };
         const page = {
-            products: [], newProducts: [first], newProductsCount: 2,
-            newProductsTotal: 2, newProductsInventoryTotal: 70, summary: { totalProducts: 0 },
+            products: [],
+            newProducts: [first],
+            newProductsCount: 2,
+            newProductsTotal: 2,
+            newProductsInventoryTotal: 70,
+            summary: { totalProducts: 0 },
         };
         dashboardApi.fetchDashboardPareto.mockImplementation(async ({ newLimit }) =>
             newLimit ? page : { ...page, newProducts: [first, second] },
@@ -163,13 +205,19 @@ describe('SalesDashboard', () => {
         expect(within(section.querySelector('tfoot')).getByText('$70,00')).toBeInTheDocument();
 
         fireEvent.click(within(section).getByText('Valor inventario'));
-        await waitFor(() => expect(dashboardApi.fetchDashboardPareto).toHaveBeenCalledWith(
-            expect.objectContaining({ newSortBy: 'inventoryValue', newSortDir: 'asc', newLimit: 20 }),
-        ));
-        fireEvent.change(within(section).getByPlaceholderText('Buscar producto nuevo...'), { target: { value: 'Nuevo' } });
-        await waitFor(() => expect(dashboardApi.fetchDashboardPareto).toHaveBeenCalledWith(
-            expect.objectContaining({ newSearch: 'Nuevo', newPage: 1 }),
-        ));
+        await waitFor(() =>
+            expect(dashboardApi.fetchDashboardPareto).toHaveBeenCalledWith(
+                expect.objectContaining({ newSortBy: 'inventoryValue', newSortDir: 'asc', newLimit: 20 }),
+            ),
+        );
+        fireEvent.change(within(section).getByPlaceholderText('Buscar producto nuevo...'), {
+            target: { value: 'Nuevo' },
+        });
+        await waitFor(() =>
+            expect(dashboardApi.fetchDashboardPareto).toHaveBeenCalledWith(
+                expect.objectContaining({ newSearch: 'Nuevo', newPage: 1 }),
+            ),
+        );
 
         fireEvent.click(within(section).getByRole('button', { name: 'Imprimir' }));
         fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Imprimir' }));
