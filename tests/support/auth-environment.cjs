@@ -197,6 +197,7 @@ async function startEnvironment({
     if (Number(existing.total)) throw new Error("La suite debe tener una base vacía.");
     await migration.up(db);
     await backend("./migrations/20261025_add_auth_event_role").up(db);
+    await backend("./migrations/20261102_add_user_mfa_requirement").up(db);
     environment.db = db;
     environment.configuration = configuration;
     environment.mfa = createMfa(configuration.AUTH_MFA_KEY);
@@ -204,6 +205,7 @@ async function startEnvironment({
       permissions = [{ capability: "rates.read", scope: "global" }],
       temporary = false,
       enrolled = false,
+      mfaRequired = false,
     } = {}) => {
       const user = {
         id: randomUUID(),
@@ -221,6 +223,7 @@ async function startEnvironment({
         must_change_password: temporary,
         temporary_expires_ms: temporary ? Date.now() + 1800000 : null,
         mfa_secret: enrollment?.encryptedSecret || null,
+        mfa_required: mfaRequired,
       });
       if (permissions.length) {
         const role = randomUUID();

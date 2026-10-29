@@ -49,10 +49,10 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
     await appendEvent(connection, { actorId, targetId, action, outcome, reason, occurredMs: time() });
   }
 
-  function stageFor(user, state, access) {
+  function stageFor(user, state) {
     if (Number(user.must_change_password) === 1) return "password";
-    if (access.privileged && !user.mfa_secret) return "mfa-enrollment";
-    if ((access.privileged || user.mfa_secret) && state.mfa_ms === null) return "mfa";
+    if (Number(user.mfa_required) === 1 && !user.mfa_secret) return "mfa-enrollment";
+    if (user.mfa_secret && state.mfa_ms === null) return "mfa";
     return "ready";
   }
 
@@ -108,7 +108,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
     }
     if (!includeAccess) return { user, state };
     const access = await accessFor(connection, user.id);
-    return { user, state, access, stage: stageFor(user, state, access) };
+    return { user, state, access, stage: stageFor(user, state) };
   }
 
   async function useSession(
@@ -189,7 +189,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
     context.user = user;
     context.state = state;
     await event(connection, { actorId: user.id, targetId: user.id, action: reason });
-    return { value: publicContext({ user, access: context.access, stage: stageFor(user, state, context.access) }) };
+    return { value: publicContext({ user, access: context.access, stage: stageFor(user, state) }) };
   }
 
   function publicContext(context) {
@@ -197,6 +197,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
       user: { id: context.user.id, username: context.user.username, displayName: context.user.display_name },
       revision: Number(context.user.session_version),
       mfaEnabled: Boolean(context.user.mfa_secret),
+      mfaRequired: Number(context.user.mfa_required) === 1,
       stage: context.stage,
       access: context.access,
     };
@@ -249,7 +250,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
             await connection("dmmarket_auth_users").where("id", user.id).update({ temporary_consumed: true });
           }
           const access = await accessFor(connection, user.id);
-          const stage = stageFor(user, state, access);
+          const stage = stageFor(user, state);
           await event(connection, {
             actorId: user.id,
             targetId: user.id,
@@ -281,7 +282,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
           if (
             recent &&
             (current - Number(context.state.password_ms) >= RECENT_AUTH_MS ||
-              ((context.access.privileged || context.user.mfa_secret) &&
+              (context.user.mfa_secret &&
                 (context.state.mfa_ms === null || current - Number(context.state.mfa_ms) >= RECENT_AUTH_MS)))
           )
             return denied(403, "RECENT_AUTH_REQUIRED");
@@ -295,7 +296,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
           if (
             recent &&
             (time() - Number(context.state.password_ms) >= RECENT_AUTH_MS ||
-              ((context.access.privileged || context.user.mfa_secret) &&
+              (context.user.mfa_secret &&
                 (context.state.mfa_ms === null || time() - Number(context.state.mfa_ms) >= RECENT_AUTH_MS)))
           )
             return unwrap(denied(403, "RECENT_AUTH_REQUIRED"));
@@ -352,7 +353,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
       return useSession(
         sid,
         async (connection, context) => {
-          if (context.stage !== "mfa-enrollment" || context.user.mfa_secret) return denied(403);
+          if (!["mfa-enrollment", "ready"].includes(context.stage) || context.user.mfa_secret) return denied(403);
           if (!(await verifyPassword(password, context.user.password_hash))) {
             await event(connection, {
               targetId: context.user.id,
@@ -390,7 +391,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
         async (connection, context) => {
           const current = time();
           if (
-            context.stage !== "mfa-enrollment" ||
+            !["mfa-enrollment", "ready"].includes(context.stage) ||
             context.user.mfa_secret ||
             !context.state.pending_mfa_secret ||
             !Number.isSafeInteger(Number(context.state.pending_mfa_expires_ms)) ||
@@ -417,6 +418,32 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
             mfa_last_step: checked.timeStep,
           });
           return rotateSession(connection, context, newSid, "auth.mfa_enrolled", context.state.password_ms, current);
+        },
+        { accessMutation: true, source: normalizeSource(source) },
+      );
+    },
+    async disableMfa(sid, { password, token, newSid } = {}, source) {
+      if (!sessionHash(newSid) || newSid === sid) return unwrap(denied(400));
+      return useSession(
+        sid,
+        async (connection, context) => {
+          if (context.stage !== "ready" || Number(context.user.mfa_required) === 1 || !context.user.mfa_secret)
+            return denied(403);
+          if (
+            !(await verifyPassword(password, context.user.password_hash)) ||
+            !(await consumeMfa(connection, context, token))
+          ) {
+            await event(connection, {
+              targetId: context.user.id,
+              action: "auth.mfa_disable_failed",
+              outcome: "failure",
+            });
+            return denied();
+          }
+          await connection("dmmarket_auth_users")
+            .where("id", context.user.id)
+            .update({ mfa_secret: null, mfa_last_step: null });
+          return rotateSession(connection, context, newSid, "auth.mfa_disabled", time(), null);
         },
         { accessMutation: true, source: normalizeSource(source) },
       );
@@ -448,7 +475,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
         async (connection, context) => {
           if (context.stage !== "ready") return denied(403);
           const passwordValid = await verifyPassword(password, context.user.password_hash);
-          const mfaRequired = context.access.privileged || Boolean(context.user.mfa_secret);
+          const mfaRequired = Boolean(context.user.mfa_secret);
           if (!passwordValid || (mfaRequired && !(await consumeMfa(connection, context, token)))) {
             await event(connection, {
               targetId: context.user.id,
@@ -490,6 +517,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
     "beginMfaEnrollment",
     "finishMfaEnrollment",
     "verifyMfa",
+    "disableMfa",
     "reauthenticate",
   ]) {
     const work = service[name];

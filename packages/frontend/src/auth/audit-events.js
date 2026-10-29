@@ -9,6 +9,8 @@ export const auditActivities = [
             'auth.password_change_failed': 'Cambio de contraseña rechazado',
             'auth.enrollment_started': 'Configuración de MFA iniciada',
             'auth.enrollment_failed': 'Configuración de MFA rechazada',
+            'auth.mfa_disabled': 'MFA desactivado',
+            'auth.mfa_disable_failed': 'Intento fallido de desactivar MFA',
             'auth.mfa_enrolled': 'MFA activado',
             'auth.mfa_verified': 'Código MFA verificado',
             'auth.mfa_failed': 'Código MFA rechazado',

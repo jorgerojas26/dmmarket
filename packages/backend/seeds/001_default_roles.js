@@ -1,10 +1,12 @@
-const { validateGrants } = require("../auth/capabilities");
+const { CAPABILITIES, validateGrants } = require("../auth/capabilities");
 const { assertAuthSchema, lockAccessMutation, appendEvent } = require("../auth/identity");
+
+const { SUPERUSER_ROLE_ID } = require("../auth/initial-administrator");
 
 const roles = [
   {
     id: "9a5f7364-12b7-4ff2-8f0e-4f4723c73101",
-    name: "Dirección",
+    name: "Administrador",
     permissions: [
       "sales.read",
       "sales.financial",
@@ -36,26 +38,13 @@ const roles = [
     ],
   },
   {
-    id: "9a5f7364-12b7-4ff2-8f0e-4f4723c73102",
-    name: "Administración técnica",
-    permissions: [
-      "access.users",
-      "access.roles",
-      "access.links",
-      "access.recover",
-      "rates.read",
-      "rates.sync",
-      "backups.read",
-      "backups.create",
-      "updates.read",
-      "updates.execute",
-      "cache.clear",
-      "audit.read",
-    ],
+    id: SUPERUSER_ROLE_ID,
+    name: "Superusuario",
+    permissions: Object.keys(CAPABILITIES),
   },
   {
     id: "9a5f7364-12b7-4ff2-8f0e-4f4723c73103",
-    name: "Consulta operativa",
+    name: "Consultor",
     permissions: ["sales.read", "inventory.read"],
   },
   {

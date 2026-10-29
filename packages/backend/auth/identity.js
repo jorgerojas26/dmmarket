@@ -32,6 +32,8 @@ async function assertAuthSchema(db) {
     throw new Error(
       "El esquema de acceso requiere preparar el estado de inicialización desde el instalador actualizado.",
     );
+  if (!(await db.schema.hasColumn("dmmarket_auth_users", "mfa_required")))
+    throw new Error("El esquema de acceso requiere preparar la política MFA por usuario.");
   if (!(await db.schema.hasColumn("dmmarket_auth_events", "target_role_id")))
     throw new Error("El esquema de acceso requiere la migración manual del objetivo de roles.");
   if (
@@ -98,8 +100,6 @@ async function assertAdministratorRemains(connection) {
     .where("u.enabled", true)
     .where("u.must_change_password", false)
     .whereNull("u.temporary_expires_ms")
-    .whereNotNull("u.mfa_secret")
-    .whereNot("u.mfa_secret", "")
     .where("p.scope", "global")
     .whereIn("p.capability", capabilities)
     .groupBy("u.id")
@@ -107,7 +107,7 @@ async function assertAdministratorRemains(connection) {
     .select("u.id")
     .first();
   if (!owner) {
-    const error = new Error("Debe permanecer un administrador habilitado con contraseña permanente y MFA enrolado.");
+    const error = new Error("Debe permanecer un administrador habilitado con contraseña permanente.");
     error.status = 409;
     throw error;
   }

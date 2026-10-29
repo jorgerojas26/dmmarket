@@ -150,9 +150,11 @@ async function createAccountService({ db, sessions, now = Date.now }) {
         return { id, username: names.username };
       });
     },
-    async createUser(sid, { username, displayName, roleIds = [], reason }) {
+    async createUser(sid, { username, displayName, roleIds = [], mfaRequired = false, reason }) {
       const names = accountNames(username, displayName);
-      const motive = validateReason(reason);
+      if (!Array.isArray(roleIds) || roleIds.length === 0) fail(400, "Selecciona al menos un rol.");
+      if (typeof mfaRequired !== "boolean") fail(400, "La opción MFA no es válida.");
+      const motive = reason === undefined || reason === null || reason === "" ? null : validateReason(reason);
       return administrator(sid, "access.users", async (connection, actorId, access) => {
         const roles = await rolesExist(connection, roleIds);
         if (roles.length && !access.hasGlobal("access.roles")) fail(403, "Acceso no permitido.");
@@ -165,6 +167,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
           ...names,
           password_hash: credential.passwordHash,
           temporary_expires_ms: credential.expiresAtMs,
+          mfa_required: mfaRequired,
         });
         if (roles.length)
           await connection("dmmarket_auth_user_roles").insert(

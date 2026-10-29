@@ -25,7 +25,7 @@ const test = base.extend({
   ],
 });
 
-test("primera apertura tras instalador compilado crea administrador y completa MFA sin terminal ni código de activación", async ({
+test("primera apertura tras instalador compilado crea administrador sin obligar MFA ni usar terminal o código de activación", async ({
   page,
   environment,
 }) => {
@@ -45,17 +45,6 @@ test("primera apertura tras instalador compilado crea administrador y completa M
     await page.getByLabel("Contraseña", { exact: true }).fill(user.password);
     await page.getByLabel("Confirmar contraseña", { exact: true }).fill(user.password);
     await page.getByRole("button", { name: "Crear administrador", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Configurar segundo factor", exact: true })).toBeVisible();
-    const pendingMfa = await setup.request("status");
-    expect(pendingMfa.body.bootstrapInstructions).toContain("completar MFA");
-    expect(pendingMfa.body.bootstrapInstructions).not.toContain("--bootstrap-access");
-    await page.reload();
-    await expect(page.getByRole("heading", { name: "Configurar segundo factor", exact: true })).toBeVisible();
-    await page.getByLabel("Contraseña para configurar MFA", { exact: true }).fill(user.password);
-    await page.getByRole("button", { name: "Generar configuración MFA", exact: true }).click();
-    const secret = await page.getByLabel("Configuración manual MFA", { exact: true }).inputValue();
-    await page.getByLabel("Código de confirmación MFA", { exact: true }).fill(await environment.token(secret));
-    await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
     await expect(page).toHaveURL((url) => url.origin === environment.origin && url.pathname === "/ventas");
     for (const name of ["Ventas", "Compras", "Clientes", "Proveedores", "Vendedores", "Inventario", "Configuración"]) {
       await expect(page.getByRole("link", { name, exact: true })).toBeVisible();

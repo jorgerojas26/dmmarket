@@ -63,12 +63,12 @@ test("reinstalación sandbox conserva claves y genera configuración privada sin
     (
       await environment
         .db("dmmarket_auth_roles")
-        .whereIn("name", ["Dirección", "Administración técnica", "Consulta operativa", "Cobranza"])
+        .whereIn("name", ["Superusuario", "Administrador", "Consultor", "Cobranza"])
         .select("name")
     )
       .map((row) => row.name)
       .sort(),
-  ).toEqual(["Dirección", "Administración técnica", "Consulta operativa", "Cobranza"].sort());
+  ).toEqual(["Superusuario", "Administrador", "Consultor", "Cobranza"].sort());
   const saved = readConfiguration(sandbox.directory);
   expect(saved.AUTH_SESSION_SECRET).toBe(environment.configuration.AUTH_SESSION_SECRET);
   expect(saved.AUTH_MFA_KEY).toBe(environment.configuration.AUTH_MFA_KEY);
@@ -195,7 +195,7 @@ test("instalador compilado incluye el seed sin archivos fuente y no crea cuentas
       (await compiled.request("install", { ...compiled.payload, confirm: true, backupConfirmed: true })).status,
     ).toBe(200);
     expect((await fresh.db("dmmarket_auth_roles").select("name")).map((row) => row.name).sort()).toEqual(
-      ["Dirección", "Administración técnica", "Consulta operativa", "Cobranza"].sort(),
+      ["Superusuario", "Administrador", "Consultor", "Cobranza"].sort(),
     );
     expect(Number((await fresh.db("dmmarket_auth_users").count("* as n").first()).n)).toBe(0);
     expect(Number((await fresh.db("dmmarket_auth_user_roles").count("* as n").first()).n)).toBe(0);

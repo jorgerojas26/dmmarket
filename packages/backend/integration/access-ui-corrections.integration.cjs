@@ -25,6 +25,42 @@ beforeEach(async () => {
   ).toBe(200);
 });
 
+test.each([undefined, [], null, "invalid", ["missing-role"]])(
+  "alta rechaza roles ausentes o inválidos: %j",
+  async (roleIds) => {
+    const username = `alta-${randomUUID().slice(0, 8)}`;
+    const response = await admin.request("/api/auth/users", {
+      method: "POST",
+      body: { username, displayName: "Ana", roleIds },
+    });
+    expect(response.status).toBe(400);
+    expect(await environment.db("dmmarket_auth_users").where({ username })).toHaveLength(0);
+  },
+);
+
+test("alta sin motivo conserva auditoría, rol inicial y credencial temporal sin exponerla en eventos", async () => {
+  const role = await admin.request("/api/auth/roles", {
+    method: "POST",
+    body: { name: randomUUID(), permissions: [] },
+  });
+  const created = await admin.request("/api/auth/users", {
+    method: "POST",
+    body: { username: `alta-${randomUUID().slice(0, 8)}`, displayName: "Ana Pérez", roleIds: [role.body.id] },
+  });
+  expect(created.status).toBe(201);
+  expect(created.body.temporaryPassword).toBeTruthy();
+  const event = await environment
+    .db("dmmarket_auth_events")
+    .where({ target_user_id: created.body.id, action: "auth.user_created" })
+    .first();
+  expect(event.actor_id).toBe(owner.id);
+  expect(event.reason).toBeNull();
+  expect(JSON.stringify(event)).not.toContain(created.body.temporaryPassword);
+  expect(
+    await environment.db("dmmarket_auth_user_roles").where({ user_id: created.body.id, role_id: role.body.id }),
+  ).toHaveLength(1);
+});
+
 test("crear, editar y asignar roles no requieren motivo manual y mantienen auditoría y revocación", async () => {
   const created = await admin.request("/api/auth/roles", {
     method: "POST",

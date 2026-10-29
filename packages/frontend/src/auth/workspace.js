@@ -5,11 +5,13 @@ import AccessEditor from './access-editor';
 import { useDiscardChanges } from './access-ui';
 import Users from './access-users';
 import { useAuth } from './context';
-import { PasswordForm } from './forms';
+import { DisableMfaForm, EnrollmentForm, PasswordForm } from './forms';
 import './access.css';
 
 export function Account() {
+    const { session } = useAuth();
     const [changePassword, setChangePassword] = useState(false);
+    const [configuringMfa, setConfiguringMfa] = useState(false);
     return (
         <>
             <button
@@ -20,6 +22,23 @@ export function Account() {
                 {changePassword ? 'Ocultar cambio de contraseña' : 'Cambiar mi contraseña'}
             </button>
             {changePassword && <PasswordForm />}
+            <section className="my-4" aria-label="Segundo factor">
+                <h2 className="h5">Segundo factor (MFA)</h2>
+                <p>
+                    {session.mfaEnabled ? 'Activado' : 'Desactivado'}
+                    {session.mfaRequired ? ' · Requerido por el administrador' : ''}
+                </p>
+                {(!session.mfaEnabled || !session.mfaRequired) && (
+                    <button
+                        type="button"
+                        className="btn btn-outline-light"
+                        onClick={() => setConfiguringMfa(!configuringMfa)}
+                    >
+                        {configuringMfa ? 'Cancelar' : session.mfaEnabled ? 'Desactivar MFA' : 'Activar MFA'}
+                    </button>
+                )}
+                {configuringMfa && (session.mfaEnabled ? <DisableMfaForm /> : <EnrollmentForm />)}
+            </section>
         </>
     );
 }
@@ -63,14 +82,21 @@ export default function AccessWorkspace() {
     const [dirty, setDirty] = useState(false);
     const allowNavigation = useRef(false);
     const { requestClose, confirmation } = useDiscardChanges(dirty);
+    const creating = location.hash === '#nuevo-usuario' && can('access.users') && can('access.roles');
     const view = location.hash === '#roles' && can('access.roles') ? 'roles' : 'usuarios';
     const items = [
         { eventKey: 'usuarios', label: 'Usuarios', icon: usersIcon },
         ...(can('access.roles') ? [{ eventKey: 'roles', label: 'Roles', icon: rolesIcon }] : []),
     ];
     useEffect(() => {
-        if (location.hash !== `#${view}`) history.replace({ ...location, hash: `#${view}` });
-    }, [view, location, history]);
+        if (!creating && location.hash !== `#${view}`) history.replace({ ...location, hash: `#${view}` });
+    }, [view, location, history, creating]);
+    const navigate = (hash) =>
+        requestClose(() => {
+            allowNavigation.current = dirty;
+            setDirty(false);
+            history.push({ ...location, hash });
+        });
     return (
         <section aria-label="Acceso" className="clientes-layout access-layout p-0">
             <Prompt
@@ -99,7 +125,17 @@ export default function AccessWorkspace() {
                 <div className="clientes-content access-content">
                     <div className="access-workspace">
                         {view === 'usuarios' ? (
-                            <Users onDirtyChange={setDirty} />
+                            <Users
+                                onDirtyChange={setDirty}
+                                creating={creating}
+                                onCreate={() => history.push({ ...location, hash: '#nuevo-usuario' })}
+                                onCancelCreate={() => navigate('#usuarios')}
+                                onCreated={() => {
+                                    allowNavigation.current = dirty;
+                                    setDirty(false);
+                                    history.replace({ ...location, hash: '#usuarios' });
+                                }}
+                            />
                         ) : (
                             <AccessEditor onDirtyChange={setDirty} />
                         )}

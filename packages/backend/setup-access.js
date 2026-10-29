@@ -31,6 +31,7 @@ async function prepareAccessSchema(configuration, { firstInstallation = false } 
       await require("./migrations/20261025_add_auth_event_role").up(db);
     }
     await require("./migrations/20261029_add_initial_setup_state").up(db);
+    await require("./migrations/20261102_add_user_mfa_requirement").up(db);
     await assertAuthSchema(db);
     await require("./migrations/20261030_rename_initial_superuser").up(db);
     await require("./seeds/001_default_roles").seed(db);

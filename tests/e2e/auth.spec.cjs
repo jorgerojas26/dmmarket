@@ -41,7 +41,7 @@ test("configuración manual MFA permite mostrar y copiar la clave sin escanear",
   context,
   environment,
 }) => {
-  const user = await environment.seedUser({ permissions: ownerPermissions });
+  const user = await environment.seedUser({ permissions: ownerPermissions, mfaRequired: true });
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: environment.origin });
   await login(page, environment, user);
   await page.getByLabel("Contraseña para configurar MFA", { exact: true }).fill(user.password);
@@ -87,7 +87,7 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
   browser,
   environment,
 }) => {
-  const owner = await environment.seedUser({ permissions: ownerPermissions, temporary: true });
+  const owner = await environment.seedUser({ permissions: ownerPermissions, temporary: true, mfaRequired: true });
   await login(page, environment, owner);
   await expect(page.getByRole("heading", { name: "Cambiar contraseña temporal" })).toBeVisible();
   expect(await page.evaluate(async () => (await fetch("/api/currency_rates")).status)).toBe(403);
@@ -103,13 +103,16 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
   await page.getByRole("textbox", { name: "Código de confirmación MFA" }).fill(await environment.token(secret));
   await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Administración de usuarios" })).toBeVisible();
+  const initialRole = await environment.seedUser();
+  const initialRoleId = (await environment.db("dmmarket_auth_user_roles").where("user_id", initialRole.id).first())
+    .role_id;
   const username = `created-${randomBytes(4).toString("hex")}`;
   await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
-  await page.getByRole("textbox", { name: "Usuario nuevo" }).fill(username);
-  await page.getByRole("textbox", { name: "Nombre visible" }).fill("Usuario sintético E2E");
-  await page.getByRole("textbox", { name: "Motivo del alta" }).fill("Alta de integración real");
+  await page.getByRole("textbox", { name: "Username" }).fill(username);
+  await page.getByRole("textbox", { name: "Nombre" }).fill("Usuario sintético E2E");
+  await page.getByLabel("Rol", { exact: true }).selectOption(initialRoleId);
   await page
-    .getByRole("dialog", { name: "Crear usuario", exact: true })
+    .getByRole("region", { name: "Crear usuario", exact: true })
     .getByRole("button", { name: "Crear usuario", exact: true })
     .click();
   const credential = page.getByRole("textbox", { name: "Contraseña temporal emitida" });
@@ -340,10 +343,10 @@ test("MFA de login y reautenticación se verifican antes de administrar", async 
     .whereNull("revoked_ms")
     .update({ password_ms: Date.now() - 300001 });
   await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
-  const panel = page.getByRole("dialog", { name: "Crear usuario", exact: true });
-  await panel.getByLabel("Usuario nuevo", { exact: true }).fill(`verified-${randomBytes(4).toString("hex")}`);
-  await panel.getByLabel("Nombre visible", { exact: true }).fill("Persona verificada");
-  await panel.getByLabel("Motivo del alta", { exact: true }).fill("Alta con verificación real");
+  const panel = page.getByRole("region", { name: "Crear usuario", exact: true });
+  await panel.getByLabel("Username", { exact: true }).fill(`verified-${randomBytes(4).toString("hex")}`);
+  await panel.getByLabel("Nombre", { exact: true }).fill("Persona verificada");
+  await panel.getByLabel("Rol", { exact: true }).selectOption({ index: 1 });
   await panel.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await page.getByRole("textbox", { name: "Contraseña de reautenticación" }).fill(user.password);
   await page.getByRole("textbox", { name: "Código MFA de reautenticación" }).fill(token);

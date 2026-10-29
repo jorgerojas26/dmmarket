@@ -127,7 +127,7 @@ test("editar rol compartido revoca a todos y audita actor y objetivo del servido
   expect(event.reason).toBe("Remove rates capability");
 });
 
-test("cambiar roles invalida la sesión y nueva capacidad privilegiada exige enrolamiento", async () => {
+test("cambiar roles invalida la sesión sin imponer MFA por capacidad privilegiada", async () => {
   const role = await createRole([{ capability: "cache.clear", scope: "global" }]);
   const user = await environment.seedUser();
   const reader = environment.client();
@@ -141,7 +141,7 @@ test("cambiar roles invalida la sesión y nueva capacidad privilegiada exige enr
     ).status,
   ).toBe(200);
   expect((await reader.request("/api/currency_rates")).status).toBe(401);
-  expect((await reader.login(user)).body.stage).toBe("mfa-enrollment");
+  expect((await reader.login(user)).body.stage).toBe("ready");
   expect((await reader.request("/api/currency_rates")).status).toBe(403);
 });
 

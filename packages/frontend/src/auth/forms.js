@@ -55,11 +55,16 @@ export function Field({
     minLength,
     maxLength,
     inputMode,
+    placeholder,
+    pattern,
+    autoCapitalize,
+    spellCheck,
+    className = 'my-3',
     required = true,
 }) {
     const id = `auth-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
     return (
-        <div className="my-3">
+        <div className={className}>
             <label className="form-label" htmlFor={id}>
                 {label}
             </label>
@@ -73,6 +78,10 @@ export function Field({
                 minLength={minLength}
                 maxLength={maxLength}
                 inputMode={inputMode}
+                placeholder={placeholder}
+                pattern={pattern}
+                autoCapitalize={autoCapitalize}
+                spellCheck={spellCheck}
                 required={required}
                 onChange={onChange ? (event) => onChange(event.target.value) : undefined}
             />
@@ -91,10 +100,7 @@ export function InitialAccountForm() {
                 await action('first-user', { displayName, username, password, confirmation });
             }}
         >
-            <p>
-                Bienvenido a DMMarket. Esta cuenta administrará el acceso. Después de crearla deberás configurar MFA
-                antes de continuar.
-            </p>
+            <p>Bienvenido a DMMarket. Esta cuenta administrará el acceso. Podrás activar MFA desde Mi cuenta.</p>
             <Field label="Nombre" name="displayName" maxLength={128} autoComplete="name" />
             <Field label="Usuario" name="username" maxLength={64} autoComplete="username" />
             <Field label="Contraseña" name="password" type="password" minLength={15} autoComplete="new-password" />
@@ -237,7 +243,7 @@ function ManualMfaConfiguration({ uri }) {
 }
 
 export function EnrollmentForm() {
-    const { action } = useAuth();
+    const { action, session } = useAuth();
     const [uri, setUri] = useState('');
     const [qr, setQr] = useState('');
     useEffect(() => {
@@ -262,7 +268,12 @@ export function EnrollmentForm() {
                     setUri(data.uri);
                 }}
             >
-                <p>Tu acceso requiere MFA. Confirma tu contraseña para generar una configuración nueva.</p>
+                <p>
+                    {session.mfaRequired
+                        ? 'Tu cuenta requiere MFA.'
+                        : 'Activa un segundo factor para proteger tu cuenta.'}{' '}
+                    Confirma tu contraseña.
+                </p>
                 <Field
                     label="Contraseña para configurar MFA"
                     name="password"
@@ -304,13 +315,38 @@ export function EnrollmentForm() {
     );
 }
 
+export function DisableMfaForm() {
+    const { action } = useAuth();
+    return (
+        <AccessForm
+            title="Desactivar MFA"
+            button="Confirmar desactivación"
+            onSubmit={({ password, token }) => action('mfa/disable', { password, token })}
+        >
+            <Field
+                label="Contraseña para desactivar MFA"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+            />
+            <Field
+                label="Código MFA para desactivar"
+                name="token"
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+            />
+        </AccessForm>
+    );
+}
+
 export function ReauthenticationForm({
     title = 'Confirmar identidad para administrar acceso',
     onConfirmed,
     embedded = false,
-    description = 'Las acciones de acceso exigen contraseña y MFA comprobados en los últimos cinco minutos.',
+    description = 'Confirma tu identidad para continuar.',
 } = {}) {
-    const { action } = useAuth();
+    const { action, session } = useAuth();
     const [confirmed, setConfirmed] = useState(false);
     return (
         <AccessForm
@@ -331,13 +367,15 @@ export function ReauthenticationForm({
                 type="password"
                 autoComplete="current-password"
             />
-            <Field
-                label="Código MFA de reautenticación"
-                name="token"
-                maxLength={6}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-            />
+            {session.mfaEnabled && (
+                <Field
+                    label="Código MFA de reautenticación"
+                    name="token"
+                    maxLength={6}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                />
+            )}
             {confirmed && <p role="status">Identidad confirmada.</p>}
         </AccessForm>
     );

@@ -8,7 +8,7 @@ const { createSessionService } = backend("./auth/sessions");
 const { createAttemptLimiter } = backend("./auth/attempts");
 let environment;
 const expected = {
-  Dirección: [
+  Administrador: [
     "sales.read",
     "sales.financial",
     "sales.export",
@@ -37,21 +37,8 @@ const expected = {
     "access.roles",
     "access.links",
   ],
-  "Administración técnica": [
-    "access.users",
-    "access.roles",
-    "access.links",
-    "access.recover",
-    "rates.read",
-    "rates.sync",
-    "backups.read",
-    "backups.create",
-    "updates.read",
-    "updates.execute",
-    "cache.clear",
-    "audit.read",
-  ],
-  "Consulta operativa": ["sales.read", "inventory.read"],
+  Superusuario: Object.keys(CAPABILITIES),
+  Consultor: ["sales.read", "inventory.read"],
   Cobranza: ["receivables.read", "receivables.payment"],
 };
 async function roles() {
@@ -67,6 +54,7 @@ async function grants(id) {
 async function matrix() {
   const rows = await roles();
   expect(rows).toHaveLength(4);
+  expect(rows.map((row) => row.name).sort()).toEqual(Object.keys(expected).sort());
   for (const row of rows)
     expect(await grants(row.id)).toEqual(
       expected[row.name]
@@ -111,11 +99,11 @@ test("seed crea exactamente los cuatro roles acordados sin cuentas, credenciales
   );
 });
 
-test("permisos son grupos ordinarios, Dirección no recibe técnicos y Operativa es global sin finanzas", async () => {
+test("Administrador no recibe técnicos, Consultor no recibe finanzas y Superusuario tiene todo", async () => {
   await seed(environment.db);
   const rows = await roles();
   const access = async (name) => createAccess(await grants(rows.find((row) => row.name === name).id), []);
-  const direction = await access("Dirección");
+  const direction = await access("Administrador");
   for (const cap of [
     "access.users",
     "access.roles",
@@ -138,11 +126,9 @@ test("permisos son grupos ordinarios, Dirección no recibe técnicos y Operativa
     "commissions.update",
   ])
     expect(direction.hasGlobal(cap)).toBe(false);
-  const technical = await access("Administración técnica");
-  expect(technical.hasGlobal("access.recover")).toBe(true);
-  expect(technical.hasGlobal("sales.read")).toBe(false);
-  expect(technical.hasGlobal("sales.financial")).toBe(false);
-  const operational = await access("Consulta operativa");
+  const superuser = await access("Superusuario");
+  for (const capability of Object.keys(CAPABILITIES)) expect(superuser.hasGlobal(capability)).toBe(true);
+  const operational = await access("Consultor");
   expect(operational.canRecord("sales.read", "B")).toBe(true);
   expect(operational.hasGlobal("sales.financial")).toBe(false);
   expect(operational.hasGlobal("sales.export")).toBe(false);
@@ -156,9 +142,9 @@ test("permisos son grupos ordinarios, Dirección no recibe técnicos y Operativa
 test("repetir seed preserva IDs, nombres personalizados y permisos vaciados o modificados", async () => {
   await seed(environment.db);
   const rows = await roles(),
-    id = rows.find((row) => row.name === "Dirección").id,
+    id = rows.find((row) => row.name === "Administrador").id,
     empty = rows.find((row) => row.name === "Cobranza").id;
-  await environment.db("dmmarket_auth_roles").where("id", id).update({ name: "Dirección personalizada" });
+  await environment.db("dmmarket_auth_roles").where("id", id).update({ name: "Administrador personalizada" });
   await environment.db("dmmarket_auth_role_permissions").whereIn("role_id", [id, empty]).delete();
   await environment
     .db("dmmarket_auth_role_permissions")
@@ -185,7 +171,7 @@ test("usuarios, sesiones y asignaciones existentes no se modifican al instalar n
   await sessions.login({ sid, username: user.username, password: user.password }, "127.0.0.1");
   const before = await environment.db("dmmarket_auth_users").where("id", user.id).first();
   await seed(environment.db);
-  const operator = (await roles()).find((role) => role.name === "Consulta operativa");
+  const operator = (await roles()).find((role) => role.name === "Consultor");
   await environment.db("dmmarket_auth_user_roles").insert({ user_id: user.id, role_id: operator.id });
   await seed(environment.db);
   expect(await environment.db("dmmarket_auth_users").where("id", user.id).first()).toEqual(before);
@@ -325,8 +311,9 @@ test("bootstrap inicial explícito concede todo el catálogo sin modificar los r
       .sort()
       .map((capability) => ({ capability, scope: "global" })),
   );
-  const technical = await environment.db("dmmarket_auth_roles").where("name", "Administración técnica").first();
+  const superuser = await environment.db("dmmarket_auth_roles").where("name", "Superusuario").first();
   expect(
-    await environment.db("dmmarket_auth_user_roles").where({ user_id: account.id, role_id: technical.id }),
-  ).toHaveLength(0);
+    await environment.db("dmmarket_auth_user_roles").where({ user_id: account.id, role_id: superuser.id }),
+  ).toHaveLength(1);
+  await matrix();
 });

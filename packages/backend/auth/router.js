@@ -16,6 +16,7 @@ function sessionView(context) {
     stage: context.stage,
     revision: context.revision,
     mfaEnabled: context.mfaEnabled,
+    mfaRequired: context.mfaRequired,
     permissions: Object.keys(CAPABILITIES).flatMap((capability) => {
       const scope = context.access.scopeFor(capability);
       if (scope.global) return [{ capability, scope: "global" }];
@@ -131,6 +132,18 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
       const context = await sessions.finishMfaEnrollment(
         req.sessionID,
         { token: req.body.token, newSid: sid },
+        source(req),
+      );
+      await respond(req, res, context, sid);
+    }),
+  );
+  router.post(
+    "/mfa/disable",
+    handler(async (req, res) => {
+      const sid = newSessionId();
+      const context = await sessions.disableMfa(
+        req.sessionID,
+        { password: req.body.password, token: req.body.token, newSid: sid },
         source(req),
       );
       await respond(req, res, context, sid);
@@ -263,6 +276,7 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
           username: req.body.username,
           displayName: req.body.displayName,
           roleIds: req.body.roleIds,
+          mfaRequired: req.body.mfaRequired,
           reason: req.body.reason,
         }),
       ),

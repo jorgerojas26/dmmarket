@@ -725,3 +725,120 @@
         transition: none;
     }
 }
+
+.access-create-user {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 8px 0 40px;
+}
+
+.access-create-user .access-header {
+    margin-bottom: 36px;
+}
+
+.access-create-user .access-header h2 {
+    font-size: clamp(28px, 3vw, 36px);
+    font-weight: 600;
+    letter-spacing: -1px;
+}
+
+.access-create-form .form-label {
+    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.access-create-form .form-control,
+.access-create-form .form-select {
+    min-height: 48px;
+    border-radius: 9px;
+    background-color: #1b1e23;
+}
+
+.access-create-field {
+    margin: 0 0 28px;
+}
+
+.access-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    margin: 0 0 16px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #a9cfff;
+    font-size: 13px;
+}
+
+.access-back:hover {
+    color: #fff;
+}
+
+.access-create-fields {
+    padding: 0;
+}
+
+.access-create-form .access-form-actions {
+    margin: 0;
+    padding: 28px 0 0;
+    border-top: 1px solid #353b44;
+    background: transparent;
+}
+
+.access-create-form .access-form-actions .btn {
+    min-height: 44px;
+    padding-right: 24px;
+    padding-left: 24px;
+}
+
+.access-create-form .access-form-actions .btn-outline-light {
+    border-color: transparent;
+    color: #a3adbb;
+}
+
+.access-create-form .access-error {
+    margin: 20px 0;
+}
+
+.access-role-preview summary {
+    color: #a9cfff;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.access-role-preview ul {
+    margin: 16px 0 0;
+    padding-left: 20px;
+}
+
+.access-role-preview li + li {
+    margin-top: 8px;
+}
+
+@media (max-width: 575.98px) {
+    .access-create-user {
+        padding-top: 0;
+    }
+
+    .access-create-user .access-header {
+        margin-bottom: 28px;
+    }
+}
+
+.access-mfa-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    margin: 24px 0;
+    color: #d6dce5;
+    cursor: pointer;
+}
+
+.access-mfa-option input {
+    width: 18px;
+    height: 18px;
+    accent-color: #3b82f6;
+}

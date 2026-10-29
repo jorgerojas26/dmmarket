@@ -41,7 +41,7 @@ test("directorio filtra en servidor, pagina y muestra roles sin formularios perm
   await page.reload();
   await expect(page.locator(".clients-sidebar")).toBeVisible();
   await expect(page.getByLabel("Contraseña de reautenticación", { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Usuario nuevo", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Username", { exact: true })).toHaveCount(0);
   await page.getByLabel("Buscar usuarios", { exact: true }).fill("directorio-");
   await expect(page.getByText("1–100 de 105", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Página siguiente", exact: true }).click();
@@ -71,17 +71,34 @@ test("directorio filtra en servidor, pagina y muestra roles sin formularios perm
   await environment.db("dmmarket_auth_roles").where("id", roleId).delete();
 });
 
-test("alta contextual protege borradores y muestra la credencial una sola vez", async ({ page, environment }) => {
+test("alta en pantalla propia protege borradores y muestra la credencial una sola vez", async ({
+  page,
+  environment,
+}) => {
   await enter(page, environment);
+  const initialRole = await environment.seedUser();
+  const initialRoleId = (await environment.db("dmmarket_auth_user_roles").where("user_id", initialRole.id).first())
+    .role_id;
   await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
-  const panel = page.getByRole("dialog", { name: "Crear usuario", exact: true });
-  await panel.getByLabel("Usuario nuevo", { exact: true }).fill("nuevo-contextual");
-  await panel.getByRole("button", { name: "Cerrar", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Crear usuario", exact: true });
+  await expect(page).toHaveURL(/#nuevo-usuario$/);
+  await expect(page.getByRole("dialog", { name: "Crear usuario", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Buscar usuarios", { exact: true })).toHaveCount(0);
+  await expect(panel.getByLabel("Motivo del alta", { exact: true })).toHaveCount(0);
+  await expect(panel.locator("aside")).toHaveCount(0);
+  await expect(panel.locator(".access-card")).toHaveCount(0);
+  await expect(panel.getByLabel("Rol", { exact: true })).toHaveAttribute("required", "");
+  await expect(panel.getByLabel("Rol", { exact: true })).toHaveValue("");
+  await expect(panel.getByRole("option", { name: /Sin rol|Sin permisos/ })).toHaveCount(0);
+  await expect(panel.getByLabel("Nombre", { exact: true })).toHaveAttribute("placeholder", "Ana Pérez");
+  await expect(panel.getByLabel("Username", { exact: true })).toHaveAttribute("placeholder", "ana.perez");
+  await panel.getByLabel("Username", { exact: true }).fill("nuevo-contextual");
+  await panel.getByRole("button", { name: "Volver a usuarios", exact: true }).click();
   const discard = page.getByRole("dialog", { name: "¿Descartar los cambios?", exact: true });
   await discard.getByRole("button", { name: "Seguir editando", exact: true }).click();
-  await expect(panel.getByLabel("Usuario nuevo", { exact: true })).toHaveValue("nuevo-contextual");
-  await panel.getByLabel("Nombre visible", { exact: true }).fill("Nueva persona");
-  await panel.getByLabel("Motivo del alta", { exact: true }).fill("Alta asistida desde el directorio");
+  await expect(panel.getByLabel("Username", { exact: true })).toHaveValue("nuevo-contextual");
+  await panel.getByLabel("Nombre", { exact: true }).fill("Nueva persona");
+  await panel.getByLabel("Rol", { exact: true }).selectOption(initialRoleId);
   await panel.getByRole("button", { name: "Crear usuario", exact: true }).click();
   const credential = page.getByRole("dialog", { name: "Credencial temporal", exact: true });
   await expect(credential).toContainText("nuevo-contextual");
@@ -94,6 +111,34 @@ test("alta contextual protege borradores y muestra la credencial una sola vez", 
   await credential.getByRole("button", { name: "Cerrar credencial temporal", exact: true }).click();
   await openUser(page, "nuevo-contextual");
   await expect(page.getByLabel("Contraseña temporal emitida", { exact: true })).toHaveCount(0);
+});
+
+test("alta explica permisos reales, conserva datos ante errores y funciona con navegación directa", async ({
+  page,
+  environment,
+}) => {
+  const owner = await enter(page, environment);
+  const roleId = randomUUID();
+  await environment.db("dmmarket_auth_roles").insert({ id: roleId, name: "Consulta personalizada" });
+  await environment
+    .db("dmmarket_auth_role_permissions")
+    .insert({ role_id: roleId, capability: "sales.read", scope: "assigned" });
+  await page.goto(`${environment.origin}/acceso#nuevo-usuario`);
+  const screen = page.getByRole("region", { name: "Crear usuario", exact: true });
+  await expect(screen.getByRole("heading", { name: "Crear usuario", exact: true })).toBeFocused();
+  await screen.getByLabel("Nombre", { exact: true }).fill("Ana Pérez");
+  await screen.getByLabel("Username", { exact: true }).fill(owner.username);
+  await screen.getByLabel("Rol", { exact: true }).selectOption(roleId);
+  await expect(screen.getByRole("region", { name: "Permisos del rol", exact: true })).toContainText("Consultar ventas");
+  await expect(screen).toContainText("Vendedores vinculados");
+  await screen.getByRole("button", { name: "Crear usuario", exact: true }).click();
+  await expect(screen.getByRole("alert")).toBeVisible();
+  await expect(screen.getByLabel("Nombre", { exact: true })).toHaveValue("Ana Pérez");
+  await expect(screen.getByLabel("Rol", { exact: true })).toHaveValue(roleId);
+  await screen.getByLabel("Username", { exact: true }).fill(`alta-${randomUUID().slice(0, 8)}`);
+  await screen.getByRole("button", { name: "Crear usuario", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Credencial temporal", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/#usuarios$/);
 });
 
 test("roles usan lenguaje humano, conservan cambios y persisten alcances", async ({ page, environment }) => {
@@ -134,6 +179,7 @@ test("verificación contextual conserva el alta, permite cancelar y reintenta so
   environment,
 }) => {
   const owner = await enter(page, environment);
+  const initialRoleId = (await environment.db("dmmarket_auth_user_roles").where("user_id", owner.id).first()).role_id;
   const expire = () =>
     environment
       .db("dmmarket_auth_session_state")
@@ -142,15 +188,15 @@ test("verificación contextual conserva el alta, permite cancelar y reintenta so
       .update({ password_ms: Date.now() - 300001, mfa_ms: Date.now() - 300001 });
   await expire();
   await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
-  const panel = page.getByRole("dialog", { name: "Crear usuario", exact: true });
-  await panel.getByLabel("Usuario nuevo", { exact: true }).fill("alta-verificada");
-  await panel.getByLabel("Nombre visible", { exact: true }).fill("Persona verificada");
-  await panel.getByLabel("Motivo del alta", { exact: true }).fill("Verificación contextual de identidad");
+  const panel = page.getByRole("region", { name: "Crear usuario", exact: true });
+  await panel.getByLabel("Username", { exact: true }).fill("alta-verificada");
+  await panel.getByLabel("Nombre", { exact: true }).fill("Persona verificada");
+  await panel.getByLabel("Rol", { exact: true }).selectOption(initialRoleId);
   await panel.getByRole("button", { name: "Crear usuario", exact: true }).click();
   const verification = page.getByRole("dialog", { name: "Confirmar identidad", exact: true });
   await expect(verification).toBeVisible();
   await verification.getByRole("button", { name: "Cerrar", exact: true }).click();
-  await expect(panel.getByLabel("Usuario nuevo", { exact: true })).toHaveValue("alta-verificada");
+  await expect(panel.getByLabel("Username", { exact: true })).toHaveValue("alta-verificada");
   expect(await environment.db("dmmarket_auth_users").where("username", "alta-verificada")).toHaveLength(0);
   await panel.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await verification.getByLabel("Contraseña de reautenticación", { exact: true }).fill("incorrecta");
@@ -241,10 +287,10 @@ test("Acceso móvil mantiene navegación, paneles y permisos sin desbordar", asy
   await enter(page, environment);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
-  const panel = page.getByRole("dialog", { name: "Crear usuario", exact: true });
-  await expect(panel.getByLabel("Usuario nuevo", { exact: true })).toBeVisible();
+  const panel = page.getByRole("region", { name: "Crear usuario", exact: true });
+  await expect(panel.getByLabel("Username", { exact: true })).toBeVisible();
   await expect.poll(() => panel.evaluate((element) => element.scrollWidth <= innerWidth)).toBe(true);
-  await panel.getByRole("button", { name: "Cerrar", exact: true }).click();
+  await panel.getByRole("button", { name: "Volver a usuarios", exact: true }).click();
   await page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true }).click();
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   await expect(page.getByLabel("Consultar ventas", { exact: true })).toBeVisible();

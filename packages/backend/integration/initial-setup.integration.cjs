@@ -94,12 +94,12 @@ test("proxy TLS que identifica cliente LAN impide alta incluso con cabeceras loc
   }
 });
 
-test("primera cuenta es superusuario global con contraseña elegida, SID nuevo y MFA obligatorio", async () => {
+test("primera cuenta es superusuario global con contraseña elegida, SID nuevo y MFA opcional", async () => {
   const client = await initialize();
   const cookie = client.jar.cookie;
   const { input, response } = await create(client);
   expect(response.status).toBe(200);
-  expect(response.body.stage).toBe("mfa-enrollment");
+  expect(response.body.stage).toBe("ready");
   expect(client.jar.cookie).not.toBe(cookie);
   const user = await environment.db("dmmarket_auth_users").first();
   expect(user.must_change_password).toBe(0);
@@ -118,8 +118,8 @@ test("primera cuenta es superusuario global con contraseña elegida, SID nuevo y
     .where("ur.user_id", user.id)
     .first("r.name");
   expect(role.name).toBe("Superusuario");
-  expect((await client.request("/api/currency_rates")).status).toBe(403);
-  expect((await client.request("/api/auth/users")).status).toBe(403);
+  expect((await client.request("/api/currency_rates")).status).toBe(200);
+  expect((await client.request("/api/auth/users")).status).toBe(200);
   expect((await environment.db("dmmarket_auth_control").first()).first_setup).toBe("closed");
   expect(
     await environment.db("dmmarket_auth_events").where("action", "auth.initial_administrator_created"),
@@ -174,13 +174,13 @@ test("dos sesiones concurrentes sólo pueden crear un administrador inicial", as
   ).toHaveLength(1);
 });
 
-test("interrumpir MFA permite volver con la misma contraseña y no abre otra alta", async () => {
+test("MFA voluntario se configura tras volver con la misma contraseña sin abrir otra alta", async () => {
   const client = await initialize();
   const { input } = await create(client);
   await client.request("/api/auth/logout", { method: "POST", body: {} });
   expect((await client.request("/api/auth/session")).body.stage).toBe("anonymous");
   expect((await create(client)).response.status).toBe(409);
-  expect((await client.login(input)).body.stage).toBe("mfa-enrollment");
+  expect((await client.login(input)).body.stage).toBe("ready");
   const enrollment = await client.request("/api/auth/mfa/enrollment", {
     method: "POST",
     body: { password: input.password },
@@ -198,13 +198,13 @@ test("interrumpir MFA permite volver con la misma contraseña y no abre otra alt
   expect(session.body.permissions.every((grant) => grant.scope === "global")).toBe(true);
 });
 
-test("reinicio real conserva cierre y sesión MFA pendiente", async () => {
+test("reinicio real conserva cierre y sesión lista sin MFA", async () => {
   const client = await initialize();
   await create(client);
   environment.server.kill("SIGTERM");
   await once(environment.server, "exit");
   await environment.restartServer();
-  expect((await client.request("/api/auth/session")).body.stage).toBe("mfa-enrollment");
+  expect((await client.request("/api/auth/session")).body.stage).toBe("ready");
   const other = environment.client();
   expect((await other.request("/api/auth/session")).body.stage).toBe("anonymous");
 });

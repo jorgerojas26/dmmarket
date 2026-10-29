@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Dropdown from 'react-bootstrap/Dropdown';
 import { createPortal } from 'react-dom';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { Assignments } from './access-editor';
+import { permissionGroups } from './access-permissions';
 import { AccessDialog, LoadState, ManagementForm, Pagination, useDiscardChanges } from './access-ui';
 import { useAuth } from './context';
 import { Field } from './forms';
@@ -11,75 +12,137 @@ import { authRequest } from './transport';
 
 function CreateUser({ onClose, onCreated, onDirtyChange }) {
     const { can } = useAuth();
+    const heading = useRef(null);
     const [username, setUsername] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [roleId, setRoleId] = useState('');
-    const [reason, setReason] = useState('');
+    const [mfaRequired, setMfaRequired] = useState(false);
     const [busy, setBusy] = useState(false);
     const { data: roles, error, mutate } = useSWR(can('access.roles') ? '/api/auth/roles' : null, fetcher);
-    const dirty = Boolean(username || displayName || roleId || reason);
-    const { requestClose, confirmation } = useDiscardChanges(dirty);
+    const role = useSWR(roleId ? `/api/auth/roles/${roleId}` : null, fetcher);
+    const dirty = Boolean(username || displayName || roleId || mfaRequired);
+    useEffect(() => {
+        heading.current?.focus();
+    }, []);
     useEffect(() => {
         onDirtyChange(dirty);
         return () => onDirtyChange(false);
     }, [dirty, onDirtyChange]);
-    const close = () => requestClose(onClose);
     return (
-        <>
-            <AccessDialog title="Crear usuario" panel onClose={close} busy={busy}>
-                <p className="access-muted">
-                    La cuenta recibirá una contraseña temporal para completar su primer ingreso.
-                </p>
+        <section className="access-create-user" aria-labelledby="create-user-title">
+            <button type="button" className="access-back" onClick={onClose} disabled={busy}>
+                <span aria-hidden="true">←</span> Volver a usuarios
+            </button>
+            <header className="access-header">
+                <h2 id="create-user-title" ref={heading} tabIndex={-1}>
+                    Crear usuario
+                </h2>
+            </header>
+            <div className="access-create-form">
                 <ManagementForm
                     button="Crear usuario"
                     onBusyChange={setBusy}
-                    onCancel={close}
-                    disabled={can('access.roles') && !roles}
+                    onCancel={onClose}
+                    disabled={Boolean(!roleId || !roles || error || !role.data || role.error)}
                     onSubmit={async () =>
                         onCreated(
                             await authRequest('users', {
                                 username,
                                 displayName,
-                                roleIds: roleId ? [roleId] : [],
-                                reason,
+                                roleIds: [roleId],
+                                mfaRequired,
                             }),
                         )
                     }
                 >
-                    <Field
-                        label="Usuario nuevo"
-                        value={username}
-                        onChange={setUsername}
-                        autoComplete="off"
-                        maxLength={64}
-                    />
-                    <Field label="Nombre visible" value={displayName} onChange={setDisplayName} maxLength={128} />
-                    {can('access.roles') && (
+                    <div className="access-create-fields">
+                        <Field
+                            label="Nombre"
+                            className="access-create-field"
+                            name="displayName"
+                            value={displayName}
+                            onChange={setDisplayName}
+                            autoComplete="off"
+                            maxLength={128}
+                            placeholder="Ana Pérez"
+                        />
+                        <Field
+                            label="Username"
+                            className="access-create-field"
+                            name="username"
+                            value={username}
+                            onChange={setUsername}
+                            autoComplete="off"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            maxLength={64}
+                            pattern={'[a-zA-Z0-9._\\-]+'}
+                            placeholder="ana.perez"
+                        />
                         <LoadState error={error} loading={!roles} onRetry={mutate}>
-                            <label className="form-label" htmlFor="initial-role">
-                                Rol inicial
-                            </label>
-                            <select
-                                id="initial-role"
-                                className="form-select"
-                                value={roleId}
-                                onChange={(event) => setRoleId(event.target.value)}
-                            >
-                                <option value="">Sin permisos de negocio</option>
-                                {roles?.data.map((role) => (
-                                    <option key={role.id} value={role.id}>
-                                        {role.name}
+                            <div className="access-create-field">
+                                <label className="form-label" htmlFor="initial-role">
+                                    Rol
+                                </label>
+                                <select
+                                    id="initial-role"
+                                    name="roleId"
+                                    className="form-select"
+                                    value={roleId}
+                                    required
+                                    onChange={(event) => setRoleId(event.target.value)}
+                                >
+                                    <option value="" disabled>
+                                        Selecciona un rol
                                     </option>
-                                ))}
-                            </select>
-                            <p className="access-muted">Podrás asignar más roles y vincular vendedores después.</p>
+                                    {roles?.data.map((item) => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            {roleId && (
+                                <LoadState error={role.error} loading={!role.data} onRetry={role.mutate}>
+                                    <section className="access-role-preview" aria-label="Permisos del rol">
+                                        <details key={roleId}>
+                                            <summary>Ver permisos ({role.data?.permissions.length || 0})</summary>
+                                            <ul>
+                                                {permissionGroups.flatMap(([, items]) =>
+                                                    items.flatMap(([key, label]) =>
+                                                        (role.data?.permissions || [])
+                                                            .filter((grant) => grant.capability === key)
+                                                            .map((grant) => (
+                                                                <li key={`${key}:${grant.scope}`}>
+                                                                    {label}{' '}
+                                                                    <span className="access-muted">
+                                                                        ·{' '}
+                                                                        {grant.scope === 'assigned'
+                                                                            ? 'Vendedores vinculados'
+                                                                            : 'Todos los datos'}
+                                                                    </span>
+                                                                </li>
+                                                            )),
+                                                    ),
+                                                )}
+                                            </ul>
+                                        </details>
+                                    </section>
+                                </LoadState>
+                            )}
                         </LoadState>
-                    )}
-                    <Field label="Motivo del alta" value={reason} onChange={setReason} minLength={5} maxLength={64} />
+                        <label className="access-mfa-option">
+                            <input
+                                type="checkbox"
+                                checked={mfaRequired}
+                                onChange={(event) => setMfaRequired(event.target.checked)}
+                            />
+                            <span>Exigir MFA</span>
+                        </label>
+                    </div>
                 </ManagementForm>
-            </AccessDialog>
-            {confirmation}
-        </>
+            </div>
+        </section>
     );
 }
 
@@ -288,12 +351,11 @@ function UserPanel({ user, onClose, onDone, onDirtyChange }) {
     );
 }
 
-export default function Users({ onDirtyChange }) {
+export default function Users({ onDirtyChange, creating, onCreate, onCancelCreate, onCreated }) {
     const { can, session } = useAuth();
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
     const [state, setState] = useState('all');
-    const [creating, setCreating] = useState(false);
     const [operation, setOperation] = useState(null);
     const [selected, setSelected] = useState(null);
     const [credential, setCredential] = useState(null);
@@ -303,7 +365,7 @@ export default function Users({ onDirtyChange }) {
         fetcher,
     );
     const done = async (result) => {
-        setCreating(false);
+        if (creating) onCreated();
         setSelected(null);
         setOperation(null);
         if (result.temporaryPassword) {
@@ -321,19 +383,20 @@ export default function Users({ onDirtyChange }) {
         }
         await mutate();
     };
+    if (creating) return <CreateUser onClose={onCancelCreate} onCreated={done} onDirtyChange={onDirtyChange} />;
     return (
         <>
             <header className="access-header">
                 <div>
                     <h2>Administración de usuarios</h2>
                 </div>
-                {can('access.users') && (
+                {can('access.users') && can('access.roles') && (
                     <button
                         type="button"
                         className="btn btn-primary"
                         onClick={() => {
                             setMessage('');
-                            setCreating(true);
+                            onCreate();
                         }}
                     >
                         Crear usuario
@@ -508,9 +571,6 @@ export default function Users({ onDirtyChange }) {
                     {data && <Pagination page={page} total={data.total} onChange={setPage} />}
                 </LoadState>
             </div>
-            {creating && (
-                <CreateUser onClose={() => setCreating(false)} onCreated={done} onDirtyChange={onDirtyChange} />
-            )}
             {selected && (
                 <UserPanel
                     key={selected.id}

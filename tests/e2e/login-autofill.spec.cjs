@@ -77,7 +77,10 @@ test("el cambio de contraseña usa los valores autocompletados visibles", async 
 });
 
 test("el enrolamiento MFA usa la contraseña y el código autocompletados", async ({ page, environment }) => {
-  const user = await environment.seedUser({ permissions: [{ capability: "access.users", scope: "global" }] });
+  const user = await environment.seedUser({
+    permissions: [{ capability: "access.users", scope: "global" }],
+    mfaRequired: true,
+  });
   await login(page, environment, user);
   await autofill(page.getByLabel("Contraseña para configurar MFA", { exact: true }), user.password);
   const enrollment = await submit(page, "mfa/enrollment", "Generar configuración MFA", { password: user.password });
@@ -133,7 +136,7 @@ test("la reautenticación usa contraseña y MFA autocompletados sin reutilizar e
 }) => {
   const user = await environment.seedUser({
     enrolled: true,
-    permissions: [{ capability: "access.users", scope: "global" }],
+    permissions: ["access.users", "access.roles"].map((capability) => ({ capability, scope: "global" })),
   });
   await login(page, environment, user);
   const used = await environment.token(user.secret);
@@ -146,10 +149,10 @@ test("la reautenticación usa contraseña y MFA autocompletados sin reutilizar e
     .whereNull("revoked_ms")
     .update({ password_ms: Date.now() - 300001 });
   await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
-  const panel = page.getByRole("dialog", { name: "Crear usuario", exact: true });
-  await panel.getByLabel("Usuario nuevo", { exact: true }).fill("autofill-verified");
-  await panel.getByLabel("Nombre visible", { exact: true }).fill("Persona autofill");
-  await panel.getByLabel("Motivo del alta", { exact: true }).fill("Alta con identidad confirmada");
+  const panel = page.getByRole("region", { name: "Crear usuario", exact: true });
+  await panel.getByLabel("Username", { exact: true }).fill("autofill-verified");
+  await panel.getByLabel("Nombre", { exact: true }).fill("Persona autofill");
+  await panel.getByLabel("Rol", { exact: true }).selectOption({ index: 1 });
   await panel.getByRole("button", { name: "Crear usuario", exact: true }).click();
   let token;
   await expect

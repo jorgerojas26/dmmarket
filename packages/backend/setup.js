@@ -234,12 +234,12 @@ function createSetupApp({
       certificateAvailable: Boolean(ca),
       certificateFingerprint: ca?.fingerprint || null,
       bootstrapInstructions: identity.initialSetupPending
-        ? "Abre DMMarket por HTTPS desde el propio servidor para crear el primer administrador y completar MFA. No necesitas un código de activación ni una terminal."
+        ? "Abre DMMarket por HTTPS desde el propio servidor para crear el primer administrador. No necesitas un código de activación ni una terminal."
         : identity.firstAdministratorRequired === false
           ? identity.administratorReady
             ? "El administrador inicial ya está configurado. Abre DMMarket para iniciar sesión."
-            : "Ya existe una cuenta. Abre DMMarket e inicia sesión para completar MFA o los pasos pendientes; no necesitas crear otro administrador."
-          : "Desde una terminal administrativa en la carpeta permanente: detén el servicio de DMMarket, ejecuta el binario con --bootstrap-access --username admin-acceso --display-name Administrador --reason Inicializacion y vuelve a iniciar el servicio. La contraseña temporal sólo se entrega en esa terminal; cambia la contraseña y configura MFA desde el acceso HTTPS. Si ya existe una cuenta temporal, completa ese acceso en lugar de crear otra.",
+            : "Ya existe una cuenta. Abre DMMarket e inicia sesión para completar los pasos pendientes; no necesitas crear otro administrador."
+          : "Desde una terminal administrativa en la carpeta permanente: detén el servicio de DMMarket, ejecuta el binario con --bootstrap-access --username admin-acceso --display-name Administrador --reason Inicializacion y vuelve a iniciar el servicio. La contraseña temporal sólo se entrega en esa terminal; cambia la contraseña desde el acceso HTTPS. Si ya existe una cuenta temporal, completa ese acceso en lugar de crear otra.",
       startupError,
       urls,
       warnings: webEnabled(applied)
