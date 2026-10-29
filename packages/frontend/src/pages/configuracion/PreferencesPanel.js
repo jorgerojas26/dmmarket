@@ -21,30 +21,30 @@ export default function PreferencesPanel() {
         if (data && effective && data.revision !== effective.revision) void mutate();
     }, [data?.revision, effective?.revision, mutate]);
 
-    const save = async (event) => {
-        event.preventDefault();
-        if (!editable || !draft || saving) return;
+    const save = async (documentType) => {
+        if (!editable || saving || !data || documentType === data.documentType) return;
+        const selection = { documentType, revision: data.revision };
+        setDraft(selection);
         setSaving(true);
         setMessage('');
         setSaveError('');
         try {
-            const result = await runPrivileged(() => updatePreferences(draft));
+            const result = await runPrivileged(() => updatePreferences(selection));
             await mutate(result, false);
-            setDraft(null);
             setMessage('Preferencias guardadas. El cambio se aplica a todos los usuarios.');
             await refreshPreferences();
         } catch (failure) {
             if (failure.name === 'AbortError') return;
             if (failure.status === 409) {
-                setDraft(null);
                 await mutate();
                 setSaveError(
-                    'Otro administrador modificó las preferencias. Revisa el valor actual antes de volver a guardar.',
+                    'Otro administrador modificó las preferencias. Revisa el valor actual y vuelve a seleccionar la opción.',
                 );
             } else {
                 setSaveError(failure.message || 'No se pudieron guardar las preferencias.');
             }
         } finally {
+            setDraft(null);
             setSaving(false);
         }
     };
@@ -67,7 +67,7 @@ export default function PreferencesPanel() {
                 ) : !data ? (
                     <p role="status">Cargando preferencias…</p>
                 ) : (
-                    <form onSubmit={save}>
+                    <>
                         <div className="report-settings__row">
                             <div>
                                 <h2 id="system-document-label">Tipo de documento</h2>
@@ -90,11 +90,7 @@ export default function PreferencesPanel() {
                                             name="documentType"
                                             value={value}
                                             checked={selected === value}
-                                            onChange={() => {
-                                                setDraft({ documentType: value, revision: data.revision });
-                                                setMessage('');
-                                                setSaveError('');
-                                            }}
+                                            onChange={() => save(value)}
                                         />
                                         <span>
                                             <strong>{label}</strong>
@@ -103,21 +99,12 @@ export default function PreferencesPanel() {
                                 ))}
                             </fieldset>
                         </div>
-                        {editable && (
-                            <footer className="report-settings__footer">
-                                <button
-                                    className="btn btn-primary btn-sm"
-                                    type="submit"
-                                    disabled={saving || !draft || selected === data.documentType}
-                                >
-                                    {saving ? 'Guardando…' : 'Guardar cambios'}
-                                </button>
-                                {draft && selected !== data.documentType && <span>Cambios sin guardar</span>}
-                            </footer>
-                        )}
-                        {message && (
-                            <p role="status" className="report-settings__success">
-                                {message}
+                        {(saving || message) && (
+                            <p
+                                role="status"
+                                className={saving ? 'report-settings__status' : 'report-settings__success'}
+                            >
+                                {saving ? 'Guardando…' : message}
                             </p>
                         )}
                         {saveError && (
@@ -125,7 +112,7 @@ export default function PreferencesPanel() {
                                 {saveError}
                             </p>
                         )}
-                    </form>
+                    </>
                 )}
             </section>
             <ReportCurrencyPanel />

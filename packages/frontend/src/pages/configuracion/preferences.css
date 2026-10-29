@@ -1,7 +1,3 @@
-.report-settings__section + .report-settings__section {
-    margin-top: 36px;
-}
-
 .report-settings__row + .report-settings__note {
     margin-top: 20px;
 }
@@ -16,8 +12,12 @@
     font-size: 11px;
 }
 
+.report-settings .report-settings__status,
 .report-settings .report-settings__success {
     margin-top: 16px;
+}
+
+.report-settings .report-settings__success {
     color: #a1d7b4;
 }
 

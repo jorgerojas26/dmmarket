@@ -52,12 +52,11 @@ test("guardar actualiza todas las sesiones y persiste al recargar sin mezclar re
     await expect(total).toContainText("$100,00");
     await expect(viewer.getByRole("link", { name: "Configuración", exact: true })).toHaveCount(0);
     await loginEditor(page, environment);
-    await expect(page.getByRole("button", { name: "Guardar cambios", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Guardar (cambios|moneda)$/ })).toHaveCount(0);
     await page.getByText("Notas de entrega", { exact: true }).click();
-    expect((await environment.db("dmmarket_preferences").where("id", 1).first()).document_type).toBe("invoices");
-    await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Preferencias guardadas" })).toBeVisible();
     await expect(page.getByRole("radio", { name: "Notas de entrega", exact: true })).toBeChecked();
-    await expect(page.getByRole("button", { name: "Guardar cambios", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Guardar (cambios|moneda)$/ })).toHaveCount(0);
     await viewer.bringToFront();
     await viewer.evaluate(() => window.dispatchEvent(new Event("focus")));
     await expect(total).toContainText("$200,00", { timeout: 20000 });
@@ -85,24 +84,25 @@ for (const width of [390, 1280]) {
       await expect(group).toHaveCSS("display", "flex");
       await expect(group).toHaveCSS("border-radius", "10px");
     }
+    for (const row of await preferences.locator(".report-settings__row").all()) {
+      await expect(row).toHaveCSS("border-bottom-width", "0px");
+    }
     const currency = preferences.getByRole("region", { name: "Moneda del negocio", exact: true });
-    await currency.getByRole("radio", { name: "USD Dólares", exact: true }).focus();
+    await expect(currency).toHaveCSS("margin-top", "0px");
+    await expect(currency.getByText(/Dólares|Bolívares/)).toHaveCount(0);
+    await currency.getByRole("radio", { name: "USD", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
-    await expect(currency.getByRole("radio", { name: "Bs Bolívares", exact: true })).toBeChecked();
-    await expect(currency.getByText("Bs 1.234,56", { exact: true })).toBeVisible();
-    await expect(currency.getByText("Cambios sin guardar", { exact: true })).toBeVisible();
-    expect((await environment.db("dmmarket_settings").where("name", "reportCurrency").first()).value).toBe("USD");
-    await currency.getByRole("button", { name: "Guardar moneda", exact: true }).click();
+    await expect(currency.getByRole("radio", { name: "Bs", exact: true })).toBeChecked();
+    await expect(preferences.getByRole("button", { name: /^Guardar (cambios|moneda)$/ })).toHaveCount(0);
     await expect(currency.getByRole("status").filter({ hasText: "Moneda guardada" })).toBeVisible();
     await preferences.getByRole("radio", { name: "Facturas", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
     await expect(preferences.getByRole("radio", { name: "Notas de entrega", exact: true })).toBeChecked();
-    await expect(preferences.getByText("Cambios sin guardar", { exact: true })).toBeVisible();
-    await preferences.getByRole("button", { name: "Guardar cambios", exact: true }).click();
+
     await expect(preferences.getByRole("status").filter({ hasText: "Preferencias guardadas" })).toBeVisible();
     await page.reload();
     await expect(preferences.getByRole("radio", { name: "Notas de entrega", exact: true })).toBeChecked();
-    await expect(currency.getByRole("radio", { name: "Bs Bolívares", exact: true })).toBeChecked();
+    await expect(currency.getByRole("radio", { name: "Bs", exact: true })).toBeChecked();
     await expect(preferences.getByText("Cambios sin guardar", { exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await preferences.screenshot({ path: `/tmp/dmmarket-preferences-main-${width}.png` });
@@ -248,4 +248,145 @@ test("la carga de preferencias tampoco bloquea los módulos independientes", asy
     release();
     await page.unrouteAll({ behavior: "wait" });
   }
+});
+
+for (const preference of [
+  {
+    name: "documentos",
+    endpoint: "/api/preferences",
+    original: "Facturas",
+    choice: "Notas de entrega",
+    label: "Notas de entrega",
+    message: "Preferencias guardadas",
+    table: "dmmarket_preferences",
+    key: { id: 1 },
+    column: "document_type",
+    before: "invoices",
+    after: "delivery-notes",
+  },
+  {
+    name: "moneda",
+    endpoint: "/api/settings",
+    original: "USD",
+    choice: "Bs",
+    label: "Bs",
+    message: "Moneda guardada",
+    table: "dmmarket_settings",
+    key: { name: "reportCurrency" },
+    column: "value",
+    before: "USD",
+    after: "Bs",
+  },
+]) {
+  test(`autoguardado de ${preference.name} muestra progreso, revierte errores y permite reintentar`, async ({
+    page,
+    environment,
+  }) => {
+    let failing = true;
+    let attempts = 0;
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**${preference.endpoint}`, async (route) => {
+      if (route.request().method() !== "PUT") return route.continue();
+      attempts += 1;
+      if (!failing) return route.continue();
+      await pending;
+      return route.fulfill({ status: 503, json: { error: { message: "No se pudo guardar la selección." } } });
+    });
+    try {
+      await login(
+        page,
+        environment,
+        await environment.seedUser({ permissions: grants("preferences.read", "preferences.update") }),
+      );
+      await expect(page.getByRole("radio", { name: preference.original, exact: true })).toBeChecked();
+      await page.getByText(preference.label, { exact: true }).click();
+      await expect(page.getByRole("status").filter({ hasText: /^Guardando…$/ })).toBeVisible();
+      await expect(page.getByRole("radio", { name: preference.choice, exact: true })).toBeChecked();
+      await expect(page.getByRole("radio", { name: preference.choice, exact: true })).toBeDisabled();
+      await expect.poll(() => attempts).toBe(1);
+      release();
+      await expect(page.getByRole("alert").filter({ hasText: "No se pudo guardar la selección." })).toBeVisible();
+      await expect(page.getByRole("radio", { name: preference.original, exact: true })).toBeChecked();
+      await expect(page.getByRole("radio", { name: preference.choice, exact: true })).toBeEnabled();
+      expect((await environment.db(preference.table).where(preference.key).first())[preference.column]).toBe(
+        preference.before,
+      );
+      failing = false;
+      await page.getByText(preference.label, { exact: true }).click();
+      await expect(page.getByRole("status").filter({ hasText: preference.message })).toBeVisible();
+      expect((await environment.db(preference.table).where(preference.key).first())[preference.column]).toBe(
+        preference.after,
+      );
+      expect(attempts).toBe(2);
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: "wait" });
+    }
+  });
+
+  test(`autoguardado de ${preference.name} respeta la confirmación de identidad y su cancelación`, async ({
+    page,
+    environment,
+  }) => {
+    const user = await environment.seedUser({ permissions: grants("preferences.read", "preferences.update") });
+    await login(page, environment, user);
+    await expect(page.getByRole("radio", { name: preference.original, exact: true })).toBeChecked();
+    await environment
+      .db("dmmarket_auth_session_state")
+      .where("user_id", user.id)
+      .whereNull("revoked_ms")
+      .update({ password_ms: Date.now() - 300001 });
+    await page.getByText(preference.label, { exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "Confirmar identidad", exact: true });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole("button", { name: "Cerrar", exact: true }).click();
+    await expect(page.getByRole("radio", { name: preference.original, exact: true })).toBeChecked();
+    await expect(page.getByRole("radio", { name: preference.choice, exact: true })).toBeEnabled();
+    expect((await environment.db(preference.table).where(preference.key).first())[preference.column]).toBe(
+      preference.before,
+    );
+    await page.getByText(preference.label, { exact: true }).click();
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByLabel("Contraseña de reautenticación", { exact: true }).fill(user.password);
+    await confirmation.getByRole("button", { name: "Confirmar identidad", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: preference.message })).toBeVisible();
+    expect((await environment.db(preference.table).where(preference.key).first())[preference.column]).toBe(
+      preference.after,
+    );
+  });
+}
+
+test("autoguardado de documentos recupera la revisión tras un conflicto sin sobrescribirla", async ({
+  page,
+  environment,
+}) => {
+  await login(
+    page,
+    environment,
+    await environment.seedUser({ permissions: grants("preferences.read", "preferences.update") }),
+  );
+  await expect(page.getByRole("radio", { name: "Facturas", exact: true })).toBeChecked();
+  await page.route("**/api/preferences", async (route) => {
+    if (route.request().method() === "PUT") {
+      await environment
+        .db("dmmarket_preferences")
+        .where("id", 1)
+        .update({ revision: environment.db.raw("revision + 1") });
+    }
+    await route.continue();
+  });
+  await page.getByText("Notas de entrega", { exact: true }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Otro administrador modificó las preferencias" }),
+  ).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Facturas", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Notas de entrega", exact: true })).toBeEnabled();
+  expect((await environment.db("dmmarket_preferences").where("id", 1).first()).document_type).toBe("invoices");
+  await page.unroute("**/api/preferences");
+  await page.getByText("Notas de entrega", { exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Preferencias guardadas" })).toBeVisible();
+  expect((await environment.db("dmmarket_preferences").where("id", 1).first()).document_type).toBe("delivery-notes");
 });
