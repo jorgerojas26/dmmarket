@@ -40,6 +40,7 @@ export const auditActivities = [
     {
         label: 'Operación del sistema',
         actions: {
+            'preferences.updated': 'Preferencias del sistema actualizadas',
             'rates.sync_requested': 'Consulta BCV solicitada',
             'rates.sync_completed': 'Consulta BCV finalizada',
             'rates.sync_failed': 'Consulta BCV fallida',

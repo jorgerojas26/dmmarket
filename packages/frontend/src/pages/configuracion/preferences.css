@@ -1,0 +1,141 @@
+.system-preferences {
+    max-width: 720px;
+}
+
+.system-preferences .dashboard-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.system-preferences-badge {
+    padding: 4px 9px;
+    border: 1px solid #454e5a;
+    border-radius: 6px;
+    color: #bac4d2;
+    font-size: 11px;
+}
+
+.system-preferences-body {
+    padding: 24px;
+    color: #d5dce6;
+}
+
+.system-preferences-intro {
+    margin: 0 0 28px;
+    color: #a7b0bd;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.system-preferences legend {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8edf4;
+}
+
+.system-preferences-description {
+    margin: 0 0 20px;
+    color: #a7b0bd;
+    font-size: 13px;
+    line-height: 1.7;
+    max-width: 530px;
+}
+
+.system-document-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.system-document-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 64px;
+    padding: 16px;
+    border: 1px solid #424b58;
+    border-radius: 9px;
+    background: #22272f;
+    color: #cbd4e1;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.system-document-option:hover {
+    border-color: #72839c;
+}
+
+.system-document-option.is-selected {
+    background: #26354a;
+    border-color: #6188bd;
+    color: #e0ebfb;
+}
+
+.system-document-option:focus-within {
+    outline: 2px solid #94bdff;
+    outline-offset: 3px;
+}
+
+.system-document-option input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: #8bb7ff;
+}
+
+.system-preferences fieldset:disabled .system-document-option {
+    cursor: default;
+}
+
+.system-preferences-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid #343c47;
+}
+
+.system-preferences-actions .btn {
+    min-height: 42px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.system-preferences-actions > span {
+    color: #a7b0bd;
+    font-size: 12px;
+}
+
+.system-preferences-success,
+.system-preferences-error {
+    margin: 20px 0 0;
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.system-preferences-success {
+    color: #a1d7b4;
+}
+
+.system-preferences-error {
+    color: #ffce99;
+}
+
+@media (max-width: 600px) {
+    .system-preferences-body {
+        padding: 20px;
+    }
+
+    .system-document-options {
+        grid-template-columns: 1fr;
+    }
+}

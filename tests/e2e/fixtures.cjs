@@ -14,6 +14,19 @@ const test = base.extend({
     },
     { scope: "worker" },
   ],
+  resetPreferences: [
+    async ({ environment }, use) => {
+      await environment
+        .db("dmmarket_preferences")
+        .where({ id: 1, document_type: "delivery-notes" })
+        .update({
+          document_type: "invoices",
+          revision: environment.db.raw("revision + 1"),
+        });
+      await use();
+    },
+    { auto: true },
+  ],
   browser: [
     async ({ environment }, use) => {
       const browser = await chromium.launch({
@@ -63,6 +76,9 @@ async function openModule(page, name, view) {
   }
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
   await navigation.waitFor({ state: "visible" });
+  await expect(
+    navigation.getByRole("button", { name: "Menú de cuenta", exact: true, includeHidden: true }),
+  ).toBeAttached();
   const link = navigation.getByRole("link", { name, exact: true });
   if (!(await link.isVisible())) {
     const toggle = navigation.getByRole("button", { name: "Abrir navegación", exact: true });
@@ -85,10 +101,50 @@ async function openModule(page, name, view) {
       .click();
 }
 
-async function setNoe(page, value) {
-  const toggle = page.getByRole("checkbox", { name: "Notas de entrega", exact: true });
-  if ((await toggle.isChecked()) !== value) await toggle.locator("..").click();
-  await expect(toggle).toBeChecked({ checked: value });
+async function setNoe(page, value, environment) {
+  const activeTab = page.locator(".report-tab-button.active");
+  const tab = (await activeTab.count()) ? await activeTab.elementHandle() : null;
+  const tabName = tab ? await tab.textContent() : null;
+  const documentType = value ? "delivery-notes" : "invoices";
+  const user = await environment.seedUser({
+    enrolled: true,
+    permissions: ["preferences.read", "preferences.update"].map((capability) => ({ capability, scope: "global" })),
+  });
+  const administrator = environment.client();
+  await administrator.login(user);
+  expect(
+    (
+      await administrator.request("/api/auth/mfa", {
+        method: "POST",
+        body: { token: await environment.token(user.secret) },
+      })
+    ).status,
+  ).toBe(200);
+  const current = await administrator.request("/api/preferences");
+  expect(current.status).toBe(200);
+  if (current.body.documentType !== documentType) {
+    expect(
+      (
+        await administrator.request("/api/preferences", {
+          method: "PUT",
+          body: { documentType, revision: current.body.revision },
+        })
+      ).status,
+    ).toBe(200);
+  }
+  const refreshed = page.waitForResponse(
+    async (response) =>
+      new URL(response.url()).pathname === "/api/preferences/effective" &&
+      response.status() === 200 &&
+      (await response.json()).documentType === documentType,
+    { timeout: 20000 },
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await refreshed;
+  if (tab && tabName && current.body.documentType !== documentType) {
+    await expect.poll(() => tab.evaluate((element) => element.isConnected)).toBe(false);
+    await page.locator(".report-tab-nav").getByRole("button", { name: tabName.trim(), exact: true }).click();
+  }
 }
 async function setCalendarMonth(page, scope, year, month) {
   await scope.locator(".date-range-trigger").click();

@@ -20,6 +20,8 @@
     "prepare:caddy": "bun scripts/prepare-caddy.mjs",
     "test:caddy": "bun scripts/test-caddy.mjs",
     "test:dev:https": "bun scripts/test-dev-https.mjs",
+    "test:dev:processes": "bun scripts/test-dev-processes.mjs",
+    "test:dev:proxy": "bun scripts/test-dev-proxy.mjs",
     "build:installer:linux": "bun run build:linux && bun run package:installers linux",
     "build:installer:windows": "bun run build:windows && bun run package:installers windows",
     "release": "bun scripts/release.mjs",

@@ -50,12 +50,14 @@ function BoundaryContent() {
                                 isPaused: () => generation !== authTransportGeneration(),
                             }}
                         >
-                            <CurrencyRateProvider>
-                                <UpdateProvider>
-                                    <App pending={checking} onLogout={signOut} logoutError={logoutError} />
-                                </UpdateProvider>
-                                {!checking && <ReauthenticationDialog />}
-                            </CurrencyRateProvider>
+                            <ShowNoesProvider enabled={!checking}>
+                                <CurrencyRateProvider>
+                                    <UpdateProvider>
+                                        <App pending={checking} onLogout={signOut} logoutError={logoutError} />
+                                    </UpdateProvider>
+                                </CurrencyRateProvider>
+                            </ShowNoesProvider>
+                            {!checking && <ReauthenticationDialog />}
                         </SWRConfig>
                     </SidebarProvider>
                 </div>
@@ -66,6 +68,20 @@ function BoundaryContent() {
         return (
             <AuthPresentation setup>
                 <InitialAccountForm />
+            </AuthPresentation>
+        );
+    }
+    if (session?.stage === 'anonymous' || session?.stage === 'mfa') {
+        return (
+            <AuthPresentation
+                mfa={session.stage === 'mfa'}
+                username={session.user?.username}
+                onLogout={signOut}
+                logoutError={logoutError}
+            >
+                <div key={`${epoch}:${session.stage}`}>
+                    {session.stage === 'anonymous' ? <LoginForm /> : <MfaForm />}
+                </div>
             </AuthPresentation>
         );
     }
@@ -117,11 +133,7 @@ function BoundaryContent() {
 
 function Boundary() {
     const { epoch } = useAuth();
-    return (
-        <ShowNoesProvider key={epoch}>
-            <BoundaryContent />
-        </ShowNoesProvider>
-    );
+    return <BoundaryContent key={epoch} />;
 }
 
 export default function AuthRoot() {

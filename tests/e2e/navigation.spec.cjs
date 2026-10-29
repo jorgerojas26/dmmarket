@@ -73,7 +73,11 @@ test("URL directa y rutas pendientes no montan formularios ni consultas protegid
     await expect(page.getByRole("table")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Administración de usuarios", exact: true })).toHaveCount(0);
   }
-  expect(requested.filter((path) => !path.startsWith("/api/auth/session"))).toEqual([]);
+  expect(
+    requested.filter(
+      (path) => !["/api/auth/session", "/api/auth/profile", "/api/preferences/effective"].includes(path),
+    ),
+  ).toEqual([]);
 });
 
 test("volver atrás reutiliza los datos de la misma sesión sin bloquear por otra validación", async ({
@@ -214,12 +218,7 @@ test("navbar conserva orden, rótulos y engranaje originales sin menú sustituto
     page.locator(".app-navbar-actions").getByRole("link", { name: "Configuración", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
-  const noe = page.getByRole("checkbox", { name: "Notas de entrega", exact: true });
-  await expect(noe.locator("..")).toBeVisible();
-  await noe.locator("..").click();
-  await expect(noe).toBeChecked();
-  await noe.locator("..").click();
-  await expect(noe).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toHaveCount(0);
   await expect(page.locator(".app-navbar-ref")).toContainText("42.125000");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 360, height: 800 });

@@ -26,6 +26,8 @@ const DEFINITIONS = {
   "inventory.read": {},
   "inventory.costs": {},
   "inventory.export": {},
+  "preferences.read": {},
+  "preferences.update": { privileged: true },
   "rates.read": {},
   "rates.sync": { privileged: true },
   "cache.clear": { privileged: true },

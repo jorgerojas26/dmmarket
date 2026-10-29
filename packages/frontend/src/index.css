@@ -1153,71 +1153,18 @@ input[type="search"] {
                                   supported by Chrome, Edge, Opera and Firefox */
 }
 
-.switch {
-    position: relative;
-    display: inline-block;
-    width: 60px;
-    height: 34px;
-}
-
-.switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #2196f3;
-    -webkit-transition: 0.4s;
-    transition: 0.4s;
-}
-
-input:checked + .slider {
-    background-color: #f39c12;
-}
-
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 26px;
-    width: 26px;
-    left: 4px;
-    bottom: 4px;
-    background-color: white;
-    -webkit-transition: 0.4s;
-    transition: 0.4s;
-}
-
-input:focus + .slider {
-    box-shadow: 0 0 1px #2196f3;
-}
-
-input:checked + .slider:before {
-    -webkit-transform: translateX(26px);
-    -ms-transform: translateX(26px);
-    transform: translateX(26px);
-}
-
-/* Rounded sliders */
-.slider.round {
-    border-radius: 34px;
-}
-
-.slider.round:before {
-    border-radius: 50%;
-}
-
 .app-navbar {
     flex-shrink: 0;
     min-height: 3.5rem;
     background-color: #1a1d21;
     position: relative;
+}
+
+@media (min-width: 1200px) {
+    .app-navbar {
+        padding-top: 0;
+        padding-bottom: 0;
+    }
 }
 
 /* ── Top Navbar Links ── */
@@ -1268,11 +1215,6 @@ input:checked + .slider:before {
     }
 }
 
-/* ── Top Navbar responsive ──
-   Desktop (≥1200px): brand | links (me-auto) | acciones a la derecha, todo
-   en una fila. Mobile (<1200px, expand="xl"): el collapse se despliega como
-   panel vertical — links apilados con área táctil amplia (44px+) y las
-   acciones (switch Facturas/NOE y REF) debajo, ordenadas. */
 .app-navbar-actions {
     display: flex;
     align-items: center;
@@ -1294,18 +1236,6 @@ input:checked + .slider:before {
     display: inline-flex;
     align-items: center;
     padding: 6px 8px;
-}
-
-.app-navbar-switch {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    white-space: nowrap;
-}
-
-.app-navbar-switch > span {
-    font-size: 0.8rem;
-    color: #9ca3af;
 }
 
 .app-navbar-ref {

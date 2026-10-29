@@ -1,7 +1,6 @@
 import UpdateToast from 'components/UpdateToast';
 import UserMenu from 'components/UserMenu';
 import { CurrencyRateContext } from 'context/currency_rate';
-import { ShowNoeContext } from 'context/show_noe';
 import { useSidebar } from 'context/sidebar';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
 import { useContext, useEffect, useState } from 'react';
@@ -15,6 +14,7 @@ import AccessWorkspace, { Account } from './auth/workspace';
 import Clients from './pages/clientes';
 import Purchases from './pages/compras';
 import Configuration from './pages/configuracion';
+import { DocumentPreferenceGate } from './pages/configuracion/PreferencesRecovery';
 import Inventory from './pages/inventario';
 import Providers from './pages/proveedores';
 import Sellers from './pages/vendedores';
@@ -24,7 +24,6 @@ export default function App({ onLogout, logoutError, pending = false }) {
     const { session, can } = useAuth();
     const { pathname } = useLocation();
     const { collapsed } = useSidebar();
-    const { showNoe, setShowNoe } = useContext(ShowNoeContext);
     const { currencyRate, setCurrencyRate } = useContext(CurrencyRateContext);
     const { data: currencies } = useCurrencyRates(can('rates.read'));
     useEffect(() => {
@@ -32,7 +31,14 @@ export default function App({ onLogout, logoutError, pending = false }) {
     }, [currencies, setCurrencyRate]);
     const [expanded, setExpanded] = useState(false);
     const has = (capability) => !pending && session?.permissions?.some((grant) => grant.capability === capability);
-    const configuration = ['rates.read', 'rates.sync', 'backups.read', 'backups.create', 'updates.read'].some(can);
+    const configuration = [
+        'preferences.read',
+        'rates.read',
+        'rates.sync',
+        'backups.read',
+        'backups.create',
+        'updates.read',
+    ].some(can);
     const access = ['access.users', 'access.roles', 'access.links', 'access.recover'].some(can);
     const modules = [
         { path: '/ventas', label: 'Ventas', allowed: has('sales.read') },
@@ -52,7 +58,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
         {
             path: '/clientes',
             allowed: can('clients.read') || can('receivables.read'),
-            content: <Clients />,
+            content: <Clients onLogout={onLogout} logoutError={logoutError} />,
         },
         { path: '/vendedores', allowed: has('sellers.read'), content: <Sellers /> },
         { path: '/inventario', allowed: can('inventory.read'), content: <Inventory /> },
@@ -154,23 +160,6 @@ export default function App({ onLogout, logoutError, pending = false }) {
                                                 </svg>
                                             </Link>
                                         )}
-                                        {has('sales.read') && (
-                                            <div className="app-navbar-switch">
-                                                <span className="text-light">Facturas</span>
-                                                <div>
-                                                    <label className="switch">
-                                                        <input
-                                                            type="checkbox"
-                                                            aria-label="Notas de entrega"
-                                                            checked={showNoe}
-                                                            onChange={(event) => setShowNoe(event.target.checked)}
-                                                        />
-                                                        <span className="slider round"></span>
-                                                    </label>
-                                                </div>
-                                                <span className="text-light">Notas de entrega</span>
-                                            </div>
-                                        )}
                                         {can('rates.read') && (
                                             <div className="text-light app-navbar-ref" aria-busy={!currencies}>
                                                 <span>
@@ -236,7 +225,13 @@ export default function App({ onLogout, logoutError, pending = false }) {
                           '/acceso',
                           '/auditoria',
                       ].includes(path) ? (
-                        view.content
+                        ['/ventas', '/vendedores', '/proveedores'].includes(path) ? (
+                            <DocumentPreferenceGate key={pathname} onLeave={onLogout} logoutError={logoutError}>
+                                {view.content}
+                            </DocumentPreferenceGate>
+                        ) : (
+                            view.content
+                        )
                     ) : view ? (
                         <section
                             key={path}

@@ -57,6 +57,8 @@ export const permissionGroups = [
     [
         'Configuración',
         [
+            ['preferences.read', 'Consultar preferencias del sistema'],
+            ['preferences.update', 'Modificar preferencias del sistema'],
             ['rates.read', 'Consultar tasas de cambio'],
             ['rates.sync', 'Sincronizar tasas BCV'],
             ['cache.clear', 'Actualizar caché de reportes'],

@@ -62,7 +62,7 @@ test("catálogo cerrado, permisos separados y acceso no administrativo denegado"
     privileged: true,
     assigned: false,
   });
-  expect(catalog.body.data).toHaveLength(37);
+  expect(catalog.body.data).toHaveLength(39);
   expect(catalog.body.data.find((row) => row.capability === "sales.financial")).toMatchObject({
     assigned: true,
     privileged: false,

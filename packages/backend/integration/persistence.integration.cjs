@@ -46,7 +46,7 @@ test("MySQL de Compose persiste todas las tablas propias en InnoDB/utf8_bin", as
     .db("information_schema.TABLES")
     .whereRaw("TABLE_SCHEMA = DATABASE()")
     .select("ENGINE", "TABLE_COLLATION");
-  expect(rows).toHaveLength(migration.tables.length);
+  expect(rows).toHaveLength(migration.tables.length + 1);
   expect(rows.every((row) => String(row.ENGINE) === "InnoDB" && String(row.TABLE_COLLATION) === "utf8_bin")).toBe(true);
 });
 

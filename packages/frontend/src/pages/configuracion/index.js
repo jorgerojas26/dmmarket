@@ -8,6 +8,7 @@ import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
 import ReactMarkdown from 'react-markdown';
 import { useHistory, useLocation } from 'react-router-dom';
 import BackupsPanel from './BackupsPanel';
+import PreferencesPanel from './PreferencesPanel';
 import RatesPanel from './RatesPanel';
 import './styles.css';
 
@@ -20,6 +21,27 @@ const MarkdownNotes = ({ children }) => (
 );
 
 const sidebarItems = [
+    {
+        eventKey: 'preferences',
+        label: 'Preferencias',
+        icon: (
+            <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+            >
+                <path d="M4 7h9m4 0h3M4 17h3m4 0h9" />
+                <circle cx="15" cy="7" r="2" />
+                <circle cx="9" cy="17" r="2" />
+            </svg>
+        ),
+    },
     {
         eventKey: 'about',
         label: 'Acerca de',
@@ -83,12 +105,13 @@ const sidebarItems = [
     },
 ];
 
-const VIEWS = { '#acercade': 'about', '#respaldos': 'backups', '#tasas': 'rates' };
-const HASHES = { about: '#acercade', backups: '#respaldos', rates: '#tasas' };
+const VIEWS = { '#preferencias': 'preferences', '#acercade': 'about', '#respaldos': 'backups', '#tasas': 'rates' };
+const HASHES = { preferences: '#preferencias', about: '#acercade', backups: '#respaldos', rates: '#tasas' };
 
 const ConfiguracionPage = () => {
     const { can } = useAuth();
     const availableViews = [
+        ...(can('preferences.read') ? ['preferences'] : []),
         ...(can('updates.read') ? ['about'] : []),
         ...(['backups.read', 'backups.create'].some(can) ? ['backups'] : []),
         ...(['rates.read', 'rates.sync'].some(can) ? ['rates'] : []),
@@ -154,6 +177,7 @@ const ConfiguracionPage = () => {
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={selectView} items={sidebarItemsMemo} />
                 <div className="clientes-content p-4">
+                    {activeView === 'preferences' && <PreferencesPanel />}
                     {activeView === 'backups' && <BackupsPanel />}
                     {activeView === 'rates' && <RatesPanel />}
                     {activeView === 'about' && (

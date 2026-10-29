@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDevelopmentHttps } from "./dev-https.mjs";
+import { acquireDevelopmentLock, run as runProcess } from "./dev-processes.mjs";
 
 const root = realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const directory = path.join(root, ".dev");
@@ -69,28 +70,7 @@ function capture(args, options = {}) {
 }
 
 async function run(args, options = {}) {
-  const { onSpawn, ...spawnOptions } = options;
-  const child = Bun.spawn(args, {
-    cwd: root,
-    env: environment(),
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-    ...spawnOptions,
-  });
-  onSpawn?.(child);
-  const stop = (signal) => child.kill(signal);
-  const interrupt = () => stop("SIGINT");
-  const terminate = () => stop("SIGTERM");
-  process.on("SIGINT", interrupt);
-  process.on("SIGTERM", terminate);
-  try {
-    const code = await child.exited;
-    if (code !== 0) throw new Error(`${args.slice(0, 3).join(" ")} terminó con código ${code}.`);
-  } finally {
-    process.off("SIGINT", interrupt);
-    process.off("SIGTERM", terminate);
-  }
+  await runProcess(args, { cwd: root, env: environment(), ...options });
 }
 
 function dumpPath() {
@@ -186,22 +166,7 @@ function showStatus() {
 }
 
 function acquireSession() {
-  mkdirSync(directory, { recursive: true });
-  const lock = path.join(directory, "session.json");
-  if (existsSync(lock)) {
-    const previous = JSON.parse(readFileSync(lock, "utf8"));
-    let alive = true;
-    try {
-      process.kill(previous.pid, 0);
-    } catch (error) {
-      if (error.code === "ESRCH") alive = false;
-      else throw error;
-    }
-    if (alive) throw new Error(`Ya hay una sesión de desarrollo activa (PID ${previous.pid}).`);
-    rmSync(lock);
-  }
-  writeFileSync(lock, JSON.stringify({ pid: process.pid }), { flag: "wx" });
-  return () => rmSync(lock, { force: true });
+  return acquireDevelopmentLock(directory, "session");
 }
 
 async function main() {
@@ -225,11 +190,18 @@ async function main() {
       }
       break;
     }
-    case "backend":
-      await run(["portless", "--name", backend, "bun", path.join(root, "scripts/dev.mjs"), "backend:serve"], {
-        env: databaseEnvironment(),
-      });
+    case "backend": {
+      const release = acquireDevelopmentLock(directory, "backend");
+      try {
+        await run(["portless", "--name", backend, "bun", path.join(root, "scripts/dev.mjs"), "backend:serve"], {
+          env: databaseEnvironment(),
+          processGroup: true,
+        });
+      } finally {
+        release();
+      }
       break;
+    }
     case "backend:serve": {
       const proxy = await startDevelopmentHttps({
         root,
@@ -249,6 +221,7 @@ async function main() {
           run(["bun", "run", "start"], {
             cwd: path.join(root, "packages/backend"),
             env: proxy.env,
+            processGroup: true,
             onSpawn: (process) => {
               child = process;
             },
@@ -269,16 +242,22 @@ async function main() {
       break;
     }
     case "frontend": {
-      databaseEnvironment();
-      await run(["portless", "--name", frontend, "bun", "run", "start"], {
-        cwd: path.join(root, "packages/frontend"),
-        env: environment({
-          DMMARKET_API_URL: serviceUrl(backend),
-          BROWSER: "none",
-          HTTPS: "false",
-          WDS_SOCKET_PORT: "",
-        }),
-      });
+      const release = acquireDevelopmentLock(directory, "frontend");
+      try {
+        databaseEnvironment();
+        await run(["portless", "--name", frontend, "bun", "run", "start"], {
+          cwd: path.join(root, "packages/frontend"),
+          processGroup: true,
+          env: environment({
+            DMMARKET_API_URL: serviceUrl(backend),
+            BROWSER: "none",
+            HTTPS: "false",
+            WDS_SOCKET_PORT: "",
+          }),
+        });
+      } finally {
+        release();
+      }
       break;
     }
     case "test:backend":

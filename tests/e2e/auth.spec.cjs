@@ -286,7 +286,7 @@ test("revalidar mientras carga el dashboard descarta la cancelación y conserva 
     release();
     const gross = page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" });
     await expect(gross).toContainText("$100,00");
-    await setNoe(page, true);
+    await setNoe(page, true, environment);
     await expect(gross).toContainText("$200,00");
     await page.unroute(pattern);
     await page.route(pattern, (route) =>
@@ -298,7 +298,7 @@ test("revalidar mientras carga el dashboard descarta la cancelación y conserva 
     );
     await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
     await expect(page.locator(".alert-danger")).toContainText("Dashboard API error: 503");
-    await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toHaveCount(0);
   } finally {
     release();
     await page.unrouteAll({ behavior: "wait" });
@@ -470,7 +470,7 @@ test("ventas originales muestran únicamente documentos propios en ambos sistema
   await expect(report.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
   await expect(report.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
   await expect(report.getByRole("cell", { name: "1", exact: true })).toBeVisible();
-  await setNoe(page, true);
+  await setNoe(page, true, environment);
   await expect(report.getByRole("cell", { name: "2", exact: true })).toBeVisible();
   await expect(report.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
   const result = await page.evaluate(
@@ -504,7 +504,7 @@ test("detalle y dashboard originales preservan comparación y no exponen costos,
   await expect(detail.getByText(/PRIVATE/)).toHaveCount(0);
   expect(await page.evaluate(async () => (await fetch("/api/invoices/2/detail")).status)).toBe(404);
   await detail.getByRole("button", { name: "Cerrar", exact: true }).click();
-  await setNoe(page, true);
+  await setNoe(page, true, environment);
   await report
     .getByRole("row")
     .filter({ has: page.getByRole("cell", { name: "2", exact: true }) })
@@ -576,7 +576,7 @@ test("clientes originales no convierten ventas propias en globales ni permiten i
   await expect(modal.locator(".stat-card").filter({ hasText: "Total Ventas" })).toContainText("$0,00");
   await expect(modal.getByText(/PRIVATE/)).toHaveCount(0);
   await modal.getByRole("button", { name: "Close", exact: true }).click();
-  await setNoe(page, true);
+  await setNoe(page, true, environment);
   await expect(customer.getByRole("cell", { name: "$200.00", exact: true })).toBeVisible();
 });
 
@@ -600,7 +600,7 @@ test("modal original y consultas mensuales conservan alcance y año en ambos sis
     [false, 100, 110],
     [true, 200, 210],
   ]) {
-    await setNoe(page, noe);
+    await setNoe(page, noe, environment);
     await page
       .getByRole("row")
       .filter({ has: page.getByRole("cell", { name: "Cliente sintético", exact: true }) })
@@ -655,7 +655,7 @@ test("dashboard original de Vendedores intersecta lectura antes de ranking, marg
     [false, 100, 39],
     [true, 200, 53.5],
   ]) {
-    await setNoe(page, noe);
+    await setNoe(page, noe, environment);
     const report = page.getByRole("region", { name: "Vendedores", exact: true });
     await expect(report.getByRole("heading", { name: "Dashboard de Vendedores", exact: true })).toBeVisible();
     await expect(report.getByText("Vendedor A", { exact: true }).first()).toBeVisible();
@@ -739,7 +739,7 @@ test("clientes sin documentos conservan tabla original y sólo histórico autori
     [false, "$110.00"],
     [true, "$210.00"],
   ]) {
-    await setNoe(page, noe);
+    await setNoe(page, noe, environment);
     const row = page
       .getByRole("row")
       .filter({ has: page.getByRole("cell", { name: "Cliente sintético", exact: true }) });
@@ -778,7 +778,7 @@ test("dashboard original de clientes conserva clasificación, retención y cober
     [false, "$100,00"],
     [true, "$200,00"],
   ]) {
-    await setNoe(page, noe);
+    await setNoe(page, noe, environment);
     const report = page.getByRole("region", { name: "Clientes", exact: true });
     await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
     await expect(report.getByRole("heading", { name: "Dashboard de Clientes", exact: true })).toBeVisible();
@@ -868,7 +868,7 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
     .locator(".dashboard-panel")
     .filter({ has: page.locator(".dashboard-inline-title").filter({ hasText: /^Análisis Pareto/ }) });
   for (const noe of [false, true]) {
-    await setNoe(page, noe);
+    await setNoe(page, noe, environment);
     await expect(panel.getByRole("cell", { name: "Producto reciente", exact: true })).toBeVisible();
     await expect(panel.getByRole("cell", { name: "2026-06-02", exact: true })).toBeVisible();
     await expect(panel.getByRole("columnheader", { name: "Valor inventario", exact: true })).toHaveCount(0);
@@ -1106,7 +1106,7 @@ test("proveedor original conserva ventas propias y el detalle de su porción en 
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   for (const noe of [false, true]) {
-    await setNoe(page, noe);
+    await setNoe(page, noe, environment);
     await openModule(page, "Proveedores");
     await page.getByRole("cell", { name: "Proveedor compras A", exact: true }).click();
     const profile = page.getByRole("dialog");

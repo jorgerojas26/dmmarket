@@ -22,7 +22,7 @@ test("SWR revalida foco, visibilidad y conexión sin desmontar ni repetir la ses
   environment,
 }) => {
   await openSales(page, environment);
-  await setNoe(page, true);
+  await setNoe(page, true, environment);
   await expect(page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" })).toContainText("$200,00");
   await page.evaluate(() => {
     window.sessionLayoutHeading = document.querySelector(".clientes-content h4");
@@ -51,7 +51,7 @@ test("SWR revalida foco, visibilidad y conexión sin desmontar ni repetir la ses
     });
     await expect.poll(() => requests).toBe(1);
     expect(await page.evaluate(() => document.contains(window.sessionLayoutHeading))).toBe(true);
-    await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toHaveCount(0);
     await expect(page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" })).toContainText("$200,00");
     release();
     await page.waitForTimeout(200);

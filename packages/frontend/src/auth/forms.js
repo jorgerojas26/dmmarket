@@ -174,15 +174,47 @@ export function InitialAccountForm() {
 
 export function LoginForm() {
     const { action } = useAuth();
+    const [visible, setVisible] = useState(false);
     return (
-        <AccessForm
-            title="Iniciar sesión"
-            button="Entrar"
-            onSubmit={({ username, password }) => action('login', { username, password })}
-        >
-            <Field label="Usuario" name="username" autoComplete="username" maxLength={64} />
-            <Field label="Contraseña" name="password" type="password" autoComplete="current-password" />
-        </AccessForm>
+        <div className="auth-entry-form">
+            <div className="auth-entry-form-icon">
+                <AuthIcon />
+            </div>
+            <h2>Iniciar sesión</h2>
+            <p className="auth-entry-description">Introduce tus credenciales para acceder a DMMarket.</p>
+            <AccessForm
+                embedded
+                button={
+                    <>
+                        Entrar <AuthIcon kind="arrow" />
+                    </>
+                }
+                onSubmit={({ username, password }) => {
+                    setVisible(false);
+                    return action('login', { username, password });
+                }}
+            >
+                <Field label="Usuario" name="username" autoComplete="username" maxLength={64} />
+                <div className="auth-entry-password">
+                    <Field
+                        label="Contraseña"
+                        name="password"
+                        type={visible ? 'text' : 'password'}
+                        autoComplete="current-password"
+                    />
+                    <button
+                        type="button"
+                        className="auth-entry-password-toggle"
+                        aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        aria-pressed={visible}
+                        onClick={() => setVisible(!visible)}
+                    >
+                        <AuthIcon kind="eye" />
+                    </button>
+                </div>
+                <p className="auth-entry-help">Usa las credenciales que te proporcionó tu administrador.</p>
+            </AccessForm>
+        </div>
     );
 }
 
@@ -229,13 +261,45 @@ export function PasswordForm() {
 export function MfaForm() {
     const { action } = useAuth();
     return (
-        <AccessForm
-            title="Verificar segundo factor"
-            button="Verificar código"
-            onSubmit={({ token }) => action('mfa', { token })}
-        >
-            <Field label="Código MFA" name="token" maxLength={6} inputMode="numeric" autoComplete="one-time-code" />
-        </AccessForm>
+        <div className="auth-entry-form">
+            <div className="auth-entry-form-icon">
+                <AuthIcon kind="code" />
+            </div>
+            <h2>Verificar segundo factor</h2>
+            <AccessForm
+                embedded
+                button={
+                    <>
+                        Verificar código <AuthIcon kind="arrow" />
+                    </>
+                }
+                onSubmit={({ token }) => action('mfa', { token })}
+            >
+                <div className="auth-entry-code-field">
+                    <label className="form-label" htmlFor="auth-mfa-code">
+                        Código MFA
+                    </label>
+                    <input
+                        id="auth-mfa-code"
+                        className="form-control"
+                        name="token"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        pattern="[0-9]{6}"
+                        minLength={6}
+                        maxLength={6}
+                        placeholder="000000"
+                        aria-describedby="auth-mfa-help"
+                        autoFocus
+                        required
+                    />
+                </div>
+                <p id="auth-mfa-help" className="auth-entry-help">
+                    Introduce los 6 dígitos. También puedes pegar el código.
+                </p>
+            </AccessForm>
+        </div>
     );
 }
 
