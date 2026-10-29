@@ -85,7 +85,7 @@ async function openModule(page, name, view) {
     if (await toggle.isVisible()) {
       if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     }
-    if (["Mi cuenta", "Acceso", "Auditoría"].includes(name))
+    if (["Configuración", "Mi cuenta", "Acceso", "Auditoría"].includes(name))
       await navigation.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
   }
   await link.click();

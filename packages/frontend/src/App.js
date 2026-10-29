@@ -100,7 +100,11 @@ export default function App({ onLogout, logoutError, pending = false }) {
                         <Navbar.Brand className="app-navbar-brand">SISTEMA DE REPORTES</Navbar.Brand>
                         {!pending && (
                             <>
-                                <Navbar.Toggle aria-controls="basic-navbar-nav" label="Abrir navegación" />
+                                <Navbar.Toggle
+                                    aria-controls="basic-navbar-nav"
+                                    aria-expanded={expanded}
+                                    label="Abrir navegación"
+                                />
                                 <Navbar.Collapse id="basic-navbar-nav">
                                     <Nav className="me-auto app-navbar-links">
                                         {modules
@@ -134,32 +138,6 @@ export default function App({ onLogout, logoutError, pending = false }) {
                                             ))}
                                     </Nav>
                                     <div className="app-navbar-actions">
-                                        {configuration && (
-                                            <Link
-                                                to="/configuracion"
-                                                title="Configuración"
-                                                aria-label="Configuración"
-                                                onClick={() => setExpanded(false)}
-                                                className={`text-decoration-none nav-link app-navbar-icon${
-                                                    pathname.includes('/configuracion') ? ' active' : ''
-                                                }`}
-                                            >
-                                                <svg
-                                                    width="20"
-                                                    height="20"
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="2"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                >
-                                                    <title>Configuración</title>
-                                                    <circle cx="12" cy="12" r="3" />
-                                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                                                </svg>
-                                            </Link>
-                                        )}
                                         {can('rates.read') && (
                                             <div className="text-light app-navbar-ref" aria-busy={!currencies}>
                                                 <span>
@@ -171,6 +149,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                                         )}
                                         <div className="app-navbar-account-actions">
                                             <UserMenu
+                                                configuration={configuration}
                                                 onLogout={onLogout}
                                                 onNavigate={() => setExpanded(false)}
                                                 administration={modules.filter((item) =>

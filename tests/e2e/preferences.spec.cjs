@@ -158,11 +158,18 @@ test("el fallo de preferencias no bloquea configuración, cuenta, inventario ni 
   await login(page, environment, user);
   await expect(page.getByRole("heading", { name: "Configuración no disponible", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Inventario", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
   await page.getByRole("link", { name: "Configuración", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Preferencias del sistema", exact: true })).toBeVisible();
-  await page.goto(`${environment.origin}/configuracion#tasas`);
+  await page
+    .locator(".clients-sidebar")
+    .getByRole("button", { name: /Tasas BCV/ })
+    .click();
   await expect(page.getByRole("heading", { name: "Tasas BCV", exact: true })).toBeVisible();
-  await page.goto(`${environment.origin}/configuracion#respaldos`);
+  await page
+    .locator(".clients-sidebar")
+    .getByRole("button", { name: /Respaldos/ })
+    .click();
   await expect(page.getByRole("heading", { name: "Respaldos", exact: true })).toBeVisible();
   await page.goto(`${environment.origin}/cuenta`);
   await expect(page.getByRole("button", { name: "Cambiar mi contraseña", exact: true })).toBeVisible();

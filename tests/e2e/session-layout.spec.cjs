@@ -247,6 +247,7 @@ test("navegar dentro de una sesión validada no bloquea el marco ni reinicia la 
     const path = new URL(request.url()).pathname;
     if (["/api/auth/session", "/api/currency_rates"].includes(path)) requests.push(path);
   });
+  await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
   await page.getByRole("link", { name: "Configuración", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Tasas BCV", exact: true })).toBeVisible();
   await expect(page.getByRole("main", { name: "Validando acceso", exact: true })).toHaveCount(0);

@@ -22,7 +22,7 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
   await login(page, environment, user);
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
   await expect(page).toHaveURL(/\/ventas\?/);
-  for (const name of ["Ventas", "Compras", "Clientes", "Vendedores", "Inventario", "Configuración"])
+  for (const name of ["Ventas", "Compras", "Clientes", "Vendedores", "Inventario"])
     await expect(navigation.getByRole("link", { name, exact: true })).toBeVisible();
   for (const name of ["Acceso", "Proveedores", "Cartera", "Comisiones"])
     await expect(navigation.getByRole("link", { name, exact: true })).toHaveCount(0);
@@ -175,14 +175,14 @@ test("superusuario conserva barra original en una fila y administración en men�
     expect(sizing.document).toBeLessThanOrEqual(width);
   }
   await navbar.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
-  for (const name of ["Mi cuenta", "Acceso", "Auditoría"])
+  for (const name of ["Configuración", "Mi cuenta", "Acceso", "Auditoría"])
     await expect(navbar.getByRole("link", { name, exact: true })).toBeVisible();
   await navbar.getByRole("link", { name: "Mi cuenta", exact: true }).click();
   await expect(page).toHaveURL(`${environment.origin}/cuenta`);
   await expect(navbar.getByRole("link", { name: "Acceso", exact: true })).not.toBeVisible();
 });
 
-test("navbar conserva orden, rótulos y engranaje originales sin menú sustituto de Comisiones", async ({
+test("navbar conserva los módulos y mueve Configuración al primer lugar del menú de usuario", async ({
   page,
   environment,
 }) => {
@@ -214,9 +214,12 @@ test("navbar conserva orden, rótulos y engranaje originales sin menú sustituto
     "inventario",
   ]);
   await expect(links.getByRole("link", { name: "Configuración", exact: true })).toHaveCount(0);
-  await expect(
-    page.locator(".app-navbar-actions").getByRole("link", { name: "Configuración", exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('.app-navbar-actions > a[href="/configuracion"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
+  const menu = page.locator(".user-menu-dropdown");
+  await expect(menu.getByRole("link").first()).toHaveText("Configuración");
+  await expect(menu.getByRole("link", { name: "Configuración", exact: true }).locator("svg")).toBeVisible();
+  await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
   await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toHaveCount(0);
   await expect(page.locator(".app-navbar-ref")).toContainText("42.125000");
@@ -225,4 +228,42 @@ test("navbar conserva orden, rótulos y engranaje originales sin menú sustituto
   await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();
   await expect(page.getByRole("link", { name: "Inventario", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+for (const width of [390, 1280]) {
+  test(`Configuración es el primer item del usermenu y cierra la navegación a ${width}px`, async ({
+    page,
+    environment,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page, environment, await environment.seedUser());
+    await expect(page.getByRole("heading", { name: "Tasas BCV", exact: true })).toBeVisible();
+    if (width < 1200) await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();
+    await expect(page.locator('.app-navbar-actions > a[href="/configuracion"]')).toHaveCount(0);
+    await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
+    const menu = page.locator(".user-menu-dropdown");
+    await expect(menu.getByRole("link")).toHaveText(["Configuración", "Mi cuenta"]);
+    await menu.getByRole("link", { name: "Mi cuenta", exact: true }).click();
+    await expect(page).toHaveURL(`${environment.origin}/cuenta`);
+    if (width < 1200) await page.getByRole("button", { name: "Abrir navegación", exact: true }).click();
+    await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
+    await menu.getByRole("link", { name: "Configuración", exact: true }).click();
+    await expect(page).toHaveURL(`${environment.origin}/configuracion#tasas`);
+    await expect(page.locator(".user-menu-trigger")).toHaveAttribute("aria-expanded", "false");
+    if (width < 1200)
+      await expect(page.getByRole("button", { name: "Abrir navegación", exact: true })).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}
+
+test("el usermenu no ofrece Configuración a una cuenta sin permisos", async ({ page, environment }) => {
+  await login(page, environment, await environment.seedUser({ permissions: [] }));
+  await expect(page.getByRole("button", { name: "Cambiar mi contraseña", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
+  const menu = page.locator(".user-menu-dropdown");
+  await expect(menu.getByRole("link").first()).toHaveText("Mi cuenta");
+  await expect(page.getByRole("link", { name: "Configuración", exact: true })).toHaveCount(0);
 });
