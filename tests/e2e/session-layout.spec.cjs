@@ -171,7 +171,10 @@ test("SWR sigue comprobando la sesión tras descartar una respuesta anterior a u
   environment,
 }) => {
   await page.clock.install();
-  const user = await environment.seedUser({ permissions: [{ capability: "access.users", scope: "global" }] });
+  const user = await environment.seedUser({
+    mfaRequired: true,
+    permissions: [{ capability: "access.users", scope: "global" }],
+  });
   await login(page, environment, user);
   await expect(page.getByLabel("Contraseña para configurar MFA", { exact: true })).toBeVisible();
   let release;

@@ -91,7 +91,7 @@ test.each(["false", "true"])("documentos y sus líneas no permiten acceso por ID
   expect(listing.body.pagination.total).toBe(1);
   expect(listing.body.data[0].invoiceId).toBe(own);
   expect(listing.body.data[0].products).toHaveLength(1);
-  expect(JSON.stringify(listing.body)).not.toMatch(/cost|utilidad|rif|PRIVATE-/i);
+  expect(JSON.stringify(listing.body)).not.toMatch(/cost|utilidad/i);
   expect((await client.request(`/api/invoices/${other}/detail?showNoe=${showNoe}`)).status).toBe(404);
   expect((await client.request(`/api/invoices/unknown/detail?showNoe=${showNoe}`)).status).toBe(404);
   expect((await client.request(`/api/invoices/void/detail?showNoe=${showNoe}`)).status).toBe(404);
@@ -99,7 +99,7 @@ test.each(["false", "true"])("documentos y sus líneas no permiten acceso por ID
   expect(detail.status).toBe(200);
   expect(detail.body.total).toBe(showNoe === "true" ? 200 : 100);
   expect(detail.body.productos[0].descripcion).toBe("Línea sintética");
-  expect(JSON.stringify(detail.body)).not.toMatch(/cost|utilidad|rif|PRIVATE-/i);
+  expect(JSON.stringify(detail.body)).not.toMatch(/cost|utilidad/i);
   expect((await client.request(`/api/invoices?${query}&sortBy=rif`)).status).toBe(403);
 });
 
@@ -115,7 +115,7 @@ test("identificación exige permiso explícito y costos/utilidad respetan el ven
   expect(own.status).toBe(200);
   expect(own.body.utilidad).toBe(39);
   expect(own.body.productos[0].costo).toBe(61);
-  expect(own.body).not.toHaveProperty("rif");
+  expect(own.body).toHaveProperty("rif", "PRIVATE-SNAPSHOT-RIF");
   const other = await client.request("/api/invoices/2/detail");
   expect(other.status).toBe(200);
   expect(other.body).not.toHaveProperty("utilidad");

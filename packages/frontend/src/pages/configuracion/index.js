@@ -1,5 +1,6 @@
 import { fetchUpdateHistory } from 'api/update';
 import { useAuth } from 'auth/context';
+import AccessDenied from 'components/AccessDenied';
 import Sidebar from 'components/Sidebar';
 import { useUpdate } from 'context/update';
 import { DateTime } from 'luxon';
@@ -8,6 +9,7 @@ import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
 import ReactMarkdown from 'react-markdown';
 import { useHistory, useLocation } from 'react-router-dom';
 import BackupsPanel from './BackupsPanel';
+import CachePanel from './CachePanel';
 import PreferencesPanel from './PreferencesPanel';
 import RatesPanel from './RatesPanel';
 import './styles.css';
@@ -47,6 +49,7 @@ const sidebarItems = [
         label: 'Acerca de',
         icon: (
             <svg
+                aria-hidden="true"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -68,6 +71,7 @@ const sidebarItems = [
         label: 'Respaldos',
         icon: (
             <svg
+                aria-hidden="true"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -88,6 +92,7 @@ const sidebarItems = [
         label: 'Tasas BCV',
         icon: (
             <svg
+                aria-hidden="true"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -106,28 +111,38 @@ const sidebarItems = [
 ];
 
 const VIEWS = {
+    '#cache': 'cache',
     '#reportes': 'preferences',
     '#preferencias': 'preferences',
     '#acercade': 'about',
     '#respaldos': 'backups',
     '#tasas': 'rates',
 };
-const HASHES = { preferences: '#preferencias', about: '#acercade', backups: '#respaldos', rates: '#tasas' };
+const HASHES = {
+    preferences: '#preferencias',
+    cache: '#cache',
+    about: '#acercade',
+    backups: '#respaldos',
+    rates: '#tasas',
+};
 
 const ConfiguracionPage = () => {
     const { can } = useAuth();
     const availableViews = [
-        ...(can('preferences.read') ? ['preferences'] : []),
+        ...(can('settings.preferences.read') || can('settings.currency.read') ? ['preferences'] : []),
         ...(can('updates.read') ? ['about'] : []),
+        ...(can('settings.cache.read') ? ['cache'] : []),
         ...(['backups.read', 'backups.create'].some(can) ? ['backups'] : []),
         ...(['rates.read', 'rates.sync'].some(can) ? ['rates'] : []),
     ];
     const historyRouter = useHistory();
     const location = useLocation();
+    const requestedView = VIEWS[location.hash];
+    const deniedView = requestedView && !availableViews.includes(requestedView);
     const activeView = availableViews.includes(VIEWS[location.hash]) ? VIEWS[location.hash] : availableViews[0];
 
     useEffect(() => {
-        if (!availableViews.includes(VIEWS[location.hash])) {
+        if (!requestedView && activeView) {
             historyRouter.replace({ ...location, hash: HASHES[activeView] });
         }
     }, [historyRouter, location, activeView]);
@@ -178,12 +193,21 @@ const ConfiguracionPage = () => {
 
     const sidebarItemsMemo = sidebarItems.filter((item) => availableViews.includes(item.eventKey));
 
+    if (deniedView) return <AccessDenied />;
     return (
         <Container as="section" aria-label="Configuración" fluid className="clientes-layout p-0">
             <div className="clientes-row">
-                <Sidebar activeKey={activeView} onSelect={selectView} items={sidebarItemsMemo} />
+                <Sidebar
+                    activeKey={activeView}
+                    onSelect={selectView}
+                    items={[
+                        ...sidebarItemsMemo,
+                        ...(can('settings.cache.read') ? [{ eventKey: 'cache', label: 'Caché', icon: null }] : []),
+                    ]}
+                />
                 <div className="clientes-content p-4">
                     {activeView === 'preferences' && <PreferencesPanel />}
+                    {activeView === 'cache' && <CachePanel />}
                     {activeView === 'backups' && <BackupsPanel />}
                     {activeView === 'rates' && <RatesPanel />}
                     {activeView === 'about' && (

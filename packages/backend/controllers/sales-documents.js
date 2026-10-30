@@ -1,7 +1,7 @@
 const { filterIdentity } = require("../utils/report-identity");
 
 function salesDocuments(transaction, access, query) {
-  const scope = access.scopeFor("sales.read");
+  const scope = access.scopeFor("read");
   if (!scope.global && !scope.sellerIds.length) {
     const error = new Error("La consulta de ventas no está permitida.");
     error.status = 403;

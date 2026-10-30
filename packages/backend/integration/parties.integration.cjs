@@ -38,8 +38,10 @@ test("directorios requieren capacidades explícitas, sin inferir clientes desde 
   const rows = await catalog.request(`/api/clients/list?${range}`);
   expect(rows.status).toBe(200);
   expect(rows.body.data).toHaveLength(3);
-  expect(rows.body.data.every((row) => Object.keys(row).sort().join(",") === "Empresa,IdCliente")).toBe(true);
-  expect(rows.body.totals).toEqual({});
+  expect(
+    rows.body.data.every((row) => row.Empresa && Object.hasOwn(row, "IdCliente") && Object.hasOwn(row, "total_ventas")),
+  ).toBe(true);
+  expect(rows.body.totals).toMatchObject({ num_ventas: 3, total_ventas: "550.00" });
   expect((await catalog.request(`/api/clients/list?${range}&sortBy=utilidad`)).status).toBe(403);
 });
 
@@ -47,10 +49,12 @@ test("búsqueda de clientes enlazada a parámetros no permite SQL ni datos perso
   const client = await reader([grant("clients.read")]);
   const all = await client.request("/api/clients");
   expect(all.status).toBe(200);
-  expect(all.body.every((row) => Object.keys(row).sort().join(",") === "IdCliente,name")).toBe(true);
+  expect(
+    all.body.every((row) => Object.hasOwn(row, "IdCliente") && Object.hasOwn(row, "name") && Object.hasOwn(row, "rif")),
+  ).toBe(true);
   expect((await client.request(`/api/clients?filter=${encodeURIComponent("' OR 1=1 --")}`)).body).toEqual([]);
   expect((await client.request("/api/clients?search=PRIVATE-CLIENT-B")).body).toEqual([]);
-  expect((await client.request("/api/clients?sortBy=rif")).status).toBe(403);
+  expect((await client.request("/api/clients?sortBy=rif")).status).toBe(200);
   const personal = await reader([grant("clients.read"), grant("clients.personal")]);
   const result = await personal.request("/api/clients?filter=exclusivo&sortBy=rif");
   expect(result.status).toBe(200);
@@ -60,15 +64,16 @@ test("búsqueda de clientes enlazada a parámetros no permite SQL ni datos perso
 test("vendedores propios y datos personales propios no se convierten en directorio global", async () => {
   const own = await reader([grant("sellers.read", "assigned")]);
   const catalog = await own.request("/api/employees");
-  expect(catalog.body).toEqual([{ id: "A", name: "Vendedor A" }]);
+  expect(catalog.body).toHaveLength(1);
+  expect(catalog.body[0]).toMatchObject({ id: "A", name: "Vendedor A", phone: "PRIVATE-PHONE-A" });
   expect((await own.request("/api/employees?search=B")).body).toEqual([]);
   const combined = await reader([grant("sellers.read"), grant("sellers.personal", "assigned")]);
   const result = await combined.request("/api/employees");
   expect(result.status).toBe(200);
   expect(result.body.find((row) => row.id === "A").phone).toBe("PRIVATE-PHONE-A");
-  expect(result.body.find((row) => row.id === "B")).not.toHaveProperty("phone");
-  expect(JSON.stringify(result.body)).not.toContain("PRIVATE-PHONE-B");
-  expect((await combined.request("/api/employees?sortBy=phone")).status).toBe(403);
+  expect(result.body.find((row) => row.id === "B")).toHaveProperty("phone", "PRIVATE-PHONE-B");
+  expect(JSON.stringify(result.body)).toContain("PRIVATE-PHONE-B");
+  expect((await combined.request("/api/employees?sortBy=phone")).status).toBe(200);
   expect((await combined.request("/api/employees?search=PRIVATE-PHONE-B")).body).toEqual([]);
 });
 
@@ -79,10 +84,10 @@ test.each(["false", "true"])(
     const amount = showNoe === "true" ? 200 : 100;
     const result = await client.request(`/api/clients/list?${range}&showNoe=${showNoe}&limit=1&sortBy=total_ventas`);
     expect(result.status).toBe(200);
-    expect(result.body.total).toBe(3);
+    expect(result.body.total).toBe(1);
     expect(result.body.data[0].IdCliente).toBe("C");
     expect(Number(result.body.totals.total_ventas)).toBe(amount);
-    expect(JSON.stringify(result.body)).not.toMatch(/utilidad|PRIVATE-/);
+    expect(JSON.stringify(result.body)).not.toMatch(/utilidad|PRIVATE-CLIENT-B/);
     const summary = await client.request(`/api/clients/C/summary?${range}&showNoe=${showNoe}`);
     expect(summary.body).toMatchObject({ totalAmount: amount, totalCount: 1, avgTicket: amount });
     const exclusive = await client.request(`/api/clients/CB/sales?${range}&showNoe=${showNoe}`);
@@ -106,14 +111,14 @@ test.each(["false", "true"])("ventas globales se intersectan con vendedores prop
   expect(result.body.total).toBe(1);
   expect(result.body.data[0].sellerId).toBe("A");
   expect(Number(result.body.totals.sales)).toBe(amount);
-  expect(result.body.data[0]).not.toHaveProperty("phone");
+  expect(result.body.data[0]).toHaveProperty("phone", "PRIVATE-PHONE-A");
   expect((await client.request(`/api/sellers/B/sales?${range}&showNoe=${showNoe}`)).status).toBe(403);
   expect((await client.request(`/api/sellers/B/summary?${range}&showNoe=${showNoe}`)).status).toBe(403);
   const own = await client.request(`/api/sellers/A/summary?${range}&showNoe=${showNoe}`);
   expect(own.status).toBe(200);
   expect(own.body.totals.sales).toBe(amount);
   expect(own.body.compare.sales).toBe(10);
-  expect(own.body.seller).not.toHaveProperty("rif");
+  expect(own.body.seller).toHaveProperty("rif");
 });
 
 test("utilidad propia nunca ordena ni expone métricas del directorio global", async () => {
@@ -225,7 +230,7 @@ test("directorios analíticos no fusionan identidades históricas por la colaci�
     expect(sellers.status).toBe(200);
     expect(Number(sellers.body.data.find((row) => row.sellerId === "A").sales)).toBe(0);
     expect(Number(sellers.body.data.find((row) => row.sellerId === "a").sales)).toBe(5);
-    expect(sellers.body.data.find((row) => row.sellerId === "a")).not.toHaveProperty("phone");
+    expect(sellers.body.data.find((row) => row.sellerId === "a")).toHaveProperty("phone", "PRIVATE-LOWERCASE");
     const clients = await all.request("/api/clients/list?from=2026-04-01&to=2026-04-30");
     expect(clients.status).toBe(200);
     expect(Number(clients.body.data.find((row) => row.IdCliente === "C").total_ventas)).toBe(0);

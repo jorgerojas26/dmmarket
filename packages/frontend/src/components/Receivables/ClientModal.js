@@ -441,15 +441,19 @@ export default function ClientModal({
                             </div>
                         </div>
                         <div className="cxc-account-header-actions">
-                            <PaymentAvailability />
-                            <Button
-                                ref={primary}
-                                className="cxc-payment-cta"
-                                disabled={!canPay || !!action}
-                                onClick={() => start({ type: 'payment' })}
-                            >
-                                <span aria-hidden="true">＋</span> Registrar abono
-                            </Button>
+                            {can('receivables.payment') && (
+                                <>
+                                    <PaymentAvailability />
+                                    <Button
+                                        ref={primary}
+                                        className="cxc-payment-cta"
+                                        disabled={!canPay || !!action}
+                                        onClick={() => start({ type: 'payment' })}
+                                    >
+                                        <span aria-hidden="true">＋</span> Registrar abono
+                                    </Button>
+                                </>
+                            )}
                             <Dropdown align="end">
                                 <Dropdown.Toggle
                                     ref={moreActions}

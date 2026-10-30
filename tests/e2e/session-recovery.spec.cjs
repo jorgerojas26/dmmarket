@@ -1,5 +1,21 @@
-const { test, expect, login } = require("./fixtures.cjs");
+const { test: base, expect, login } = require("./fixtures.cjs");
 const { seedSales } = require("../support/sales-fixtures.cjs");
+const { startEnvironment } = require("../support/auth-environment.cjs");
+const test = base.extend({
+  environment: [
+    async ({ browserName }, use) => {
+      if (browserName !== "chromium") throw new Error("Esta suite verifica recuperación en Chrome real.");
+      const environment = await startEnvironment({ web: true });
+      try {
+        await seedSales(environment.db);
+        await use(environment);
+      } finally {
+        await environment.close();
+      }
+    },
+    { scope: "worker" },
+  ],
+});
 
 const grossSales = (page) => page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" });
 

@@ -16,8 +16,8 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 const LIMIT = 20;
 
 const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
-    const { session, can } = useAuth();
-    const analytics = session.permissions.some((grant) => grant.capability === 'sales.read');
+    const { has } = useAuth();
+    const analytics = has('amounts');
     const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
@@ -202,7 +202,7 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                     loading={isLoading}
                     showFooter={!!summaries}
                     summaries={summaries}
-                    onRowClick={analytics ? onRowSelect : undefined}
+                    onRowClick={has('clients.details.read') || has('clients.documents.read') ? onRowSelect : undefined}
                     emptyMessage="Sin datos"
                     fillHeight
                     sorting={{
@@ -224,7 +224,7 @@ const ClientsTable = ({ onRowSelect, ruta, dateRange }) => {
                         onPageChange: setPage,
                     }}
                     print={{
-                        enabled: can('clients.export') && Boolean(result),
+                        enabled: result?.exportAllowed === true,
                         onGlobalPrint: handlePrintAll,
                         storageKey: 'clientes',
                     }}

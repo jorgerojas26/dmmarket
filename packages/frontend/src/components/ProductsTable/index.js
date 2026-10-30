@@ -80,7 +80,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                 accessor: 'peso',
                 Cell: ({ value }) => formatWeight(value),
             },
-            { Header: 'Total', accessor: 'total' },
+            ...(products?.some((row) => Object.hasOwn(row, 'total')) ? [{ Header: 'Total', accessor: 'total' }] : []),
             ...(financial
                 ? [
                       {
@@ -91,7 +91,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                   ]
                 : []),
         ],
-        [financial],
+        [financial, products],
     );
 
     const summaries = useMemo(
@@ -133,7 +133,7 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                     throw new Error('No se dispone de una tasa autorizada.');
                 productsData = productsData.map((item) => ({
                     ...item,
-                    total: convertReportAmount(item.total, currency, rate),
+                    ...(Object.hasOwn(item, 'total') ? { total: convertReportAmount(item.total, currency, rate) } : {}),
                     ...(Object.hasOwn(item, 'utilidad')
                         ? { utilidad: convertReportAmount(item.utilidad, currency, rate) }
                         : {}),
@@ -143,7 +143,8 @@ const ProductsTable = ({ data: products, totalSummary: invoicesTotalSummary, pri
                 productsData = sortRows(productsData, config.sortBy);
                 const columns = config.columns.filter(
                     (column) =>
-                        column.accessor !== 'utilidad' || productsData.every((row) => Object.hasOwn(row, 'utilidad')),
+                        !['total', 'utilidad'].includes(column.accessor) ||
+                        productsData.every((row) => Object.hasOwn(row, column.accessor)),
                 );
                 if (!columns.length) throw new Error('No hay columnas autorizadas.');
                 const pdfData = pdf(

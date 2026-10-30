@@ -76,6 +76,7 @@ export function useDashboardParetoRaw(
 ) {
     const {
         search = '',
+        metric,
         sortBy: newSortBy = 'firstPurchaseDate',
         sortDir: newSortDir = 'desc',
         page = 1,
@@ -89,6 +90,7 @@ export function useDashboardParetoRaw(
                   dateRange.to,
                   showNoe,
                   modo,
+                  metric,
                   sortBy || 'default',
                   sortDir,
                   search,
@@ -106,6 +108,7 @@ export function useDashboardParetoRaw(
                 to: dateRange.to,
                 showNoe,
                 modo,
+                metric,
                 sortBy,
                 sortDir,
                 newSearch: search,

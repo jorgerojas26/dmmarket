@@ -22,7 +22,7 @@ const InvoicesTable = ({
         () =>
             columns.filter(
                 (column) =>
-                    !['rif', 'utilidad'].includes(column.accessor) ||
+                    !['rif', 'utilidad', 'total'].includes(column.accessor) ||
                     data?.some((row) => Object.hasOwn(row, column.accessor)),
             ),
         [data],

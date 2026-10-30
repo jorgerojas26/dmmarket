@@ -1,3 +1,5 @@
+const { filterClientScope } = require("./client-scope");
+const { groupAllowed } = require("../auth/resource-policy");
 const { reportId, missingName, filterIdentity } = require("../utils/report-identity");
 const { salesBase, financialFields } = require("./sales");
 const { salesDocuments } = require("./sales-documents");
@@ -26,6 +28,7 @@ async function monthly(transaction, access, query, id) {
     .orderBy("month");
   const catalog = transaction("clientes");
   filterIdentity(catalog, transaction.raw("BINARY IdCliente"), id);
+  filterClientScope(transaction, catalog, access.scopeFor("read"), "clientes.IdCliente");
   const client = await catalog.first("Empresa");
   const amounts = new Map(rows.map((row) => [row.month, row]));
   const cursor = new Date(`${query.from.slice(0, 7)}-01T00:00:00Z`);
@@ -108,7 +111,8 @@ async function inactiveClients(transaction, access, query) {
     dias_inactivo: selected.dias_inactivo,
     revenue_historico: selected.revenue_historico,
   };
-  const sortBy = query.sortBy || "revenue_historico";
+  filterClientScope(transaction, source, access.scopeFor("read"), "c.IdCliente");
+  const sortBy = query.sortBy || (groupAllowed(access, "amounts", query) ? "revenue_historico" : "Empresa");
   if (!Object.hasOwn(sort, sortBy)) fail(400);
   const [{ total }] = await source.clone().count("* as total");
   const data = await source

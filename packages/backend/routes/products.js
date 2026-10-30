@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { inventory, options } = require("../controllers/products");
 
@@ -6,7 +7,7 @@ function createInventoryRoutes({ sessions }) {
   router.get("/products", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) =>
+        await requestSession(sessions, req, { readOnly: true }, ({ transaction, access }) =>
           inventory(transaction, access, options(req.query)),
         ),
       );

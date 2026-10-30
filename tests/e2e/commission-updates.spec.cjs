@@ -36,7 +36,7 @@ test("edición de comisión confirma actor y no recalcula capturas históricas",
   await expect(page.getByRole("link", { name: "Ventas", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
   await page.goto(`${environment.origin}/comisiones`);
-  await expect(page.getByRole("region", { name: "Página no disponible", exact: true })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Acceso restringido", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Consulta autorizada de comisiones", exact: true })).toHaveCount(0);
   const applied = await page.evaluate(async () => {
     const payload = { commissionInfo: { G: "15.25" }, reason: "Cambio de porcentaje E2E aprobado" },

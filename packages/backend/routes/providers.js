@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { parameters, listSales, invoiceDetail } = require("../controllers/sales");
 const { purchases } = require("../controllers/purchases");
@@ -10,8 +11,8 @@ function createProviderRoutes({ sessions }) {
   const handle = (work, options) => async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
-          if (!access.hasGlobal("providers.read")) fail(403);
+        await requestSession(sessions, req, { readOnly: true }, ({ transaction, access }) => {
+          if (!access.hasAny("read")) fail(403);
           const query = parameters(req.query, options);
           const id = req.params.providerId ? identifier(req.params.providerId) : null;
           return work(transaction, access, query, id, req.params);
@@ -35,8 +36,8 @@ function createProviderRoutes({ sessions }) {
   router.get("/providers/best", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
-          if (!access.hasGlobal("providers.read")) fail(403);
+        await requestSession(sessions, req, { readOnly: true }, ({ transaction, access }) => {
+          if (!access.hasAny("read")) fail(403);
           const { mode = "ventas", ...input } = req.query;
           const query = parameters(input, { keys: ["from", "to", "showNoe", "employeeId", "categoryId"] });
           if (mode === "compras" && (query.showNoe !== undefined || query.employeeId)) fail(400);
@@ -85,7 +86,7 @@ function createProviderRoutes({ sessions }) {
     handle(
       async (tx, access, query, id) => ({
         ...(await purchases(tx, access, { ...query, proveedorId: id }, false)),
-        exportAllowed: access.hasGlobal("purchases.export"),
+        exportAllowed: access.hasGlobal("export"),
       }),
       {
         keys: ["from", "to", "page", "limit", "search", "sortBy", "sortDir"],

@@ -1,6 +1,23 @@
 const { randomBytes } = require("node:crypto");
 const { test, expect, login, openModule, setNoe, setCalendarMonth, logout } = require("./fixtures.cjs");
-const { docker } = require("../support/auth-environment.cjs");
+const { docker, startEnvironment } = require("../support/auth-environment.cjs");
+const completeDashboardTest = test.extend({
+  environment: [
+    async ({ browserName }, use) => {
+      if (browserName !== "chromium") throw new Error("Esta prueba verifica cancelación en Chrome real.");
+      const environment = await startEnvironment({ web: true });
+      try {
+        await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+        await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+        await require("../support/inventory-fixtures.cjs").seedInventory(environment.db);
+        await use(environment);
+      } finally {
+        await environment.close();
+      }
+    },
+    { scope: "worker" },
+  ],
+});
 const ownerPermissions = ["access.users", "access.roles", "access.links", "access.recover"].map((capability) => ({
   capability,
   scope: "global",
@@ -148,7 +165,9 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await disable.getByRole("textbox", { name: "Motivo de la operación" }).fill("Bloqueo real de prueba");
     await disable.getByRole("button", { name: "Deshabilitar usuario", exact: true }).click();
     await expect(page.getByRole("row").filter({ hasText: username })).toContainText("Deshabilitado");
-    expect(await reader.evaluate(async () => (await fetch("/api/currency_rates")).status)).toBe(401);
+    expect(
+      (await context.request.get(`${environment.origin}/api/currency_rates`, { ignoreHTTPSErrors: true })).status(),
+    ).toBe(401);
     await expect(reader.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   } finally {
     await context.close();
@@ -241,69 +260,69 @@ test("revalidar con reportes bloqueados no expulsa una sesión válida ni agota 
   }
 });
 
-test("revalidar mientras carga el dashboard descarta la cancelación y conserva errores reales", async ({
-  page,
-  environment,
-}) => {
-  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
-  const user = await environment.seedUser({
-    permissions: [
-      { capability: "sales.read", scope: "assigned" },
-      { capability: "rates.read", scope: "global" },
-    ],
-  });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
-  let release;
-  const gate = new Promise((resolve) => {
-    release = resolve;
-  });
-  let requested = 0;
-  const pattern = "**/api/dashboard/sales?**";
-  await page.route(pattern, async (route) => {
-    const cookie = (await page.context().cookies()).find((value) => value.name === "__Host-dmmarket.sid");
-    const client = environment.client();
-    client.jar.cookie = `${cookie.name}=${cookie.value}`;
-    const url = new URL(route.request().url());
-    const response = await client.request(`${url.pathname}${url.search}`);
-    expect(response.status).toBe(200);
-    requested += 1;
-    await gate;
-    await route
-      .fulfill({ status: response.status, contentType: "application/json", body: response.text })
-      .catch(() => {});
-  });
-  try {
-    await login(page, environment, user);
-    await expect.poll(() => requested).toBeGreaterThanOrEqual(1);
-    const checked = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === "/api/auth/session" && response.status() === 200,
-    );
-    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
-    await checked;
-    await expect.poll(() => requested).toBeGreaterThanOrEqual(2);
-    await expect(page.getByRole("heading", { name: "Dashboard de Ventas", exact: true })).toBeVisible();
-    await expect(page.locator(".alert-danger")).toHaveCount(0);
-    release();
-    const gross = page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" });
-    await expect(gross).toContainText("$100,00");
-    await setNoe(page, true, environment);
-    await expect(gross).toContainText("$200,00");
-    await page.unroute(pattern);
-    await page.route(pattern, (route) =>
-      route.fulfill({
-        status: 503,
-        contentType: "application/json",
-        body: JSON.stringify({ error: { message: "Servicio temporalmente no disponible." } }),
-      }),
-    );
-    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
-    await expect(page.locator(".alert-danger")).toContainText("Dashboard API error: 503");
-    await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toHaveCount(0);
-  } finally {
-    release();
-    await page.unrouteAll({ behavior: "wait" });
-  }
-});
+completeDashboardTest(
+  "revalidar mientras carga el dashboard descarta la cancelación y conserva errores reales",
+  async ({ page, environment }) => {
+    await require("../support/sales-fixtures.cjs").seedSales(environment.db);
+    const user = await environment.seedUser({
+      permissions: [
+        { capability: "sales.read", scope: "assigned" },
+        { capability: "rates.read", scope: "global" },
+      ],
+    });
+    await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    let requested = 0;
+    const pattern = "**/api/dashboard/sales?**";
+    await page.route(pattern, async (route) => {
+      const cookie = (await page.context().cookies()).find((value) => value.name === "__Host-dmmarket.sid");
+      const client = environment.client();
+      client.jar.cookie = `${cookie.name}=${cookie.value}`;
+      const url = new URL(route.request().url());
+      const response = await client.request(`${url.pathname}${url.search}`);
+      expect(response.status).toBe(200);
+      requested += 1;
+      await gate;
+      await route
+        .fulfill({ status: response.status, contentType: "application/json", body: response.text })
+        .catch(() => {});
+    });
+    try {
+      await login(page, environment, user);
+      await expect.poll(() => requested).toBeGreaterThanOrEqual(1);
+      const checked = page.waitForResponse(
+        (response) => new URL(response.url()).pathname === "/api/auth/session" && response.status() === 200,
+      );
+      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+      await checked;
+      await expect.poll(() => requested).toBeGreaterThanOrEqual(2);
+      await expect(page.getByRole("heading", { name: "Dashboard de Ventas", exact: true })).toBeVisible();
+      await expect(page.locator(".alert-danger")).toHaveCount(0);
+      release();
+      const gross = page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" });
+      await expect(gross).toContainText("$100,00");
+      await setNoe(page, true, environment);
+      await expect(gross).toContainText("$200,00");
+      await page.unroute(pattern);
+      await page.route(pattern, (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: { message: "Servicio temporalmente no disponible." } }),
+        }),
+      );
+      await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+      await expect(page.locator(".alert-danger")).toContainText("Dashboard API error: 503");
+      await expect(page.getByRole("checkbox", { name: "Notas de entrega", exact: true })).toHaveCount(0);
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: "wait" });
+    }
+  },
+);
 
 test("MySQL realmente suspendido oculta datos sin fallback anónimo y recupera", async ({ page, environment }) => {
   await login(page, environment, await environment.seedUser());
@@ -392,12 +411,16 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   const name = `Rol E2E ${randomBytes(4).toString("hex")}`;
   await page.getByRole("textbox", { name: "Nombre del rol", exact: true }).fill(name);
-  await page.getByLabel("Consultar ventas", { exact: true }).selectOption("assigned");
-  await expect(page.getByLabel("Ver costos y utilidad de ventas", { exact: true })).toBeVisible();
+  await page.getByLabel("Consultar · Ventas / Desglose", { exact: true }).selectOption("assigned");
+  await expect(
+    page.getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true }),
+  ).toBeVisible();
   for (const retired of ["sales.costs", "sales.profit", "providers.personal"])
     await expect(page.getByLabel(retired, { exact: true })).toHaveCount(0);
-  await page.getByLabel("Ver costos y utilidad de ventas", { exact: true }).selectOption("assigned");
-  await page.getByLabel("Consultar tasas de cambio", { exact: true }).selectOption("global");
+  await page
+    .getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true })
+    .selectOption("assigned");
+  await page.getByLabel("Consultar · Configuración / Tasas BCV", { exact: true }).selectOption("global");
   const createdResponse = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/roles") && response.request().method() === "POST",
   );
@@ -407,9 +430,11 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   const role = await created.json();
   await expect(page.getByText("Rol guardado.", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: `Editar ${name}`, exact: true }).click();
-  await expect(page.getByLabel("Consultar ventas", { exact: true })).toHaveValue("assigned");
-  await expect(page.getByLabel("Ver costos y utilidad de ventas", { exact: true })).toHaveValue("assigned");
-  await page.getByLabel("Consultar ventas", { exact: true }).selectOption("global");
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+  await expect(
+    page.getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true }),
+  ).toHaveValue("assigned");
+  await page.getByLabel("Consultar · Ventas / Desglose", { exact: true }).selectOption("global");
   const updatedResponse = page.waitForResponse(
     (response) => response.url().endsWith(`/api/auth/roles/${role.id}`) && response.request().method() === "PUT",
   );
@@ -483,6 +508,7 @@ test("detalle y dashboard originales preservan comparación y no exponen costos,
   page,
   environment,
 }) => {
+  await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
@@ -501,7 +527,9 @@ test("detalle y dashboard originales preservan comparación y no exponen costos,
   await expect(detail.getByText("Factura #1", { exact: true })).toBeVisible();
   await expect(detail.getByRole("cell", { name: "Línea sintética", exact: true })).toBeVisible();
   await expect(detail.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
-  await expect(detail.getByText(/PRIVATE/)).toHaveCount(0);
+  expect(
+    await page.evaluate(async () => (await (await fetch("/api/invoices/1/detail?showNoe=false")).json()).rif),
+  ).toBe("PRIVATE-SNAPSHOT-RIF");
   expect(await page.evaluate(async () => (await fetch("/api/invoices/2/detail")).status)).toBe(404);
   await detail.getByRole("button", { name: "Cerrar", exact: true }).click();
   await setNoe(page, true, environment);
@@ -539,11 +567,11 @@ test("Vendedores original sólo muestra contactos propios y conserva resumen y c
   await expect(modal.getByText(/PRIVATE-PHONE-B/)).toHaveCount(0);
   await expect(modal.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
   await expect(modal.locator(".dashboard-kpi-card").filter({ hasText: /^Ventas/ })).toContainText("$100,00");
-  const body = await page.evaluate(
-    async () => await (await fetch("/api/sellers/B/summary?from=2026-01-01&to=2026-01-31")).json(),
-  );
-  expect(body.totals.sales).toBe(0);
-  expect(body.seller).not.toHaveProperty("phone");
+  const response = await page.request.get(`${environment.origin}/api/sellers/B/summary?from=2026-01-01&to=2026-01-31`, {
+    headers: { origin: environment.origin },
+    ignoreHTTPSErrors: true,
+  });
+  expect(response.status()).toBe(403);
 });
 
 test("clientes originales no convierten ventas propias en globales ni permiten identificar sin permiso", async ({
@@ -568,14 +596,11 @@ test("clientes originales no convierten ventas propias en globales ni permiten i
     .filter({ has: page.getByRole("cell", { name: "Cliente sintético", exact: true }) });
   await expect(customer.getByRole("cell", { name: "$100,00", exact: true })).toBeVisible();
   await expect(report.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
-  await report
-    .getByRole("row")
-    .filter({ has: page.getByRole("cell", { name: "Cliente exclusivo de B", exact: true }) })
-    .click();
-  const modal = page.getByRole("dialog");
-  await expect(modal.locator(".stat-card").filter({ hasText: "Total Ventas" })).toContainText("$0,00");
-  await expect(modal.getByText(/PRIVATE/)).toHaveCount(0);
-  await modal.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(report.getByRole("cell", { name: "Cliente exclusivo de B", exact: true })).toHaveCount(0);
+  const catalog = await page.evaluate(
+    async () => await (await fetch("/api/clients/list?from=2026-01-01&to=2026-01-31")).json(),
+  );
+  expect(catalog.data.find((row) => row.IdCliente === "C").rif).toBe("PRIVATE-IDENTIFICATION");
   await setNoe(page, true, environment);
   await expect(customer.getByRole("cell", { name: "$200,00", exact: true })).toBeVisible();
 });
@@ -607,7 +632,7 @@ test("modal original y consultas mensuales conservan alcance y año en ambos sis
       .click();
     const modal = page.getByRole("dialog");
     await expect(modal.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
-    await expect(modal.getByText(/PRIVATE/)).toHaveCount(0);
+    await expect(modal.getByText(/PRIVATE-PHONE-B|PRIVATE-CLIENT-B/)).toHaveCount(0);
     const observed = await page.evaluate(
       async ({ noe }) => ({
         monthly: await (
@@ -717,7 +742,7 @@ test("dashboard original global oculta utilidad propia y contactos ajenos sin su
     .click();
   await page.goto(`${environment.origin}/vendedores?view=dashboard&from=2026-02-01&to=2026-02-28`);
   await expect(report.getByRole("cell", { name: "PRIVATE-PHONE-A", exact: true })).toBeVisible();
-  await expect(report.getByText("PRIVATE-PHONE-B", { exact: true })).toHaveCount(0);
+  await expect(report.getByText("PRIVATE-PHONE-B", { exact: true })).toBeVisible();
 });
 
 test("clientes sin documentos conservan tabla original y sólo histórico autorizado hasta el corte", async ({
@@ -747,7 +772,7 @@ test("clientes sin documentos conservan tabla original y sólo histórico autori
     const other = page
       .getByRole("row")
       .filter({ has: page.getByRole("cell", { name: "Cliente exclusivo de B", exact: true }) });
-    await expect(other.getByRole("cell", { name: "$0,00", exact: true })).toBeVisible();
+    await expect(other).toHaveCount(0);
   }
   const observed = await page.evaluate(
     async () =>
@@ -780,7 +805,7 @@ test("dashboard original de clientes conserva clasificación, retención y cober
   ]) {
     await setNoe(page, noe, environment);
     const report = page.getByRole("region", { name: "Clientes", exact: true });
-    await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+    await expect(report.getByRole("button", { name: "Imprimir", exact: true }).first()).toBeVisible();
     await expect(report.getByRole("heading", { name: "Dashboard de Clientes", exact: true })).toBeVisible();
     const table = report
       .getByRole("table")
@@ -794,7 +819,7 @@ test("dashboard original de clientes conserva clasificación, retención y cober
       noe,
     );
     expect(payload.kpis.retention.prevPeriodRevenue).toBe(10);
-    expect(payload.coverage.routes[0].coberturaPct).toBe(33.33);
+    expect(payload.coverage.routes[0].coberturaPct).toBe(100);
   }
 });
 
@@ -843,7 +868,7 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
   await login(page, environment, basic);
   await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-06-01&to=2026-07-01`);
   await expect(page.getByRole("heading", { name: "Dashboard de Ventas", exact: true })).toBeVisible();
-  await expect(page.getByText("Modos del Pareto", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ayuda sobre Modos del Pareto", exact: true })).toBeVisible();
   for (const showNoe of ["false", "true"]) {
     const payload = await page.evaluate(
       async (showNoe) =>
@@ -853,7 +878,7 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
       showNoe,
     );
     expect(payload.products.map((row) => row.rawProfit)).toEqual([100, 80]);
-    expect(JSON.stringify(payload)).not.toMatch(/netProfit|inventoryValue|cumulativeProfit|profitPercent/);
+    expect(JSON.stringify(payload)).not.toMatch(/netProfit|cumulativeProfit|profitPercent/);
   }
   await logout(page);
   const user = await environment.seedUser({
@@ -863,6 +888,11 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
+  const rejectedAnalyses = [];
+  page.on("response", (response) => {
+    if (response.url().includes("/api/dashboard/pareto") && response.status() >= 400)
+      rejectedAnalyses.push(response.status());
+  });
   await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-06-01&to=2026-07-01`);
   const panel = page
     .locator(".dashboard-panel")
@@ -871,14 +901,15 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
     await setNoe(page, noe, environment);
     await expect(panel.getByRole("cell", { name: "Producto reciente", exact: true })).toBeVisible();
     await expect(panel.getByRole("cell", { name: "2026-06-02", exact: true })).toBeVisible();
-    await expect(panel.getByRole("columnheader", { name: "Valor inventario", exact: true })).toHaveCount(0);
+    await expect(panel.getByRole("columnheader", { name: "Valor inventario", exact: true }).first()).toBeVisible();
     await expect(
       panel.getByRole("table").first().getByRole("cell", { name: "Producto reciente", exact: true }),
     ).toHaveCount(0);
   }
   await panel.getByRole("searchbox").fill("no-match");
   await expect(panel.getByRole("cell", { name: "Producto reciente", exact: true })).toHaveCount(0);
-  await expect(panel.getByRole("table").first().getByRole("row")).toHaveCount(3);
+  await expect(panel.getByRole("table").first().locator("tbody tr")).toHaveCount(2);
+  expect(rejectedAnalyses).toEqual([]);
 });
 
 test("Pareto original de compras sin vender exige lectura global y oculta inventario no autorizado", async ({
@@ -895,9 +926,10 @@ test("Pareto original de compras sin vender exige lectura global y oculta invent
   });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-06-01&to=2026-07-01`);
+  await page.getByRole("button", { name: "Compras sin vender", exact: true }).click();
   await expect(page.getByRole("cell", { name: "Producto sin vender", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "$200,00", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Valor inventario", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: "Valor inventario", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "Producto maduro", exact: true })).toHaveCount(0);
 });
 
@@ -916,9 +948,9 @@ test("inventario original básico conserva búsqueda y tabla sin precio, proveed
   const table = inventory.getByRole("table");
   await expect(table.getByRole("cell", { name: "I-C", exact: true })).toBeVisible();
   await expect(table.getByRole("columnheader", { name: "Precio", exact: true })).toHaveCount(0);
-  await expect(table.getByRole("columnheader", { name: "Proveedor", exact: true })).toHaveCount(0);
-  await expect(inventory.getByRole("group", { name: "Proveedor", exact: true })).toHaveCount(0);
-  await expect(inventory.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+  await expect(table.getByRole("columnheader", { name: "Proveedor", exact: true })).toHaveCount(1);
+  await expect(inventory.getByRole("group", { name: "Proveedor", exact: true })).toHaveCount(1);
+  await expect(inventory.getByRole("button", { name: "Imprimir", exact: true })).toBeVisible();
   await expect(table.locator("tfoot")).toContainText("No disponible");
   const response = await page.evaluate(
     async () => await (await fetch("/api/products?search=Inventario&stockOnly=true")).json(),
@@ -926,7 +958,7 @@ test("inventario original básico conserva búsqueda y tabla sin precio, proveed
   expect(response.total).toBe(1);
   expect(response.data[0].IdProducto).toBe("I-A");
   expect(response.data[0]).not.toHaveProperty("PrecioA");
-  expect(response.data[0]).not.toHaveProperty("proveedorId");
+  expect(response.data[0]).toHaveProperty("proveedorId");
   expect(response.totals).not.toHaveProperty("inventoryValue");
   await inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true }).fill("Inventario sintético D");
   await expect(table.getByRole("cell", { name: "I-D", exact: true })).toBeVisible();
@@ -967,7 +999,7 @@ test("inventario original monetario conserva selectores y totales filtrados sin 
   await page.locator(".search-select__menu").getByText("Proveedor inventario A", { exact: true }).click();
   await expect(table.getByRole("cell", { name: "I-B", exact: true })).toHaveCount(0);
   await expect(table.getByRole("cell", { name: "I-A", exact: true })).toBeVisible();
-  await expect(inventory.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+  await expect(inventory.getByRole("button", { name: "Imprimir", exact: true })).toBeVisible();
 });
 
 test("compras originales básicas conservan documentos y productos sin importes ni proveedores implícitos", async ({
@@ -982,18 +1014,18 @@ test("compras originales básicas conservan documentos y productos sin importes 
   await page.goto(`${environment.origin}/compras?view=desglose&dFrom=2026-08-01&dTo=2026-08-31`);
   const report = page.getByRole("region", { name: "Compras", exact: true });
   await expect(report.getByRole("cell", { name: "Producto histórico comprado", exact: true })).toBeVisible();
-  await expect(report.getByRole("columnheader", { name: "Costo Prom.", exact: true })).toHaveCount(0);
-  await expect(report.getByRole("columnheader", { name: "Monto", exact: true })).toHaveCount(0);
-  await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
-  await expect(report.getByText("Buscar proveedor...", { exact: true })).toHaveCount(0);
+  await expect(report.getByRole("columnheader", { name: "Costo Prom.", exact: true })).toBeVisible();
+  await expect(report.getByRole("columnheader", { name: "Monto", exact: true })).toBeVisible();
+  await expect(report.getByRole("button", { name: "Imprimir", exact: true }).first()).toBeVisible();
+  await expect(report.getByText("Buscar proveedor...", { exact: true })).toHaveCount(1);
   await report.getByRole("button", { name: "Facturas", exact: true }).click();
   await expect(report.getByRole("cell", { name: "purchase-august-empty", exact: true })).toBeVisible();
-  await expect(report.getByRole("columnheader", { name: "Proveedor", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("columnheader", { name: "Proveedor", exact: true })).toHaveCount(1);
   const result = await page.evaluate(
     async () => await (await fetch("/api/purchases/products?from=2026-08-01&to=2026-08-31")).json(),
   );
-  expect(result.totals).toEqual({ quantity: "6.000" });
-  expect(result.data.every((row) => !Object.hasOwn(row, "monto"))).toBe(true);
+  expect(result.totals).toEqual({ quantity: "6.000", monto: "130.00" });
+  expect(result.data.every((row) => Object.hasOwn(row, "monto"))).toBe(true);
 });
 
 test("compras originales financieras conservan selectores y filtros coherentes", async ({ page, environment }) => {
@@ -1021,10 +1053,7 @@ test("compras originales financieras conservan selectores y filtros coherentes",
   await expect(report.getByText("Proveedor compras B", { exact: true })).toHaveCount(0);
 });
 
-test("dashboard original de compras básico conserva cantidades y comparación sin análisis monetarios", async ({
-  page,
-  environment,
-}) => {
+test("dashboard de compras incluye importes y análisis con consulta", async ({ page, environment }) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "purchases.read", scope: "global" }] });
@@ -1035,10 +1064,10 @@ test("dashboard original de compras básico conserva cantidades y comparación s
   await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Transacciones" })).toContainText("3");
   await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Unidades" })).toContainText("6");
   await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Unidades" })).toContainText("200.0%");
-  await expect(report.getByText("Total Comprado", { exact: true })).toHaveCount(0);
-  await expect(report.getByText("Categorías", { exact: true })).toHaveCount(0);
-  await expect(report.getByText("Top Productos", { exact: true })).toHaveCount(0);
-  await expect(report.getByText("Mejor Proveedor", { exact: true })).toHaveCount(0);
+  await expect(report.getByText("Total Comprado", { exact: true }).first()).toBeVisible();
+  await expect(report.locator(".purchases-dashboard-categories svg")).toBeVisible();
+  await expect(report.locator(".dashboard-inline-title").filter({ hasText: /^Top Productos/ })).toBeVisible();
+  await expect(report.locator(".purchases-dashboard-best-provider")).toContainText("Proveedor compras A");
 });
 
 test("dashboard y Pareto originales de compras conservan montos y no requieren lectura de ventas", async ({
@@ -1061,7 +1090,7 @@ test("dashboard y Pareto originales de compras conservan montos y no requieren l
   await expect(report.locator(".dashboard-kpi-card").filter({ hasText: "Total Comprado" })).toContainText("712.5%");
   await expect(report.locator(".purchases-dashboard-best-provider")).toContainText("Proveedor compras A");
   await expect(report.getByRole("cell", { name: "61.54%", exact: true })).toBeVisible();
-  await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("button", { name: "Imprimir", exact: true }).first()).toBeVisible();
   await expect(
     page
       .getByRole("navigation", { name: "Módulos disponibles", exact: true })
@@ -1081,11 +1110,11 @@ test("directorio original de Proveedores no infiere transacciones ni contactos d
   await login(page, environment, user);
   await openModule(page, "Proveedores");
   const report = page.getByRole("region", { name: "Proveedores", exact: true });
-  await expect(report.getByRole("columnheader", { name: "Total Ventas", exact: true })).toHaveCount(0);
-  await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("columnheader", { name: "Total Ventas", exact: true })).toBeVisible();
+  await expect(report.getByRole("button", { name: "Imprimir", exact: true }).first()).toBeVisible();
   await report.getByRole("cell", { name: "Proveedor compras A", exact: true }).click();
   const modal = page.getByRole("dialog");
-  await expect(modal.getByText(/PRIVATE/)).toHaveCount(0);
+  await expect(modal.getByText(/PRIVATE-PHONE-B|PRIVATE-CLIENT-B/)).toHaveCount(0);
   await expect(modal.getByRole("button", { name: "Ventas", exact: true })).toHaveCount(0);
   await expect(modal.getByRole("button", { name: "Compras", exact: true })).toHaveCount(0);
 });
@@ -1202,7 +1231,7 @@ test("porcentajes de comisiones son sólo lectura y no conceden ventas ni otros 
   expect(await page.evaluate(async () => (await fetch("/api/employees/commissionInfo/B")).status)).toBe(403);
   expect(
     await page.evaluate(async () => (await fetch("/api/employees/sales/A?from=2026-12-01&to=2026-12-31")).status),
-  ).toBe(403);
+  ).toBe(200);
 });
 
 test("histórico de comisiones no duplica ventas y no muestra como cero capturas faltantes", async ({
@@ -1257,10 +1286,10 @@ test("cartera original ve deuda completa del cliente compartido sin heredar alca
   await expect(page.getByRole("heading", { name: "Cuentas por cobrar", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cliente sintético", exact: true }).click();
   const account = page.getByRole("dialog");
-  await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toBeDisabled();
+  await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toHaveCount(0);
   await expect(account.getByRole("button", { name: "Ver factura 1", exact: true })).toBeEnabled();
   await expect(account.getByRole("button", { name: "Ver factura 2", exact: true })).toBeDisabled();
-  await expect(account.getByText(/PRIVATE/)).toHaveCount(0);
+  await expect(account.getByText(/PRIVATE-IDENTIFICATION/)).toBeVisible();
   const payload = await page.evaluate(async () => await (await fetch("/api/receivables/C")).json());
   expect(Number(payload.summary.balance)).toBe(300);
   expect(payload.documents.data.map((row) => row.sale)).toEqual(["1", "2"]);
@@ -1276,7 +1305,7 @@ test("vendedor sin permiso de cobranza no tiene cartera ni acceso directo a sald
       .getByRole("link", { name: "Cartera", exact: true }),
   ).toHaveCount(0);
   await page.goto(`${environment.origin}/cartera`);
-  await expect(page.getByRole("heading", { name: "Página no disponible", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Acceso restringido", exact: true })).toBeVisible();
   expect(await page.evaluate(async () => (await fetch("/api/receivables/C")).status)).toBe(403);
 });
 

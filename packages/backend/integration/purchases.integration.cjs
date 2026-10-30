@@ -34,7 +34,7 @@ test("compras exige lectura explícita, no se infiere de ventas, costos o provee
   }
 });
 
-test("lectura básica conserva documentos sin líneas y cantidades sin exponer importes o proveedores", async () => {
+test("consulta incluye importes y conserva documentos sin líneas", async () => {
   const client = await reader([grant("purchases.read"), grant("inventory.costs"), grant("sales.financial")]);
   const invoices = await client.request(`/api/purchases/invoices?${range}&sortBy=numero&sortDir=asc&limit=1`);
   expect(invoices.status).toBe(200);
@@ -44,24 +44,24 @@ test("lectura básica conserva documentos sin líneas y cantidades sin exponer i
     unidades: "5.000",
     fecha: "2026-08-01",
   });
-  expect(invoices.body.totals).toEqual({ unidades: "6.000" });
-  expect(JSON.stringify(invoices.body)).not.toMatch(/monto|Precio|avgUnitCost|proveedor|PRIVATE|80\.00|130\.00/i);
+  expect(invoices.body.totals).toEqual({ unidades: "6.000", monto: "130.00" });
+  expect(JSON.stringify(invoices.body)).not.toMatch(/PRIVATE/i);
   const empty = await client.request(`/api/purchases/invoices?${range}&search=purchase-august-empty`);
   expect(empty.body.data[0].unidades).toBe("0.000");
   const products = await client.request(`/api/purchases/products?${range}`);
   expect(products.body.pagination.total).toBe(2);
   expect(products.body.data.find((row) => row.productId === "MISSING-PUR").product).toBe("Producto histórico comprado");
-  expect(products.body.totals).toEqual({ quantity: "6.000" });
+  expect(products.body.totals).toEqual({ quantity: "6.000", monto: "130.00" });
 });
 
-test("costos y todos sus derivados y ordenaciones requieren purchases.costs", async () => {
+test("consulta de compras incluye costos y ordenación por importes", async () => {
   const basic = await reader([grant("purchases.read")]);
   for (const [path, sort] of [
     ["invoices", "monto"],
     ["products", "monto"],
     ["products", "avgUnitCost"],
   ])
-    expect((await basic.request(`/api/purchases/${path}?${range}&sortBy=${sort}`)).status).toBe(403);
+    expect((await basic.request(`/api/purchases/${path}?${range}&sortBy=${sort}`)).status).toBe(200);
   const client = await reader([grant("purchases.read"), grant("purchases.costs")]);
   const products = await client.request(`/api/purchases/products?${range}&sortBy=monto&limit=1`);
   expect(products.body.data[0]).toMatchObject({ productId: "P", monto: "80.00", avgUnitCost: "16.00" });
@@ -73,11 +73,13 @@ test("costos y todos sus derivados y ordenaciones requieren purchases.costs", as
   expect(header.body.data[0].monto).toBe("0.00");
 });
 
-test("proveedores son permiso separado y su identificación no entra en compras", async () => {
+test("el proveedor operativo se consulta desde Compras sin abrir Proveedores", async () => {
   const basic = await reader([grant("purchases.read")]);
   for (const suffix of ["proveedorId=PUR-A", "sortBy=proveedor"])
-    expect((await basic.request(`/api/purchases/invoices?${range}&${suffix}`)).status).toBe(403);
-  expect((await basic.request(`/api/purchases/invoices?${range}&search=Proveedor`)).body.pagination.total).toBe(0);
+    expect((await basic.request(`/api/purchases/invoices?${range}&${suffix}`)).status).toBe(200);
+  expect(
+    (await basic.request(`/api/purchases/invoices?${range}&search=Proveedor`)).body.pagination.total,
+  ).toBeGreaterThan(0);
   const client = await reader([grant("purchases.read"), grant("providers.read")]);
   const result = await client.request(`/api/purchases/invoices?${range}&proveedorId=PUR-A&sortBy=proveedor`);
   expect(result.status).toBe(200);
@@ -146,7 +148,9 @@ test("tablas de compras son fijas y los parámetros no abren exportaciones ni es
       })
     ).status,
   ).toBe(403);
-  expect((await client.request("/api/groups")).status).toBe(200);
+  expect(
+    (await client.request("/api/groups", { headers: { "X-Access-Resource": "purchases.breakdown" } })).status,
+  ).toBe(200);
 });
 
 test("identificadores binarios no mezclan documentos ni proveedores por colación", async () => {

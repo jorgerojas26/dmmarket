@@ -79,12 +79,21 @@ export function AccessDialog({ title, children, onClose, dirty = false, busy = f
     );
 }
 
-export function ManagementForm({ children, onSubmit, button, disabled = false, onCancel, onBusyChange }) {
+export function ManagementForm({
+    children,
+    onSubmit,
+    button,
+    disabled = false,
+    onCancel,
+    onBusyChange,
+    readOnly = false,
+}) {
     const { runPrivileged } = useAuth();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const submit = async (event) => {
         event.preventDefault();
+        if (readOnly) return;
         setError('');
         setBusy(true);
         onBusyChange?.(true);
@@ -100,23 +109,25 @@ export function ManagementForm({ children, onSubmit, button, disabled = false, o
     };
     return (
         <form onSubmit={submit} method="post">
-            <fieldset disabled={busy}>
+            <fieldset disabled={busy || readOnly}>
                 {children}
                 {error && (
                     <p role="alert" className="access-error">
                         {error}
                     </p>
                 )}
-                <div className="access-form-actions">
-                    {onCancel && (
-                        <button type="button" className="btn btn-outline-light" onClick={onCancel}>
-                            Cancelar
+                {!readOnly && (
+                    <div className="access-form-actions">
+                        {onCancel && (
+                            <button type="button" className="btn btn-outline-light" onClick={onCancel}>
+                                Cancelar
+                            </button>
+                        )}
+                        <button type="submit" className="btn btn-primary" disabled={disabled}>
+                            {busy ? 'Guardando…' : button}
                         </button>
-                    )}
-                    <button type="submit" className="btn btn-primary" disabled={disabled}>
-                        {busy ? 'Guardando…' : button}
-                    </button>
-                </div>
+                    </div>
+                )}
             </fieldset>
         </form>
     );

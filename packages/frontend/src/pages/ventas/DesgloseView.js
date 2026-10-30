@@ -1,5 +1,5 @@
 import { fetchInvoiceDetail } from 'api/invoice';
-import { fetchSalesExport, fetchInvoiceExport } from 'api/sales';
+import { fetchInvoiceExport, fetchSalesExport } from 'api/sales';
 import { useAuth } from 'auth/context';
 import ClientSearch from 'components/ClientSearch';
 import DateRangePicker from 'components/DateRangePicker';
@@ -29,8 +29,8 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 const PAGE_SIZE = 50;
 
 const DesgloseView = ({ isActive }) => {
-    const { session, can } = useAuth();
-    const has = (capability) => session.permissions.some((grant) => grant.capability === capability);
+    const { can, has } = useAuth();
+
     const [reportError, setReportError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
@@ -97,7 +97,10 @@ const DesgloseView = ({ isActive }) => {
 
     // ---- Productos table state ----
     const [productosPage, setProductosPage] = useState(1);
-    const [productosSort, setProductosSort] = useState({ sortBy: 'rawProfit', sortDir: 'desc' });
+    const [productosSort, setProductosSort] = useState({
+        sortBy: has('amounts') ? 'rawProfit' : 'product',
+        sortDir: 'desc',
+    });
     const [productosSearch, setProductosSearch] = useState('');
 
     // ---- Factura detail modal ----
@@ -756,8 +759,8 @@ const DesgloseView = ({ isActive }) => {
             loading={facturasLoading}
             columns={facturasColumns.filter(
                 (col) =>
-                    !['utilidad', 'promedio'].includes(col.accessor) ||
-                    Object.hasOwn(facturasRes?.totals || {}, 'utilidad'),
+                    !['monto', 'utilidad', 'promedio'].includes(col.accessor) ||
+                    Object.hasOwn(facturasRes?.totals || {}, col.accessor),
             )}
             fillHeight
             summaries={facturasSummaries}
@@ -798,8 +801,8 @@ const DesgloseView = ({ isActive }) => {
             loading={productosLoading}
             columns={productosColumns.filter(
                 (col) =>
-                    !['netProfit', 'averageProfitPercent'].includes(col.accessor) ||
-                    Object.hasOwn(productosRes?.totals || {}, 'netProfit'),
+                    !['rawProfit', 'netProfit', 'averageProfitPercent'].includes(col.accessor) ||
+                    Object.hasOwn(productosRes?.totals || {}, col.accessor),
             )}
             fillHeight
             summaries={productosSummaries}

@@ -82,11 +82,12 @@ export default function AccessWorkspace() {
     const [dirty, setDirty] = useState(false);
     const allowNavigation = useRef(false);
     const { requestClose, confirmation } = useDiscardChanges(dirty);
-    const creating = location.hash === '#nuevo-usuario' && can('access.users') && can('access.roles');
-    const view = location.hash === '#roles' && can('access.roles') ? 'roles' : 'usuarios';
+    const creating = location.hash === '#nuevo-usuario' && can('access.users.create') && can('access.roles.assign');
+    const users = ['access.users.read', 'access.links.read', 'access.recovery.read'].some(can);
+    const view = (location.hash === '#roles' && can('access.roles.read')) || !users ? 'roles' : 'usuarios';
     const items = [
-        { eventKey: 'usuarios', label: 'Usuarios', icon: usersIcon },
-        ...(can('access.roles') ? [{ eventKey: 'roles', label: 'Roles', icon: rolesIcon }] : []),
+        ...(users ? [{ eventKey: 'usuarios', label: 'Usuarios', icon: usersIcon }] : []),
+        ...(can('access.roles.read') ? [{ eventKey: 'roles', label: 'Roles', icon: rolesIcon }] : []),
     ];
     useEffect(() => {
         if (!creating && location.hash !== `#${view}`) history.replace({ ...location, hash: `#${view}` });

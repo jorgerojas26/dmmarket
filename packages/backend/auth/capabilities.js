@@ -1,55 +1,6 @@
 const { createMongoAbility, subject } = require("@casl/ability");
 
-const DEFINITIONS = {
-  "sales.read": { assigned: true },
-  "sales.financial": { assigned: true },
-  "sales.export": { assigned: true },
-  "clients.read": {},
-  "clients.export": {},
-  "clients.personal": {},
-  "sellers.read": { assigned: true },
-  "sellers.export": { assigned: true },
-  "sellers.personal": { assigned: true },
-  "commissions.read": { assigned: true },
-  "commissions.update": { privileged: true },
-  "receivables.read": {},
-  "receivables.export": {},
-  "receivables.payment": { privileged: true },
-  "receivables.void": { privileged: true },
-  "receivables.close": { privileged: true },
-  "receivables.reopen": { privileged: true },
-  "purchases.read": {},
-  "purchases.costs": {},
-  "purchases.export": {},
-  "providers.read": {},
-  "providers.export": {},
-  "inventory.read": {},
-  "inventory.costs": {},
-  "inventory.export": {},
-  "preferences.read": {},
-  "preferences.update": { privileged: true },
-  "rates.read": {},
-  "rates.sync": { privileged: true },
-  "cache.clear": { privileged: true },
-  "backups.read": {},
-  "backups.create": { privileged: true },
-  "updates.read": {},
-  "updates.execute": { privileged: true },
-  "access.users": { privileged: true },
-  "access.roles": { privileged: true },
-  "access.links": { privileged: true },
-  "access.recover": { privileged: true },
-  "audit.read": {},
-};
-
-const CAPABILITIES = Object.freeze(
-  Object.fromEntries(
-    Object.entries(DEFINITIONS).map(([name, options]) => [
-      name,
-      Object.freeze({ assigned: options.assigned === true, privileged: options.privileged === true }),
-    ]),
-  ),
-);
+const { CAPABILITIES, RESOURCES } = require("@dmmarket/permissions");
 
 function sellerId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
@@ -89,10 +40,24 @@ function createAccess(grants, linkedSellerIds) {
     });
   }
   const ability = createMongoAbility(rules);
-  const hasGlobal = (capability) => scopes.get(capability) === "global";
+  const dependencies = (capability) => {
+    const definition = CAPABILITIES[capability];
+    if (!definition) return [];
+    return [
+      capability,
+      ...(definition.action === "read" ? [] : [`${definition.resource}.read`]),
+      ...(!RESOURCES[definition.resource].completeConsultation && ["financial", "inventory"].includes(definition.action)
+        ? [`${definition.resource}.amounts`]
+        : []),
+    ];
+  };
+  const hasGlobal = (capability) =>
+    Object.hasOwn(CAPABILITIES, capability) && dependencies(capability).every((key) => scopes.get(key) === "global");
   const canRecord = (capability, recordSellerId) => {
     if (!Object.hasOwn(CAPABILITIES, capability)) return false;
-    return ability.can(capability, subject("record", { sellerId: sellerId(recordSellerId) }));
+    return dependencies(capability).every((key) =>
+      ability.can(key, subject("record", { sellerId: sellerId(recordSellerId) })),
+    );
   };
   return Object.freeze({
     privileged: validated.some(({ capability }) => CAPABILITIES[capability].privileged),
@@ -109,7 +74,7 @@ function createAccess(grants, linkedSellerIds) {
     scopeFor(capability) {
       return {
         global: hasGlobal(capability),
-        sellerIds: scopes.get(capability) === "assigned" ? [...sellers] : [],
+        sellerIds: hasGlobal(capability) ? [] : sellers.filter((id) => canRecord(capability, id)),
       };
     },
   });

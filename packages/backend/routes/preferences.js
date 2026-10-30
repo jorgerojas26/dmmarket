@@ -12,7 +12,7 @@ function createPreferenceRoutes({ sessions, security }) {
     router.get(path, async (req, res, next) => {
       try {
         const value = await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
-          if (restricted && !access.hasGlobal("preferences.read")) forbidden();
+          if (restricted && !access.hasGlobal("settings.preferences.read")) forbidden();
           return preferences(transaction, req.query);
         });
         res.json(value);
@@ -25,7 +25,8 @@ function createPreferenceRoutes({ sessions, security }) {
     try {
       if (!req.is("application/json")) throw Object.assign(new Error("Envía JSON."), { status: 415 });
       const value = await sessions.withSession(req.sessionID, { recent: true }, ({ transaction, access, user }) => {
-        if (!access.hasGlobal("preferences.read") || !access.hasGlobal("preferences.update")) forbidden();
+        if (!access.hasGlobal("settings.preferences.read") || !access.hasGlobal("settings.preferences.update"))
+          forbidden();
         return updatePreferences(transaction, user, req.body, req.query);
       });
       reportCache.clear();

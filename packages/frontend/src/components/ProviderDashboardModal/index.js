@@ -167,6 +167,7 @@ const documentTable = (detail, format) => {
 
 const IconSales = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -184,6 +185,7 @@ const IconSales = () => (
 
 const IconHash = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -202,6 +204,7 @@ const IconHash = () => (
 
 const IconTicket = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -236,6 +239,7 @@ const IconProfit = () => (
 
 const IconUserStar = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -283,18 +287,18 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         },
         [close],
     );
-    const { session, can } = useAuth();
-    const has = (cap) => session.permissions.some((grant) => grant.capability === cap);
-    const canSales = has('sales.read'),
-        canPurchases = can('purchases.read'),
-        canClients = canSales && can('clients.read'),
-        canSellers = canSales && has('sellers.read');
+    const { can, has } = useAuth();
+
+    const canSales = has('providers.sales.read'),
+        canPurchases = has('providers.purchases.read'),
+        canClients = has('providers.clients.read'),
+        canSellers = has('providers.sellers.read');
     const allowedTabs = [
         ...(canSales ? ['ventas'] : []),
         ...(canPurchases ? ['compras'] : []),
         ...(canClients ? ['clientes'] : []),
         ...(canSellers ? ['vendedores'] : []),
-        ...(canSales ? ['productos'] : []),
+        ...(has('providers.products.read') ? ['productos'] : []),
     ];
     const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
@@ -363,7 +367,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const { data: summary, isLoading: summaryLoading } = useProviderSummary(
         provider?.IdProveedor,
         { from: dateRange.from, to: dateRange.to, showNoe },
-        enabled,
+        enabled && has('providers.details.read'),
     );
 
     const { data: purchasesData, isLoading: purchasesLoading } = useProviderPurchases(
@@ -441,7 +445,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             sortDir: productsSort[0]?.desc ? 'desc' : 'asc',
             showNoe,
         },
-        enabled && canSales && activeTab === 'productos',
+        enabled && has('providers.products.read') && activeTab === 'productos',
     );
 
     const handleDateRangeChange = ({ from, to }) => {
@@ -483,11 +487,15 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         setSalesPage(1);
     }, []);
     const handleClientsSort = useCallback((s) => {
-        setClientsSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
+        setClientsSort(
+            s.length ? s : [{ id: has('providers.clients.amounts') ? 'totalVentas' : 'cliente', desc: true }],
+        );
         setClientsPage(1);
     }, []);
     const handleSellersSort = useCallback((s) => {
-        setSellersSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
+        setSellersSort(
+            s.length ? s : [{ id: has('providers.sellers.amounts') ? 'totalVentas' : 'vendedor', desc: true }],
+        );
         setSellersPage(1);
     }, []);
     const handleProductsSort = useCallback((s) => {
@@ -1181,9 +1189,16 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     )}
 
                     <div className="provider-stats-row">
-                        {stats.map((stat) => (
-                            <StatCard key={stat.label} {...stat} loading={summaryLoading} />
-                        ))}
+                        {stats
+                            .filter(
+                                (stat) =>
+                                    has('providers.details.read') &&
+                                    (has('providers.details.amounts') ||
+                                        !['Total Compras', 'Total Ventas', 'Utilidad'].includes(stat.label)),
+                            )
+                            .map((stat) => (
+                                <StatCard key={stat.label} {...stat} loading={summaryLoading} />
+                            ))}
                     </div>
 
                     <div className="provider-tabs-container">

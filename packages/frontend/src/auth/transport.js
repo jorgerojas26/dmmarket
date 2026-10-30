@@ -1,3 +1,5 @@
+import { resourceFromLocation } from './resources';
+
 let originalFetch;
 let generation = 0;
 let csrfToken = null;
@@ -65,6 +67,22 @@ export function installAuthTransport() {
                     : 60000,
         );
         const headers = new Headers(init.headers || (typeof resource !== 'string' ? resource.headers : undefined));
+        const accessResource = resourceFromLocation();
+        if (
+            accessResource &&
+            !headers.has('X-Access-Resource') &&
+            ['/api/clients', '/api/employees', '/api/clients/routes', '/api/providers/options', '/api/groups'].includes(
+                url.pathname,
+            )
+        )
+            headers.set('X-Access-Resource', accessResource);
+        if (
+            /^\/api\/(invoices\/[^/]+\/detail|exports\/sales(?:\/[^/]+)?)$/.test(url.pathname) &&
+            !url.pathname.endsWith('/dispatch')
+        ) {
+            if (window.location.pathname === '/clientes') headers.set('X-Access-Resource', 'clients.documents');
+            if (window.location.pathname === '/vendedores') headers.set('X-Access-Resource', 'sellers.documents');
+        }
         const method = (init.method || (typeof resource !== 'string' ? resource.method : 'GET')).toUpperCase();
         if (unavailable && !['GET', 'HEAD', 'OPTIONS'].includes(method) && url.pathname !== '/api/auth/logout') {
             cleanup();

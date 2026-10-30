@@ -38,7 +38,7 @@ test.each(["false", "true"])(
     const client = await reader([grant("clients.read"), grant("sales.read", "assigned")]);
     const result = await client.request(`/api/clients/sin-facturar?${period}&showNoe=${showNoe}&limit=1`);
     expect(result.status).toBe(200);
-    expect(result.body.total).toBe(3);
+    expect(result.body.total).toBe(1);
     expect(result.body.data).toHaveLength(1);
     expect(result.body.data[0]).toMatchObject({
       IdCliente: "C",
@@ -47,13 +47,8 @@ test.each(["false", "true"])(
     });
     expect(JSON.stringify(result.body)).not.toMatch(/rif|PRIVATE|profit|utilidad|phone/i);
     const later = await client.request(`/api/clients/sin-facturar?${period}&showNoe=${showNoe}&page=2&limit=1`);
-    expect(later.body.total).toBe(3);
-    expect(later.body.data[0]).toMatchObject({
-      IdCliente: "CB",
-      last_factura: null,
-      dias_inactivo: null,
-      revenue_historico: "0.00",
-    });
+    expect(later.body.total).toBe(1);
+    expect(later.body.data).toEqual([]);
     const before = await client.request(`/api/clients/sin-facturar?from=2025-11-01&to=2025-11-30&showNoe=${showNoe}`);
     expect(before.body.data.every((row) => row.last_factura === null && Number(row.revenue_historico) === 0)).toBe(
       true,
@@ -68,10 +63,7 @@ test.each(["false", "true"])(
     const result = await client.request(`/api/clients/sin-facturar?from=2026-01-02&to=2026-01-05&showNoe=${showNoe}`);
     expect(result.status).toBe(200);
     expect(result.body.data.some((row) => row.IdCliente === "C")).toBe(showNoe !== "true");
-    expect(result.body.data.find((row) => row.IdCliente === "CB")).toMatchObject({
-      last_factura: null,
-      revenue_historico: "0.00",
-    });
+    expect(result.body.data.find((row) => row.IdCliente === "CB")).toBeUndefined();
     const global = await reader([grant("clients.read"), grant("sales.read")]);
     const all = await global.request(`/api/clients/sin-facturar?from=2026-01-02&to=2026-01-05&showNoe=${showNoe}`);
     expect(all.body.data.map((row) => row.IdCliente)).toEqual(["NEVER"]);
@@ -107,7 +99,7 @@ test("documentos sin líneas cuentan como actividad; anulados y futuros no", asy
   ]);
   const client = await reader([grant("clients.read"), grant("sales.read", "assigned")]);
   const april = await client.request("/api/clients/sin-facturar?from=2026-04-01&to=2026-04-30");
-  expect(april.body.data.map((row) => row.IdCliente)).toEqual(["CB", "NEVER"]);
+  expect(april.body.data.map((row) => row.IdCliente)).toEqual(["CB"]);
   expect(april.body.data.every((row) => row.last_factura === null)).toBe(true);
   const may = await client.request("/api/clients/sin-facturar?from=2026-05-01&to=2026-05-31");
   expect(may.body.data.find((row) => row.IdCliente === "C").dias_inactivo).toBe(60);
@@ -125,10 +117,7 @@ test("collation insensible no amplía histórico ni excluye por vendedor ajeno",
     .insert({ IdFactura: "lowercase", IdProducto: "P", Precio: 999, Costo: 1, Cantidad: 1 });
   const client = await reader([grant("clients.read"), grant("sales.read", "assigned")]);
   const result = await client.request(`/api/clients/sin-facturar?${period}`);
-  expect(result.body.data.find((row) => row.IdCliente === "NEVER")).toMatchObject({
-    last_factura: null,
-    revenue_historico: "0.00",
-  });
+  expect(result.body.data.find((row) => row.IdCliente === "NEVER")).toBeUndefined();
   const global = await reader([grant("clients.read"), grant("sales.read")]);
   const narrowed = await global.request(`/api/clients/sin-facturar?${period}&employeeId=A`);
   expect(narrowed.body.data.find((row) => row.IdCliente === "NEVER")).toMatchObject({

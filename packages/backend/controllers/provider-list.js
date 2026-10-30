@@ -9,12 +9,12 @@ function fail(status) {
 }
 
 async function providerList(tx, access, query) {
-  if (!access.hasGlobal("providers.read")) fail(403);
-  const sales = access.scopeFor("sales.read");
+  if (!access.hasAny("read")) fail(403);
+  const sales = access.scopeFor("read");
   const selling = !!query.from && (sales.global || sales.sellerIds.length > 0);
-  const buying = !!query.from && access.hasGlobal("purchases.read");
+  const buying = !!query.from && access.hasGlobal("read");
   const financial = selling && financialFields(access, query);
-  const costs = buying && access.hasGlobal("purchases.costs");
+  const costs = buying && access.hasGlobal("amounts");
   const keys = [
     "IdProveedor",
     "Empresa",

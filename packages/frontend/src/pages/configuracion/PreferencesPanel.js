@@ -54,68 +54,74 @@ export default function PreferencesPanel() {
             <header className="report-settings__header">
                 <h1 id="system-preferences-title">Preferencias del sistema</h1>
                 <p>Ajustes generales para tu negocio.</p>
-                {!editable && <span className="report-settings__badge">Solo lectura</span>}
-            </header>
-            <section className="report-settings__section">
-                {error ? (
-                    <div role="alert">
-                        <p>No se pudieron cargar las preferencias del sistema.</p>
-                        <button type="button" className="btn btn-outline-light btn-sm" onClick={() => mutate()}>
-                            Reintentar
-                        </button>
-                    </div>
-                ) : !data ? (
-                    <p role="status">Cargando preferencias…</p>
-                ) : (
-                    <>
-                        <div className="report-settings__row">
-                            <div>
-                                <h2 id="system-document-label">Tipo de documento</h2>
-                                <p id="system-document-help">Los documentos que consultas en los reportes de ventas.</p>
-                            </div>
-                            <fieldset
-                                className="report-settings__currencies"
-                                disabled={!editable || saving}
-                                aria-busy={saving}
-                                aria-labelledby="system-document-label"
-                                aria-describedby="system-document-help"
-                            >
-                                {[
-                                    ['invoices', 'Facturas'],
-                                    ['delivery-notes', 'Notas de entrega'],
-                                ].map(([value, label]) => (
-                                    <label key={value} className="report-settings__option">
-                                        <input
-                                            type="radio"
-                                            name="documentType"
-                                            value={value}
-                                            checked={selected === value}
-                                            onChange={() => save(value)}
-                                        />
-                                        <span>
-                                            <strong>{label}</strong>
-                                        </span>
-                                    </label>
-                                ))}
-                            </fieldset>
-                        </div>
-                        {(saving || message) && (
-                            <p
-                                role="status"
-                                className={saving ? 'report-settings__status' : 'report-settings__success'}
-                            >
-                                {saving ? 'Guardando…' : message}
-                            </p>
-                        )}
-                        {saveError && (
-                            <p role="alert" className="report-settings__error">
-                                {saveError}
-                            </p>
-                        )}
-                    </>
+                {!editable && !can('settings.currency.update') && (
+                    <span className="report-settings__badge">Solo lectura</span>
                 )}
-            </section>
-            <ReportCurrencyPanel />
+            </header>
+            {can('settings.preferences.read') && (
+                <section className="report-settings__section">
+                    {error ? (
+                        <div role="alert">
+                            <p>No se pudieron cargar las preferencias del sistema.</p>
+                            <button type="button" className="btn btn-outline-light btn-sm" onClick={() => mutate()}>
+                                Reintentar
+                            </button>
+                        </div>
+                    ) : !data ? (
+                        <p role="status">Cargando preferencias…</p>
+                    ) : (
+                        <>
+                            <div className="report-settings__row">
+                                <div>
+                                    <h2 id="system-document-label">Tipo de documento</h2>
+                                    <p id="system-document-help">
+                                        Los documentos que consultas en los reportes de ventas.
+                                    </p>
+                                </div>
+                                <fieldset
+                                    className="report-settings__currencies"
+                                    disabled={!editable || saving}
+                                    aria-busy={saving}
+                                    aria-labelledby="system-document-label"
+                                    aria-describedby="system-document-help"
+                                >
+                                    {[
+                                        ['invoices', 'Facturas'],
+                                        ['delivery-notes', 'Notas de entrega'],
+                                    ].map(([value, label]) => (
+                                        <label key={value} className="report-settings__option">
+                                            <input
+                                                type="radio"
+                                                name="documentType"
+                                                value={value}
+                                                checked={selected === value}
+                                                onChange={() => save(value)}
+                                            />
+                                            <span>
+                                                <strong>{label}</strong>
+                                            </span>
+                                        </label>
+                                    ))}
+                                </fieldset>
+                            </div>
+                            {(saving || message) && (
+                                <p
+                                    role="status"
+                                    className={saving ? 'report-settings__status' : 'report-settings__success'}
+                                >
+                                    {saving ? 'Guardando…' : message}
+                                </p>
+                            )}
+                            {saveError && (
+                                <p role="alert" className="report-settings__error">
+                                    {saveError}
+                                </p>
+                            )}
+                        </>
+                    )}
+                </section>
+            )}
+            {can('settings.currency.read') && <ReportCurrencyPanel />}
         </section>
     );
 }

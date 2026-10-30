@@ -115,9 +115,9 @@ const ProductDetailModal = ({ show, onClose, product, provider, dateRange, showN
         },
         [close],
     );
-    const { session, can } = useAuth();
-    const canSellers = session.permissions.some((grant) => grant.capability === 'sellers.read');
-    const canClients = can('clients.read');
+    const { has } = useAuth();
+    const canSellers = has('providers.sellers.read');
+    const canClients = has('providers.clients.read');
     const { currencyRate } = useContext(CurrencyRateContext) || {};
     const [activeTab, setActiveTab] = usePrivateState(`${prefix}activeTab`, canSellers ? 'vendedores' : 'clientes');
     const [selectedSeller, setSelectedSeller] = usePrivateState(`${prefix}selectedSeller`, null);

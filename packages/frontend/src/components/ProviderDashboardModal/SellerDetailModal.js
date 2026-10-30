@@ -67,7 +67,7 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
         },
         [close],
     );
-    const { can } = useAuth();
+    const { has } = useAuth();
     const { currencyRate } = useContext(CurrencyRateContext);
     const [selectedInvoiceId, setSelectedInvoiceId] = usePrivateState(`${prefix}selectedInvoiceId`, null);
     const [printError, setPrintError] = useState('');
@@ -91,7 +91,7 @@ const SellerDetailModal = ({ show, onClose, seller, provider, dateRange, showNoe
             sortBy: clientSort[0]?.id,
             sortDir: clientSort[0]?.desc ? 'desc' : 'asc',
         },
-        show && can('clients.read'),
+        show && has('providers.clients.read'),
     );
     const {
         data: sales,

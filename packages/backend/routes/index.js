@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { createSalesRoutes } = require("./sales");
 const { createPartyRoutes } = require("./parties");
@@ -34,7 +35,7 @@ function createBusinessRouter({ sessions, security, db, services }) {
   router.use(createCommissionUpdateRoutes({ sessions, security }));
   router.use(createReceivablesRoutes({ sessions, security }));
   router.use((req, _res, next) => {
-    sessions.withSession(req.sessionID, { readOnly: true }, async () => forbidden()).catch(next);
+    requestSession(sessions, req, { readOnly: true }, async () => forbidden()).catch(next);
   });
   return router;
 }

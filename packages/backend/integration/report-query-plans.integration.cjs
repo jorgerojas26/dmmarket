@@ -1,3 +1,4 @@
+const { scopedAccess } = require("../auth/resource-policy");
 const { backend } = require("../../../tests/support/auth-environment.cjs");
 const { realDatabase } = require("../../../tests/support/test-database.cjs");
 const { CAPABILITIES, createAccess } = backend("./auth/capabilities");
@@ -42,7 +43,11 @@ test.each([false, true])(
   async (noe) => {
     const table = noe ? "masternoe" : "masterfact";
     const [{ latest }] = await db(table).max("Fecha as latest");
-    const { base, invoice } = salesBase(db, access, { from: latest, to: latest, showNoe: String(noe) });
+    const { base, invoice } = salesBase(db, scopedAccess(access, "sales.breakdown"), {
+      from: latest,
+      to: latest,
+      showNoe: String(noe),
+    });
     const rows = await plan(base, `mf.${invoice}`);
     expectIndexed(rows, ["c", "v", "p"]);
     if (!noe) expectIndexed(rows, ["sf"]);
@@ -51,6 +56,6 @@ test.each([false, true])(
 
 test("joins de compras usan los índices existentes de productos y proveedores", async () => {
   const [{ latest }] = await db("mastercomp").max("Fecha as latest");
-  const { base } = purchaseBase(db, access, { from: latest, to: latest }, true);
+  const { base } = purchaseBase(db, scopedAccess(access, "purchases.breakdown"), { from: latest, to: latest }, true);
   expectIndexed(await plan(base, "mc.IdFactura"), ["p", "v"]);
 });

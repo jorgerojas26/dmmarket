@@ -69,7 +69,7 @@ test("URL directa y rutas pendientes no montan formularios ni consultas protegid
     "/configuracion",
   ]) {
     await page.goto(`${environment.origin}${path}`);
-    await expect(page.getByRole("heading", { name: "Página no disponible", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Acceso restringido", exact: true })).toBeVisible();
     await expect(page.getByRole("table")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Administración de usuarios", exact: true })).toHaveCount(0);
   }

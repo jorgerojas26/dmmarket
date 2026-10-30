@@ -10,6 +10,6 @@ export function useReceivablesAccess() {
         error,
         refreshStatus: () => mutate(),
         canOperate: (type) => !error && status?.writesAvailable === true && can(`receivables.${type}`),
-        canExport: can('receivables.export'),
+        canExport: can('receivables.read'),
     };
 }

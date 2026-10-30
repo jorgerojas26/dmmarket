@@ -160,7 +160,7 @@ const WaterfallBar = ({ bar, barHeight }) => {
 };
 
 const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
-    const { can } = useAuth();
+    const { has } = useAuth();
     const { data, error, isLoading } = useClientsDashboard(dateRange, showNoe, ruta);
     const [requestedMode, setParetoMode] = useState('utilidad');
     const paretoMode = requestedMode === 'utilidad' && data?.abcUtility ? 'utilidad' : 'ventas';
@@ -269,6 +269,18 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
         );
     };
 
+    const inactiveClients = has('clients.inactive.read') ? (
+        <section className="dashboard-panel mb-4" aria-label="Clientes Sin Facturar" style={{ padding: '16px 20px' }}>
+            <PanelHelpTitle
+                title="Clientes Sin Facturar"
+                help={{
+                    que: 'Clientes sin facturas en el periodo seleccionado.',
+                    servir: 'Identificar a quién contactar para retomar la venta.',
+                }}
+            />
+            <SinFacturarTable from={dateRange.from} to={dateRange.to} ruta={ruta} onRowSelect={onClientSelect} />
+        </section>
+    ) : null;
     return (
         <div style={{ position: 'relative' }}>
             {isLoading && (
@@ -449,7 +461,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                             summary={paretoDataset.summary}
                             config={paretoConfig}
                             exportData={
-                                can('clients.export')
+                                data?.exportAllowed === true
                                     ? async () =>
                                           (
                                               await fetchClientExport({
@@ -677,28 +689,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                 </div>
             </div>
 
-            {/* Clientes sin facturar en el periodo */}
-            <div className="row g-3 mb-4">
-                <div className="col-12">
-                    <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <PanelHelpTitle
-                            title="Clientes Sin Facturar"
-                            help={{
-                                que: 'Clientes sin ninguna factura dentro del periodo elegido (o de la ruta seleccionada).',
-                                leer: 'Ordenados por su venta histórica: los que más dinero han movido aparecen primero. "Nunca" = jamás han facturado.',
-                                servir: 'Es la lista de acción: a quién llamar o visitar para recuperar venta.',
-                                accion: 'Haz clic en una fila para abrir el dashboard del cliente y retomarlo.',
-                            }}
-                        />
-                        <SinFacturarTable
-                            from={dateRange.from}
-                            to={dateRange.to}
-                            ruta={ruta}
-                            onRowSelect={onClientSelect}
-                        />
-                    </div>
-                </div>
-            </div>
+            {inactiveClients}
 
             {/* Top 50 Treemap + Segment Table */}
             <div className="row g-3 mb-4">

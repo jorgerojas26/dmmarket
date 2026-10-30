@@ -513,7 +513,7 @@ function createReceivablesService({
     const count = await db.from(query.clone().as("s")).count("* as count").first();
     const data = await query
       .orderBy(sort, filters.sortDir || "desc")
-      .orderBy("a.balance", "desc")
+      .orderBy(sort === "name" ? "a.IdCliente" : "a.balance", sort === "name" ? "asc" : "desc")
       .orderBy("a.IdCliente")
       .limit(limit)
       .offset((page - 1) * limit);

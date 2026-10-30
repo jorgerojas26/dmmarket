@@ -53,6 +53,7 @@ const SALES_COLUMNS = [
 
 const IconSales = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -69,6 +70,7 @@ const IconSales = () => (
 );
 const IconHash = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -86,6 +88,7 @@ const IconHash = () => (
 );
 const IconTicket = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -102,6 +105,7 @@ const IconTicket = () => (
 );
 const IconCalendar = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -143,8 +147,8 @@ const aggregateSalesByMonth = (sales) => {
 };
 
 const ClientDashboardModal = ({ show, onClose, client }) => {
-    const { session } = useAuth();
-    const exporting = session.permissions.some((grant) => grant.capability === 'sales.export');
+    const { has } = useAuth('clients.details');
+    const exporting = has('clients.documents.export');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext) || {};
     const [salesSearch, setSalesSearch] = useState('');
@@ -174,7 +178,11 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
         data: summary,
         error: summaryError,
         isLoading: summaryLoading,
-    } = useClientSummary(client?.IdCliente, { from: dateRange.from, to: dateRange.to, showNoe }, clientEnabled);
+    } = useClientSummary(
+        client?.IdCliente,
+        { from: dateRange.from, to: dateRange.to, showNoe },
+        clientEnabled && has('clients.details.read'),
+    );
 
     const {
         data: salesData,
@@ -192,7 +200,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
             sortDir: salesSort[0]?.desc ? 'desc' : 'asc',
             showNoe,
         },
-        clientEnabled,
+        clientEnabled && has('clients.documents.read'),
     );
 
     const chartLoading = summaryLoading;
@@ -439,6 +447,7 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                 ) : (
                     <div className="chart-empty">
                         <svg
+                            aria-hidden="true"
                             width="40"
                             height="40"
                             viewBox="0 0 24 24"
@@ -571,14 +580,21 @@ const ClientDashboardModal = ({ show, onClose, client }) => {
                     </div>
 
                     <div className="stats-row">
-                        {stats.map((stat) => (
-                            <StatCard key={stat.label} {...stat} loading={summaryLoading} />
-                        ))}
+                        {stats
+                            .filter(
+                                (stat) =>
+                                    has('clients.details.read') &&
+                                    (has('clients.details.amounts') ||
+                                        !['Total Ventas', 'Promedio Ticket'].includes(stat.label)),
+                            )
+                            .map((stat) => (
+                                <StatCard key={stat.label} {...stat} loading={summaryLoading} />
+                            ))}
                     </div>
 
                     <div className="dashboard-grid">
-                        {chartBlock}
-                        {salesBlock}
+                        {has('clients.details.read') && has('clients.details.amounts') && chartBlock}
+                        {has('clients.documents.read') && salesBlock}
                     </div>
                 </Modal.Body>
             </Modal>

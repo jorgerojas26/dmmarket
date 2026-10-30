@@ -210,7 +210,7 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
         throw error;
       }
       const result = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ access, transaction }) => {
-        if (!access.hasGlobal("access.users")) forbidden();
+        if (!access.hasGlobal("access.users.read")) forbidden();
         const rows = await transaction("dmmarket_auth_users")
           .select("id", "username", "display_name", "enabled", "must_change_password")
           .orderBy("username")
@@ -226,7 +226,7 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
     "/roles",
     handler(async (req, res) => {
       const roles = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ access, transaction }) => {
-        if (!access.hasGlobal("access.roles")) forbidden();
+        if (!access.hasGlobal("access.roles.read")) forbidden();
         return transaction("dmmarket_auth_roles").select("id", "name").orderBy("name").limit(200);
       });
       res.json({ data: roles });

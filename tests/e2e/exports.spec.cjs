@@ -21,7 +21,7 @@ test("impresión original genera PDF real con filtro de stock y sin campos monet
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Configuración de impresión", { exact: true })).toBeVisible();
   await expect(dialog.getByText("Precio", { exact: true })).toHaveCount(0);
-  await expect(dialog.getByText("Proveedor", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText("Proveedor", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("radio", { name: "Bs", exact: true })).toBeDisabled();
   await dialog.getByRole("checkbox", { name: "Solo productos con stock > 0", exact: true }).check();
   const prepared = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/exports/inventory");
@@ -31,7 +31,7 @@ test("impresión original genera PDF real con filtro de stock y sin campos monet
   expect(response.status()).toBe(200);
   const report = await response.json();
   expect(report.total).toBe(1);
-  expect(JSON.stringify(report)).not.toMatch(/PrecioA|inventoryValue|Proveedor|PRIVATE/);
+  expect(JSON.stringify(report)).not.toMatch(/PrecioA|inventoryValue|PRIVATE/);
   const popup = await opening;
   await popup.waitForURL(/^blob:/);
   const magic = await page.evaluate(async (url) => {
@@ -42,18 +42,15 @@ test("impresión original genera PDF real con filtro de stock y sin campos monet
   await popup.close();
 });
 
-test("sólo lectura no muestra impresión original ni permite preparar exportación por URL", async ({
-  page,
-  environment,
-}) => {
+test("la consulta incluye impresión sin conceder valores monetarios de inventario", async ({ page, environment }) => {
   await fixture(environment);
   const user = await environment.seedUser({ permissions: [grant("inventory.read")] });
   await login(page, environment, user);
   const inventory = page.getByRole("region", { name: "Inventario", exact: true });
   await inventory.getByRole("searchbox", { name: "Buscar producto...", exact: true }).fill("Inventario sintético");
   await expect(inventory.getByRole("cell", { name: "I-C", exact: true })).toBeVisible();
-  await expect(inventory.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
-  expect(await page.evaluate(async () => (await fetch("/api/exports/inventory")).status)).toBe(403);
+  await expect(inventory.getByRole("button", { name: "Imprimir", exact: true })).toBeVisible();
+  expect(await page.evaluate(async () => (await fetch("/api/exports/inventory")).status)).toBe(200);
 });
 
 test("cambiar filtros originales no conserva columnas financieras propias mientras la consulta global está bloqueada", async ({
@@ -141,5 +138,5 @@ test("despacho original conserva selección al imprimir y sólo exporta document
     .click();
   await report.getByRole("button", { name: "Productos", exact: true }).click();
   await expect(report.getByRole("cell", { name: "300", exact: true })).toBeVisible();
-  await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+  await expect(report.getByRole("button", { name: "Imprimir", exact: true })).toBeVisible();
 });

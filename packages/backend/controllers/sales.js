@@ -59,19 +59,25 @@ function parameters(query, { range = true, compare = false, keys = null } = {}) 
   return { ...query, page, limit, sortDir: (query.sortDir || "desc").toLowerCase() };
 }
 
-function financialFields(access, query, read = access.scopeFor("sales.read")) {
-  return (
-    access.hasGlobal("sales.financial") ||
+function financialFields(access, query, read = access.scopeFor("read")) {
+  const amounts =
+    access.hasGlobal("amounts") ||
     (query.employeeId
-      ? !["__none__", "__empty__"].includes(query.employeeId) && access.canRecord("sales.financial", query.employeeId)
-      : !read.global && access.covers("sales.financial", read.sellerIds))
+      ? access.canRecord("amounts", query.employeeId)
+      : !read.global && access.covers("amounts", read.sellerIds));
+  return (
+    amounts &&
+    (access.hasGlobal("financial") ||
+      (query.employeeId
+        ? !["__none__", "__empty__"].includes(query.employeeId) && access.canRecord("financial", query.employeeId)
+        : !read.global && access.covers("financial", read.sellerIds)))
   );
 }
 
 function salesBase(transaction, access, query, { clients = true, sellers = true, products = true } = {}) {
-  const read = access.scopeFor("sales.read");
+  const read = access.scopeFor("read");
   if (!read.global && !read.sellerIds.length) fail(403);
-  if (query.proveedorId && !access.hasGlobal("providers.read")) fail(403);
+  if (query.proveedorId && !access.hasAny("read")) fail(403);
   const noe = query.showNoe === "true";
   const master = noe ? "masternoe" : "masterfact";
   const slave = noe ? "slavenoe" : "slavefact";
@@ -158,13 +164,13 @@ async function listSales(transaction, access, query, kind) {
         monto: amount,
         cliente: "c.Empresa",
         vendedor: "v.Empresa",
-        ...(access.hasGlobal("clients.personal") ? { rif: "mf.Rif" } : {}),
+        ...(access.hasGlobal("personal") ? { rif: "mf.Rif" } : {}),
         utilidad: profit,
         promedio: percent,
       };
   if (!products && query.productId) sort.quantity = quantity;
   const sortBy = query.sortBy || (products ? "rawProfit" : "fecha");
-  if (sortBy === "rif" && !access.hasGlobal("clients.personal")) fail(403);
+  if (sortBy === "rif" && !access.hasGlobal("personal")) fail(403);
   if (!Object.hasOwn(sort, sortBy)) fail(400);
   if (!financial && ["netProfit", "averageProfitPercent", "utilidad", "promedio"].includes(sortBy)) fail(403);
   const metrics = products
@@ -206,8 +212,7 @@ async function listSales(transaction, access, query, kind) {
       : data.map(({ sellerId, sellerCount, ...row }) => ({
           ...row,
           exportAllowed:
-            access.hasGlobal("sales.export") ||
-            (Number(sellerCount) === 1 && access.canRecord("sales.export", sellerId)),
+            access.hasGlobal("export") || (Number(sellerCount) === 1 && access.canRecord("export", sellerId)),
         })),
     pagination: { page: query.page, limit: query.limit, total: Number(count.total) },
     totals,
@@ -224,7 +229,7 @@ async function invoiceList(transaction, access, query) {
   const normalized = { ...query, invoiceSearch: true, sortBy: aliases[query.sortBy] || query.sortBy };
   const summary = await listSales(transaction, access, normalized, "invoices");
   const financial = financialFields(access, query);
-  const personal = access.hasGlobal("clients.personal");
+  const personal = access.hasGlobal("personal");
   const { base, invoice } = salesBase(transaction, access, query);
   if (query.search)
     base.where(function () {
@@ -287,7 +292,7 @@ async function invoiceDetail(transaction, access, query, id) {
   if (typeof id !== "string" || !id || id.length > 128 || /[\p{Cc}\p{Cs}]/u.test(id)) fail(400);
   const { base, invoice } = salesBase(transaction, access, query);
   base.whereRaw("BINARY ?? = ?", [`mf.${invoice}`, id]);
-  const personal = access.hasGlobal("clients.personal");
+  const personal = access.hasGlobal("personal");
   const header = await base.clone().first({
     idFactura: `mf.${invoice}`,
     fecha: "mf.Fecha",
@@ -299,7 +304,7 @@ async function invoiceDetail(transaction, access, query, id) {
   if (!header) fail(404);
   const sellers = await base.clone().select({ id: "mf.IdVend" }).groupByRaw("BINARY mf.IdVend");
   const financial = access.covers(
-    "sales.financial",
+    "financial",
     sellers.map((row) => row.id),
   );
   const metrics = {
@@ -325,7 +330,7 @@ async function invoiceDetail(transaction, access, query, id) {
     })
     .limit(1001);
   if (lines.length > 1000) fail(413);
-  return {
+  const result = {
     idFactura: header.idFactura,
     fecha: header.fecha,
     cliente: header.cliente,
@@ -346,6 +351,8 @@ async function invoiceDetail(transaction, access, query, id) {
         : {}),
     })),
   };
+  Object.defineProperty(result, "authorizedSellerIds", { value: sellers.map((row) => row.id) });
+  return result;
 }
 
 async function groupSales(transaction, access, query) {

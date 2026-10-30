@@ -7,40 +7,8 @@ const { CAPABILITIES, createAccess } = backend("./auth/capabilities");
 const { createSessionService } = backend("./auth/sessions");
 const { createAttemptLimiter } = backend("./auth/attempts");
 let environment;
-const expected = {
-  Administrador: [
-    "sales.read",
-    "sales.financial",
-    "sales.export",
-    "clients.read",
-    "clients.personal",
-    "clients.export",
-    "sellers.read",
-    "sellers.personal",
-    "sellers.export",
-    "providers.read",
-    "providers.export",
-    "purchases.read",
-    "purchases.costs",
-    "purchases.export",
-    "inventory.read",
-    "inventory.costs",
-    "inventory.export",
-    "receivables.read",
-    "receivables.export",
-    "receivables.payment",
-    "receivables.void",
-    "receivables.close",
-    "receivables.reopen",
-    "rates.read",
-    "access.users",
-    "access.roles",
-    "access.links",
-  ],
-  Superusuario: Object.keys(CAPABILITIES),
-  Consultor: ["sales.read", "inventory.read"],
-  Cobranza: ["receivables.read", "receivables.payment"],
-};
+const expected = Object.fromEntries(backend("./auth/default-roles").roles.map((role) => [role.name, role.permissions]));
+
 async function roles() {
   return environment.db("dmmarket_auth_roles").orderBy("id");
 }
@@ -105,37 +73,36 @@ test("Administrador no recibe técnicos, Consultor no recibe finanzas y Superusu
   const access = async (name) => createAccess(await grants(rows.find((row) => row.name === name).id), []);
   const direction = await access("Administrador");
   for (const cap of [
-    "access.users",
-    "access.roles",
-    "access.links",
-    "receivables.void",
-    "receivables.close",
-    "receivables.reopen",
-    "sales.financial",
+    "access.users.update",
+    "access.roles.update",
+    "access.links.update",
+    "clients.receivables.void",
+    "clients.receivables.close",
+    "sales.dashboard.financial",
   ])
     expect(direction.hasGlobal(cap)).toBe(true);
   for (const cap of [
-    "access.recover",
-    "backups.read",
-    "backups.create",
-    "updates.read",
-    "updates.execute",
-    "rates.sync",
-    "cache.clear",
-    "audit.read",
-    "commissions.update",
+    "access.recovery.execute",
+    "settings.backups.read",
+    "settings.backups.create",
+    "settings.updates.read",
+    "settings.updates.execute",
+    "settings.rates.sync",
+    "settings.cache.clear",
+    "audit.events.read",
+    "sellers.commissions.update",
   ])
     expect(direction.hasGlobal(cap)).toBe(false);
   const superuser = await access("Superusuario");
   for (const capability of Object.keys(CAPABILITIES)) expect(superuser.hasGlobal(capability)).toBe(true);
   const operational = await access("Consultor");
-  expect(operational.canRecord("sales.read", "B")).toBe(true);
-  expect(operational.hasGlobal("sales.financial")).toBe(false);
-  expect(operational.hasGlobal("sales.export")).toBe(false);
+  expect(operational.canRecord("sales.dashboard.read", "B")).toBe(true);
+  expect(operational.hasGlobal("sales.dashboard.financial")).toBe(false);
+  expect(operational.hasGlobal("sales.breakdown.export")).toBe(false);
   expect(operational.privileged).toBe(false);
   const collection = await access("Cobranza");
-  expect(collection.hasGlobal("receivables.payment")).toBe(true);
-  expect(collection.hasGlobal("receivables.void")).toBe(false);
+  expect(collection.hasGlobal("clients.receivables.payment")).toBe(true);
+  expect(collection.hasGlobal("clients.receivables.void")).toBe(false);
   expect(collection.privileged).toBe(true);
 });
 
@@ -148,7 +115,7 @@ test("repetir seed preserva IDs, nombres personalizados y permisos vaciados o mo
   await environment.db("dmmarket_auth_role_permissions").whereIn("role_id", [id, empty]).delete();
   await environment
     .db("dmmarket_auth_role_permissions")
-    .insert({ role_id: id, capability: "rates.read", scope: "global" });
+    .insert({ role_id: id, capability: "settings.rates.read", scope: "global" });
   const before = await roles(),
     permissions = await environment.db("dmmarket_auth_role_permissions").orderBy("role_id").orderBy("capability");
   await seed(environment.db);
@@ -192,10 +159,10 @@ test("colisión con nombre de rol propio detiene toda la siembra sin adoptar ni 
   await environment.db("dmmarket_auth_roles").insert({ id, name: "Cobranza" });
   await environment
     .db("dmmarket_auth_role_permissions")
-    .insert({ role_id: id, capability: "rates.read", scope: "global" });
+    .insert({ role_id: id, capability: "settings.rates.read", scope: "global" });
   await expect(seed(environment.db)).rejects.toThrow("Cobranza");
   expect(await roles()).toEqual([{ id, name: "Cobranza" }]);
-  expect(await grants(id)).toEqual([{ capability: "rates.read", scope: "global" }]);
+  expect(await grants(id)).toEqual([{ capability: "settings.rates.read", scope: "global" }]);
   expect(await environment.db("dmmarket_auth_events")).toHaveLength(0);
 });
 
@@ -270,7 +237,7 @@ test("Knex seed:run ejecuta el mismo archivo real y es idempotente desde el task
 });
 
 test("recuperación de una cuenta existente no concede permisos de negocio adicionales", async () => {
-  const user = await environment.seedUser({ permissions: [{ capability: "rates.read", scope: "global" }] });
+  const user = await environment.seedUser({ permissions: [{ capability: "settings.rates.read", scope: "global" }] });
   const accounts = await backend("./auth/accounts").createAccountService({ db: environment.db });
   await accounts.recoverLocally({
     mode: "recover",
@@ -284,10 +251,22 @@ test("recuperación de una cuenta existente no concede permisos de negocio adici
     .select("p.capability", "p.scope")
     .orderBy("p.capability");
   expect(grants).toEqual(
-    ["access.links", "access.recover", "access.roles", "access.users", "rates.read"].map((capability) => ({
-      capability,
-      scope: "global",
-    })),
+    [
+      "access.users.read",
+      "access.users.create",
+      "access.users.update",
+      "access.roles.read",
+      "access.roles.create",
+      "access.roles.update",
+      "access.roles.assign",
+      "access.links.read",
+      "access.links.update",
+      "access.recovery.read",
+      "access.recovery.execute",
+      "settings.rates.read",
+    ]
+      .sort()
+      .map((capability) => ({ capability, scope: "global" })),
   );
 });
 

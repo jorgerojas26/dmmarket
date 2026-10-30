@@ -8,12 +8,12 @@ test.beforeEach(async ({ environment }) => {
   await seedParties(environment.db);
 });
 
-test("catálogo original sin ventas conserva perfil autorizado sin consultar analíticas prohibidas", async ({
+test("directorio incluye ventas e identidad propias sin conceder otras vistas analíticas", async ({
   page,
   environment,
 }) => {
   const user = await environment.seedUser({
-    permissions: [grant("sellers.read", "assigned"), grant("sellers.personal", "assigned")],
+    permissions: [grant("sellers.directory.read", "assigned")],
   });
   await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
   const analytics = [];
@@ -21,8 +21,10 @@ test("catálogo original sin ventas conserva perfil autorizado sin consultar ana
     if (/\/api\/sellers\/(dashboard|[^/]+\/(summary|sales))/.test(request.url())) analytics.push(request.url());
   });
   await login(page, environment, user);
+  await page.goto(`${environment.origin}/vendedores?view=sellers&dFrom=2026-01-01&dTo=2026-01-31`);
   await expect(page.getByRole("heading", { name: "Desglose de Vendedores", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Ventas", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: "Ventas", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /Utilidad|Margen|Costo/ })).toHaveCount(0);
   await expect(page.getByRole("cell", { name: "Vendedor B", exact: true })).toHaveCount(0);
   await page.getByRole("cell", { name: "Vendedor A", exact: true }).click();
   const modal = page.getByRole("dialog");

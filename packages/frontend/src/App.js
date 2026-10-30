@@ -1,3 +1,5 @@
+import { modulePermissions } from '@dmmarket/permissions';
+import AccessDenied from 'components/AccessDenied';
 import UpdateToast from 'components/UpdateToast';
 import UserMenu from 'components/UserMenu';
 import { CurrencyRateContext } from 'context/currency_rate';
@@ -8,7 +10,7 @@ import { useContext, useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
-import { Link, NavLink, Redirect, useLocation } from 'react-router-dom';
+import { NavLink, Redirect, useLocation } from 'react-router-dom';
 import Audit from './auth/audit';
 import { useAuth } from './auth/context';
 import AccessWorkspace, { Account } from './auth/workspace';
@@ -31,40 +33,33 @@ export default function App({ onLogout, logoutError, pending = false }) {
         if (currencies?.status === 200) setCurrencyRate(currencies.data.find((currency) => currency.Simbolo === 'BsS'));
     }, [currencies, setCurrencyRate]);
     const [expanded, setExpanded] = useState(false);
-    const has = (capability) => !pending && session?.permissions?.some((grant) => grant.capability === capability);
-    const configuration = [
-        'preferences.read',
-        'rates.read',
-        'rates.sync',
-        'backups.read',
-        'backups.create',
-        'updates.read',
-    ].some(can);
-    const access = ['access.users', 'access.roles', 'access.links', 'access.recover'].some(can);
+    const hasModule = (module) => !pending && modulePermissions(session?.permissions || [], module).length > 0;
+    const configuration = hasModule('settings');
+    const access = hasModule('access');
     const modules = [
-        { path: '/ventas', label: 'Ventas', allowed: has('sales.read') },
-        { path: '/compras', label: 'Compras', allowed: can('purchases.read') },
-        { path: '/clientes', label: 'Clientes', allowed: can('clients.read') || can('receivables.read') },
-        { path: '/proveedores', label: 'Proveedores', allowed: can('providers.read') },
-        { path: '/vendedores', label: 'Vendedores', allowed: has('sellers.read') },
-        { path: '/inventario', label: 'Inventario', allowed: can('inventory.read') },
+        { path: '/ventas', label: 'Ventas', allowed: hasModule('sales') },
+        { path: '/compras', label: 'Compras', allowed: hasModule('purchases') },
+        { path: '/clientes', label: 'Clientes', allowed: hasModule('clients') },
+        { path: '/proveedores', label: 'Proveedores', allowed: hasModule('providers') },
+        { path: '/vendedores', label: 'Vendedores', allowed: hasModule('sellers') },
+        { path: '/inventario', label: 'Inventario', allowed: hasModule('inventory') },
         { path: '/configuracion', label: 'Configuración', allowed: configuration },
-        { path: '/auditoria', label: 'Auditoría', allowed: can('audit.read') },
+        { path: '/auditoria', label: 'Auditoría', allowed: hasModule('audit') },
         { path: '/acceso', label: 'Acceso', allowed: access },
     ].filter((module) => module.allowed);
     const views = [
-        { path: '/ventas', allowed: has('sales.read'), content: <Sales /> },
-        { path: '/compras', allowed: can('purchases.read'), content: <Purchases /> },
-        { path: '/proveedores', allowed: can('providers.read'), content: <Providers /> },
+        { path: '/ventas', allowed: hasModule('sales'), content: <Sales /> },
+        { path: '/compras', allowed: hasModule('purchases'), content: <Purchases /> },
+        { path: '/proveedores', allowed: hasModule('providers'), content: <Providers /> },
         {
             path: '/clientes',
-            allowed: can('clients.read') || can('receivables.read'),
+            allowed: hasModule('clients'),
             content: <Clients onLogout={onLogout} logoutError={logoutError} />,
         },
-        { path: '/vendedores', allowed: has('sellers.read'), content: <Sellers /> },
-        { path: '/inventario', allowed: can('inventory.read'), content: <Inventory /> },
+        { path: '/vendedores', allowed: hasModule('sellers'), content: <Sellers /> },
+        { path: '/inventario', allowed: hasModule('inventory'), content: <Inventory /> },
         { path: '/configuracion', allowed: configuration, content: <Configuration /> },
-        { path: '/auditoria', allowed: can('audit.read'), content: <Audit /> },
+        { path: '/auditoria', allowed: hasModule('audit'), content: <Audit /> },
         { path: '/acceso', allowed: access, content: <AccessWorkspace /> },
         { path: '/cuenta', allowed: true, content: <Account /> },
     ].filter((view) => view.allowed);
@@ -227,11 +222,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                             {view.content}
                         </section>
                     ) : (
-                        <section aria-label="Página no disponible" className="p-4">
-                            <h2 className="h4">Página no disponible</h2>
-                            <p>Esta página no está autorizada para tu cuenta o todavía no está habilitada.</p>
-                            <Link to="/">Volver al inicio</Link>
-                        </section>
+                        <AccessDenied key={path} />
                     )}
                 </Container>
             </Container>

@@ -74,7 +74,7 @@ test("sin columna Peso se conservan inventario, ventas, despacho y permisos sin 
     const inventory = await connection.request("/api/products?sortBy=Peso&sortDir=asc");
     expect(inventory.status).toBe(200);
     expect(inventory.body.data.every((product) => product.Peso === null)).toBe(true);
-    expect(JSON.stringify(inventory.body)).not.toMatch(/PrecioA|inventoryValue|Proveedor/);
+    expect(JSON.stringify(inventory.body)).not.toMatch(/PrecioA|inventoryValue/);
     for (const sortDir of ["asc", "desc"]) {
       const products = await connection.request(
         `/api/sales/productos?from=2026-01-01&to=2026-01-31&sortBy=peso&sortDir=${sortDir}`,

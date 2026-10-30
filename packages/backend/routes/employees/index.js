@@ -1,3 +1,4 @@
+const { requestSession } = require("../../auth/resource-policy");
 const express = require("express");
 const { rates, sales } = require("../../controllers/commissions");
 
@@ -10,7 +11,7 @@ function createCommissionRoutes({ sessions }) {
     router.get(path, async (req, res, next) => {
       try {
         res.json(
-          await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) =>
+          await requestSession(sessions, req, { readOnly: true }, ({ transaction, access }) =>
             work(transaction, access, req.params.employeeId, req.query),
           ),
         );

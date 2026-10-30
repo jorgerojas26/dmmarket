@@ -18,7 +18,7 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
     const [roleId, setRoleId] = useState('');
     const [mfaRequired, setMfaRequired] = useState(false);
     const [busy, setBusy] = useState(false);
-    const { data: roles, error, mutate } = useSWR(can('access.roles') ? '/api/auth/roles' : null, fetcher);
+    const { data: roles, error, mutate } = useSWR(can('access.roles.read') ? '/api/auth/roles' : null, fetcher);
     const role = useSWR(roleId ? `/api/auth/roles/${roleId}` : null, fetcher);
     const dirty = Boolean(username || displayName || roleId || mfaRequired);
     useEffect(() => {
@@ -337,7 +337,7 @@ function UserPanel({ user, onClose, onDone, onDirtyChange }) {
                 <fieldset disabled={busy}>
                     <Assignments id={user.id} onDirtyChange={setDirty} onBusyChange={setBusy} />
                 </fieldset>
-                {!can('access.roles') && !can('access.links') && (
+                {!can('access.roles.read') && !can('access.links.read') && (
                     <p className="access-muted">
                         Desde aquí puedes administrar el estado y la recuperación de esta cuenta, según tus permisos.
                     </p>
@@ -390,7 +390,7 @@ export default function Users({ onDirtyChange, creating, onCreate, onCancelCreat
                 <div>
                     <h2>Administración de usuarios</h2>
                 </div>
-                {can('access.users') && can('access.roles') && (
+                {can('access.users.create') && can('access.roles.assign') && (
                     <button
                         type="button"
                         className="btn btn-primary"

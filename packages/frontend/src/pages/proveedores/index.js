@@ -10,8 +10,8 @@ import Container from 'react-bootstrap/Container';
 import { useHistory, useLocation } from 'react-router-dom';
 
 const ProveedoresPage = () => {
-    const { session, can } = useAuth();
-    const analytics = can('purchases.read') || session.permissions.some((grant) => grant.capability === 'sales.read');
+    const { can, has } = useAuth();
+    const analytics = can('purchases.read') || has('sales.read');
     const history = useHistory(),
         location = useLocation();
     const params = new URLSearchParams(location.search);
@@ -35,7 +35,6 @@ const ProveedoresPage = () => {
     const handleProviderSelect = useCallback((provider) => {
         setSelectedProvider(provider);
         setModalKey((k) => k + 1);
-        setShowModal(true);
     }, []);
 
     const sidebarItems = useMemo(
@@ -45,6 +44,7 @@ const ProveedoresPage = () => {
                 label: 'Desglose',
                 icon: (
                     <svg
+                        aria-hidden="true"
                         width="18"
                         height="18"
                         viewBox="0 0 24 24"

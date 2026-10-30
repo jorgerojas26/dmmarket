@@ -8,7 +8,7 @@ function fail(status) {
 
 function authorize(access, id) {
   if (typeof id !== "string" || !/^[\p{L}\p{N}._-]{1,32}$/u.test(id)) fail(400);
-  if (!access.canRecord("commissions.read", id)) fail(403);
+  if (!access.canRecord("read", id)) fail(403);
 }
 
 async function rates(transaction, access, id, input) {
@@ -37,7 +37,7 @@ async function rates(transaction, access, id, input) {
 async function sales(transaction, access, id, input) {
   authorize(access, id);
   const query = parameters(input, { keys: ["from", "to", "showNoe", "page", "limit", "sortBy", "sortDir", "search"] });
-  if (query.showNoe === "true" || !access.canRecord("sales.read", id)) fail(403);
+  if (query.showNoe === "true" || !access.canRecord("read", id)) fail(403);
   const filtered = { ...query, employeeId: id, showNoe: "false" };
   const { base } = salesBase(transaction, access, filtered);
   if (query.search)

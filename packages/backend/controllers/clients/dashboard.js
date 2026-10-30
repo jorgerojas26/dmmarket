@@ -1,3 +1,4 @@
+const { filterClientScope } = require("../client-scope");
 const { reportId, missingName } = require("../../utils/report-identity");
 const { financialFields, parameters } = require("../sales");
 const { salesDocuments } = require("../sales-documents");
@@ -66,6 +67,7 @@ async function clientDashboard(transaction, access, query) {
       routeId: "c.Ruta",
       routeName: transaction.raw("COALESCE(r.Nombre, c.Ruta)"),
     });
+  filterClientScope(transaction, catalogQuery, access.scopeFor("read"), "c.IdCliente");
   if (query.ruta) catalogQuery.whereRaw("BINARY c.Ruta = ?", [query.ruta]);
   const catalog = bounded(await catalogQuery.orderBy("c.IdCliente").limit(5001), 5000);
   const catalogById = new Map(catalog.map((row) => [key(row.clientId), row]));

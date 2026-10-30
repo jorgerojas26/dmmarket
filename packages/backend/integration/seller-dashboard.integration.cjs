@@ -98,7 +98,7 @@ test("otros permisos no conceden finanzas ni alertas derivadas", async () => {
   expect(global.body.kpis.lowMarginSellers).toBe(1);
 });
 
-test("sin ventas autorizadas no equivale a no vender; contactos se omiten por registro", async () => {
+test("sin ventas autorizadas no equivale a no vender; consulta incluye contactos del alcance", async () => {
   const client = await reader([grant("sellers.read"), grant("sellers.personal", "assigned"), grant("sales.read")]);
   const result = await client.request("/api/sellers/dashboard?from=2026-02-01&to=2026-02-28");
   expect(result.status).toBe(200);
@@ -114,11 +114,11 @@ test("sin ventas autorizadas no equivale a no vender; contactos se omiten por re
   expect(result.body.ranking).toEqual([]);
   expect(result.body.monthlyTrend).toEqual([]);
   expect(result.body.inactiveSellers.find((row) => row.sellerId === "A").phone).toBe("PRIVATE-PHONE-A");
-  expect(result.body.inactiveSellers.find((row) => row.sellerId === "B")).not.toHaveProperty("phone");
+  expect(result.body.inactiveSellers.find((row) => row.sellerId === "B")).toHaveProperty("phone", "PRIVATE-PHONE-B");
   const assigned = await reader([grant("sellers.read"), grant("sales.read", "assigned")]);
   const partial = await assigned.request(`/api/sellers/dashboard?${range}`);
   expect(partial.body.kpis.totalSales).toBe(100);
-  expect(partial.body.inactiveSellers).toEqual([{ sellerId: "B", name: "Vendedor B" }]);
+  expect(partial.body.inactiveSellers).toEqual([]);
 });
 
 test("validación estricta no acepta búsqueda, ordenación o rangos alternativos", async () => {

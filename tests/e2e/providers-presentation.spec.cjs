@@ -62,21 +62,18 @@ test("PDF original de ventas del proveedor prepara documentos completos acotados
   await expect(page.getByRole("dialog").getByText("01 nov 2026 - 30 nov 2026", { exact: true })).toBeVisible();
 });
 
-test("PDF original de compras conserva detalle, oculta precios sin costos y usa exportación independiente", async ({
-  page,
-  environment,
-}) => {
+test("consulta de compras permite imprimir documentos completos con precios", async ({ page, environment }) => {
   const profile = await enter(page, environment, [
     grant("providers.read"),
     grant("purchases.read"),
     grant("purchases.export"),
   ]);
   await profile.getByRole("cell", { name: "provider-purchase-A", exact: true }).waitFor();
-  await expect(profile.getByRole("columnheader", { name: "Total", exact: true })).toHaveCount(0);
+  await expect(profile.getByRole("columnheader", { name: "Total", exact: true })).toBeVisible();
   const report = await pdf(page, profile, "/exports/providers/PUR-A/purchase-documents?");
   expect(report.total).toBe(1);
-  expect(report.data[0].detail).not.toHaveProperty("total");
-  expect(report.data[0].detail.productos[0]).not.toHaveProperty("precio");
+  expect(Number(report.data[0].detail.total)).toBe(14);
+  expect(report.data[0].detail.productos[0]).toHaveProperty("precio");
 });
 
 test("desglose original de producto conserva vendedor, cliente y documentos al imprimir sin ampliar población", async ({

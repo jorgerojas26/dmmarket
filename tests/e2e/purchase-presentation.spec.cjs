@@ -33,23 +33,23 @@ const pareto = (report) =>
     has: report.page().locator(".dashboard-inline-title").filter({ hasText: "Análisis Pareto (ABC) de Compras" }),
   });
 
-test("dashboard original básico conserva tarjetas y selector de fechas, sin gráficas monetarias ni consultas prohibidas", async ({
+test("consulta de compras conserva indicadores completos y selector sin consultar otros módulos", async ({
   page,
   environment,
 }) => {
   const forbidden = [];
   page.on("request", (request) => {
-    if (/\/api\/(sales|dashboard|providers|purchases\/pareto)/.test(request.url())) forbidden.push(request.url());
+    if (/\/api\/(sales|dashboard|providers)/.test(request.url())) forbidden.push(request.url());
   });
   const report = await enter(page, environment, ["purchases.read"]);
   await expect(report.locator(".clients-sidebar")).toBeVisible();
   await expect(card(report, "Unidades")).toContainText("6");
   await expect(card(report, "Transacciones")).toContainText("3");
-  await expect(report.locator(".dashboard-kpi-card")).toHaveCount(2);
-  await expect(report.locator(".dashboard-inline-title").filter({ hasText: /^Top Productos/ })).toHaveCount(0);
-  await expect(report.getByText("Categorías", { exact: true })).toHaveCount(0);
-  await expect(report.getByText("Mejor Proveedor", { exact: true })).toHaveCount(0);
-  expect(await report.innerText()).not.toMatch(/\$/);
+  await expect(report.locator(".dashboard-kpi-card")).toHaveCount(5);
+  await expect(report.locator(".dashboard-inline-title").filter({ hasText: /^Top Productos/ })).toBeVisible();
+  await expect(report.locator(".purchases-dashboard-categories svg")).toBeVisible();
+  await expect(report.locator(".purchases-dashboard-best-provider")).toContainText("Proveedor compras A");
+  await expect(card(report, "Total Comprado")).toContainText("$130,00");
   await report.locator(".date-range-trigger").click();
   await expect(report.locator(".date-range-dropdown")).toBeVisible();
   await report.getByRole("button", { name: "Hoy", exact: true }).click();
@@ -73,7 +73,7 @@ test("dashboard original financiero conserva categorías, proveedor destacado y 
   await expect(report.getByText(/PRIVATE/)).toHaveCount(0);
   const panel = pareto(report);
   await expect(panel.getByRole("cell", { name: "61.54%", exact: true })).toBeVisible();
-  await expect(panel.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "Imprimir", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 360, height: 780 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

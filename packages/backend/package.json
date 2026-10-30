@@ -42,7 +42,8 @@
     "mysql2": "^2.3.0",
     "otplib": "13.5.0",
     "pug": "^3.0.2",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "@dmmarket/permissions": "workspace:*"
   },
   "devDependencies": {
     "jest": "^30.4.2",

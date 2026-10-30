@@ -1,3 +1,4 @@
+const { filterClientScope } = require("../controllers/client-scope");
 const express = require("express");
 const { withReportCache } = require("../middlewares/authorized-report-cache");
 const { parameters } = require("../controllers/sales");
@@ -10,7 +11,7 @@ function createClientRoutes({ sessions }) {
     try {
       res.json(
         await withReportCache(req, res, sessions, ({ transaction, access }) => {
-          if (!access.hasGlobal("clients.read")) fail(403);
+          if (!access.hasAny("read")) fail(403);
           return work(transaction, access, parameters(req.query, options), req.params);
         }),
       );
@@ -40,8 +41,10 @@ function createClientRoutes({ sessions }) {
   router.get(
     "/clients/routes",
     handle(
-      async (transaction) => {
-        const rows = await transaction("clientes as c")
+      async (transaction, access) => {
+        const source = transaction("clientes as c");
+        filterClientScope(transaction, source, access.scopeFor("read"), "c.IdCliente");
+        const rows = await source
           .join("rutas as r", "r.Id_Ruta", "c.Ruta")
           .select({ Id_Ruta: "c.Ruta", Nombre: "r.Nombre", clientes: transaction.raw("COUNT(*)") })
           .groupBy("c.Ruta", "r.Nombre")

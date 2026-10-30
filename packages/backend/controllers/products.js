@@ -17,9 +17,9 @@ function options(input) {
 }
 
 async function inventory(transaction, access, query) {
-  if (!access.hasGlobal("inventory.read")) fail(403);
-  const monetary = access.hasGlobal("inventory.costs");
-  const providers = access.hasGlobal("providers.read");
+  if (!access.hasGlobal("read")) fail(403);
+  const monetary = access.hasGlobal("amounts");
+  const providers = access.hasGlobal("read");
   const sortBy = query.sortBy || "Descripcion";
   if (["PrecioA", "inventoryValue"].includes(sortBy) && !monetary) fail(403);
   if ((sortBy === "Proveedor" || query.proveedorId) && !providers) fail(403);

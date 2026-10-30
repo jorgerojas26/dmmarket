@@ -1,10 +1,7 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { createReceivablesService } = require("../receivables");
-const {
-  requireReceivables,
-  requireReceivablesOperation,
-  OPERATION_CAPABILITIES,
-} = require("../controllers/receivables-policy");
+const { requireReceivables, requireReceivablesOperation } = require("../controllers/receivables-policy");
 const { assertWritableReceivables } = require("../receivables-storage");
 const { appendEvent } = require("../auth/identity");
 
@@ -33,14 +30,15 @@ function createReceivablesRoutes({ sessions, security }) {
   const handle = (work, keys) => async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
+        await requestSession(sessions, req, { readOnly: true }, ({ transaction, access }) => {
           requireReceivables(access);
           const query = options(req.query, keys);
+          if (keys.includes("sortBy") && !access.hasGlobal("amounts") && !query.sortBy) query.sortBy = "name";
           const service = createReceivablesService({
             db: transaction,
-            personal: access.hasGlobal("clients.personal"),
-            referenceRate: access.hasGlobal("rates.read"),
-            canReadSale: (sellerId) => access.canRecord("sales.read", sellerId),
+            personal: access.hasGlobal("personal"),
+            referenceRate: access.hasGlobal("settings.rates.read"),
+            canReadSale: (sellerId) => access.canRecord("clients.documents.read", sellerId),
           });
           return work(service, req, query, transaction);
         }),
@@ -89,7 +87,7 @@ function createReceivablesRoutes({ sessions, security }) {
       try {
         if (!req.is("application/json")) throw Object.assign(new Error("Envía JSON."), { status: 415 });
         res.json(
-          await sessions.withSession(req.sessionID, { recent: commit }, async ({ transaction, access, user }) => {
+          await requestSession(sessions, req, { recent: commit }, async ({ transaction, access, user }) => {
             const body = req.body;
             const type = body?.type;
             requireReceivablesOperation(access, type);
@@ -109,12 +107,12 @@ function createReceivablesRoutes({ sessions, security }) {
             const service = createReceivablesService({
               db: transaction,
               actorId: user.id,
-              personal: access.hasGlobal("clients.personal"),
-              referenceRate: access.hasGlobal("rates.read"),
+              personal: access.hasGlobal("personal"),
+              referenceRate: access.hasGlobal("settings.rates.read"),
               onOperation: async (connection, result) => {
                 await appendEvent(connection, {
                   actorId: user.id,
-                  action: OPERATION_CAPABILITIES[type],
+                  action: `receivables.${type}`,
                   reason: result.operationId,
                   occurredMs: Date.now(),
                 });

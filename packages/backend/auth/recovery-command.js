@@ -89,12 +89,4 @@ async function withStoppedWeb(work) {
   }
 }
 
-async function runCatalogMigration(args) {
-  assertLocalAdministrator();
-  if (args.length)
-    throw new Error("Usa --migrate-access-catalog sin argumentos, con la web y su supervisor detenidos.");
-  await withStoppedWeb((db) => require("../migrations/20261028_consolidate_access_catalog").up(db));
-  process.stdout.write("Catálogo de acceso actualizado. Las sesiones afectadas fueron revocadas.\n");
-}
-
-module.exports = { runAccessCommand, runCatalogMigration, assertLocalAdministrator };
+module.exports = { runAccessCommand, assertLocalAdministrator };

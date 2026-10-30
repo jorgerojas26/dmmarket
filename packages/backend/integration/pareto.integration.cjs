@@ -25,13 +25,14 @@ afterAll(async () => {
 });
 
 test("dependencias explícitas impiden inferir compras o utilidad desde ventas", async () => {
-  for (const permissions of [[grant("sales.read")], [grant("purchases.read")], [grant("access.users")]]) {
+  for (const permissions of [[grant("purchases.read")], [grant("access.users")]]) {
     const client = await reader(permissions);
     expect((await client.request(`/api/dashboard/pareto?${range}&metric=rawProfit`)).status).toBe(403);
   }
   const client = await reader(own);
-  expect((await client.request(`/api/dashboard/pareto?${range}`)).status).toBe(403);
-  for (const suffix of ["sortBy=netProfit", "newSortBy=netProfit", "sortBy=inventoryValue", "newSortBy=inventoryValue"])
+  expect((await client.request(`/api/dashboard/pareto?${range}`)).status).toBe(200);
+  expect((await client.request(`/api/dashboard/pareto?${range}&metric=netProfit`)).status).toBe(403);
+  for (const suffix of ["sortBy=netProfit", "newSortBy=netProfit"])
     expect((await client.request(`/api/dashboard/pareto?${range}&metric=rawProfit&${suffix}`)).status).toBe(403);
 });
 
@@ -50,15 +51,13 @@ test.each(["false", "true"])("filtra vendedor antes de ranking y maduración a 3
   expect(result.body.summary.totalProducts).toBe(2);
   expect(result.body.newProductsCount).toBe(1);
   expect(result.body.newProducts[0]).toMatchObject({ productId: "R", rawProfit: 20, firstPurchaseDate: "2026-06-02" });
-  expect(JSON.stringify(result.body)).not.toMatch(
-    /netProfit|inventoryValue|cumulativeProfit|profitPercent|newProductsInventoryTotal/,
-  );
+  expect(JSON.stringify(result.body)).not.toMatch(/netProfit|cumulativeProfit|profitPercent/);
 });
 
 test("cobertura financiera se exige sobre todo el conjunto, no basta una capacidad", async () => {
   const partial = await reader([grant("sales.read"), grant("purchases.read"), grant("sales.financial", "assigned")]);
-  expect((await partial.request(`/api/dashboard/pareto?${range}`)).status).toBe(403);
-  const bounded = await partial.request(`/api/dashboard/pareto?${range}&employeeId=A`);
+  expect((await partial.request(`/api/dashboard/pareto?${range}&metric=netProfit`)).status).toBe(403);
+  const bounded = await partial.request(`/api/dashboard/pareto?${range}&employeeId=A&metric=netProfit`);
   expect(bounded.status).toBe(200);
   expect(bounded.body.products.map((row) => [row.productId, row.netProfit])).toEqual([
     ["Q", 60],
@@ -66,15 +65,15 @@ test("cobertura financiera se exige sobre todo el conjunto, no basta una capacid
   ]);
   for (const capability of ["inventory.costs", "purchases.costs"]) {
     const single = await reader([...own, grant(capability)]);
-    expect((await single.request(`/api/dashboard/pareto?${range}`)).status).toBe(403);
+    expect((await single.request(`/api/dashboard/pareto?${range}&metric=netProfit`)).status).toBe(403);
   }
 });
 
-test("inventario actual exige ambas capacidades; datos desconocidos no se convierten en cero", async () => {
+test("la consulta del análisis incluye inventario actual; datos desconocidos no se convierten en cero", async () => {
   const onlyRead = await reader([...own, grant("inventory.read")]);
   const hidden = await onlyRead.request(`/api/dashboard/pareto?${range}&metric=rawProfit`);
-  expect(hidden.body.products.every((row) => !Object.hasOwn(row, "inventoryValue"))).toBe(true);
-  const allowed = await reader([...own, grant("inventory.read"), grant("inventory.costs")]);
+  expect(hidden.body.products.every((row) => Object.hasOwn(row, "inventoryValue"))).toBe(true);
+  const allowed = await reader([...own, grant("sales.pareto.inventory")]);
   const result = await allowed.request(`/api/dashboard/pareto?${range}&metric=rawProfit&sortBy=inventoryValue`);
   expect(result.body.products.map((row) => [row.productId, row.inventoryValue])).toEqual([
     ["Q", 500],
@@ -88,10 +87,10 @@ test("inventario actual exige ambas capacidades; datos desconocidos no se convie
 });
 
 test("compras sin vender requiere lectura global de ventas y costos de compras", async () => {
-  const scoped = await reader([...own, grant("purchases.costs")]);
+  const scoped = await reader([grant("sales.pareto.read", "assigned"), grant("sales.pareto.amounts", "assigned")]);
   expect((await scoped.request(`/api/dashboard/pareto?${range}&modo=compras-sin-vender`)).status).toBe(403);
-  const noCosts = await reader([grant("sales.read"), grant("purchases.read")]);
-  expect((await noCosts.request(`/api/dashboard/pareto?${range}&modo=compras-sin-vender`)).status).toBe(403);
+  const noCosts = await reader([grant("sales.unsold.read")]);
+  expect((await noCosts.request(`/api/dashboard/pareto?${range}&modo=compras-sin-vender`)).status).toBe(200);
   const client = await reader([grant("sales.read"), grant("purchases.read"), grant("purchases.costs")]);
   for (const showNoe of ["false", "true"]) {
     const result = await client.request(`/api/dashboard/pareto?${range}&modo=compras-sin-vender&showNoe=${showNoe}`);

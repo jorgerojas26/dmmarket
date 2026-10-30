@@ -1,3 +1,4 @@
+const { groupAllowed } = require("../auth/resource-policy");
 const { salesBase, financialFields } = require("./sales");
 const { purchaseBase, metrics } = require("./purchases");
 const { sellerSalesScope } = require("./parties");
@@ -7,8 +8,8 @@ function fail(status) {
 }
 
 async function parties(transaction, access, query, id, sellers) {
-  if (!sellers && !access.hasGlobal("clients.read")) fail(403);
-  const scope = sellers ? sellerSalesScope(access) : access.scopeFor("sales.read");
+  if (!sellers && !access.hasAny("read")) fail(403);
+  const scope = sellers ? sellerSalesScope(access) : access.scopeFor("read");
   const filtered = { ...query, proveedorId: id };
   const { base, invoice } = salesBase(transaction, access, filtered);
   if (!scope.global) base.whereIn(transaction.raw("BINARY mf.IdVend"), scope.sellerIds);
@@ -42,7 +43,7 @@ async function parties(transaction, access, query, id, sellers) {
   const quantity = transaction.raw("CASE WHEN COUNT(*)=COUNT(sf.Cantidad) THEN ROUND(SUM(sf.Cantidad),3) END");
   const grouped = base.clone().groupByRaw("BINARY ??", [identity]);
   if (split) grouped.groupByRaw("BINARY mf.IdVend");
-  const sortBy = query.sortBy || "amount";
+  const sortBy = query.sortBy || (groupAllowed(access, "amounts", query) ? "amount" : "name");
   if (sortBy === "profit" && !financial) fail(403);
   const sort = {
     name,
@@ -85,11 +86,11 @@ async function parties(transaction, access, query, id, sellers) {
     })),
     totals,
     exportAllowed: sellers
-      ? access.hasGlobal("sellers.export") ||
+      ? access.hasGlobal("export") ||
         (query.employeeId
-          ? access.canRecord("sellers.export", query.employeeId)
-          : !scope.global && access.covers("sellers.export", scope.sellerIds))
-      : access.hasGlobal("clients.export"),
+          ? access.canRecord("export", query.employeeId)
+          : !scope.global && access.covers("export", scope.sellerIds))
+      : access.hasGlobal("export"),
     pagination: { total: Number(total), page: query.page, limit: query.limit },
   };
 }
@@ -101,7 +102,7 @@ async function best(transaction, access, query, mode) {
   let identity;
   let amount;
   if (buying) {
-    if (!access.hasGlobal("purchases.costs")) fail(403);
+    if (!access.hasGlobal("amounts")) fail(403);
     base = purchaseBase(transaction, access, query, true).base;
     identity = "mc.IdProveedor";
     amount = metrics(transaction).amount;

@@ -842,3 +842,19 @@
     height: 18px;
     accent-color: #3b82f6;
 }
+
+.access-permission-submodule {
+    margin-top: 24px;
+}
+.access-permission-submodule h4 {
+    margin: 0 0 12px;
+    font-size: 15px;
+    color: #e8edf4;
+}
+.access-permission-section h5 {
+    margin: 14px 0 4px;
+    font-size: 11px;
+    color: #9aa8bb;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}

@@ -1,3 +1,4 @@
+const { groupAllowed } = require("../auth/resource-policy");
 const { reportId } = require("../utils/report-identity");
 const { parameters, salesBase, financialFields } = require("./sales");
 
@@ -117,13 +118,13 @@ function classify(rows, valueKey) {
 }
 
 async function pareto(transaction, access, query) {
-  if (!access.hasGlobal("purchases.read")) fail(403);
+  if (!access.hasAny("read") || !groupAllowed(access, "amounts", query)) fail(403);
   const unsold = query.modo === "compras-sin-vender";
   const financial = financialFields(access, query);
-  const inventory = access.hasGlobal("inventory.read") && access.hasGlobal("inventory.costs");
-  const valueKey = query.metric || (unsold ? "totalPurchased" : "netProfit");
+  const inventory = groupAllowed(access, "inventory", query);
+  const valueKey = query.metric || (unsold ? "totalPurchased" : financial ? "netProfit" : "rawProfit");
   if (unsold) {
-    if (!access.hasGlobal("sales.read") || !access.hasGlobal("purchases.costs")) fail(403);
+    if (!access.hasGlobal("read") || !access.hasGlobal("amounts")) fail(403);
     if (["employeeId", "clientId", "ruta"].some((key) => query[key])) fail(400);
     if (valueKey !== "totalPurchased") fail(400);
   } else {

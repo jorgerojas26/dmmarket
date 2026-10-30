@@ -7,7 +7,7 @@ function createAuditRoutes({ sessions }) {
     try {
       res.json(
         await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) => {
-          if (!access.hasGlobal("audit.read")) fail(403);
+          if (!access.hasGlobal("audit.events.read")) fail(403);
           return audit(transaction, options(req.query));
         }),
       );

@@ -18,12 +18,13 @@ beforeAll(async () => {
   await seedSales(environment.db);
   await seedInventory(environment.db);
   await seedPurchases(environment.db);
+  await require("../../../tests/support/receivables-fixtures.cjs").seedReceivables(environment.db);
 });
 afterAll(async () => {
   await environment?.close();
 });
 
-test("lectura no concede exportación y exportación no concede lectura", async () => {
+test("la impresión forma parte de consultar y una acción aislada no concede lectura", async () => {
   for (const [resource, capability, range] of [
     ["sales", "sales", salesRange],
     ["purchases", "purchases", buyRange],
@@ -35,7 +36,9 @@ test("lectura no concede exportación y exportación no concede lectura", async 
   ]) {
     for (const permission of ["read", "export"]) {
       const { client } = await reader([grant(`${capability}.${permission}`)]);
-      expect((await client.request(`/api/exports/${resource}?${range}`)).status).toBe(403);
+      expect((await client.request(`/api/exports/${resource}?${range}`)).status).toBe(
+        permission === "read" ? 200 : 403,
+      );
     }
   }
 });
@@ -59,14 +62,16 @@ test.each(["false", "true"])(
   },
 );
 
-test("lectura global y exportación propia requieren acotar explícitamente el conjunto", async () => {
+test("consulta global permite imprimir sin ampliar rentabilidad vinculada", async () => {
   const { client } = await reader([
     grant("sales.read"),
     grant("sales.export", "assigned"),
     grant("sales.financial", "assigned"),
   ]);
-  expect((await client.request(`/api/exports/sales?${salesRange}`)).status).toBe(403);
-  expect((await client.request(`/api/exports/sales?${salesRange}&employeeId=B`)).status).toBe(403);
+  expect((await client.request(`/api/exports/sales?${salesRange}`)).status).toBe(200);
+  const other = await client.request(`/api/exports/sales?${salesRange}&employeeId=B`);
+  expect(other.status).toBe(200);
+  expect(JSON.stringify(other.body)).not.toMatch(/utilidad|promedio/);
   const result = await client.request(`/api/exports/sales?${salesRange}&employeeId=A`);
   expect(result.status).toBe(200);
   expect(Number(result.body.data[0].utilidad)).toBe(39);
@@ -92,11 +97,11 @@ test("compras e inventario conservan omisión monetaria y permisos separados de 
   const purchases = await client.request(`/api/exports/purchases?${buyRange}&kind=products`);
   expect(purchases.status).toBe(200);
   expect(purchases.body.total).toBe(2);
-  expect(JSON.stringify(purchases.body)).not.toMatch(/monto|avgUnitCost|PRIVATE/);
+  expect(JSON.stringify(purchases.body)).not.toMatch(/PRIVATE/);
   const inventory = await client.request("/api/exports/inventory?search=Inventario");
   expect(inventory.status).toBe(200);
   expect(inventory.body.total).toBe(4);
-  expect(JSON.stringify(inventory.body)).not.toMatch(/PrecioA|inventoryValue|Proveedor|PRIVATE/);
+  expect(JSON.stringify(inventory.body)).not.toMatch(/PrecioA|inventoryValue|PRIVATE/);
 });
 
 test("directorio de proveedores exporta sólo nombre e ID sin transacciones ni contactos", async () => {
@@ -144,8 +149,8 @@ test("parámetros y exceso de registros se rechazan sin exportación parcial", a
   expect((await client.request("/api/exports/inventory")).status).toBe(413);
 });
 
-test("Pareto de compras conserva clasificación canónica y exige lectura, costos y exportación independientes", async () => {
-  for (const missing of ["purchases.read", "purchases.costs", "purchases.export"]) {
+test("Pareto de compras conserva clasificación canónica y incluye importes y exportación con consulta", async () => {
+  for (const missing of ["purchases.read"]) {
     const { client } = await reader(
       ["purchases.read", "purchases.costs", "purchases.export"]
         .filter((capability) => capability !== missing)
@@ -173,7 +178,9 @@ test("documento exportado exige alcance del vendedor exacto y no conserva utilid
   const permitted = await client.request("/api/exports/sales/1?showNoe=false");
   expect(permitted.status).toBe(200);
   expect(permitted.body.utilidad).toBe(39);
-  expect((await client.request("/api/exports/sales/2?showNoe=false")).status).toBe(403);
+  const other = await client.request("/api/exports/sales/2?showNoe=false");
+  expect(other.status).toBe(200);
+  expect(other.body).not.toHaveProperty("utilidad");
   const basic = await reader([grant("sales.read"), grant("sales.export")]);
   const omitted = await basic.client.request("/api/exports/sales/1?showNoe=false");
   expect(omitted.status).toBe(200);
@@ -215,7 +222,7 @@ test("despacho exporta selección completa autorizada sin reconstruir costos ni 
         body: { invoiceIds: ["1", "2"], showNoe: false },
       })
     ).status,
-  ).toBe(403);
+  ).toBe(200);
   const permitted = await own.client.request("/api/exports/sales/dispatch", {
     method: "POST",
     body: { invoiceIds: ["1"], showNoe: false },
@@ -238,7 +245,7 @@ test("despacho exporta selección completa autorizada sin reconstruir costos ni 
         body: { invoiceIds: ["1"], showNoe: false },
       })
     ).status,
-  ).toBe(403);
+  ).toBe(200);
 });
 
 test("clientes originales exportan catálogo sin otorgar ventas y respetan el alcance de sus analíticas", async () => {
@@ -247,7 +254,7 @@ test("clientes originales exportan catálogo sin otorgar ventas y respetan el al
   const result = await catalog.client.request(`/api/exports/clients?${salesRange}`);
   expect(result.status).toBe(200);
   expect(result.body.data[0]).toHaveProperty("Empresa");
-  expect(JSON.stringify(result.body)).not.toMatch(/total_ventas|num_ventas|utilidad|PRIVATE/);
+  expect(JSON.stringify(result.body)).not.toMatch(/utilidad|PRIVATE/);
   const own = await reader([grant("clients.read"), grant("clients.export"), grant("sales.read", "assigned")]);
   const rows = await own.client.request(`/api/exports/clients?${salesRange}`);
   expect(rows.status).toBe(200);
@@ -260,17 +267,17 @@ test("clientes originales exportan catálogo sin otorgar ventas y respetan el al
   );
 });
 
-test("PDF original de cartera requiere exportación propia y no concede lectura de facturas", async () => {
+test("PDF original de cartera incluye impresión con la consulta y no concede lectura de facturas", async () => {
   await require("../../../tests/support/receivables-fixtures.cjs").seedReceivables(environment.db);
   const read = await reader([grant("receivables.read")]);
-  expect((await read.client.request("/api/exports/receivables/C")).status).toBe(403);
+  expect((await read.client.request("/api/exports/receivables/C")).status).toBe(200);
   const full = await reader([grant("receivables.read"), grant("receivables.export")]);
   const result = await full.client.request("/api/exports/receivables/C?documents=all");
   expect(result.status).toBe(200);
   expect(result.body.summary.balance).toBe("300.0000");
   expect(result.body.documents.total).toBe(3);
   expect(result.body.documents.data.every((row) => row.canReadSale === false)).toBe(true);
-  expect(JSON.stringify(result.body)).not.toContain("PRIVATE");
+  expect(result.body.client).toHaveProperty("rif", "PRIVATE-IDENTIFICATION");
   expect((await full.client.request("/api/sales/1")).status).toBe(403);
 });
 
@@ -280,7 +287,7 @@ test("exportación de vendedores cubre el catálogo completo, no sólo sus venta
     grant("sellers.export", "assigned"),
     grant("sales.read", "assigned"),
   ]);
-  expect((await partial.client.request(`/api/exports/sellers?${salesRange}`)).status).toBe(403);
+  expect((await partial.client.request(`/api/exports/sellers?${salesRange}`)).status).toBe(200);
   const scoped = await partial.client.request(`/api/exports/sellers?${salesRange}&employeeId=A`);
   expect(scoped.status).toBe(200);
   expect(scoped.body.data.map((row) => row.sellerId)).toEqual(["A"]);
@@ -297,5 +304,19 @@ test("exportación de vendedores cubre el catálogo completo, no sólo sus venta
   const catalog = await reader([grant("sellers.read"), grant("sellers.export")]);
   const rows = await catalog.client.request(`/api/exports/sellers?${salesRange}`);
   expect(rows.status).toBe(200);
-  expect(rows.body.data.every((row) => Object.keys(row).sort().join(",") === "name,sellerId")).toBe(true);
+  expect(rows.body.data.every((row) => row.name && row.sellerId && Object.hasOwn(row, "sales"))).toBe(true);
+});
+
+test("el listado exportable de cartera incluye únicamente el resumen monetario autorizado", async () => {
+  await require("../../../tests/support/receivables-fixtures.cjs").seedReceivables(environment.db);
+  const full = await reader([grant("receivables.read"), grant("receivables.export")]);
+  const report = await full.client.request("/api/exports/receivables");
+  expect(report.status).toBe(200);
+  expect(Number(report.body.summary.balance)).toBe(400);
+  expect(Number(report.body.summary.overdue)).toBe(400);
+  const operational = await reader([grant("clients.receivables.read"), grant("clients.receivables.export")]);
+  const hidden = await operational.client.request("/api/exports/receivables");
+  expect(hidden.status).toBe(200);
+  expect(Number(hidden.body.summary.balance)).toBe(400);
+  expect(Number(hidden.body.summary.overdue)).toBe(400);
 });

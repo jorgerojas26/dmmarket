@@ -51,18 +51,20 @@ async function dispatchExport(tx, access, input) {
     .select({ id: `mf.${invoice}`, sellerId: "mf.IdVend" })
     .groupByRaw("BINARY ??, BINARY mf.IdVend", [`mf.${invoice}`]);
   if (new Set(headers.map((row) => String(row.id))).size !== ids.length) fail(404);
-  if (!headers.every((row) => access.canRecord("sales.export", row.sellerId))) fail(403);
+  if (!headers.every((row) => access.canRecord("export", row.sellerId))) fail(403);
   const sellers = [...new Set(headers.map((row) => row.sellerId))];
   const selectedAccess = {
     ...access,
     scopeFor: (capability) =>
-      capability === "sales.read"
+      capability === "read"
         ? { global: sellers.some((id) => id == null), sellerIds: sellers.filter((id) => id != null) }
         : access.scopeFor(capability),
   };
   const result = await invoiceList(tx, selectedAccess, { ...query, invoiceIds: ids });
   const totals = aggregate(result.data);
-  return { invoices: result.data, products: totals.products, total: totals.total };
+  const report = { invoices: result.data, products: totals.products, total: totals.total };
+  Object.defineProperty(report, "authorizedSellerIds", { value: sellers });
+  return report;
 }
 
 module.exports = { dispatchExport };

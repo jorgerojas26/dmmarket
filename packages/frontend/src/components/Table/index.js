@@ -1,3 +1,4 @@
+import { AMOUNTS, FINANCIAL, INVENTORY, PERSONAL } from '@dmmarket/permissions/information';
 import PrintConfigModal from 'components/Modals/PrintConfigModal';
 import debounce from 'lodash.debounce';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -79,7 +80,7 @@ const getPageNumbers = (current, totalPages, windowSize = 3) => {
     pages.push(1);
 
     // Left ellipsis?
-    if (leftBound > 2) pages.push('...');
+    if (leftBound > 2) pages.push('ellipsis-before');
     else if (leftBound === 2) pages.push(2);
 
     // Middle window
@@ -88,7 +89,7 @@ const getPageNumbers = (current, totalPages, windowSize = 3) => {
     }
 
     // Right ellipsis?
-    if (rightBound < totalPages - 1) pages.push('...');
+    if (rightBound < totalPages - 1) pages.push('ellipsis-after');
     else if (rightBound === totalPages - 1) pages.push(totalPages - 1);
 
     // Always include last page
@@ -106,7 +107,9 @@ const useRemoveSelectedRows = (hooks) => {
     hooks.stateReducers.push((state, action) => {
         if (action.type !== REMOVE_SELECTED_ROWS) return state;
         const selectedRowIds = { ...(state.selectedRowIds || {}) };
-        action.ids.forEach((id) => delete selectedRowIds[id]);
+        action.ids.forEach((id) => {
+            delete selectedRowIds[id];
+        });
         return { ...state, selectedRowIds };
     });
 };
@@ -115,7 +118,7 @@ const Table = ({
     // ── core ──
     data = [],
     loading,
-    columns = [],
+    columns: inputColumns = [],
     emptyMessage = 'Sin datos',
     /** Texto secundario bajo `emptyMessage` cuando la tabla está vacía. */
     emptySubtitle = 'No hay registros para mostrar.',
@@ -179,6 +182,20 @@ const Table = ({
     /** Called with the displayed rows' originals (`Array`) whenever the sorted/filtered data changes. */
     onSortedRowsChange,
 }) => {
+    const columns = useMemo(
+        () =>
+            inputColumns.filter((column) => {
+                const field = column.accessor;
+                const protectedField =
+                    [AMOUNTS, FINANCIAL, PERSONAL, INVENTORY].some((group) => group.has(field)) || field === 'total';
+                return (
+                    !protectedField ||
+                    data.some((row) => Object.hasOwn(row, field)) ||
+                    Object.hasOwn(summaries || {}, field)
+                );
+            }),
+        [inputColumns, data, summaries],
+    );
     /* ── Plugins ── */
     const plugins = useMemo(() => {
         const list = [];
@@ -264,7 +281,9 @@ const Table = ({
             // Los ids de otra página no existen en rowsById: react-table no puede
             // togglarlos (crashea). Se eliminan del cache de selección y con el
             // reducer propio; el efecto de sync notifica al padre con la lista nueva.
-            deselectSignal.ids.forEach((id) => delete selectedRowsCacheRef.current[id]);
+            deselectSignal.ids.forEach((id) => {
+                delete selectedRowsCacheRef.current[id];
+            });
             dispatch({ type: REMOVE_SELECTED_ROWS, ids: deselectSignal.ids });
         }
     }, [deselectSignal, dispatch, isControlled]);
@@ -371,7 +390,9 @@ const Table = ({
                     const last = lastSelectedIndexRef.current;
                     const [from, to] = last < row.index ? [last, row.index] : [row.index, last];
                     const rangeIds = new Set();
-                    rows.slice(from, to + 1).forEach((r) => rangeIds.add(r.id));
+                    rows.slice(from, to + 1).forEach((r) => {
+                        rangeIds.add(r.id);
+                    });
                     const next = selectedRows.filter((o) => !rangeIds.has(idOf(o)));
                     rows.slice(from, to + 1).forEach((r) => {
                         if (r.index !== last && !selectedIdSet.has(r.id)) next.push(r.original);
@@ -823,6 +844,7 @@ const Table = ({
                         <div className="table-pagination-controls">
                             {/* Prev */}
                             <button
+                                type="button"
                                 className="table-pagination-btn"
                                 disabled={page <= 1}
                                 onClick={() => pg.onPageChange(page - 1)}
@@ -838,13 +860,14 @@ const Table = ({
                             </span>
 
                             {/* Page numbers (hidden on small screens) */}
-                            {pageNumbers.map((p, idx) =>
-                                p === '...' ? (
-                                    <span key={`ellipsis-${idx}`} className="table-pagination-ellipsis">
+                            {pageNumbers.map((p) =>
+                                typeof p === 'string' ? (
+                                    <span key={p} className="table-pagination-ellipsis">
                                         …
                                     </span>
                                 ) : (
                                     <button
+                                        type="button"
                                         key={p}
                                         className={`table-pagination-btn table-pagination-num${p === page ? ' active' : ''}`}
                                         onClick={() => pg.onPageChange(p)}
@@ -858,6 +881,7 @@ const Table = ({
 
                             {/* Next */}
                             <button
+                                type="button"
                                 className="table-pagination-btn"
                                 disabled={page >= totalPages}
                                 onClick={() => pg.onPageChange(page + 1)}
@@ -906,7 +930,7 @@ const Table = ({
                 className={`table-container${isEmpty ? ' table-empty' : ''}`}
                 style={tableContainerStyle}
                 role={scrollLabel ? 'region' : undefined}
-                aria-label={scrollLabel}
+                {...(scrollLabel ? { 'aria-label': scrollLabel } : {})}
                 tabIndex={scrollLabel ? 0 : undefined}
             >
                 {tableElement}
@@ -932,31 +956,32 @@ const Table = ({
 };
 
 const ChevronLeft = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
         <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
     </svg>
 );
 
 const ChevronRight = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
         <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
     </svg>
 );
 
 const ChevronUp = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="10" height="10">
         <path d="M12 8l-8 8h16z" />
     </svg>
 );
 
 const ChevronDown = () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="10" height="10">
         <path d="M12 16l8-8H4z" />
     </svg>
 );
 
 const PrintIcon = () => (
     <svg
+        aria-hidden="true"
         width="14"
         height="14"
         viewBox="0 0 24 24"
@@ -1000,7 +1025,6 @@ const RowActionCell = React.memo(({ onPrint, rowData, isSelected, allowed = true
     if (!allowed) return <td />;
     return (
         <td
-            onClick={handleClick}
             style={{
                 background: isSelected ? '#2d3748' : 'transparent',
                 textAlign: 'center',
@@ -1008,9 +1032,16 @@ const RowActionCell = React.memo(({ onPrint, rowData, isSelected, allowed = true
                 cursor: 'pointer',
             }}
         >
-            <span className="table-row-action" title="Imprimir">
+            <button
+                type="button"
+                className="table-row-action"
+                title="Imprimir"
+                aria-label="Imprimir registro"
+                onClick={handleClick}
+                style={{ background: 'none', border: 0, padding: 0, color: 'inherit' }}
+            >
                 <PrintIcon />
-            </span>
+            </button>
         </td>
     );
 });

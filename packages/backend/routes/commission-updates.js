@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { commissionStatus, updateCommission } = require("../controllers/commission-updates");
 
@@ -6,7 +7,7 @@ function createCommissionUpdateRoutes({ sessions, security }) {
   router.get("/employees/commissionInfo/:employeeId/status", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) =>
+        await requestSession(sessions, req, { readOnly: true }, ({ transaction, access }) =>
           commissionStatus(transaction, access, req.params.employeeId, req.query),
         ),
       );
@@ -23,7 +24,7 @@ function createCommissionUpdateRoutes({ sessions, security }) {
       try {
         if (!req.is("application/json")) throw Object.assign(new Error("Envía JSON."), { status: 415 });
         res.json(
-          await sessions.withSession(req.sessionID, { recent: commit }, ({ transaction, access, user }) =>
+          await requestSession(sessions, req, { recent: commit }, ({ transaction, access, user }) =>
             updateCommission(transaction, access, user, req.params.employeeId, req.body, req.query, commit),
           ),
         );

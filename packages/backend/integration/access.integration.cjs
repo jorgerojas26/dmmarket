@@ -1,3 +1,4 @@
+const { scenarioPermissions } = require("../../../tests/support/permission-presets.cjs");
 const { randomUUID } = require("node:crypto");
 const { startEnvironment } = require("../../../tests/support/auth-environment.cjs");
 const ownerPermissions = ["access.users", "access.roles", "access.links", "access.recover"].map((capability) => ({
@@ -17,10 +18,15 @@ async function administrator() {
   ).toBe("ready");
   return { user, client };
 }
-async function createRole(permissions = [{ capability: "rates.read", scope: "global" }]) {
+async function createRole(permissions = [{ capability: "settings.rates.read", scope: "global" }]) {
   const result = await admin.request("/api/auth/roles", {
     method: "POST",
-    body: { name: randomUUID(), permissions, reason: "Integration role creation", actorId: "forged" },
+    body: {
+      name: randomUUID(),
+      permissions: scenarioPermissions(permissions),
+      reason: "Integration role creation",
+      actorId: "forged",
+    },
   });
   expect(result.status).toBe(201);
   return result.body;
@@ -58,20 +64,20 @@ test("catálogo cerrado, permisos separados y acceso no administrativo denegado"
     ).status,
   ).toBe(403);
   const catalog = await admin.request("/api/auth/roles/catalog");
-  expect(catalog.body.data.find((entry) => entry.capability === "access.roles")).toMatchObject({
+  expect(catalog.body.data.find((entry) => entry.capability === "access.roles.update")).toMatchObject({
     privileged: true,
     assigned: false,
   });
-  expect(catalog.body.data).toHaveLength(39);
-  expect(catalog.body.data.find((row) => row.capability === "sales.financial")).toMatchObject({
+  expect(catalog.body.data).toHaveLength(Object.keys(require("../auth/capabilities").CAPABILITIES).length);
+  expect(catalog.body.data.find((row) => row.capability === "sales.breakdown.financial")).toMatchObject({
     assigned: true,
     privileged: false,
   });
   expect(
     catalog.body.data.some((row) => ["sales.costs", "sales.profit", "providers.personal"].includes(row.capability)),
   ).toBe(false);
-  expect(catalog.body.data.some((row) => row.capability === "commissions.read")).toBe(true);
-  expect(catalog.body.data.some((row) => row.capability === "commissions.update")).toBe(true);
+  expect(catalog.body.data.some((row) => row.capability === "sellers.commissions.read")).toBe(true);
+  expect(catalog.body.data.some((row) => row.capability === "sellers.commissions.update")).toBe(true);
   for (const permission of [
     { capability: "sales.costs", scope: "global" },
     { capability: "sales.profit", scope: "global" },
@@ -198,7 +204,7 @@ test("no elimina permisos ni roles del último administrador", async () => {
       })
     ).status,
   ).toBe(409);
-  expect((await admin.request(`/api/auth/roles/${roleId}`)).body.permissions).toHaveLength(4);
+  expect((await admin.request(`/api/auth/roles/${roleId}`)).body.permissions).toHaveLength(11);
   expect((await admin.request("/api/auth/users")).status).toBe(200);
 });
 
@@ -238,7 +244,7 @@ test("fallo de auditoría revierte rol, vínculos y revocación juntos", async (
   }
   expect((await reader.request("/api/currency_rates")).status).toBe(200);
   expect((await admin.request(`/api/auth/roles/${role.id}`)).body.permissions).toEqual([
-    { capability: "rates.read", scope: "global" },
+    { capability: "settings.rates.read", scope: "global" },
   ]);
   expect((await admin.request(`/api/auth/users/${user.id}/sellers`)).body.data).toEqual([]);
 });

@@ -1,4 +1,6 @@
 import { useAuth } from 'auth/context';
+import { ResourceBoundary } from 'auth/resources';
+import AccessDenied from 'components/AccessDenied';
 import SellersDashboard from 'components/Dashboard/SellersDashboard';
 import DateRangePicker from 'components/DateRangePicker';
 import SellerDashboardModal from 'components/SellerDashboardModal';
@@ -18,16 +20,18 @@ const initialDateRange = () => ({
 });
 
 const VendedoresPage = () => {
-    const { session } = useAuth();
-    const analytics = session.permissions.some((grant) => grant.capability === 'sales.read');
-    const availableViews = analytics ? VALID_VIEWS : ['sellers'];
+    const { has } = useAuth();
+    const analytics = has('sellers.dashboard.read');
+    const availableViews = VALID_VIEWS.filter((view) =>
+        has(`sellers.${view === 'sellers' ? 'directory' : 'dashboard'}.read`),
+    );
     const history = useHistory();
     const location = useLocation();
     const { showNoe } = useContext(ShowNoeContext);
 
     const searchParams = new URLSearchParams(location.search);
     const urlView = searchParams.get('view');
-    const initialView = availableViews.includes(urlView) ? urlView : availableViews[0];
+    const initialView = urlView || availableViews[0];
 
     const [activeView, setActiveView] = useState(initialView);
     const [dateRange, setDateRange] = useState(() => ({
@@ -48,7 +52,7 @@ const VendedoresPage = () => {
         params.set('to', dateRange.to);
         params.set('dFrom', desgloseDateRange.from);
         params.set('dTo', desgloseDateRange.to);
-        history.replace({ search: params.toString() });
+        if (availableViews.includes(activeView)) history.replace({ search: params.toString() });
     }, [activeView, dateRange, desgloseDateRange, history]);
 
     const handleDateRangeChange = useCallback(({ from, to }) => {
@@ -74,6 +78,7 @@ const VendedoresPage = () => {
                 label: 'Dashboard',
                 icon: (
                     <svg
+                        aria-hidden="true"
                         width="18"
                         height="18"
                         viewBox="0 0 24 24"
@@ -96,6 +101,7 @@ const VendedoresPage = () => {
                 label: 'Desglose',
                 icon: (
                     <svg
+                        aria-hidden="true"
                         width="18"
                         height="18"
                         viewBox="0 0 24 24"
@@ -119,68 +125,72 @@ const VendedoresPage = () => {
         [],
     );
 
+    if (urlView && !availableViews.includes(urlView)) return <AccessDenied />;
+
     return (
-        <Container as="section" aria-label="Vendedores" fluid className="clientes-layout p-0">
-            <div className="clientes-row">
-                <Sidebar
-                    activeKey={activeView}
-                    onSelect={setActiveView}
-                    items={sidebarItems.filter((item) => availableViews.includes(item.eventKey))}
-                />
-                <div className="clientes-content p-4">
-                    {activeView === 'sellers' && (
-                        <div className="report-page">
-                            <div className="clients-content-wrapper report-page-header mb-3">
-                                <h4 className="m-0 text-light">Desglose de Vendedores</h4>
-                                <div className="report-page-filters">
-                                    {analytics && (
+        <ResourceBoundary resource={`sellers.${activeView === 'sellers' ? 'directory' : 'dashboard'}`}>
+            <Container as="section" aria-label="Vendedores" fluid className="clientes-layout p-0">
+                <div className="clientes-row">
+                    <Sidebar
+                        activeKey={activeView}
+                        onSelect={setActiveView}
+                        items={sidebarItems.filter((item) => availableViews.includes(item.eventKey))}
+                    />
+                    <div className="clientes-content p-4">
+                        {activeView === 'sellers' && (
+                            <div className="report-page">
+                                <div className="clients-content-wrapper report-page-header mb-3">
+                                    <h4 className="m-0 text-light">Desglose de Vendedores</h4>
+                                    <div className="report-page-filters">
+                                        {analytics && (
+                                            <DateRangePicker
+                                                initialFrom={desgloseDateRange.from}
+                                                initialTo={desgloseDateRange.to}
+                                                onChange={handleDesgloseDateRangeChange}
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                                <div
+                                    className="clients-content-wrapper"
+                                    style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}
+                                >
+                                    <SellersTable onRowSelect={handleRowSelect} dateRange={desgloseDateRange} />
+                                </div>
+                            </div>
+                        )}
+                        {activeView === 'dashboard' && (
+                            <section className="d-flex flex-column gap-3">
+                                <div className="clients-content-wrapper report-page-header">
+                                    <h4 className="m-0 text-light">Dashboard de Vendedores</h4>
+                                    <div className="report-page-filters">
                                         <DateRangePicker
-                                            initialFrom={desgloseDateRange.from}
-                                            initialTo={desgloseDateRange.to}
-                                            onChange={handleDesgloseDateRangeChange}
+                                            initialFrom={dateRange.from}
+                                            initialTo={dateRange.to}
+                                            onChange={handleDateRangeChange}
                                         />
-                                    )}
+                                    </div>
                                 </div>
-                            </div>
-                            <div
-                                className="clients-content-wrapper"
-                                style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}
-                            >
-                                <SellersTable onRowSelect={handleRowSelect} dateRange={desgloseDateRange} />
-                            </div>
-                        </div>
-                    )}
-                    {activeView === 'dashboard' && (
-                        <section className="d-flex flex-column gap-3">
-                            <div className="clients-content-wrapper report-page-header">
-                                <h4 className="m-0 text-light">Dashboard de Vendedores</h4>
-                                <div className="report-page-filters">
-                                    <DateRangePicker
-                                        initialFrom={dateRange.from}
-                                        initialTo={dateRange.to}
-                                        onChange={handleDateRangeChange}
-                                    />
-                                </div>
-                            </div>
-                            <SellersDashboard
-                                dateRange={dateRange}
-                                showNoe={showNoe}
-                                onSellerSelect={handleRowSelect}
-                            />
-                        </section>
-                    )}
+                                <SellersDashboard
+                                    dateRange={dateRange}
+                                    showNoe={showNoe}
+                                    onSellerSelect={handleRowSelect}
+                                />
+                            </section>
+                        )}
+                    </div>
                 </div>
-            </div>
-            {selectedSeller && (
-                <SellerDashboardModal
-                    key={modalKey}
-                    show
-                    onClose={() => setSelectedSeller(null)}
-                    seller={selectedSeller}
-                    initialDateRange={activeView === 'sellers' ? desgloseDateRange : dateRange}
-                />
-            )}
-        </Container>
+                {selectedSeller && (
+                    <SellerDashboardModal
+                        key={modalKey}
+                        show
+                        onClose={() => setSelectedSeller(null)}
+                        seller={selectedSeller}
+                        initialDateRange={activeView === 'sellers' ? desgloseDateRange : dateRange}
+                    />
+                )}
+            </Container>
+        </ResourceBoundary>
     );
 };
 

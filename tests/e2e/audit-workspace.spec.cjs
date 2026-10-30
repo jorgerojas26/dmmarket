@@ -2,13 +2,15 @@ const { randomUUID } = require("node:crypto");
 const { test, expect, login } = require("./fixtures.cjs");
 
 async function openAudit(page, environment) {
+  await environment.db("dmmarket_auth_events").delete();
   const reader = await environment.seedUser({ permissions: [{ capability: "audit.read", scope: "global" }] });
   const actor = await environment.seedUser();
   const target = await environment.seedUser();
   await environment.db("dmmarket_auth_users").where("id", actor.id).update({ display_name: "Ana Pérez" });
   await environment.db("dmmarket_auth_users").where("id", target.id).update({ display_name: "Lucía Torres" });
   const role = (await environment.db("dmmarket_auth_user_roles").where("user_id", actor.id).first()).role_id;
-  await environment.db("dmmarket_auth_roles").where("id", role).update({ name: "Equipo de ventas" });
+  const roleName = `Equipo de ventas ${role.slice(0, 8)}`;
+  await environment.db("dmmarket_auth_roles").where("id", role).update({ name: roleName });
   const today = new Date().toISOString().slice(0, 10);
   await environment.db("dmmarket_auth_events").insert(
     Array.from({ length: 27 }, (_, index) => ({
@@ -27,7 +29,7 @@ async function openAudit(page, environment) {
   const report = page.getByRole("region", { name: "Consulta autorizada de auditoría", exact: true });
   await report.getByRole("searchbox", { name: "Buscar en el historial", exact: true }).fill("Lucía Torres");
   await expect(report.getByRole("status").filter({ hasText: "27 eventos" })).toBeVisible();
-  return { report, actor, target, role, reader };
+  return { report, actor, target, role, roleName, reader };
 }
 
 test("historial muestra nombres y actividades legibles con filtros y paginación reales", async ({
@@ -53,12 +55,12 @@ test("detalle contextual conserva identificadores, motivo y nombres actuales sin
   page,
   environment,
 }) => {
-  const { report, actor, target, role } = await openAudit(page, environment);
+  const { report, actor, target, role, roleName } = await openAudit(page, environment);
   await report.getByLabel("Actividad", { exact: true }).selectOption("auth.role_changed");
   await report.getByRole("button", { name: "Rol actualizado", exact: true }).first().click();
   const panel = page.getByRole("dialog", { name: "Detalle del evento", exact: true });
   await panel.getByText("Referencia técnica", { exact: true }).click();
-  for (const text of ["Ana Pérez", "Lucía Torres", "Equipo de ventas", actor.id, target.id, role, "auth.role_changed"])
+  for (const text of ["Ana Pérez", "Lucía Torres", roleName, actor.id, target.id, role, "auth.role_changed"])
     await expect(panel.getByText(text, { exact: true })).toBeVisible();
   await expect(panel.getByText(/Revisión de permisos/)).toBeVisible();
   await expect(panel.getByText(/Los nombres corresponden a los registros actuales/)).toBeVisible();

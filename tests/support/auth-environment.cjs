@@ -1,3 +1,4 @@
+const { scenarioPermissions } = require("./permission-presets.cjs");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -227,6 +228,7 @@ async function startEnvironment({
         mfa_secret: enrollment?.encryptedSecret || null,
         mfa_required: mfaRequired,
       });
+      permissions = scenarioPermissions(permissions);
       if (permissions.length) {
         const role = randomUUID();
         await db("dmmarket_auth_roles").insert({ id: role, name: role });

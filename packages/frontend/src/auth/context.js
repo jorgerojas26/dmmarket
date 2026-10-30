@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useHistory } from 'react-router-dom';
 import useSWR from 'swr';
+import { permissionReference, useResource } from './resources';
 import {
     authRequest,
     authTransportGeneration,
@@ -51,7 +52,17 @@ function verifiedSession(data) {
 }
 
 const AuthContext = createContext(null);
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = (explicitResource) => {
+    const context = useContext(AuthContext);
+    const inherited = useResource();
+    const resource = explicitResource || inherited;
+    const has = (capability) =>
+        !context.checking &&
+        !context.failure &&
+        context.session?.permissions?.some((grant) => grant.capability === permissionReference(capability, resource));
+    const can = (capability) => context.can(permissionReference(capability, resource));
+    return { ...context, can, has, resource };
+};
 
 export function AuthProvider({ children }) {
     const history = useHistory();

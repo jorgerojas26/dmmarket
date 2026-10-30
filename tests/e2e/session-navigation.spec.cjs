@@ -1,6 +1,23 @@
-const { test, expect, login, logout, openModule } = require("./fixtures.cjs");
+const { test: base, expect, login, logout, openModule } = require("./fixtures.cjs");
 const { seedSales } = require("../support/sales-fixtures.cjs");
 const { seedPurchases } = require("../support/purchase-fixtures.cjs");
+const { startEnvironment } = require("../support/auth-environment.cjs");
+const test = base.extend({
+  environment: [
+    async ({ browserName }, use) => {
+      if (browserName !== "chromium") throw new Error("Esta suite verifica navegación en Chrome real.");
+      const environment = await startEnvironment({ web: true });
+      try {
+        await seedSales(environment.db);
+        await seedPurchases(environment.db);
+        await use(environment);
+      } finally {
+        await environment.close();
+      }
+    },
+    { scope: "worker" },
+  ],
+});
 
 async function reportUser(environment, seller = "A") {
   await seedSales(environment.db);

@@ -59,7 +59,7 @@ test("asistente sandbox conserva claves, verifica HTTPS real y no declara listo 
     expect(await page.locator("body").innerText()).not.toContain(environment.configuration.AUTH_MFA_KEY);
     expect(Number((await environment.db("dmmarket_auth_users").count("* as n").first()).n)).toBe(0);
     expect((await environment.db("dmmarket_auth_roles").select("name")).map((role) => role.name).sort()).toEqual(
-      ["Dirección", "Administración técnica", "Consulta operativa", "Cobranza"].sort(),
+      ["Superusuario", "Administrador", "Consultor", "Cobranza"].sort(),
     );
     expect(Number((await environment.db("dmmarket_auth_user_roles").count("* as n").first()).n)).toBe(0);
   } finally {
@@ -71,11 +71,11 @@ test("reinstalador compilado carga roles ausentes y conserva personalizaciones s
   page,
   environment,
 }) => {
-  const direction = await environment.db("dmmarket_auth_roles").where("name", "Dirección").first();
-  await environment.db("dmmarket_auth_roles").where("id", direction.id).update({ name: "Dirección personalizada" });
+  const direction = await environment.db("dmmarket_auth_roles").where("name", "Administrador").first();
+  await environment.db("dmmarket_auth_roles").where("id", direction.id).update({ name: "Administrador personalizado" });
   await environment
     .db("dmmarket_auth_role_permissions")
-    .where({ role_id: direction.id, capability: "access.links" })
+    .where({ role_id: direction.id, capability: "access.links.update" })
     .delete();
   const collection = await environment.db("dmmarket_auth_roles").where("name", "Cobranza").first();
   await environment.db("dmmarket_auth_role_permissions").where("role_id", collection.id).delete();
@@ -99,7 +99,7 @@ test("reinstalador compilado carga roles ausentes y conserva personalizaciones s
       page.getByRole("heading", { name: "HTTPS activo; completa la preparación de acceso", exact: true }),
     ).toBeVisible();
     expect((await environment.db("dmmarket_auth_roles").where("id", direction.id).first()).name).toBe(
-      "Dirección personalizada",
+      "Administrador personalizado",
     );
     expect(
       await environment.db("dmmarket_auth_role_permissions").where("role_id", direction.id).orderBy("capability"),

@@ -40,10 +40,10 @@ test.each(["false", "true"])(
     const amount = showNoe === "true" ? 200 : 100;
     expect(result.status).toBe(200);
     expect(result.body.kpis).toMatchObject({
-      totalClients: 3,
+      totalClients: 1,
       activeClients: 1,
-      sinFacturar: 2,
-      activePercent: 33.33,
+      sinFacturar: 0,
+      activePercent: 100,
       unregisteredActiveClients: 0,
       avgFrequency: 1,
       retention: { retainedRevenue: 10, prevPeriodRevenue: 10, rate: 100 },
@@ -57,9 +57,9 @@ test.each(["false", "true"])(
     expect(result.body.revenueBySegment[0]).toMatchObject({ num_clients: 1, revenue: amount, avg_invoices: 1 });
     expect(result.body.coverage.routes[0]).toMatchObject({
       Id_Ruta: "R",
-      asignados: 3,
+      asignados: 1,
       activos: 1,
-      coberturaPct: 33.33,
+      coberturaPct: 100,
     });
     expect(JSON.stringify(result.body)).not.toMatch(/PRIVATE|utilidad|abcUtility|rif|phone|email/i);
   },
@@ -127,11 +127,11 @@ test("cabeceras sin líneas cuentan una vez; identidades históricas se separan 
   const client = await reader([grant("clients.read"), grant("sales.read", "assigned")]);
   const result = await client.request("/api/clients/dashboard?from=2026-03-01&to=2026-03-31");
   expect(result.body.kpis).toMatchObject({
-    totalClients: 3,
+    totalClients: 1,
     activeClients: 1,
-    activePercent: 33.33,
+    activePercent: 100,
     unregisteredActiveClients: 2,
-    sinFacturar: 2,
+    sinFacturar: 0,
     avgFrequency: 1,
   });
   expect(result.body.monthlyActive).toEqual([{ month: "2026-03", count: 1, unregistered: 2 }]);

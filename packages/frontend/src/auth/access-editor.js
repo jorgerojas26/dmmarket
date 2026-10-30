@@ -1,7 +1,7 @@
+import { MODULES } from '@dmmarket/permissions';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
-import { permissionGroups } from './access-permissions';
 import { LoadState, ManagementForm, Pagination, useDiscardChanges } from './access-ui';
 import { useAuth } from './context';
 import { Field } from './forms';
@@ -14,7 +14,7 @@ function grantsFor(role) {
     }, {});
 }
 
-function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
+function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange, readOnly = false }) {
     const { check } = useAuth();
     const [name, setName] = useState(role?.name || '');
     const [grants, setGrants] = useState(() => grantsFor(role));
@@ -22,7 +22,7 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
     const changed =
         name !== (role?.name || '') ||
         catalog.some(({ capability }) => (grants[capability] || '') !== (grantsFor(role)[capability] || ''));
-    const dirty = changed;
+    const dirty = !readOnly && changed;
     const { requestClose, confirmation } = useDiscardChanges(dirty);
     useEffect(() => {
         onDirtyChange(dirty);
@@ -52,12 +52,13 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
                         Volver a roles
                     </button>
                     <span className="access-eyebrow">Acceso / Roles</span>
-                    <h2>{role ? 'Editar rol' : 'Crear rol'}</h2>
+                    <h2>{readOnly ? 'Permisos del rol' : role ? 'Editar rol' : 'Crear rol'}</h2>
                     <p>Define qué puede hacer este perfil y sobre qué datos.</p>
                 </div>
             </div>
             <div className="access-role-editor">
                 <ManagementForm
+                    readOnly={readOnly}
                     button="Guardar rol"
                     onBusyChange={setBusy}
                     disabled={!changed}
@@ -87,54 +88,71 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
                             no concede acceso.
                         </p>
                     </div>
-                    {permissionGroups.map(([group, entries]) => {
-                        const permissions = entries.filter(([key]) =>
-                            catalog.some(({ capability }) => capability === key),
-                        );
-                        if (!permissions.length) return null;
-                        return (
-                            <section
-                                className="access-permission-group"
-                                key={group}
-                                aria-label={`Permisos de ${group}`}
-                            >
-                                <h3>{group}</h3>
-                                {group === 'Ventas' && (
-                                    <p className="access-muted">
-                                        Costos, utilidad y margen solo se muestran si el permiso financiero cubre todos
-                                        los datos consultados.
-                                    </p>
-                                )}
-                                {permissions.map(([key, label]) => {
-                                    const capability = catalog.find((item) => item.capability === key);
-                                    return (
-                                        <div className="access-permission" key={key}>
-                                            <div>
-                                                <label htmlFor={`permission-${key}`}>{label}</label>
-                                                {capability.privileged && (
-                                                    <span className="access-mfa">Requiere MFA</span>
-                                                )}
+                    {MODULES.map((module) => (
+                        <section
+                            className="access-permission-group"
+                            key={module.key}
+                            aria-label={`Permisos de ${module.label}`}
+                        >
+                            <h3>{module.label}</h3>
+                            {module.resources.map((resource) => (
+                                <section
+                                    className="access-permission-submodule"
+                                    key={resource.resource}
+                                    aria-label={`${module.label} / ${resource.label}`}
+                                >
+                                    <h4>{resource.label}</h4>
+                                    {['access', 'information', 'action'].map((kind) => {
+                                        const entries = catalog.filter(
+                                            (entry) => entry.resource === resource.resource && entry.kind === kind,
+                                        );
+                                        if (!entries.length) return null;
+                                        return (
+                                            <div key={kind} className="access-permission-section">
+                                                <h5>
+                                                    {
+                                                        {
+                                                            access: 'Acceso',
+                                                            information: 'Información',
+                                                            action: 'Acciones',
+                                                        }[kind]
+                                                    }
+                                                </h5>
+                                                {entries.map((capability) => {
+                                                    const key = capability.capability;
+                                                    return (
+                                                        <div className="access-permission" key={key}>
+                                                            <label htmlFor={`permission-${key}`}>
+                                                                {capability.label}
+                                                            </label>
+                                                            <select
+                                                                id={`permission-${key}`}
+                                                                className="form-select"
+                                                                aria-label={`${capability.label} · ${module.label} / ${resource.label}`}
+                                                                disabled={busy}
+                                                                value={grants[key] || ''}
+                                                                onChange={(event) =>
+                                                                    setGrants({ ...grants, [key]: event.target.value })
+                                                                }
+                                                            >
+                                                                <option value="">Sin acceso</option>
+                                                                <option value="global">Todo el negocio</option>
+                                                                {capability.assigned && (
+                                                                    <option value="assigned">
+                                                                        Vendedores vinculados
+                                                                    </option>
+                                                                )}
+                                                            </select>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
-                                            <select
-                                                id={`permission-${key}`}
-                                                className="form-select"
-                                                value={grants[key] || ''}
-                                                onChange={(event) =>
-                                                    setGrants({ ...grants, [key]: event.target.value })
-                                                }
-                                            >
-                                                <option value="">Sin acceso</option>
-                                                <option value="global">Todo el negocio</option>
-                                                {capability.assigned && (
-                                                    <option value="assigned">Vendedores vinculados</option>
-                                                )}
-                                            </select>
-                                        </div>
-                                    );
-                                })}
-                            </section>
-                        );
-                    })}
+                                        );
+                                    })}
+                                </section>
+                            ))}
+                        </section>
+                    ))}
                     <div className="access-role-basics">
                         <p className="access-notice">
                             Los permisos limitados necesitan vendedores vinculados al usuario. Al modificar un rol se
@@ -149,6 +167,7 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange }) {
 }
 
 export default function AccessEditor({ onDirtyChange }) {
+    const { can } = useAuth();
     const { data: roles, error, mutate } = useSWR('/api/auth/roles', fetcher);
     const { data: catalog, error: catalogError, mutate: retryCatalog } = useSWR('/api/auth/roles/catalog', fetcher);
     const [editing, setEditing] = useState(null);
@@ -171,6 +190,7 @@ export default function AccessEditor({ onDirtyChange }) {
             >
                 <RoleForm
                     key={editing}
+                    readOnly={!can(editing === 'new' ? 'access.roles.create' : 'access.roles.update')}
                     role={editing === 'new' ? null : role}
                     catalog={catalog?.data || []}
                     onDirtyChange={onDirtyChange}
@@ -192,16 +212,18 @@ export default function AccessEditor({ onDirtyChange }) {
                 <div>
                     <h2>Roles</h2>
                 </div>
-                <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                        setMessage('');
-                        setEditing('new');
-                    }}
-                >
-                    Crear rol
-                </button>
+                {can('access.roles.create') && (
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => {
+                            setMessage('');
+                            setEditing('new');
+                        }}
+                    >
+                        Crear rol
+                    </button>
+                )}
             </header>
             {message && (
                 <p role="status" className="access-success">
@@ -234,13 +256,13 @@ export default function AccessEditor({ onDirtyChange }) {
                                     <button
                                         type="button"
                                         className="btn btn-outline-light"
-                                        aria-label={`Editar ${item.name}`}
+                                        aria-label={`${can('access.roles.update') ? 'Editar' : 'Ver permisos de'} ${item.name}`}
                                         onClick={() => {
                                             setMessage('');
                                             setEditing(item.id);
                                         }}
                                     >
-                                        Editar
+                                        {can('access.roles.update') ? 'Editar' : 'Ver permisos'}
                                     </button>
                                 </li>
                             ))}
@@ -436,9 +458,9 @@ function SellersAssignment({ id, initial, onDirtyChange, onBusyChange, onSaved }
 
 export function Assignments({ id, onDirtyChange, onBusyChange }) {
     const { can } = useAuth();
-    const roles = useSWR(can('access.roles') ? '/api/auth/roles' : null, fetcher);
-    const assignedRoles = useSWR(can('access.roles') ? `/api/auth/users/${id}/roles` : null, fetcher);
-    const sellers = useSWR(can('access.links') ? `/api/auth/users/${id}/sellers` : null, fetcher);
+    const roles = useSWR(can('access.roles.read') ? '/api/auth/roles' : null, fetcher);
+    const assignedRoles = useSWR(can('access.roles.read') ? `/api/auth/users/${id}/roles` : null, fetcher);
+    const sellers = useSWR(can('access.links.read') ? `/api/auth/users/${id}/sellers` : null, fetcher);
     const [rolesDirty, setRolesDirty] = useState(false);
     const [sellersDirty, setSellersDirty] = useState(false);
     useEffect(() => {
@@ -446,7 +468,7 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
     }, [rolesDirty, sellersDirty, onDirtyChange]);
     return (
         <>
-            {can('access.roles') && (
+            {can('access.roles.read') && (
                 <LoadState
                     error={roles.error || assignedRoles.error}
                     loading={!roles.data || !assignedRoles.data}
@@ -455,27 +477,67 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
                         assignedRoles.mutate();
                     }}
                 >
-                    <RolesAssignment
-                        id={id}
-                        initial={assignedRoles.data?.data || []}
-                        roles={roles.data?.data || []}
-                        onSaved={(data) => assignedRoles.mutate({ data }, false)}
-                        onDirtyChange={setRolesDirty}
-                        onBusyChange={onBusyChange}
-                    />
+                    {can('access.roles.assign') ? (
+                        <RolesAssignment
+                            id={id}
+                            initial={assignedRoles.data?.data || []}
+                            roles={roles.data?.data || []}
+                            onSaved={(data) => assignedRoles.mutate({ data }, false)}
+                            onDirtyChange={setRolesDirty}
+                            onBusyChange={onBusyChange}
+                        />
+                    ) : (
+                        <section aria-label="Roles del usuario">
+                            <h3>Roles</h3>
+                            <ul>
+                                {(roles.data?.data || [])
+                                    .filter((role) => assignedRoles.data?.data.includes(role.id))
+                                    .map((role) => (
+                                        <li key={role.id}>{role.name}</li>
+                                    ))}
+                            </ul>
+                        </section>
+                    )}
                 </LoadState>
             )}
-            {can('access.links') && (
+            {can('access.links.read') && (
                 <LoadState error={sellers.error} loading={!sellers.data} onRetry={sellers.mutate}>
-                    <SellersAssignment
-                        id={id}
-                        initial={sellers.data?.data || []}
-                        onSaved={(data) => sellers.mutate({ data }, false)}
-                        onDirtyChange={setSellersDirty}
-                        onBusyChange={onBusyChange}
-                    />
+                    {can('access.links.update') ? (
+                        <SellersAssignment
+                            id={id}
+                            initial={sellers.data?.data || []}
+                            onSaved={(data) => sellers.mutate({ data }, false)}
+                            onDirtyChange={setSellersDirty}
+                            onBusyChange={onBusyChange}
+                        />
+                    ) : (
+                        <LinkedSellers initial={sellers.data?.data || []} />
+                    )}
                 </LoadState>
             )}
         </>
+    );
+}
+
+function LinkedSellers({ initial }) {
+    const { data, error, mutate } = useSWR(
+        initial.length ? `/api/auth/seller-options?ids=${encodeURIComponent(initial.join(','))}` : null,
+        fetcher,
+    );
+    return (
+        <section aria-label="Vendedores vinculados">
+            <h3>Vendedores vinculados</h3>
+            {initial.length ? (
+                <LoadState error={error} loading={!data} onRetry={mutate}>
+                    <ul>
+                        {data?.data.map((seller) => (
+                            <li key={seller.id}>{seller.name}</li>
+                        ))}
+                    </ul>
+                </LoadState>
+            ) : (
+                <p className="access-muted">Sin vendedores vinculados.</p>
+            )}
+        </section>
     );
 }

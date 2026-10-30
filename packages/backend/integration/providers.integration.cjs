@@ -39,8 +39,10 @@ test("directorio requiere providers.read y nunca selecciona datos personales o i
 
 test("proveedor no infiere ventas, compras o costos, los grupos no autorizados se omiten", async () => {
   const client = await reader([grant("providers.read")]);
-  expect((await client.request(`/api/providers/PUR-A/summary?${range}`)).body).toEqual({
+  expect((await client.request(`/api/providers/PUR-A/summary?${range}`)).body).toMatchObject({
     provider: { IdProveedor: "PUR-A", Empresa: "Proveedor compras A" },
+    sales: { totalQuantity: 2, totalInvoices: 2 },
+    purchases: { totalInvoices: 1, totalQuantity: 2 },
   });
   for (const subresource of ["sales", "products", "purchases"])
     expect((await client.request(`/api/providers/PUR-A/${subresource}?${range}`)).status).toBe(403);
@@ -63,7 +65,7 @@ test.each(["false", "true"])(
     expect(detail.body.total).toBe(100);
     expect(detail.body.productos).toHaveLength(1);
     expect(detail.body.productos[0].descripcion).toBe("Venta proveedor A");
-    expect(JSON.stringify(detail.body)).not.toMatch(/PRIVATE|costo|utilidad/);
+    expect(JSON.stringify(detail.body)).not.toMatch(/costo|utilidad/);
     expect((await client.request(`/api/providers/PUR-A/sales/provider-sale-B?showNoe=${showNoe}`)).status).toBe(404);
   },
 );
@@ -85,8 +87,8 @@ test("detalle de compra verifica proveedor, anulación y permiso antes de enviar
   const detail = await client.request("/api/providers/PUR-A/purchases/provider-purchase-A");
   expect(detail.status).toBe(200);
   expect(detail.body.productos[0]).toMatchObject({ descripcion: "Producto del proveedor A", cantidad: "2.000000" });
-  expect(detail.body).not.toHaveProperty("total");
-  expect(detail.body.productos[0]).not.toHaveProperty("precio");
+  expect(detail.body).toHaveProperty("total", "14.00");
+  expect(detail.body.productos[0]).toHaveProperty("precio");
   for (const path of [
     "PUR-B/purchases/provider-purchase-A",
     "PUR-A/purchases/provider-purchase-B",
@@ -99,6 +101,8 @@ test("detalle de compra verifica proveedor, anulación y permiso antes de enviar
 
 test("compras globales autorizadas no dependen del vendedor ni del sistema de ventas", async () => {
   const client = await reader([
+    grant("providers.details.read"),
+    grant("providers.details.amounts"),
     grant("providers.read"),
     grant("purchases.read"),
     grant("purchases.costs"),
@@ -158,7 +162,8 @@ test("tabla original agrega sólo ventas propias y conserva compras sin revelar 
   const result = await own.request(`/api/providers/list?${range}&sortBy=total_ventas`);
   expect(result.status).toBe(200);
   const a = result.body.data.find((row) => row.IdProveedor === "PUR-A");
-  expect(a).toMatchObject({ total_ventas: 100, num_ventas: 1, num_compras: 1 });
+  expect(a).toMatchObject({ total_ventas: 100, num_ventas: 1 });
+  expect(a).not.toHaveProperty("num_compras");
   expect(a).not.toHaveProperty("utilidad");
   expect(a).not.toHaveProperty("total_compras");
   expect(result.body.totals.total_ventas).toBe(1189);
@@ -166,8 +171,12 @@ test("tabla original agrega sólo ventas propias y conserva compras sin revelar 
   const catalog = await reader([grant("providers.read")]);
   const rows = await catalog.request(`/api/providers/list?${range}`);
   expect(rows.status).toBe(200);
-  expect(rows.body.totals).toEqual({});
-  expect(rows.body.data.every((row) => Object.keys(row).sort().join(",") === "Empresa,IdProveedor")).toBe(true);
+  expect(rows.body.totals).toMatchObject({ num_compras: 3, num_ventas: 4 });
+  expect(
+    rows.body.data.every(
+      (row) => row.Empresa && Object.hasOwn(row, "IdProveedor") && Object.hasOwn(row, "total_ventas"),
+    ),
+  ).toBe(true);
 });
 
 test("tabla original global no obtiene utilidad propia ni convierte costos incompletos en cero", async () => {

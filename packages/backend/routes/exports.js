@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { parameters, invoiceDetail, salesBase } = require("../controllers/sales");
 const { dispatchExport } = require("../controllers/dispatch-export");
@@ -17,12 +18,12 @@ function createExportRoutes({ sessions, security }) {
         fail(400);
       if (req.query.documents !== undefined && !["all", "pending"].includes(req.query.documents)) fail(400);
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
-          if (!access.hasGlobal("receivables.read") || !access.hasGlobal("receivables.export")) fail(403);
+        await requestSession(sessions, req, { readOnly: true }, async ({ transaction, access, user }) => {
+          if (!access.hasGlobal("read") || !access.hasGlobal("export")) fail(403);
           const service = createReceivablesService({
             db: transaction,
-            personal: access.hasGlobal("clients.personal"),
-            referenceRate: access.hasGlobal("rates.read"),
+            personal: access.hasGlobal("personal"),
+            referenceRate: access.hasGlobal("settings.rates.read"),
           });
           const result = await service.detail(
             req.params.clientId,
@@ -47,7 +48,7 @@ function createExportRoutes({ sessions, security }) {
     try {
       if (!req.is("application/json")) fail(415);
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
+        await requestSession(sessions, req, { readOnly: true }, async ({ transaction, access, user }) => {
           const result = await dispatchExport(transaction, access, req.body);
           await appendEvent(transaction, {
             actorId: user.id,
@@ -66,8 +67,8 @@ function createExportRoutes({ sessions, security }) {
     try {
       const query = parameters(req.query, { range: false, keys: ["showNoe", "proveedorId"] });
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
-          const scope = access.scopeFor("sales.export");
+        await requestSession(sessions, req, { readOnly: true }, async ({ transaction, access, user }) => {
+          const scope = access.scopeFor("export");
           if (!scope.global && !scope.sellerIds.length) fail(403);
           const { base, invoice } = salesBase(transaction, access, query);
           const headers = await base
@@ -75,7 +76,7 @@ function createExportRoutes({ sessions, security }) {
             .select({ sellerId: "mf.IdVend" })
             .groupByRaw("BINARY mf.IdVend");
           if (!headers.length) fail(404);
-          if (!headers.every((header) => access.canRecord("sales.export", header.sellerId))) fail(403);
+          if (!headers.every((header) => access.canRecord("export", header.sellerId))) fail(403);
           const result = await invoiceDetail(transaction, access, query, req.params.invoiceId);
           await appendEvent(transaction, {
             actorId: user.id,
@@ -93,7 +94,7 @@ function createExportRoutes({ sessions, security }) {
   router.get("/exports/:resource", async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
+        await requestSession(sessions, req, { readOnly: true }, async ({ transaction, access, user }) => {
           const result = await dataset(req.params.resource, transaction, access, req.query);
           await appendEvent(transaction, {
             actorId: user.id,

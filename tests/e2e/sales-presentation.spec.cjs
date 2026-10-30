@@ -8,6 +8,8 @@ const test = base.extend({
       const environment = await startEnvironment({ web: true });
       try {
         await seedSales(environment.db);
+        await require("../support/purchase-fixtures.cjs").seedPurchases(environment.db);
+        await require("../support/inventory-fixtures.cjs").seedInventory(environment.db);
         await use(environment);
       } finally {
         await environment.close();
@@ -34,7 +36,7 @@ test("dashboard original conserva tarjetas y categorías propias, ocultando rank
 }) => {
   const forbidden = [];
   page.on("request", (r) => {
-    if (/\/api\/(purchases|dashboard\/pareto|providers|exports)/.test(r.url())) forbidden.push(r.url());
+    if (/\/api\/(purchases|providers|exports)/.test(r.url())) forbidden.push(r.url());
   });
   const report = await enter(page, environment, [grant("sales.read", "assigned")]);
   await expect(card(report, "Venta Bruta")).toContainText("$100,00");

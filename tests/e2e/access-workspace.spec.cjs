@@ -96,6 +96,7 @@ test("alta en pantalla propia protege borradores y muestra la credencial una sol
   await panel.getByRole("button", { name: "Volver a usuarios", exact: true }).click();
   const discard = page.getByRole("dialog", { name: "¿Descartar los cambios?", exact: true });
   await discard.getByRole("button", { name: "Seguir editando", exact: true }).click();
+  await expect(discard).toHaveCount(0);
   await expect(panel.getByLabel("Username", { exact: true })).toHaveValue("nuevo-contextual");
   await panel.getByLabel("Nombre", { exact: true }).fill("Nueva persona");
   await panel.getByLabel("Rol", { exact: true }).selectOption(initialRoleId);
@@ -122,14 +123,16 @@ test("alta explica permisos reales, conserva datos ante errores y funciona con n
   await environment.db("dmmarket_auth_roles").insert({ id: roleId, name: "Consulta personalizada" });
   await environment
     .db("dmmarket_auth_role_permissions")
-    .insert({ role_id: roleId, capability: "sales.read", scope: "assigned" });
+    .insert({ role_id: roleId, capability: "sales.breakdown.read", scope: "assigned" });
   await page.goto(`${environment.origin}/acceso#nuevo-usuario`);
   const screen = page.getByRole("region", { name: "Crear usuario", exact: true });
   await expect(screen.getByRole("heading", { name: "Crear usuario", exact: true })).toBeFocused();
   await screen.getByLabel("Nombre", { exact: true }).fill("Ana Pérez");
   await screen.getByLabel("Username", { exact: true }).fill(owner.username);
   await screen.getByLabel("Rol", { exact: true }).selectOption(roleId);
-  await expect(screen.getByRole("region", { name: "Permisos del rol", exact: true })).toContainText("Consultar ventas");
+  await expect(screen.getByRole("region", { name: "Permisos del rol", exact: true })).toContainText(
+    "Desglose · Consultar",
+  );
   await expect(screen).toContainText("Vendedores vinculados");
   await screen.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await expect(screen.getByRole("alert")).toBeVisible();
@@ -147,20 +150,22 @@ test("roles usan lenguaje humano, conservan cambios y persisten alcances", async
   await expect(page).toHaveURL(/#roles$/);
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   await page.getByLabel("Nombre del rol", { exact: true }).fill("Ventas limitadas");
-  await page.getByLabel("Consultar ventas", { exact: true }).selectOption("assigned");
-  await page.getByLabel("Ver costos y utilidad de ventas", { exact: true }).selectOption("assigned");
+  await page.getByLabel("Consultar · Ventas / Desglose", { exact: true }).selectOption("assigned");
+  await page
+    .getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true })
+    .selectOption("assigned");
   await expect(page.getByText("sales.financial", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Volver a roles", exact: true }).click();
   await page
     .getByRole("dialog", { name: "¿Descartar los cambios?", exact: true })
     .getByRole("button", { name: "Seguir editando", exact: true })
     .click();
-  await expect(page.getByLabel("Consultar ventas", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
   await expect(page.getByLabel("Motivo del cambio de rol", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Rol guardado" })).toBeVisible();
   await page.getByRole("button", { name: "Editar Ventas limitadas", exact: true }).click();
-  await expect(page.getByLabel("Consultar ventas", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
   const role = await environment.db("dmmarket_auth_roles").where("name", "Ventas limitadas").first();
   expect(
     await environment
@@ -169,8 +174,8 @@ test("roles usan lenguaje humano, conservan cambios y persisten alcances", async
       .orderBy("capability")
       .select("capability", "scope"),
   ).toEqual([
-    { capability: "sales.financial", scope: "assigned" },
-    { capability: "sales.read", scope: "assigned" },
+    { capability: "sales.breakdown.financial", scope: "assigned" },
+    { capability: "sales.breakdown.read", scope: "assigned" },
   ]);
 });
 
@@ -232,6 +237,8 @@ test("vincula vendedores por nombre sin conceder lectura de negocio", async ({ p
       table.string("Telefono", 64);
     });
   }
+  if (!(await environment.db.schema.hasColumn("vendedores", "Telefono")))
+    await environment.db.schema.alterTable("vendedores", (table) => table.string("Telefono", 64));
   await environment
     .db("vendedores")
     .insert({ idVend: "SELECTOR", Empresa: "Vendedora del selector", Telefono: "PRIVATE-SELECTOR" });
@@ -293,7 +300,7 @@ test("Acceso móvil mantiene navegación, paneles y permisos sin desbordar", asy
   await panel.getByRole("button", { name: "Volver a usuarios", exact: true }).click();
   await page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true }).click();
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
-  await expect(page.getByLabel("Consultar ventas", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 

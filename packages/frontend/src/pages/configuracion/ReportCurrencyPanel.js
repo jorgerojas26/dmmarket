@@ -6,7 +6,7 @@ import { fetcher } from 'swr-config';
 export default function ReportCurrencyPanel() {
     const { can, runPrivileged } = useAuth();
     const settings = useReportSettings();
-    const editable = can('preferences.read') && can('preferences.update');
+    const editable = can('settings.currency.read') && can('settings.currency.update');
     const [draft, setDraft] = useState(null);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');

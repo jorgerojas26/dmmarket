@@ -1,3 +1,4 @@
+const { groupAllowed } = require("../auth/resource-policy");
 const { parameters, listSales } = require("./sales");
 const { canExportSales } = require("./sales-export");
 const { pareto: salesPareto, options: paretoOptions } = require("./dashboard");
@@ -96,7 +97,7 @@ async function dataset(resource, tx, access, input) {
               ["promedio", "Margen (%)"],
             ];
   } else if (resource === "purchases") {
-    if (!access.hasGlobal("purchases.export")) fail(403);
+    if (!access.hasGlobal("export")) fail(403);
     const { kind = "documents", ...filters } = input;
     if (!["documents", "products", "pareto"].includes(kind)) fail(400);
     const query = purchaseOptions(filters, { listing: kind !== "pareto" });
@@ -150,13 +151,14 @@ async function dataset(resource, tx, access, input) {
       ["sharePercent", "% del Total"],
     ];
   } else if (resource === "clients") {
-    if (!access.hasGlobal("clients.export") || !access.hasGlobal("clients.read")) fail(403);
+    if (!canExportSales(access, { employeeId: input.employeeId })) fail(403);
     const { kind = "directory", mode = "ventas", ...filters } = input;
     if (!["directory", "inactive", "pareto"].includes(kind) || !["ventas", "utilidad"].includes(mode)) fail(400);
     const query = parameters(filters, {
       keys: ["from", "to", "showNoe", "search", "ruta", "sortBy", "sortDir", "employeeId"],
     });
     if (kind === "pareto") {
+      if (!groupAllowed(access, "amounts", query)) fail(403);
       const report = await clientDashboard(tx, access, query);
       const selected = mode === "utilidad" ? report.abcUtility : report.abc;
       if (!selected) fail(403);
@@ -190,13 +192,13 @@ async function dataset(resource, tx, access, input) {
             ["ruta", "Ruta"],
           ];
   } else if (resource === "receivables") {
-    if (!access.hasGlobal("receivables.read") || !access.hasGlobal("receivables.export")) fail(403);
+    if (!access.hasGlobal("read") || !access.hasGlobal("export")) fail(403);
     if (Object.keys(input).some((key) => !["search", "ruta", "state", "due", "sortBy", "sortDir"].includes(key)))
       fail(400);
     const service = createReceivablesService({
       db: tx,
-      personal: access.hasGlobal("clients.personal"),
-      referenceRate: access.hasGlobal("rates.read"),
+      personal: access.hasGlobal("personal"),
+      referenceRate: access.hasGlobal("settings.rates.read"),
     });
     result = await service.list(input, 5001);
     title = "Cuentas por cobrar";
@@ -209,7 +211,7 @@ async function dataset(resource, tx, access, input) {
       ["lastPayment", "Último abono"],
     ];
   } else if (resource === "inventory") {
-    if (!access.hasGlobal("inventory.export")) fail(403);
+    if (!access.hasGlobal("export")) fail(403);
     const query = inventoryOptions(input);
     result = await inventory(tx, access, { ...query, page: 1, limit: 5001 });
     title = "Inventario autorizado";
@@ -224,7 +226,7 @@ async function dataset(resource, tx, access, input) {
       ["inventoryValue", "Valor actual a precio A"],
     ];
   } else if (resource === "providers") {
-    if (!access.hasGlobal("providers.read") || !access.hasGlobal("providers.export")) fail(403);
+    if (!canExportSales(access, input)) fail(403);
     const query = parameters(input, { range: false, keys: ["from", "to", "showNoe", "search", "sortBy", "sortDir"] });
     result = await providerList(tx, access, { ...query, page: 1, limit: 5001 });
     title = "Proveedores autorizados";
@@ -246,6 +248,7 @@ async function dataset(resource, tx, access, input) {
   return {
     title,
     filename: `dmmarket-${resource}.pdf`,
+    ...(resource === "receivables" ? { summary: result.summary } : {}),
     columns,
     data: result.data.map((row) =>
       Object.fromEntries(

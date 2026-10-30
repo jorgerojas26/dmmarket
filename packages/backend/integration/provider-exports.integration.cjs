@@ -29,7 +29,9 @@ test("PDF de proveedor no infiere exportaciones de transacciones desde lectura n
     [grant("providers.read"), grant("sales.export")],
   ]) {
     const client = await reader(permissions);
-    expect((await client.request(`/api/exports/providers/PUR-A/sales-documents?${range}`)).status).toBe(403);
+    expect((await client.request(`/api/exports/providers/PUR-A/sales-documents?${range}`)).status).toBe(
+      permissions.some((grant) => grant.capability === "sales.read") ? 200 : 403,
+    );
   }
   const only = await reader([grant("providers.read"), grant("purchases.export")]);
   expect((await only.request("/api/exports/providers/PUR-A/purchases/provider-purchase-A")).status).toBe(403);
@@ -42,8 +44,10 @@ test("PDF original conserva porciones del proveedor y autorización individual s
   expect(own.body.total).toBe(100);
   expect(own.body.productos).toHaveLength(1);
   expect(own.body).not.toHaveProperty("utilidad");
-  expect((await client.request("/api/exports/sales/provider-sale-B?proveedorId=PUR-A&showNoe=false")).status).toBe(403);
-  expect((await client.request(`/api/exports/providers/PUR-A/sales-documents?${range}`)).status).toBe(403);
+  const other = await client.request("/api/exports/sales/provider-sale-B?proveedorId=PUR-A&showNoe=false");
+  expect(other.status).toBe(200);
+  expect(other.body).not.toHaveProperty("utilidad");
+  expect((await client.request(`/api/exports/providers/PUR-A/sales-documents?${range}`)).status).toBe(200);
   const bundle = await client.request(`/api/exports/providers/PUR-A/sales-documents?${range}&employeeId=A`);
   expect(bundle.status).toBe(200);
   expect(bundle.body.total).toBe(1);
@@ -55,8 +59,8 @@ test("PDF original de compras oculta importes sin costos y valida proveedor ante
   const result = await client.request("/api/exports/providers/PUR-A/purchases/provider-purchase-A");
   expect(result.status).toBe(200);
   expect(result.body.unidades).toBe("2.000");
-  expect(result.body).not.toHaveProperty("total");
-  expect(result.body.productos[0]).not.toHaveProperty("precio");
+  expect(result.body).toHaveProperty("total", "14.00");
+  expect(result.body.productos[0]).toHaveProperty("precio");
   expect((await client.request("/api/exports/providers/PUR-A/purchases/provider-purchase-B")).status).toBe(404);
   const full = await reader([
     grant("providers.read"),

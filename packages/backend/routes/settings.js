@@ -26,7 +26,7 @@ function createSettingsRoutes({ sessions, security }) {
         req.sessionID,
         { recent: true },
         async ({ transaction, access, user }) => {
-          if (!access.hasGlobal("preferences.read") || !access.hasGlobal("preferences.update")) forbidden();
+          if (!access.hasGlobal("settings.currency.read") || !access.hasGlobal("settings.currency.update")) forbidden();
           if (
             Object.keys(req.query).length ||
             !req.body ||

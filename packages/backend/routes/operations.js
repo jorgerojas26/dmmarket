@@ -34,17 +34,17 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
       next(error);
     }
   };
-  router.get(["/currency_rates", "/currency_rates/"], handle("rates.read", currentRates));
-  router.get("/currency_rates/bcv", handle("rates.read", rateHistory));
-  router.get("/currency_rates/bcv/latest", handle("rates.read", latestRate));
+  router.get(["/currency_rates", "/currency_rates/"], handle("settings.rates.read", currentRates));
+  router.get("/currency_rates/bcv", handle("settings.rates.read", rateHistory));
+  router.get("/currency_rates/bcv/latest", handle("settings.rates.read", latestRate));
   router.get(
     "/currency_rates/bcv/status",
-    handle("rates.read", (tx, req) => rateStatus(tx, req, rateService, lastSync)),
+    handle("settings.rates.read", (tx, req) => rateStatus(tx, req, rateService, lastSync)),
   );
-  router.get("/currency_rates/bcv/:date", handle("rates.read", rateForDate));
+  router.get("/currency_rates/bcv/:date", handle("settings.rates.read", rateForDate));
   router.get(
     "/backups",
-    handle("backups.read", async (_tx, req) => {
+    handle("settings.backups.read", async (_tx, req) => {
       empty(req.query);
       const value = await backupService.status();
       return {
@@ -64,7 +64,7 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
   );
   router.get(
     "/backups/drive",
-    handle("backups.read", async (_tx, req) => {
+    handle("settings.backups.read", async (_tx, req) => {
       empty(req.query);
       const value = await driveBackupService.status();
       return {
@@ -94,7 +94,7 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
     router.get(path, async (req, res, next) => {
       try {
         await sessions.withSession(req.sessionID, { readOnly: true }, ({ access }) => {
-          if (!access.hasGlobal("updates.read")) fail(403);
+          if (!access.hasGlobal("settings.updates.read")) fail(403);
           empty(req.query);
         });
         controller(req, res);
@@ -109,7 +109,7 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
     router[method](path, ...(method === "post" ? [security.csrfProtection] : []), async (req, res, next) => {
       try {
         await sessions.withSession(req.sessionID, { readOnly: true }, ({ access }) => {
-          if (!access.hasGlobal("updates.read")) fail(403);
+          if (!access.hasGlobal("settings.updates.read")) fail(403);
           empty(req.query);
           if (method === "post") {
             if (!req.is("application/json")) fail(415);
@@ -133,7 +133,7 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
           req.sessionID,
           { recent: true },
           async ({ transaction, access, user }) => {
-            if (!access.hasGlobal("updates.read") || !access.hasGlobal("updates.execute")) fail(403);
+            if (!access.hasGlobal("settings.updates.read") || !access.hasGlobal("settings.updates.execute")) fail(403);
             empty(req.query);
             const keys = action === "download" ? ["confirmed", "assetUrl", "sha256AssetUrl"] : ["confirmed"];
             if (req.body?.confirmed !== true || Object.keys(req.body).some((key) => !keys.includes(key))) fail(400);
@@ -166,8 +166,8 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
       }
     });
   for (const [path, capability, service] of [
-    ["/backups", "backups.create", "backup"],
-    ["/currency_rates/bcv/sync", "rates.sync", "rates"],
+    ["/backups", "settings.backups.create", "backup"],
+    ["/currency_rates/bcv/sync", "settings.rates.sync", "rates"],
   ])
     router.post(path, security.csrfProtection, async (req, res, next) => {
       try {
@@ -182,7 +182,7 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
             if (req.body?.confirmed !== true || Object.keys(req.body).some((key) => key !== "confirmed")) fail(400);
             await appendEvent(transaction, {
               actorId: user.id,
-              action: `${capability}_requested`,
+              action: `${service === "backup" ? "backups.create" : "rates.sync"}_requested`,
               reason: operationId,
               occurredMs: Date.now(),
             });
@@ -207,7 +207,7 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
             await db.transaction((connection) =>
               appendEvent(connection, {
                 actorId,
-                action: `${capability}_completed`,
+                action: `${service === "backup" ? "backups.create" : "rates.sync"}_completed`,
                 outcome,
                 reason: operationId,
                 occurredMs: Date.now(),
@@ -223,7 +223,7 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
               await db.transaction((connection) =>
                 appendEvent(connection, {
                   actorId,
-                  action: `${capability}_failed`,
+                  action: `${service === "backup" ? "backups.create" : "rates.sync"}_failed`,
                   outcome: "failure",
                   reason: operationId,
                   occurredMs: Date.now(),
@@ -247,7 +247,7 @@ function createOperationRoutes({ sessions, security, db, services = {} }) {
         req.sessionID,
         { recent: true },
         async ({ transaction, access, user }) => {
-          if (!access.hasGlobal("cache.clear")) fail(403);
+          if (!access.hasGlobal("settings.cache.clear")) fail(403);
           empty(req.query);
           if (req.body?.confirmed !== true || Object.keys(req.body).some((key) => key !== "confirmed")) fail(400);
           await appendEvent(transaction, {

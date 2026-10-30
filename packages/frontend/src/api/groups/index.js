@@ -1,7 +1,7 @@
 const BASE_URL = '/api/groups';
 
-export const fetchGroups = async ({ filter } = {}) => {
-    const response = await fetch(BASE_URL);
+export const fetchGroups = async ({ filter, accessResource } = {}) => {
+    const response = await fetch(BASE_URL, accessResource ? { headers: { 'X-Access-Resource': accessResource } } : {});
     if (!response.ok) throw new Error('No se pudieron cargar las categorías autorizadas.');
     const groups = await response.json();
     const term = String(filter || '').toLocaleLowerCase('es');

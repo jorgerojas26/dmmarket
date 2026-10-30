@@ -2,9 +2,12 @@ import { fetcher } from 'swr-config';
 
 const BASE_URL = '/api/clients';
 
-export const fetchClients = async ({ filter }) => {
+export const fetchClients = async ({ filter, accessResource }) => {
     const filterParam = filter ? `?filter=${filter}` : '';
-    return fetcher(`${BASE_URL}${filterParam}`);
+    return fetcher(
+        `${BASE_URL}${filterParam}`,
+        accessResource ? { headers: { 'X-Access-Resource': accessResource } } : {},
+    );
 };
 export const fetchBestClients = async (dateRange, showNoe) => {
     return fetcher(`${BASE_URL}/best/?from=${dateRange.from}&to=${dateRange.to}&showNoe=${showNoe}`);
@@ -64,8 +67,8 @@ export const fetchClientsList = async ({
     return fetcher(`${BASE_URL}/list?${params.toString()}`);
 };
 
-export const fetchClientRoutes = async () => {
-    return fetcher(`${BASE_URL}/routes`);
+export const fetchClientRoutes = async (_showNoe, accessResource) => {
+    return fetcher(`${BASE_URL}/routes`, accessResource ? { headers: { 'X-Access-Resource': accessResource } } : {});
 };
 
 export const fetchClientsSinFacturar = async ({

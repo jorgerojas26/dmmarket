@@ -35,7 +35,7 @@ test("consulta de porcentajes exige permiso de comisiones y vínculo exacto", as
   expect(rates.body.find((row) => row.groupId === "COM-G2").commission).toBeNull();
   expect(rates.body.find((row) => row.groupId === "COM-G3").commission).toBeNull();
   expect((await client.request("/api/employees/commissionInfo/B")).status).toBe(403);
-  expect((await client.request(`/api/employees/sales/A?${range}`)).status).toBe(403);
+  expect((await client.request(`/api/employees/sales/A?${range}`)).status).toBe(200);
 });
 
 test("ventas se intersectan con lectura de comisiones, sin duplicar por historial ambiguo", async () => {

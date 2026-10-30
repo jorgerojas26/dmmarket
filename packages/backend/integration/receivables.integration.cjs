@@ -47,13 +47,13 @@ test("cobranza global incluye deuda completa del cliente compartido sin heredar 
   expect(detail.status).toBe(200);
   expect(detail.body.summary.balance).toBe("300.0000");
   expect(detail.body.documents.data.map((row) => row.sale)).toEqual(["1", "2"]);
-  expect(detail.body.client).not.toHaveProperty("rif");
+  expect(detail.body.client).toHaveProperty("rif", "PRIVATE-IDENTIFICATION");
   expect(detail.body).not.toHaveProperty("rate");
 });
 
-test("cartera no consulta identificación personal ni tasa sin sus permisos", async () => {
+test("cartera incluye identificación pero no concede tasas de referencia", async () => {
   const client = await reader([grant("receivables.read")]);
-  expect((await client.request("/api/receivables?search=PRIVATE-CXC-RIF")).body.total).toBe(0);
+  expect((await client.request("/api/receivables?search=PRIVATE-CXC-RIF")).body.total).toBeGreaterThan(0);
   const allowed = await reader([grant("receivables.read"), grant("clients.personal"), grant("rates.read")]);
   const detail = await allowed.request("/api/receivables/CXC-C2");
   expect(detail.status).toBe(200);

@@ -32,9 +32,9 @@ const formatDate = (value) =>
     value && DateTime.fromISO(value).isValid ? DateTime.fromISO(value).toFormat('dd/MM/yyyy') : '—';
 
 const SellersTable = ({ onRowSelect, dateRange }) => {
-    const { session } = useAuth();
-    const analytics = session.permissions.some((grant) => grant.capability === 'sales.read');
-    const exporting = session.permissions.some((grant) => grant.capability === 'sellers.export');
+    const { has } = useAuth();
+    const analytics = has('amounts');
+    const exporting = has('sellers.export');
     const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);

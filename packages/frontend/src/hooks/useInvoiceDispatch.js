@@ -9,14 +9,21 @@ import { useMemo } from 'react';
 export const useInvoiceDispatch = (selectedRows) => {
     const { productsSummary, invoicesTotalSummary } = useMemo(() => {
         const invoices = selectedRows || [];
-        const financial = invoices.length > 0 && invoices.every((row) => Object.hasOwn(row, 'utilidad'));
+        const amounts = invoices.length > 0 && invoices.every((row) => Object.hasOwn(row, 'total'));
+        const financial = amounts && invoices.every((row) => Object.hasOwn(row, 'utilidad'));
         const grouped = new Map();
         const add = (left, right) => (left == null || right == null ? null : left + right);
         for (const invoice of invoices)
             for (const product of invoice.products) {
                 let row = grouped.get(product.productId);
                 if (!row) {
-                    row = { ...product, quantity: 0, peso: 0, total: 0, ...(financial ? { utilidad: 0 } : {}) };
+                    row = {
+                        ...product,
+                        quantity: 0,
+                        peso: 0,
+                        ...(amounts ? { total: 0 } : {}),
+                        ...(financial ? { utilidad: 0 } : {}),
+                    };
                     grouped.set(product.productId, row);
                 }
                 row.quantity = add(row.quantity, product.quantity);
@@ -24,10 +31,11 @@ export const useInvoiceDispatch = (selectedRows) => {
                     row.peso,
                     product.quantity == null || product.peso == null ? null : product.quantity * product.peso,
                 );
-                row.total = add(
-                    row.total,
-                    product.quantity == null || product.price == null ? null : product.quantity * product.price,
-                );
+                if (amounts)
+                    row.total = add(
+                        row.total,
+                        product.quantity == null || product.price == null ? null : product.quantity * product.price,
+                    );
                 if (financial)
                     row.utilidad = add(
                         row.utilidad,
@@ -37,7 +45,10 @@ export const useInvoiceDispatch = (selectedRows) => {
                     );
             }
         const productsSummary = [...grouped.values()];
-        return { productsSummary, invoicesTotalSummary: productsSummary.reduce((sum, row) => add(sum, row.total), 0) };
+        return {
+            productsSummary,
+            invoicesTotalSummary: amounts ? productsSummary.reduce((sum, row) => add(sum, row.total), 0) : undefined,
+        };
     }, [selectedRows]);
 
     return { productsSummary, invoicesTotalSummary };

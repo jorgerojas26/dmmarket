@@ -21,13 +21,16 @@ const LIMIT = 50;
  * fetches all matching rows and exports them via pdfMake.
  */
 const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
-    const { can } = useAuth();
+    const { has } = useAuth('clients.inactive');
     const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [sort, setSort] = useState({ sortBy: 'revenue_historico', sortDir: 'desc' });
+    const [sort, setSort] = useState({
+        sortBy: has('amounts') ? 'revenue_historico' : 'Empresa',
+        sortDir: has('amounts') ? 'desc' : 'asc',
+    });
 
     const { data: result, isLoading } = useClientsSinFacturar({
         from,
@@ -210,7 +213,7 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
                     onPageChange: setPage,
                 }}
                 print={{
-                    enabled: can('clients.export') && Boolean(result),
+                    enabled: result?.exportAllowed === true,
                     onGlobalPrint: handlePrintAll,
                     storageKey: 'sin-facturar',
                 }}

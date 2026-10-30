@@ -1,5 +1,5 @@
 const { randomUUID } = require("node:crypto");
-const { createAccess } = require("./capabilities");
+const { createAccess, CAPABILITIES } = require("./capabilities");
 
 const AUTH_TABLES = [
   "dmmarket_auth_attempts",
@@ -36,13 +36,9 @@ async function assertAuthSchema(db) {
     throw new Error("El esquema de acceso requiere preparar la política MFA por usuario.");
   if (!(await db.schema.hasColumn("dmmarket_auth_events", "target_role_id")))
     throw new Error("El esquema de acceso requiere la migración manual del objetivo de roles.");
-  if (
-    await db("dmmarket_auth_role_permissions")
-      .whereIn("capability", ["sales.costs", "sales.profit", "providers.personal"])
-      .first()
-  )
+  if (await db("dmmarket_auth_role_permissions").whereNotIn("capability", Object.keys(CAPABILITIES)).first())
     throw new Error(
-      "El catálogo de acceso requiere migración manual. Detén la web y ejecuta --migrate-access-catalog con el binario actualizado.",
+      "El catálogo de acceso requiere preparar las migraciones propias desde el instalador actualizado, con la web detenida.",
     );
   if (!(await db("dmmarket_auth_control").where("id", 1).first()))
     throw new Error("Falta el control transaccional de acceso.");
@@ -93,7 +89,17 @@ async function invalidateUser(connection, userId, now, reason) {
 }
 
 async function assertAdministratorRemains(connection) {
-  const capabilities = ["access.users", "access.roles", "access.links", "access.recover"];
+  const capabilities = [
+    "access.users.read",
+    "access.users.update",
+    "access.roles.read",
+    "access.roles.update",
+    "access.roles.assign",
+    "access.links.read",
+    "access.links.update",
+    "access.recovery.read",
+    "access.recovery.execute",
+  ];
   const owner = await connection("dmmarket_auth_users as u")
     .join("dmmarket_auth_user_roles as r", "r.user_id", "u.id")
     .join("dmmarket_auth_role_permissions as p", "p.role_id", "r.role_id")

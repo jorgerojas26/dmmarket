@@ -23,7 +23,7 @@ afterAll(async () => {
 });
 
 test("proveedores y ventas no conceden directorio de clientes o vendedores", async () => {
-  const client = await reader([grant("providers.read"), grant("sales.read")]);
+  const client = await reader([grant("providers.directory.read"), grant("sales.read")]);
   for (const subresource of ["clients", "sellers"])
     expect((await client.request(`/api/providers/PUR-A/${subresource}?${range}`)).status).toBe(403);
 });
@@ -82,7 +82,7 @@ test("vendedores propios intersectan ventas globales antes de agregar utilidad",
 
 test("clasificar por compras exige sus importes y no mezcla sistemas o filtros de vendedor", async () => {
   const basic = await reader([grant("providers.read"), grant("purchases.read")]);
-  expect((await basic.request(`/api/providers/best?${range}&mode=compras`)).status).toBe(403);
+  expect((await basic.request(`/api/providers/best?${range}&mode=compras`)).status).toBe(200);
   const allowed = await reader([grant("providers.read"), grant("purchases.read"), grant("purchases.costs")]);
   const result = await allowed.request(`/api/providers/best?${range}&mode=compras`);
   expect(result.status).toBe(200);

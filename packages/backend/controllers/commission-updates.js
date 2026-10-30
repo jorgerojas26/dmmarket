@@ -9,7 +9,8 @@ function fail(status) {
 }
 function authorize(access, id, write) {
   if (typeof id !== "string" || !/^[\p{L}\p{N}._-]{1,8}$/u.test(id)) fail(400);
-  if (!access.canRecord("commissions.read", id) || (write && !access.hasGlobal("commissions.update"))) fail(403);
+  if (!access.canRecord("read", id) || (write && (!access.canRecord("update", id) || !access.canRecord("amounts", id))))
+    fail(403);
 }
 function payload(body, commit) {
   const keys = ["commissionInfo", "reason", ...(commit ? ["requestId", "snapshot"] : [])];

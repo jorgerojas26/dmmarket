@@ -37,38 +37,63 @@ const PURCHASES_PARETO_CONFIG = {
 const NEW_PAGE_SIZE = 20;
 
 const PARETO_MODES = [
-    { key: 'ventas', label: 'Ganancia (Ventas)', color: '#3b82f6' },
+    { key: 'ventas', label: 'Ventas', color: '#3b82f6' },
     { key: 'compras-sin-vender', label: 'Compras sin vender', color: '#f59e0b' },
 ];
 
 const SalesDashboard = ({ dateRange, showNoe }) => {
-    const { can } = useAuth();
+    const { has } = useAuth();
     const { data, error, isLoading } = useDashboardSalesRaw(dateRange, showNoe);
-    const [paretoMode, setParetoMode] = useState(
-        can('sales.read') && can('purchases.costs') && !can('sales.financial') ? 'compras-sin-vender' : 'ventas',
-    );
+    const [paretoMode, setParetoMode] = useState('ventas');
     const [paretoSort, setParetoSort] = useState(null); // { id, desc } | null = default del modo
     const [newSearch, setNewSearch] = useState('');
     const [newPage, setNewPage] = useState(1);
     const [newSort, setNewSort] = useState({ id: 'firstPurchaseDate', desc: true });
     const financial = Object.hasOwn(data?.kpis || {}, 'totalNetProfit');
     const allowPareto =
-        can('purchases.read') &&
-        (paretoMode === 'compras-sin-vender' ? can('sales.read') && can('purchases.costs') : financial);
-    const inventoryValueKey = can('inventory.read') && can('inventory.costs') ? 'inventoryValue' : null;
+        has(paretoMode === 'compras-sin-vender' ? 'sales.unsold.read' : 'sales.pareto.read') &&
+        has(paretoMode === 'compras-sin-vender' ? 'sales.unsold.amounts' : 'sales.pareto.amounts');
+    const inventoryValueKey = has(
+        paretoMode === 'compras-sin-vender' ? 'sales.unsold.inventory' : 'sales.pareto.inventory',
+    )
+        ? 'inventoryValue'
+        : null;
+    const paretoMetric = paretoMode === 'compras-sin-vender' ? 'totalPurchased' : financial ? 'netProfit' : 'rawProfit';
     const paretoConfig = {
         ...(paretoMode === 'compras-sin-vender' ? PURCHASES_PARETO_CONFIG : SALES_PARETO_CONFIG),
+        ...(paretoMetric === 'rawProfit'
+            ? {
+                  valueKey: 'rawProfit',
+                  valueLabel: 'Ventas',
+                  valueAxisLabel: 'Ventas brutas',
+                  axisLegend: 'Productos ordenados por ventas',
+                  summaryValueKey: 'revenuePercent',
+                  summaryPctLabel: 'de ventas',
+                  subtitle: 'Clasificación según ventas brutas',
+                  pdfTitle: 'Análisis Pareto de ventas brutas',
+              }
+            : {}),
         inventoryValueKey,
     };
-    const paretoDefaultSortId = paretoMode === 'compras-sin-vender' ? 'totalPurchased' : 'netProfit';
-    const paretoSortBy = paretoSort || { id: paretoDefaultSortId, desc: true };
-    const { data: paretoData, isLoading: paretoLoading } = useDashboardParetoRaw(
+    const paretoDefaultSortId = paretoMetric;
+    const paretoSortBy =
+        paretoSort &&
+        (!['rawProfit', 'netProfit', 'totalPurchased'].includes(paretoSort.id) || paretoSort.id === paretoMetric)
+            ? paretoSort
+            : { id: paretoDefaultSortId, desc: true };
+    const {
+        data: paretoData,
+        error: paretoError,
+        isLoading: paretoLoading,
+        mutate: refreshPareto,
+    } = useDashboardParetoRaw(
         dateRange,
         showNoe,
         paretoMode,
         paretoSortBy.id,
         paretoSortBy.desc ? 'desc' : 'asc',
         {
+            metric: paretoMetric,
             search: newSearch,
             page: newPage,
             limit: NEW_PAGE_SIZE,
@@ -92,15 +117,24 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
     useEffect(() => setNewPage(1), [dateRange?.from, dateRange?.to, showNoe]);
 
     const exportPareto = useCallback(
-        async () => (await fetchSalesExport({ ...dateRange, showNoe, modo: paretoMode, kind: 'pareto' })).data,
-        [dateRange.from, dateRange.to, showNoe, paretoMode],
+        async () =>
+            (await fetchSalesExport({ ...dateRange, showNoe, modo: paretoMode, metric: paretoMetric, kind: 'pareto' }))
+                .data,
+        [dateRange.from, dateRange.to, showNoe, paretoMode, paretoMetric],
     );
     const fetchAllNewProducts = useCallback(
         async (search = newSearch) =>
             (
-                await fetchSalesExport({ ...dateRange, showNoe, modo: paretoMode, kind: 'pareto', newSearch: search })
+                await fetchSalesExport({
+                    ...dateRange,
+                    showNoe,
+                    modo: paretoMode,
+                    metric: paretoMetric,
+                    kind: 'pareto',
+                    newSearch: search,
+                })
             ).data.filter((row) => row.isNew),
-        [dateRange.from, dateRange.to, showNoe, paretoMode, newSearch],
+        [dateRange.from, dateRange.to, showNoe, paretoMode, paretoMetric, newSearch],
     );
 
     const handleParetoModeChange = (key) => {
@@ -132,6 +166,105 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
         return <div className="alert alert-danger">Error al cargar el dashboard: {error.message}</div>;
     }
 
+    const paretoPanel = (
+        <>
+            {' '}
+            {allowPareto && (
+                <div className="row g-3 mb-4">
+                    <div className="col-12">
+                        <div
+                            style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 8,
+                                justifyContent: 'space-between',
+                                marginBottom: 12,
+                            }}
+                        >
+                            <PanelHelpTitle
+                                title="Modos del Pareto"
+                                help={{
+                                    que: 'Ambos modos parten de productos comprados en el período. Ganancia (Ventas) incluye los que también se vendieron; Compras sin vender incluye los que no tuvieron ventas en ese período.',
+                                    leer: 'Son grupos distintos: un producto no puede aparecer en ambos modos para el mismo rango. «Sin vender» no significa que nunca se haya vendido; pudo tener ventas antes del período.',
+                                    servir: 'Separar la ganancia de los productos vendidos de la inversión en los que aún no se vendieron.',
+                                }}
+                            />
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                {PARETO_MODES.filter((mode) =>
+                                    has(mode.key === 'ventas' ? 'sales.pareto.amounts' : 'sales.unsold.amounts'),
+                                ).map(({ key, label, color }) => (
+                                    <button
+                                        type="button"
+                                        key={key}
+                                        onClick={() => handleParetoModeChange(key)}
+                                        style={{
+                                            padding: '6px 16px',
+                                            borderRadius: 6,
+                                            border:
+                                                paretoMode === key
+                                                    ? `1.5px solid ${color}`
+                                                    : '1px solid rgba(255,255,255,0.1)',
+                                            background: paretoMode === key ? `${color}18` : 'transparent',
+                                            color: paretoMode === key ? color : '#9ca3af',
+                                            fontSize: 12,
+                                            fontWeight: paretoMode === key ? 600 : 400,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        {key === 'ventas' && paretoMetric === 'rawProfit' ? 'Ventas' : label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        {paretoError ? (
+                            <div className="alert alert-danger" role="alert">
+                                No se pudo cargar el análisis Pareto.
+                                <button type="button" className="btn btn-link" onClick={() => refreshPareto()}>
+                                    Reintentar análisis
+                                </button>
+                            </div>
+                        ) : (
+                            <ParetoChart
+                                products={paretoData?.products || []}
+                                newProducts={paretoData?.newProducts || []}
+                                newProductsTable={{
+                                    count: paretoData?.newProductsCount || 0,
+                                    total: paretoData?.newProductsTotal || 0,
+                                    inventoryTotal: paretoData ? paretoData.newProductsInventoryTotal : 0,
+                                    page: newPage,
+                                    pageSize: NEW_PAGE_SIZE,
+                                    sort: newSort,
+                                    onSearch: handleNewSearch,
+                                    onSort: handleNewSort,
+                                    onPageChange: setNewPage,
+                                    fetchAll: fetchAllNewProducts,
+                                    exportAllowed: paretoData?.exportAllowed === true,
+                                    rangeLabel: `${dateRange?.from} — ${dateRange?.to}`,
+                                }}
+                                summary={paretoData?.summary || null}
+                                loading={paretoLoading}
+                                config={paretoConfig}
+                                exportData={
+                                    paretoData?.exportAllowed
+                                        ? async () => (await exportPareto()).filter((row) => !row.isNew)
+                                        : null
+                                }
+                                sorting={{
+                                    enabled: true,
+                                    sortBy: [paretoSortBy],
+                                    onSort: (sortByList) => {
+                                        const s = sortByList?.[0];
+                                        if (s) setParetoSort({ id: s.id, desc: s.desc });
+                                    },
+                                }}
+                            />
+                        )}
+                    </div>
+                </div>
+            )}{' '}
+        </>
+    );
     return (
         <div style={{ position: 'relative' }}>
             {isLoading && (
@@ -293,92 +426,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                 </div>
             </div>
 
-            {/* Pareto Analysis */}
-            {allowPareto && (
-                <div className="row g-3 mb-4">
-                    <div className="col-12">
-                        <div
-                            style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: 8,
-                                justifyContent: 'space-between',
-                                marginBottom: 12,
-                            }}
-                        >
-                            <PanelHelpTitle
-                                title="Modos del Pareto"
-                                help={{
-                                    que: 'Ambos modos parten de productos comprados en el período. Ganancia (Ventas) incluye los que también se vendieron; Compras sin vender incluye los que no tuvieron ventas en ese período.',
-                                    leer: 'Son grupos distintos: un producto no puede aparecer en ambos modos para el mismo rango. «Sin vender» no significa que nunca se haya vendido; pudo tener ventas antes del período.',
-                                    servir: 'Separar la ganancia de los productos vendidos de la inversión en los que aún no se vendieron.',
-                                }}
-                            />
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                {PARETO_MODES.filter((mode) =>
-                                    mode.key === 'ventas' ? financial : can('sales.read') && can('purchases.costs'),
-                                ).map(({ key, label, color }) => (
-                                    <button
-                                        type="button"
-                                        key={key}
-                                        onClick={() => handleParetoModeChange(key)}
-                                        style={{
-                                            padding: '6px 16px',
-                                            borderRadius: 6,
-                                            border:
-                                                paretoMode === key
-                                                    ? `1.5px solid ${color}`
-                                                    : '1px solid rgba(255,255,255,0.1)',
-                                            background: paretoMode === key ? `${color}18` : 'transparent',
-                                            color: paretoMode === key ? color : '#9ca3af',
-                                            fontSize: 12,
-                                            fontWeight: paretoMode === key ? 600 : 400,
-                                            cursor: 'pointer',
-                                            transition: 'all 0.15s',
-                                        }}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                        <ParetoChart
-                            products={paretoData?.products || []}
-                            newProducts={paretoData?.newProducts || []}
-                            newProductsTable={{
-                                count: paretoData?.newProductsCount || 0,
-                                total: paretoData?.newProductsTotal || 0,
-                                inventoryTotal: paretoData ? paretoData.newProductsInventoryTotal : 0,
-                                page: newPage,
-                                pageSize: NEW_PAGE_SIZE,
-                                sort: newSort,
-                                onSearch: handleNewSearch,
-                                onSort: handleNewSort,
-                                onPageChange: setNewPage,
-                                fetchAll: fetchAllNewProducts,
-                                exportAllowed: data?.exportAllowed === true,
-                                rangeLabel: `${dateRange?.from} — ${dateRange?.to}`,
-                            }}
-                            summary={paretoData?.summary || null}
-                            loading={paretoLoading}
-                            config={paretoConfig}
-                            exportData={
-                                data?.exportAllowed
-                                    ? async () => (await exportPareto()).filter((row) => !row.isNew)
-                                    : null
-                            }
-                            sorting={{
-                                enabled: true,
-                                sortBy: [paretoSortBy],
-                                onSort: (sortByList) => {
-                                    const s = sortByList?.[0];
-                                    if (s) setParetoSort({ id: s.id, desc: s.desc });
-                                },
-                            }}
-                        />
-                    </div>
-                </div>
-            )}
+            {paretoPanel}
 
             {financial && (
                 <div className="row g-3 mb-4">

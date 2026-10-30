@@ -1,8 +1,8 @@
 const OPERATION_CAPABILITIES = Object.freeze({
-  payment: "receivables.payment",
-  void: "receivables.void",
-  close: "receivables.close",
-  reopen: "receivables.reopen",
+  payment: "payment",
+  void: "void",
+  close: "close",
+  reopen: "void",
 });
 
 function denied() {
@@ -12,12 +12,12 @@ function denied() {
 }
 
 function requireReceivables(access) {
-  if (!access.hasGlobal("receivables.read")) denied();
+  if (!access.hasGlobal("read")) denied();
 }
 
 function requireReceivablesOperation(access, operation) {
   if (
-    !access.hasGlobal("receivables.read") ||
+    !access.hasGlobal("read") ||
     !Object.hasOwn(OPERATION_CAPABILITIES, operation) ||
     !access.hasGlobal(OPERATION_CAPABILITIES[operation])
   )

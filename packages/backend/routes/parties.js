@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { withReportCache } = require("../middlewares/authorized-report-cache");
 const { parameters, listSales, salesBase } = require("../controllers/sales");
@@ -27,7 +28,7 @@ function createPartyRoutes({ sessions }) {
   const catalog = (clients) => async (req, res, next) => {
     try {
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, ({ transaction, access }) =>
+        await requestSession(sessions, req, { readOnly: true }, ({ transaction, access }) =>
           directory(transaction, access, req.query, clients),
         ),
       );
@@ -65,7 +66,7 @@ function createPartyRoutes({ sessions }) {
   router.get(
     "/clients/:clientId/sales",
     handle(async (transaction, access, query, params) => {
-      requireCapability(access, "clients.read");
+      requireCapability(access, "read");
       const result = await listSales(
         transaction,
         access,
@@ -90,12 +91,7 @@ function createPartyRoutes({ sessions }) {
     "/sellers/:sellerId/sales",
     handle(async (transaction, access, query, params) => {
       const id = identifier(params.sellerId);
-      if (
-        ["__none__", "__empty__"].includes(id)
-          ? !access.hasGlobal("sellers.read")
-          : !access.canRecord("sellers.read", id)
-      )
-        fail(403);
+      if (["__none__", "__empty__"].includes(id) ? !access.hasGlobal("read") : !access.canRecord("read", id)) fail(403);
       const result = await listSales(transaction, access, { ...query, employeeId: id }, "invoices");
       return {
         data: result.data.map(({ cliente, ...row }) => ({ ...row, client: cliente })),
@@ -111,7 +107,7 @@ function createPartyRoutes({ sessions }) {
     "/clients/best",
     handle(
       async (transaction, access, query) => {
-        requireCapability(access, "clients.read");
+        requireCapability(access, "read");
         const { base } = salesBase(transaction, access, query);
         const rows = await base
           .select({

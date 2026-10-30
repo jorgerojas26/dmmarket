@@ -14,27 +14,27 @@ function identifier(id) {
 }
 
 async function exportProvider(tx, access, id, kind, query) {
-  if (!access.hasGlobal("providers.read")) fail(403);
+  if (!access.hasAny("read")) fail(403);
   const buying = ["purchases", "purchase-documents"].includes(kind);
   const documents = ["sales-documents", "purchase-documents"].includes(kind);
   const filtered = { ...query, proveedorId: id, page: 1, limit: 5001 };
   let result;
   if (buying) {
-    if (!access.hasGlobal("purchases.export")) fail(403);
+    if (!access.hasGlobal("export")) fail(403);
     result = await purchases(tx, access, filtered, false);
   } else if (["sales", "products", "sales-documents"].includes(kind)) {
     if (!canExportSales(access, filtered)) fail(403);
     result = await listSales(tx, access, filtered, kind === "products" ? "products" : "invoices");
   } else if (["clients", "sellers"].includes(kind)) {
-    if (kind === "clients" && !access.hasGlobal("clients.export")) fail(403);
+    if (kind === "clients" && !access.hasGlobal("export")) fail(403);
     if (kind === "sellers") {
       const scope = sellerSalesScope(access);
       if (
         !(
-          access.hasGlobal("sellers.export") ||
+          access.hasGlobal("export") ||
           (query.employeeId
-            ? access.canRecord("sellers.export", query.employeeId)
-            : !scope.global && access.covers("sellers.export", scope.sellerIds))
+            ? access.canRecord("export", query.employeeId)
+            : !scope.global && access.covers("export", scope.sellerIds))
         )
       )
         fail(403);

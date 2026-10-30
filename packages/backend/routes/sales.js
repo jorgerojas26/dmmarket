@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { withReportCache } = require("../middlewares/authorized-report-cache");
 const {
@@ -94,10 +95,10 @@ function createSalesRoutes({ sessions }) {
   router.get("/dashboard/sales", handle(dashboard, { compare: true, keys: chartKeys }));
   router.get("/groups", async (req, res, next) => {
     try {
-      const result = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access }) => {
+      const result = await requestSession(sessions, req, { readOnly: true }, async ({ transaction, access }) => {
         if (Object.keys(req.query).length) fail(400);
         if (
-          !["sales.read", "purchases.read", "inventory.read", "commissions.read"].some((capability) => {
+          !["read", "read", "read", "read"].some((capability) => {
             const scope = access.scopeFor(capability);
             return scope.global || scope.sellerIds.length;
           })

@@ -44,6 +44,7 @@ test.each(["false", "true"])(
     const result = await own.request(`/api/clients/average/month/C?from=2025-12-01&to=2026-02-28&showNoe=${showNoe}`);
     expect(result.status).toBe(200);
     expect(result.body).toEqual({
+      exportAllowed: true,
       id: "Cliente sintético",
       data: [
         { x: "2025-12", y: 10, invoiceCount: 1 },

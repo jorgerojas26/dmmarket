@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const { createHash } = require("node:crypto");
 const { CAPABILITIES } = require("../auth/capabilities");
 const { reportCache, isReportPath } = require("./report-cache");
@@ -5,7 +6,7 @@ const { reportCache, isReportPath } = require("./report-cache");
 async function withReportCache(req, res, sessions, work) {
   let prepared;
   try {
-    const value = await sessions.withSession(req.sessionID, { readOnly: true }, async (context) => {
+    const value = await requestSession(sessions, req, { readOnly: true }, async (context) => {
       if (req.method !== "GET" || !isReportPath(req.path)) return work(context);
       const url = new URL(req.originalUrl, "http://localhost");
       url.searchParams.sort();
@@ -14,7 +15,7 @@ async function withReportCache(req, res, sessions, work) {
         return [capability, scope.global, [...scope.sellerIds].sort()];
       });
       const scope = createHash("sha256")
-        .update(JSON.stringify([context.user.id, context.revision, permissions]))
+        .update(JSON.stringify([context.user.id, context.revision, context.access.resource, permissions]))
         .digest("hex");
       prepared = await reportCache.prepare(`auth:${scope}:${url.pathname}${url.search}`, () => work(context));
       return prepared.value;

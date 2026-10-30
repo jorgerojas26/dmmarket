@@ -39,11 +39,11 @@ async function provider(transaction, access, query, id) {
     .select("IdProveedor", "Empresa")
     .first();
   if (row) return row;
-  if (access.hasGlobal("purchases.read")) {
+  if (access.hasGlobal("read")) {
     const { base } = purchaseBase(transaction, access, { ...query, proveedorId: id }, false);
     if (await base.first("mc.IdFactura")) return { IdProveedor: id, Empresa: `Proveedor no registrado (${id})` };
   }
-  const scope = access.scopeFor("sales.read");
+  const scope = access.scopeFor("read");
   if (scope.global || scope.sellerIds.length) {
     const { base } = salesBase(transaction, access, { ...query, proveedorId: id });
     if (await base.first("sf.IdProducto")) return { IdProveedor: id, Empresa: `Proveedor no registrado (${id})` };
@@ -53,9 +53,9 @@ async function provider(transaction, access, query, id) {
 
 async function summary(transaction, access, query, id) {
   const identity = await provider(transaction, access, query, id);
-  const sales = access.scopeFor("sales.read");
+  const sales = access.scopeFor("read");
   const selling = sales.global || sales.sellerIds.length > 0;
-  const sellers = access.scopeFor("sellers.read");
+  const sellers = access.scopeFor("read");
   const sellerAvailable =
     selling &&
     (sellers.global || sellers.sellerIds.length > 0) &&
@@ -86,7 +86,7 @@ async function summary(transaction, access, query, id) {
   return {
     provider: identity,
     ...(selling ? { sales: salesKpis } : {}),
-    ...(access.hasGlobal("purchases.read")
+    ...(access.hasGlobal("read")
       ? { purchases: await purchaseKpis(transaction, access, { ...query, proveedorId: id }) }
       : {}),
     ...(sellerAvailable

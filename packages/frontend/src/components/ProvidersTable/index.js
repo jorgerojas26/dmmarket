@@ -17,22 +17,16 @@ pdfMake.vfs = pdfFonts.pdfMake.vfs;
 const LIMIT = 20;
 
 const ProvidersTable = ({ onRowSelect, dateRange }) => {
-    const { session, can } = useAuth();
-    const has = (cap) => session.permissions.some((grant) => grant.capability === cap);
-    const financial = has('sales.read') && has('sales.financial') && (!can('sales.read') || can('sales.financial'));
+    const { can, has } = useAuth();
+
+    const financial = has('amounts') && has('sales.financial') && (!can('sales.read') || can('sales.financial'));
     const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState({
-        sortBy: financial
-            ? 'utilidad'
-            : has('sales.read')
-              ? 'total_ventas'
-              : can('purchases.read')
-                ? 'num_compras'
-                : 'Empresa',
+        sortBy: financial ? 'utilidad' : has('amounts') ? 'total_ventas' : has('amounts') ? 'num_compras' : 'Empresa',
         sortDir: 'desc',
     });
 
@@ -267,7 +261,7 @@ const ProvidersTable = ({ onRowSelect, dateRange }) => {
                         onPageChange: setPage,
                     }}
                     print={{
-                        enabled: can('providers.export') && Boolean(result),
+                        enabled: result?.exportAllowed === true,
                         onGlobalPrint: handlePrintAll,
                         storageKey: 'proveedores',
                     }}

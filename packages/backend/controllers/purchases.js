@@ -28,9 +28,9 @@ function options(input, { listing = true, compare = false } = {}) {
 }
 
 function purchaseBase(transaction, access, query, products) {
-  if (!access.hasGlobal("purchases.read")) fail(403);
-  const costs = access.hasGlobal("purchases.costs");
-  const providers = access.hasGlobal("providers.read");
+  if (!access.hasGlobal("read")) fail(403);
+  const costs = access.hasGlobal("amounts");
+  const providers = access.hasGlobal("read");
   if (query.proveedorId && !providers) fail(403);
   const base = transaction("mastercomp as mc")
     .leftJoin("slavecomp as sc", function () {
@@ -212,7 +212,7 @@ async function dashboard(transaction, access, query) {
 }
 
 async function pareto(transaction, access, query) {
-  if (!access.hasGlobal("purchases.costs")) fail(403);
+  if (!access.hasGlobal("amounts")) fail(403);
   const result = await purchases(
     transaction,
     access,

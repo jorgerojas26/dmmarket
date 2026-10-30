@@ -20,17 +20,20 @@ afterAll(async () => {
   await environment?.close();
 });
 
-test("dashboard básico no ordena ni revela importes, comparaciones financieras o proveedores", async () => {
+test("consultar el dashboard incluye importes, comparaciones y proveedores", async () => {
   const client = await reader([grant("purchases.read"), grant("sales.financial"), grant("inventory.costs")]);
   const result = await client.request(`/api/purchases/dashboard?${range}&${compare}`);
   expect(result.status).toBe(200);
-  expect(result.body.kpis).toEqual({ totalInvoices: 3, totalQuantity: 6, compareQuantity: 2, compareInvoices: 1 });
-  expect(result.body.topProducts.map((row) => row.quantity)).toEqual(["5.000", "1.000"]);
+  expect(result.body.kpis).toMatchObject({
+    totalInvoices: 3,
+    totalQuantity: 6,
+    totalPurchased: 130,
+    comparePurchased: 16,
+  });
+  expect(result.body.topProducts.map((row) => row.totalPurchased)).toEqual(["80.00", "50.00"]);
   expect(result.body.groupPurchasesChart).toHaveLength(2);
-  expect(JSON.stringify(result.body)).not.toMatch(
-    /monto|Purchased|avgTicket|avgUnitCost|Provider|proveedor|PRIVATE|Rif/,
-  );
-  expect((await client.request(`/api/purchases/pareto?${range}`)).status).toBe(403);
+  expect(JSON.stringify(result.body)).not.toMatch(/PRIVATE|Rif/);
+  expect((await client.request(`/api/purchases/pareto?${range}`)).status).toBe(200);
 });
 
 test("lectura financiera no se infiere desde costos o lectura de otros recursos", async () => {
@@ -56,8 +59,8 @@ test("totales, costo promedio y comparación requieren costos de compras", async
     comparePurchased: 16,
   });
   expect(result.body.topProducts.map((row) => row.totalPurchased)).toEqual(["80.00", "50.00"]);
-  expect(result.body).not.toHaveProperty("topProviders");
-  expect(result.body).not.toHaveProperty("bestProvider");
+  expect(result.body).toHaveProperty("topProviders");
+  expect(result.body).toHaveProperty("bestProvider");
 });
 
 test("datos básicos de proveedor y clasificaciones no incluyen identificación o contactos", async () => {
@@ -69,10 +72,10 @@ test("datos básicos de proveedor y clasificaciones no incluyen identificación 
     quantity: "5.000",
     invoiceCount: 2,
   });
-  expect(result.body.topProviders[0]).not.toHaveProperty("totalPurchased");
+  expect(result.body.topProviders[0]).toHaveProperty("totalPurchased");
   expect(JSON.stringify(result.body)).not.toMatch(/PRIVATE|Rif|Telfs|Email/);
   const noProviders = await reader([grant("purchases.read")]);
-  expect((await noProviders.request(`/api/purchases/dashboard?${range}&proveedorId=PUR-A`)).status).toBe(403);
+  expect((await noProviders.request(`/api/purchases/dashboard?${range}&proveedorId=PUR-A`)).status).toBe(200);
 });
 
 test("grupo y proveedor acotan también comparaciones y rankings", async () => {

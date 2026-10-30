@@ -182,9 +182,9 @@ const RatesPanel = () => {
                       ? `Se actualizaron ${request.written} tasas.`
                       : 'Consulta del BCV finalizada.',
             );
-            void Promise.all([refreshRates(), ...(fecha ? [refreshBuscada()] : [])]);
+            void Promise.all([refreshStatus(), refreshRates(), ...(fecha ? [refreshBuscada()] : [])]);
         } else setSyncError('La consulta del BCV no pudo completarse.');
-    }, [status, requestId, refreshRates, refreshBuscada, fecha]);
+    }, [status, requestId, refreshStatus, refreshRates, refreshBuscada, fecha]);
 
     return (
         <div className="rates-panel">

@@ -39,7 +39,14 @@ for (const showNoe of ["false", "true"]) {
     db.on("query", collect);
     try {
       await handle(
-        { method: "GET", path: "/uncached-computation", query, params: {}, sessionID: "computation" },
+        {
+          method: "GET",
+          originalUrl: `/api${path}`,
+          path: "/uncached-computation",
+          query,
+          params: {},
+          sessionID: "computation",
+        },
         {
           json(value) {
             body = value;

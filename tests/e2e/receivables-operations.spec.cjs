@@ -180,13 +180,11 @@ test("abono original confirma identidad reciente sin perder formulario ni duplic
   expect(Number((await environment.db("cxc_operaciones").where("ActorId", user.id).count("* as n").first()).n)).toBe(1);
 });
 
-test("cartera sin permiso muestra un estado breve junto al registro bloqueado", async ({ page, environment }) => {
+test("cartera de consulta no ofrece controles para registrar abonos", async ({ page, environment }) => {
   await enter(page, environment, [grant("receivables.read")]);
   const account = page.getByRole("dialog");
-  await expect(account.getByRole("status", { name: "Disponibilidad de abonos", exact: true })).toHaveText(
-    "Sin permiso",
-  );
-  await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toBeDisabled();
+  await expect(account.getByRole("status", { name: "Disponibilidad de abonos", exact: true })).toHaveCount(0);
+  await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toHaveCount(0);
 });
 
 test("esquema pendiente muestra solo lectura sin convertir tablas desde una consulta", async ({

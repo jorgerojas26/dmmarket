@@ -39,8 +39,8 @@ test("inventario básico omite importes, proveedores y derivados incluso con per
   expect(result.status).toBe(200);
   expect(result.body).toMatchObject({ total: 4, page: 1, limit: 1, totals: { existencia: null } });
   expect(result.body.data[0]).toMatchObject({ IdProducto: "I-A", Existencia: "2.000000", Grupo: "Grupo sintético" });
-  expect(JSON.stringify(result.body)).not.toMatch(/PrecioA|inventoryValue|Proveedor|proveedorId|PRIVATE|123\.45/);
-  for (const suffix of ["sortBy=PrecioA", "sortBy=inventoryValue", "sortBy=Proveedor", "proveedorId=I-PROV-A"])
+  expect(JSON.stringify(result.body)).not.toMatch(/PrecioA|inventoryValue|PRIVATE|123\.45/);
+  for (const suffix of ["sortBy=PrecioA", "sortBy=inventoryValue"])
     expect((await client.request(`/api/products?${search}&${suffix}`)).status).toBe(403);
 });
 

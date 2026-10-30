@@ -1,3 +1,5 @@
+const { filterClientScope, projectClientPersonal } = require("./client-scope");
+const { groupAllowed } = require("../auth/resource-policy");
 const { Types } = require("mysql2");
 const {
   exactKey,
@@ -28,18 +30,21 @@ function identifier(value) {
 }
 
 function sellerSalesScope(access) {
-  const sellers = requireCapability(access, "sellers.read");
-  const sales = requireCapability(access, "sales.read");
-  if (sellers.global) return sales;
-  if (sales.global) return sellers;
-  const sellerIds = sellers.sellerIds.filter((id) => sales.sellerIds.includes(id));
-  if (!sellerIds.length) fail(403);
-  return { global: false, sellerIds };
+  return requireCapability(access, "read");
 }
 
-function sellerColumns(transaction, access) {
-  const scope = access.scopeFor("sellers.personal");
-  const fields = { rif: "v.Rif", ci: "v.Ci", phone: "v.Telfs", email: "v.Email" };
+async function sellerColumns(transaction, access) {
+  const scope = access.scopeFor("personal");
+  const columns = await transaction("information_schema.COLUMNS")
+    .whereRaw("TABLE_SCHEMA = DATABASE()")
+    .where("TABLE_NAME", "vendedores")
+    .pluck("COLUMN_NAME");
+  const available = new Set(columns.map((column) => column.toLowerCase()));
+  const fields = Object.fromEntries(
+    Object.entries({ rif: "v.Rif", ci: "v.Ci", phone: "v.Telfs", email: "v.Email" }).filter(([, column]) =>
+      available.has(column.slice(2).toLowerCase()),
+    ),
+  );
   if (scope.global) return fields;
   if (!scope.sellerIds.length) return {};
   const placeholders = scope.sellerIds.map(() => "?").join(",");
@@ -52,13 +57,13 @@ function sellerColumns(transaction, access) {
 }
 
 function sellerRow(access, row, idKey) {
-  if (access.canRecord("sellers.personal", row[idKey])) return row;
+  if (access.canRecord("personal", row[idKey])) return row;
   const { rif, ci, phone, email, ...publicRow } = row;
   return publicRow;
 }
 
 async function directory(transaction, access, query, clients) {
-  const scope = requireCapability(access, clients ? "clients.read" : "sellers.read");
+  const scope = requireCapability(access, "read");
   const normalized = { ...query };
   if (Object.hasOwn(normalized, "filter")) {
     if (Object.hasOwn(normalized, "search")) fail(400);
@@ -72,52 +77,61 @@ async function directory(transaction, access, query, clients) {
   const source = transaction(clients ? "clientes as c" : "vendedores as v");
   const idColumn = clients ? "c.IdCliente" : "v.idVend";
   const nameColumn = clients ? "c.Empresa" : "v.Empresa";
-  if (!scope.global) source.whereIn(transaction.raw("BINARY ??", [idColumn]), scope.sellerIds);
+  if (clients) filterClientScope(transaction, source, scope, idColumn);
+  if (!clients && !scope.global) source.whereIn(transaction.raw("BINARY ??", [idColumn]), scope.sellerIds);
   if (options.search)
     source.where(function () {
       this.where(nameColumn, "like", `%${options.search}%`).orWhere(idColumn, "like", `%${options.search}%`);
     });
   if (clients && options.ruta) source.whereRaw("BINARY c.Ruta = ?", [options.ruta]);
+  const sellerContacts = clients ? {} : await sellerColumns(transaction, access);
   const personal = clients
-    ? access.hasGlobal("clients.personal")
-    : access.hasGlobal("sellers.personal") || (!scope.global && access.covers("sellers.personal", scope.sellerIds));
+    ? access.hasAny("personal")
+    : access.hasGlobal("personal") || (!scope.global && access.covers("personal", scope.sellerIds));
   const sort = {
     name: nameColumn,
     id: idColumn,
     ...(personal
-      ? { rif: clients ? "c.Rif" : "v.Rif", ...(!clients ? { ci: "v.Ci", phone: "v.Telfs", email: "v.Email" } : {}) }
+      ? clients
+        ? { rif: "c.Rif" }
+        : Object.fromEntries(
+            Object.keys(sellerContacts).map((key) => [
+              key,
+              { rif: "v.Rif", ci: "v.Ci", phone: "v.Telfs", email: "v.Email" }[key],
+            ]),
+          )
       : {}),
   };
   const sortBy = options.sortBy || "name";
-  if (["rif", "ci", "phone", "email"].includes(sortBy) && !personal) fail(403);
+  if (["rif", "ci", "phone", "email"].includes(sortBy) && !access.hasGlobal("personal")) fail(403);
   if (!Object.hasOwn(sort, sortBy)) fail(400);
   const rows = await source
     .select({
       [clients ? "IdCliente" : "id"]: idColumn,
       name: nameColumn,
-      ...(clients ? (personal ? { rif: "c.Rif" } : {}) : sellerColumns(transaction, access)),
+      ...(clients ? (personal ? { rif: "c.Rif" } : {}) : sellerContacts),
     })
     .orderBy(sort[sortBy], options.sortDir)
     .orderBy(idColumn)
     .limit(5001);
   if (rows.length > 5000) fail(413);
-  return clients ? rows : rows.map((row) => sellerRow(access, row, "id"));
+  return clients ? projectClientPersonal(transaction, access, rows) : rows.map((row) => sellerRow(access, row, "id"));
 }
 
 function canExportSellers(access, query) {
-  const read = access.scopeFor("sellers.read");
+  const read = access.scopeFor("read");
   if (!read.global && !read.sellerIds.length) return false;
   return (
-    access.hasGlobal("sellers.export") ||
+    access.hasGlobal("export") ||
     (query.employeeId
-      ? access.canRecord("sellers.export", query.employeeId)
-      : !read.global && access.covers("sellers.export", read.sellerIds))
+      ? access.canRecord("export", query.employeeId)
+      : !read.global && access.covers("export", read.sellerIds))
   );
 }
 
 async function partyList(transaction, access, query, clients) {
-  if (clients) requireCapability(access, "clients.read");
-  const salesRead = access.scopeFor("sales.read");
+  if (clients) requireCapability(access, "read");
+  const salesRead = access.scopeFor("read");
   if (!salesRead.global && !salesRead.sellerIds.length) {
     const sort = clients ? { Empresa: "name", IdCliente: "id" } : { name: "name", sellerId: "id" };
     const sortBy = query.sortBy || (clients ? "Empresa" : "name");
@@ -144,7 +158,7 @@ async function partyList(transaction, access, query, clients) {
       ...(!clients ? { exportAllowed: canExportSellers(access, query) } : {}),
     };
   }
-  const scope = clients ? requireCapability(access, "sales.read") : sellerSalesScope(access);
+  const scope = clients ? requireCapability(access, "read") : sellerSalesScope(access);
   const financial = financialFields(access, query, scope);
   const allowed = clients
     ? ["IdCliente", "Empresa", "total_ventas", "num_ventas", "last_factura", ...(financial ? ["utilidad"] : [])]
@@ -157,20 +171,23 @@ async function partyList(transaction, access, query, clients) {
         "lastSale",
         ...(financial ? ["profit", "marginPercent"] : []),
       ];
-  const sortBy = query.sortBy || (clients ? "total_ventas" : "sales");
+  const sortBy =
+    query.sortBy ||
+    (groupAllowed(access, "amounts", query) ? (clients ? "total_ventas" : "sales") : clients ? "Empresa" : "name");
   if (["profit", "utilidad", "marginPercent"].includes(sortBy) && !financial) fail(403);
   if (!allowed.includes(sortBy)) fail(400);
   const idColumn = clients ? "c.IdCliente" : "v.idVend";
   const nameColumn = clients ? "c.Empresa" : "v.Empresa";
   const personal = clients
-    ? access.hasGlobal("clients.personal")
+    ? access.hasAny("personal")
       ? { rif: "c.Rif" }
       : {}
-    : sellerColumns(transaction, access);
+    : await sellerColumns(transaction, access);
   const pattern = `%${query.search || ""}%`;
   const catalogQuery = transaction(clients ? "clientes as c" : "vendedores as v");
-  const read = access.scopeFor(clients ? "clients.read" : "sellers.read");
-  if (!read.global) catalogQuery.whereIn(transaction.raw("BINARY ??", [idColumn]), read.sellerIds);
+  const read = access.scopeFor("read");
+  if (clients) filterClientScope(transaction, catalogQuery, read, idColumn);
+  if (!clients && !read.global) catalogQuery.whereIn(transaction.raw("BINARY ??", [idColumn]), read.sellerIds);
   if (!clients && query.employeeId)
     filterIdentity(catalogQuery, transaction.raw("BINARY ??", [idColumn]), query.employeeId);
   if (clients && query.ruta) catalogQuery.whereRaw("BINARY c.Ruta = ?", [query.ruta]);
@@ -296,7 +313,13 @@ async function partyList(transaction, access, query, clients) {
     return (query.sortDir === "desc" ? -compared : compared) || compareIds(first.id, second.id);
   });
   return {
-    data: projected.slice((query.page - 1) * query.limit, query.page * query.limit).map((row) => row.data),
+    data: clients
+      ? await projectClientPersonal(
+          transaction,
+          access,
+          projected.slice((query.page - 1) * query.limit, query.page * query.limit).map((row) => row.data),
+        )
+      : projected.slice((query.page - 1) * query.limit, query.page * query.limit).map((row) => row.data),
     total: projected.length,
     page: query.page,
     limit: query.limit,
@@ -306,7 +329,7 @@ async function partyList(transaction, access, query, clients) {
 }
 
 async function clientSummary(transaction, access, query, id) {
-  requireCapability(access, "clients.read");
+  requireCapability(access, "read");
   const filtered = { ...query, clientId: identifier(id) };
   const summary = await kpis(transaction, access, filtered);
   const { base } = salesBase(transaction, access, filtered);
@@ -338,15 +361,12 @@ async function clientSummary(transaction, access, query, id) {
 
 async function sellerSummary(transaction, access, query, id) {
   identifier(id);
-  if (
-    ["__none__", "__empty__"].includes(id) ? !access.hasGlobal("sellers.read") : !access.canRecord("sellers.read", id)
-  )
-    fail(403);
-  requireCapability(access, "sales.read");
+  if (["__none__", "__empty__"].includes(id) ? !access.hasGlobal("read") : !access.canRecord("read", id)) fail(403);
+  requireCapability(access, "read");
   const sellerQuery = transaction("vendedores as v");
   filterIdentity(sellerQuery, transaction.raw("BINARY v.idVend"), id);
   let seller = await sellerQuery
-    .select({ sellerId: "v.idVend", name: "v.Empresa", ...sellerColumns(transaction, access) })
+    .select({ sellerId: "v.idVend", name: "v.Empresa", ...(await sellerColumns(transaction, access)) })
     .first();
   if (!seller) {
     const { base } = salesBase(transaction, access, { ...query, employeeId: id });
@@ -413,11 +433,11 @@ async function sellerDashboard(transaction, access, query) {
   const scope = sellerSalesScope(access);
   const financial = financialFields(access, query, scope);
   const catalogQuery = transaction("vendedores as v");
-  const read = access.scopeFor("sellers.read");
+  const read = access.scopeFor("read");
   if (!read.global) catalogQuery.whereIn(transaction.raw("BINARY v.idVend"), read.sellerIds);
   if (query.employeeId) filterIdentity(catalogQuery, transaction.raw("BINARY v.idVend"), query.employeeId);
   const catalog = await catalogQuery
-    .select({ sellerId: "v.idVend", name: "v.Empresa", ...sellerColumns(transaction, access) })
+    .select({ sellerId: "v.idVend", name: "v.Empresa", ...(await sellerColumns(transaction, access)) })
     .orderByRaw("BINARY v.idVend")
     .limit(5001);
   if (catalog.length > 5000) fail(413);

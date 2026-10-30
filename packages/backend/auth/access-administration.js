@@ -82,12 +82,12 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
   }
   return Object.freeze({
     catalog(sid) {
-      return administer(sid, "access.roles", false, async () =>
+      return administer(sid, "access.roles.read", false, async () =>
         Object.entries(CAPABILITIES).map(([capability, configuration]) => ({ capability, ...configuration })),
       );
     },
     role(sid, id) {
-      return administer(sid, "access.roles", false, async (connection) => {
+      return administer(sid, "access.roles.read", false, async (connection) => {
         const role = await connection("dmmarket_auth_roles").where("id", identifier(id)).select("id", "name").first();
         if (!role) fail(404, "El rol no está disponible.");
         return {
@@ -104,7 +104,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
       const name = roleName(input.name);
       const grants = permissions(input.permissions);
       const reason = optionalReason(input.reason);
-      return administer(sid, "access.roles", true, async (connection, actorId) => {
+      return administer(sid, "access.roles.create", true, async (connection, actorId) => {
         if (await connection("dmmarket_auth_roles").where("name", name).first())
           fail(409, "Ya existe un rol con ese nombre.");
         const id = randomUUID();
@@ -119,7 +119,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
       const name = roleName(input.name);
       const grants = permissions(input.permissions);
       const reason = optionalReason(input.reason);
-      return administer(sid, "access.roles", true, async (connection, actorId) => {
+      return administer(sid, "access.roles.update", true, async (connection, actorId) => {
         await target(connection, "dmmarket_auth_roles", id);
         if (await connection("dmmarket_auth_roles").where("name", name).whereNot("id", id).first())
           fail(409, "Ya existe un rol con ese nombre.");
@@ -139,7 +139,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
     },
     assignments(sid, id, kind) {
       const roles = kind === "roles";
-      return administer(sid, roles ? "access.roles" : "access.links", false, async (connection) => {
+      return administer(sid, roles ? "access.roles.read" : "access.links.read", false, async (connection) => {
         if (!(await connection("dmmarket_auth_users").where("id", identifier(id)).first()))
           fail(404, "La cuenta no está disponible.");
         return connection(roles ? "dmmarket_auth_user_roles" : "dmmarket_auth_user_sellers")
@@ -151,7 +151,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
     setRoles(sid, id, input) {
       const ids = roleIds(input.roleIds);
       const reason = optionalReason(input.reason);
-      return administer(sid, "access.roles", true, async (connection, actorId) => {
+      return administer(sid, "access.roles.assign", true, async (connection, actorId) => {
         await target(connection, "dmmarket_auth_users", id);
         const rows = ids.length ? await connection("dmmarket_auth_roles").whereIn("id", ids).select("id") : [];
         if (rows.length !== ids.length) fail(400, "Uno de los roles no está disponible.");
@@ -171,7 +171,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
     setSellers(sid, id, input) {
       const ids = sellerIds(input.sellerIds);
       const reason = validateReason(input.reason);
-      return administer(sid, "access.links", true, async (connection, actorId) => {
+      return administer(sid, "access.links.update", true, async (connection, actorId) => {
         await target(connection, "dmmarket_auth_users", id);
         const rows = ids.length ? await connection("vendedores").whereIn("idVend", ids).select("idVend") : [];
         if (rows.length !== ids.length || rows.some((row) => !ids.includes(String(row.idVend))))

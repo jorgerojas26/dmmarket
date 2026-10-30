@@ -151,7 +151,7 @@ test("usuarios, permisos efectivos y vendedores vinculados nunca comparten resul
   const role = await environment.db("dmmarket_auth_user_roles").where("user_id", first.user.id).first();
   await environment
     .db("dmmarket_auth_role_permissions")
-    .where({ role_id: role.role_id, capability: "sales.financial" })
+    .where({ role_id: role.role_id, capability: "sales.dashboard.financial" })
     .delete();
   const reduced = await first.client.request(dashboard);
   expect(reduced.headers["x-report-cache"]).toBe("MISS");

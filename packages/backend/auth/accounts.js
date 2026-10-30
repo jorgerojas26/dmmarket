@@ -13,7 +13,19 @@ const {
 } = require("./identity");
 
 const TEMPORARY_MS = 30 * 60 * 1000;
-const OWNER_CAPABILITIES = ["access.users", "access.roles", "access.links", "access.recover"];
+const OWNER_CAPABILITIES = [
+  "access.users.read",
+  "access.users.create",
+  "access.users.update",
+  "access.roles.read",
+  "access.roles.create",
+  "access.roles.update",
+  "access.roles.assign",
+  "access.links.read",
+  "access.links.update",
+  "access.recovery.read",
+  "access.recovery.execute",
+];
 
 function fail(status, message) {
   const error = new Error(message);
@@ -155,9 +167,9 @@ async function createAccountService({ db, sessions, now = Date.now }) {
       if (!Array.isArray(roleIds) || roleIds.length === 0) fail(400, "Selecciona al menos un rol.");
       if (typeof mfaRequired !== "boolean") fail(400, "La opción MFA no es válida.");
       const motive = reason === undefined || reason === null || reason === "" ? null : validateReason(reason);
-      return administrator(sid, "access.users", async (connection, actorId, access) => {
+      return administrator(sid, "access.users.create", async (connection, actorId, access) => {
         const roles = await rolesExist(connection, roleIds);
-        if (roles.length && !access.hasGlobal("access.roles")) fail(403, "Acceso no permitido.");
+        if (roles.length && !access.hasGlobal("access.roles.assign")) fail(403, "Acceso no permitido.");
         if (await connection("dmmarket_auth_users").where("username", names.username).first())
           fail(409, "El usuario ya existe.");
         const credential = await temporaryCredential(time());
@@ -185,7 +197,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
     async setEnabled(sid, id, enabled, reason) {
       if (typeof enabled !== "boolean") fail(400, "El estado de cuenta no es válido.");
       const motive = validateReason(reason);
-      return administrator(sid, "access.users", async (connection, actorId) => {
+      return administrator(sid, "access.users.update", async (connection, actorId) => {
         await targetUser(connection, id);
         if (!enabled && id === actorId) fail(409, "No puedes deshabilitar tu propia cuenta.");
         await connection("dmmarket_auth_users").where("id", id).update({ enabled });
@@ -198,7 +210,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
     async resetCredentials(sid, id, { resetMfa = false, reason }) {
       if (typeof resetMfa !== "boolean") fail(400, "La recuperación MFA no es válida.");
       const motive = validateReason(reason);
-      return administrator(sid, "access.recover", async (connection, actorId) =>
+      return administrator(sid, "access.recovery.execute", async (connection, actorId) =>
         reset(connection, await targetUser(connection, id), actorId, resetMfa, motive),
       );
     },

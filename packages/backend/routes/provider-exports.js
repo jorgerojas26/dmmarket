@@ -1,3 +1,4 @@
+const { requestSession } = require("../auth/resource-policy");
 const express = require("express");
 const { parameters } = require("../controllers/sales");
 const { purchaseDetail } = require("../controllers/providers");
@@ -12,8 +13,8 @@ function createProviderExportRoutes({ sessions }) {
         document = identifier(req.params.invoiceId);
       if (Object.keys(req.query).length) fail(400);
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
-          if (!access.hasGlobal("providers.read") || !access.hasGlobal("purchases.export")) fail(403);
+        await requestSession(sessions, req, { readOnly: true }, async ({ transaction, access, user }) => {
+          if (!access.hasGlobal("read") || !access.hasGlobal("export")) fail(403);
           const result = await purchaseDetail(transaction, access, {}, id, document);
           await appendEvent(transaction, {
             actorId: user.id,
@@ -39,7 +40,7 @@ function createProviderExportRoutes({ sessions }) {
           : ["from", "to", "showNoe", "employeeId", "clientId", "productId", "search", "sortBy", "sortDir"],
       });
       res.json(
-        await sessions.withSession(req.sessionID, { readOnly: true }, async ({ transaction, access, user }) => {
+        await requestSession(sessions, req, { readOnly: true }, async ({ transaction, access, user }) => {
           const result = await exportProvider(transaction, access, id, kind, query);
           await appendEvent(transaction, {
             actorId: user.id,

@@ -25,7 +25,11 @@ function createAccessDirectory(sessions) {
       const state = query.state || "all";
       if (!["all", "enabled", "disabled"].includes(state)) invalid();
       return sessions.withSession(sid, { readOnly: true }, async ({ access, transaction }) => {
-        if (!["access.users", "access.roles", "access.links", "access.recover"].some((key) => access.hasGlobal(key)))
+        if (
+          !["access.users.read", "access.roles.read", "access.links.read", "access.recovery.read"].some((key) =>
+            access.hasGlobal(key),
+          )
+        )
           forbidden();
         const directory = transaction("dmmarket_auth_users");
         if (search)
@@ -39,7 +43,7 @@ function createAccessDirectory(sessions) {
           .orderBy("username")
           .limit(100)
           .offset((page - 1) * 100);
-        if (access.hasGlobal("access.roles")) {
+        if (access.hasGlobal("access.roles.read")) {
           const roles = rows.length
             ? await transaction("dmmarket_auth_user_roles as ur")
                 .join("dmmarket_auth_roles as r", "r.id", "ur.role_id")
@@ -61,7 +65,7 @@ function createAccessDirectory(sessions) {
       const ids = query.ids === undefined ? null : typeof query.ids === "string" ? query.ids.split(",") : invalid();
       if (ids && (ids.length > 100 || ids.some((id) => !/^[\p{L}\p{N}._-]{1,32}$/u.test(id)))) invalid();
       return sessions.withSession(sid, { readOnly: true }, async ({ access, transaction }) => {
-        if (!access.hasGlobal("access.links")) forbidden();
+        if (!access.hasGlobal("access.links.read")) forbidden();
         const sellers = transaction("vendedores");
         if (ids) sellers.whereIn("idVend", ids);
         if (search)
