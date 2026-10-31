@@ -810,7 +810,6 @@
 .access-role-editor {
     overflow: visible;
     border: 0;
-    max-width: 960px;
     height: clamp(440px, calc(100dvh - 320px), 720px);
 }
 
@@ -899,7 +898,6 @@
 }
 
 .access-role-identity {
-    max-width: 960px;
     min-width: 0;
     margin: 0 0 20px;
     padding: 0;

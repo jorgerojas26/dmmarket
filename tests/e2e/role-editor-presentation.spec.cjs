@@ -23,6 +23,34 @@ async function openEditor(page, environment, readOnly = false) {
   return page.getByRole("navigation", { name: "Módulos de permisos", exact: true });
 }
 
+for (const width of [390, 1440, 1920]) {
+  test(`lista y editor de roles mantienen el mismo ancho a ${width}px`, async ({ page, environment }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await openEditor(page, environment);
+    await page.getByRole("button", { name: "Volver a roles", exact: true }).click();
+    const list = page.locator(".access-card");
+    await expect(list).toBeVisible();
+    const { x, width: listWidth } = await list.boundingBox();
+    await page.getByRole("button", { name: "Crear rol", exact: true }).click();
+    await expect(page.getByRole("table", { name: "Permisos de Ventas", exact: true })).toBeVisible();
+    for (const selector of [".access-role-editor", ".access-role-identity"]) {
+      const bounds = await page.locator(selector).boundingBox();
+      expect(bounds.x).toBe(x);
+      expect(bounds.width).toBe(listWidth);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.getByRole("button", { name: "Volver a roles", exact: true }).click();
+    await page
+      .getByRole("button", { name: /^Editar / })
+      .first()
+      .click();
+    await expect(page.getByRole("table", { name: "Permisos de Ventas", exact: true })).toBeVisible();
+    const edited = await page.locator(".access-role-editor").boundingBox();
+    expect(edited.x).toBe(x);
+    expect(edited.width).toBe(listWidth);
+  });
+}
+
 for (const width of [390, 1440]) {
   test(`editor de roles muestra un módulo, conserva alcances y funciona con teclado a ${width}px`, async ({
     page,
