@@ -23,6 +23,71 @@ async function openEditor(page, environment, readOnly = false) {
   return page.getByRole("navigation", { name: "Módulos de permisos", exact: true });
 }
 
+for (const width of [390, 1440]) {
+  test(`módulos de solo consulta usan tablas compactas sin alterar el editor a ${width}px`, async ({
+    page,
+    environment,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const modules = await openEditor(page, environment);
+    await expect(page.getByRole("table", { name: "Permisos de Ventas", exact: true })).toBeVisible();
+    const footer = page.locator(".access-role-editor .access-form-actions");
+    const initialFooter = await footer.boundingBox();
+    for (const [name, resources] of [
+      ["Compras", ["Dashboard", "Desglose"]],
+      ["Auditoría", ["Eventos"]],
+    ]) {
+      await modules.getByRole("button", { name, exact: true }).click();
+      const panel = page.getByRole("region", { name: `Permisos de ${name}`, exact: true });
+      const table = panel.getByRole("table", { name: `Permisos de ${name}`, exact: true });
+      await expect(table).toBeVisible();
+      await expect(table.locator("thead tr")).toHaveCount(1);
+      await expect(table.getByRole("columnheader")).toHaveText(["Vista o función", "Consulta"]);
+      const resourceHeading = table.getByRole("columnheader", { name: "Vista o función", exact: true });
+      await expect(resourceHeading).toHaveCSS("text-transform", "uppercase");
+      await expect(resourceHeading).toHaveCSS("font-size", "10px");
+      await expect(resourceHeading).toHaveCSS("background-color", "rgb(37, 43, 53)");
+      await expect(table.locator('[scope="colgroup"]')).toHaveCount(0);
+      await expect(table.locator("tbody tr")).toHaveCount(resources.length);
+      expect(
+        await table
+          .locator("tbody tr")
+          .evaluateAll((rows) => rows.every((row) => row.getBoundingClientRect().height >= 48)),
+      ).toBe(true);
+      await expect(table.getByRole("columnheader", { name: "Consulta", exact: true })).toHaveCSS(
+        "background-color",
+        "rgb(37, 52, 75)",
+      );
+      expect((await table.boundingBox()).width).toBeLessThanOrEqual(560);
+      for (const resource of resources) {
+        await expect(table.getByRole("rowheader", { name: resource, exact: true })).toBeVisible();
+        const checkbox = table.getByRole("checkbox", { name: `Consultar · ${name} / ${resource}`, exact: true });
+        const before = await checkbox.boundingBox();
+        await checkbox.check();
+        await expect(checkbox).toBeChecked();
+        expect(await checkbox.boundingBox()).toEqual(before);
+        await checkbox.focus();
+        await page.keyboard.press("Space");
+        await expect(checkbox).not.toBeChecked();
+      }
+      expect(await footer.boundingBox()).toEqual(initialFooter);
+    }
+    for (const name of ["Inventario", "Acceso"]) {
+      await modules.getByRole("button", { name, exact: true }).click();
+      const table = page.getByRole("table", { name: `Permisos de ${name}`, exact: true });
+      await expect(table).toBeVisible();
+      await expect(table.locator("thead tr")).toHaveCount(2);
+      expect(
+        await table
+          .locator("tbody tr")
+          .evaluateAll((rows) => rows.every((row) => row.getBoundingClientRect().height >= 48)),
+      ).toBe(true);
+      expect(await footer.boundingBox()).toEqual(initialFooter);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  });
+}
+
 for (const width of [390, 1440, 1920]) {
   test(`lista y editor de roles mantienen el mismo ancho a ${width}px`, async ({ page, environment }) => {
     await page.setViewportSize({ width, height: 1000 });
@@ -222,6 +287,9 @@ test("la inspección de un rol permite recorrer módulos sin habilitar edición 
   await expect(page.getByLabel("Consultar · Configuración / Tasas BCV", { exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Guardar rol", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Activar consultas", exact: true })).toHaveCount(0);
+  await modules.getByRole("button", { name: "Auditoría", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Permisos de Auditoría", exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Consultar · Auditoría / Eventos", exact: true })).toBeDisabled();
   await modules.getByRole("button", { name: "Ventas", exact: true }).click();
   await expect(page.getByRole("region", { name: "Permisos de Ventas", exact: true })).toBeVisible();
 });

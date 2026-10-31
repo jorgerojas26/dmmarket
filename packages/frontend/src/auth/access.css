@@ -968,8 +968,16 @@
     font-weight: 500;
 }
 
+.access-permission-table tbody tr {
+    height: 48px;
+}
+
 .access-permission-table tbody tr > * {
     border-top: 1px solid #2b3038;
+}
+
+.access-permission-table tbody td {
+    vertical-align: middle;
 }
 
 .access-permission-table tbody th,
@@ -1135,7 +1143,8 @@
     background: rgb(35 49 42 / 30%);
 }
 
-.access-permission-table .access-permission-groups th {
+.access-permission-table .access-permission-groups th,
+.access-permission-table-compact thead th:first-child {
     height: 34px;
     background: #252b35;
     color: #b9c6d8;
@@ -1167,4 +1176,19 @@
 
 .access-commercial-identity {
     margin-bottom: 24px;
+}
+
+.access-permission-table-compact {
+    max-width: 560px;
+}
+
+.access-permission-table-compact thead th:first-child {
+    padding-left: 16px;
+    text-align: left;
+}
+
+.access-permission-table-compact thead [data-group="access"] {
+    width: 128px;
+    background: #25344b;
+    color: #9dc7ff;
 }

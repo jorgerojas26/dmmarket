@@ -85,30 +85,37 @@ export function RolePermissionMatrix({ module, catalog, grants, setGrants }) {
         }))
         .filter((group) => group.columns.length);
     const columns = groups.flatMap((group) => group.columns);
+    const compact = actions.length === 1 && actions[0] === 'read';
     return (
         <section className="access-permission-panel" aria-label={`Permisos de ${module.label}`}>
             <header className="access-permission-panel-header">
                 <h3>{module.label}</h3>
             </header>
             <section className="access-permission-table-scroll" aria-label={`Tabla de permisos de ${module.label}`}>
-                <table className="access-permission-table" aria-label={`Permisos de ${module.label}`}>
+                <table
+                    className={`access-permission-table${compact ? ' access-permission-table-compact' : ''}`}
+                    aria-label={`Permisos de ${module.label}`}
+                >
                     <thead>
-                        <tr className="access-permission-groups">
-                            <th scope="col" rowSpan={2}>
-                                Vista o función
-                            </th>
-                            {groups.map((group) => (
-                                <th
-                                    scope="colgroup"
-                                    colSpan={group.columns.length}
-                                    key={group.key}
-                                    data-group={group.key}
-                                >
-                                    {group.label}
+                        {!compact && (
+                            <tr className="access-permission-groups">
+                                <th scope="col" rowSpan={2}>
+                                    Vista o función
                                 </th>
-                            ))}
-                        </tr>
+                                {groups.map((group) => (
+                                    <th
+                                        scope="colgroup"
+                                        colSpan={group.columns.length}
+                                        key={group.key}
+                                        data-group={group.key}
+                                    >
+                                        {group.label}
+                                    </th>
+                                ))}
+                            </tr>
+                        )}
                         <tr>
+                            {compact && <th scope="col">Vista o función</th>}
                             {columns.map((column) => (
                                 <th scope="col" key={column.action} data-group={column.group}>
                                     {column.label}
