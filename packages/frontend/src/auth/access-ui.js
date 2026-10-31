@@ -80,7 +80,9 @@ export function AccessDialog({ title, children, onClose, dirty = false, busy = f
 }
 
 export function ManagementForm({
+    id,
     children,
+    secondaryAction,
     onSubmit,
     button,
     disabled = false,
@@ -108,7 +110,7 @@ export function ManagementForm({
         }
     };
     return (
-        <form onSubmit={submit} method="post">
+        <form id={id} onSubmit={submit} method="post">
             <fieldset disabled={busy || readOnly}>
                 {children}
                 {error && (
@@ -118,6 +120,7 @@ export function ManagementForm({
                 )}
                 {!readOnly && (
                     <div className="access-form-actions">
+                        {secondaryAction}
                         {onCancel && (
                             <button type="button" className="btn btn-outline-light" onClick={onCancel}>
                                 Cancelar

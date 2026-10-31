@@ -42,10 +42,14 @@ test("el editor organiza permisos por módulo, submódulo e información/accione
   await page.goto(`${environment.origin}/acceso#roles`);
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   const sales = page.getByRole("region", { name: "Permisos de Ventas", exact: true });
-  await expect(sales.getByRole("heading", { name: "Despacho", exact: true })).toBeVisible();
+  await expect(sales.getByRole("rowheader", { name: "Despacho", exact: true })).toBeVisible();
   await expect(page.getByLabel("Consultar · Ventas / Despacho", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Ver importes comerciales · Ventas / Despacho", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Imprimir y exportar · Ventas / Despacho", { exact: true })).toHaveCount(0);
+  await page
+    .getByRole("navigation", { name: "Módulos de permisos", exact: true })
+    .getByRole("button", { name: "Configuración", exact: true })
+    .click();
   await expect(page.getByRole("region", { name: "Permisos de Configuración", exact: true })).toBeVisible();
 });
 
@@ -124,7 +128,7 @@ test("consultar un rol permite inspeccionar sus permisos sin ofrecer guardado", 
     .first()
     .click();
   await expect(page.getByRole("heading", { name: "Permisos del rol", exact: true })).toBeVisible();
-  await expect(page.getByRole("combobox").first()).toBeDisabled();
+  await expect(page.getByRole("checkbox").first()).toBeDisabled();
   await expect(page.getByRole("button", { name: "Guardar rol", exact: true })).toHaveCount(0);
 });
 

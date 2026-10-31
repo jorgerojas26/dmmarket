@@ -1,5 +1,5 @@
 const { randomBytes } = require("node:crypto");
-const { test, expect, login, openModule, setNoe, setCalendarMonth, logout } = require("./fixtures.cjs");
+const { test, expect, setPermission, login, openModule, setNoe, setCalendarMonth, logout } = require("./fixtures.cjs");
 const { docker, startEnvironment } = require("../support/auth-environment.cjs");
 const completeDashboardTest = test.extend({
   environment: [
@@ -411,16 +411,18 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   const name = `Rol E2E ${randomBytes(4).toString("hex")}`;
   await page.getByRole("textbox", { name: "Nombre del rol", exact: true }).fill(name);
-  await page.getByLabel("Consultar · Ventas / Desglose", { exact: true }).selectOption("assigned");
+  await setPermission(page, "Consultar · Ventas / Desglose", "assigned");
   await expect(
     page.getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true }),
   ).toBeVisible();
   for (const retired of ["sales.costs", "sales.profit", "providers.personal"])
     await expect(page.getByLabel(retired, { exact: true })).toHaveCount(0);
+  await setPermission(page, "Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", "assigned");
   await page
-    .getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true })
-    .selectOption("assigned");
-  await page.getByLabel("Consultar · Configuración / Tasas BCV", { exact: true }).selectOption("global");
+    .getByRole("navigation", { name: "Módulos de permisos", exact: true })
+    .getByRole("button", { name: "Configuración", exact: true })
+    .click();
+  await setPermission(page, "Consultar · Configuración / Tasas BCV", "global");
   const createdResponse = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/roles") && response.request().method() === "POST",
   );
@@ -430,11 +432,11 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   const role = await created.json();
   await expect(page.getByText("Rol guardado.", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: `Editar ${name}`, exact: true }).click();
-  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
   await expect(
-    page.getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true }),
+    page.getByLabel("Alcance de Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true }),
   ).toHaveValue("assigned");
-  await page.getByLabel("Consultar · Ventas / Desglose", { exact: true }).selectOption("global");
+  await setPermission(page, "Consultar · Ventas / Desglose", "global");
   const updatedResponse = page.waitForResponse(
     (response) => response.url().endsWith(`/api/auth/roles/${role.id}`) && response.request().method() === "PUT",
   );

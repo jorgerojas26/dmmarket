@@ -1,10 +1,13 @@
 import { MODULES } from '@dmmarket/permissions';
 import { useEffect, useState } from 'react';
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import Popover from 'react-bootstrap/Popover';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { LoadState, ManagementForm, Pagination, useDiscardChanges } from './access-ui';
 import { useAuth } from './context';
 import { Field } from './forms';
+import { RoleModules, RolePermissionMatrix } from './role-permissions';
 import { authRequest } from './transport';
 
 function grantsFor(role) {
@@ -19,10 +22,14 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange, readOnly = 
     const [name, setName] = useState(role?.name || '');
     const [grants, setGrants] = useState(() => grantsFor(role));
     const [busy, setBusy] = useState(false);
+    const [selectedModule, setSelectedModule] = useState(MODULES[0].key);
     const changed =
         name !== (role?.name || '') ||
         catalog.some(({ capability }) => (grants[capability] || '') !== (grantsFor(role)[capability] || ''));
     const dirty = !readOnly && changed;
+    const module = MODULES.find((module) => module.key === selectedModule);
+    const moduleEntries = catalog.filter((entry) => entry.module === selectedModule);
+    const hasModulePermissions = moduleEntries.some(({ capability }) => grants[capability]);
     const { requestClose, confirmation } = useDiscardChanges(dirty);
     useEffect(() => {
         onDirtyChange(dirty);
@@ -51,115 +58,127 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange, readOnly = 
                         </svg>
                         Volver a roles
                     </button>
-                    <span className="access-eyebrow">Acceso / Roles</span>
-                    <h2>{readOnly ? 'Permisos del rol' : role ? 'Editar rol' : 'Crear rol'}</h2>
-                    <p>Define qué puede hacer este perfil y sobre qué datos.</p>
+                    <div className="panel-help-title access-role-title">
+                        <h2>{readOnly ? 'Permisos del rol' : role ? 'Editar rol' : 'Crear rol'}</h2>
+                        <OverlayTrigger
+                            trigger="click"
+                            rootClose
+                            placement="bottom"
+                            overlay={
+                                <Popover id="role-permissions-help" className="kpi-help-popover">
+                                    <Popover.Body>
+                                        <div className="kpi-help-line">Los permisos se suman entre roles.</div>
+                                        <div className="kpi-help-line">
+                                            <span className="kpi-help-k">Sin acceso: </span>
+                                            este rol no concede el permiso.
+                                        </div>
+                                        <div className="kpi-help-line">
+                                            <span className="kpi-help-k">Todo el negocio: </span>
+                                            acceso a todos los datos.
+                                        </div>
+                                        <div className="kpi-help-line">
+                                            <span className="kpi-help-k">Vendedores vinculados: </span>
+                                            solo los datos de los vendedores asignados al usuario.
+                                        </div>
+                                        <div className="kpi-help-line">
+                                            <span className="kpi-help-k">Consulta: </span>
+                                            incluye impresión, salvo permisos adicionales.
+                                        </div>
+                                        <div className="kpi-help-line">
+                                            <span className="kpi-help-k">Rentabilidad: </span>
+                                            costos, utilidad y margen.
+                                        </div>
+                                        <div className="kpi-help-line">
+                                            Guardar cambios en un rol cierra las sesiones afectadas.
+                                        </div>
+                                    </Popover.Body>
+                                </Popover>
+                            }
+                        >
+                            <button
+                                type="button"
+                                className="panel-help-btn"
+                                aria-label="Ayuda sobre permisos"
+                                title="Ayuda sobre permisos"
+                            >
+                                ?
+                            </button>
+                        </OverlayTrigger>
+                    </div>
                 </div>
             </div>
+            <fieldset className="access-role-identity" disabled={busy || readOnly}>
+                <Field
+                    label="Nombre del rol"
+                    value={name}
+                    onChange={setName}
+                    maxLength={64}
+                    className="access-role-name"
+                    form="access-role-form"
+                />
+            </fieldset>
             <div className="access-role-editor">
-                <ManagementForm
-                    readOnly={readOnly}
-                    button="Guardar rol"
-                    onBusyChange={setBusy}
-                    disabled={!changed}
-                    onCancel={() => {
-                        if (!busy) requestClose(onCancel);
-                    }}
-                    onSubmit={async () => {
-                        await authRequest(
-                            role ? `roles/${role.id}` : 'roles',
-                            {
-                                name,
-                                permissions: Object.entries(grants)
-                                    .filter(([, scope]) => scope)
-                                    .map(([capability, scope]) => ({ capability, scope })),
-                            },
-                            role ? 'PUT' : 'POST',
-                        );
-                        onDirtyChange(false);
-                        await onSaved();
-                        await check(false);
-                    }}
-                >
-                    <div className="access-role-basics">
-                        <Field label="Nombre del rol" value={name} onChange={setName} maxLength={64} />
-                        <p className="access-muted">
-                            Los permisos se suman a los de otros roles del usuario. Sin permisos seleccionados, este rol
-                            no concede acceso.
-                        </p>
-                    </div>
-                    {MODULES.map((module) => (
-                        <section
-                            className="access-permission-group"
-                            key={module.key}
-                            aria-label={`Permisos de ${module.label}`}
-                        >
-                            <h3>{module.label}</h3>
-                            {module.resources.map((resource) => (
-                                <section
-                                    className="access-permission-submodule"
-                                    key={resource.resource}
-                                    aria-label={`${module.label} / ${resource.label}`}
+                <div className="access-role-layout">
+                    <RoleModules
+                        modules={MODULES}
+                        catalog={catalog}
+                        grants={grants}
+                        selected={selectedModule}
+                        onSelect={setSelectedModule}
+                        busy={busy}
+                    />
+                    <ManagementForm
+                        id="access-role-form"
+                        readOnly={readOnly}
+                        secondaryAction={
+                            hasModulePermissions && (
+                                <button
+                                    type="button"
+                                    className="access-role-clear"
+                                    aria-label={`Quitar permisos de ${module.label}`}
+                                    onClick={() =>
+                                        setGrants((previous) => {
+                                            const next = { ...previous };
+                                            for (const entry of moduleEntries) delete next[entry.capability];
+                                            return next;
+                                        })
+                                    }
                                 >
-                                    <h4>{resource.label}</h4>
-                                    {['access', 'information', 'action'].map((kind) => {
-                                        const entries = catalog.filter(
-                                            (entry) => entry.resource === resource.resource && entry.kind === kind,
-                                        );
-                                        if (!entries.length) return null;
-                                        return (
-                                            <div key={kind} className="access-permission-section">
-                                                <h5>
-                                                    {
-                                                        {
-                                                            access: 'Acceso',
-                                                            information: 'Información',
-                                                            action: 'Acciones',
-                                                        }[kind]
-                                                    }
-                                                </h5>
-                                                {entries.map((capability) => {
-                                                    const key = capability.capability;
-                                                    return (
-                                                        <div className="access-permission" key={key}>
-                                                            <label htmlFor={`permission-${key}`}>
-                                                                {capability.label}
-                                                            </label>
-                                                            <select
-                                                                id={`permission-${key}`}
-                                                                className="form-select"
-                                                                aria-label={`${capability.label} · ${module.label} / ${resource.label}`}
-                                                                disabled={busy}
-                                                                value={grants[key] || ''}
-                                                                onChange={(event) =>
-                                                                    setGrants({ ...grants, [key]: event.target.value })
-                                                                }
-                                                            >
-                                                                <option value="">Sin acceso</option>
-                                                                <option value="global">Todo el negocio</option>
-                                                                {capability.assigned && (
-                                                                    <option value="assigned">
-                                                                        Vendedores vinculados
-                                                                    </option>
-                                                                )}
-                                                            </select>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    })}
-                                </section>
-                            ))}
-                        </section>
-                    ))}
-                    <div className="access-role-basics">
-                        <p className="access-notice">
-                            Los permisos limitados necesitan vendedores vinculados al usuario. Al modificar un rol se
-                            cerrarán las sesiones de sus usuarios.
-                        </p>
-                    </div>
-                </ManagementForm>
+                                    Quitar permisos
+                                </button>
+                            )
+                        }
+                        button="Guardar rol"
+                        onBusyChange={setBusy}
+                        disabled={!changed}
+                        onCancel={() => {
+                            if (!busy) requestClose(onCancel);
+                        }}
+                        onSubmit={async () => {
+                            await authRequest(
+                                role ? `roles/${role.id}` : 'roles',
+                                {
+                                    name,
+                                    permissions: Object.entries(grants)
+                                        .filter(([, scope]) => scope)
+                                        .map(([capability, scope]) => ({ capability, scope })),
+                                },
+                                role ? 'PUT' : 'POST',
+                            );
+                            onDirtyChange(false);
+                            await onSaved();
+                            await check(false);
+                        }}
+                    >
+                        <RolePermissionMatrix
+                            key={selectedModule}
+                            module={module}
+                            catalog={catalog}
+                            grants={grants}
+                            setGrants={setGrants}
+                        />
+                    </ManagementForm>
+                </div>
             </div>
             {confirmation}
         </>
@@ -251,7 +270,6 @@ export default function AccessEditor({ onDirtyChange }) {
                                     </div>
                                     <div>
                                         <strong>{item.name}</strong>
-                                        <span>Perfil de permisos</span>
                                     </div>
                                     <button
                                         type="button"

@@ -59,6 +59,12 @@ async function login(page, environment, user) {
   await (await response).finished();
 }
 
+async function setPermission(page, name, scope) {
+  await page.getByRole("checkbox", { name, exact: true }).setChecked(Boolean(scope));
+  const selector = page.getByRole("combobox", { name: `Alcance de ${name}`, exact: true });
+  if (scope && (await selector.count())) await selector.selectOption(scope);
+}
+
 async function logout(page) {
   const exit = page.getByRole("button", { name: "Salir", exact: true });
   if (!(await exit.isVisible())) {
@@ -157,4 +163,4 @@ async function setCalendarMonth(page, scope, year, month) {
   await days.filter({ has: page.getByText(String(last), { exact: true }) }).click();
   await scope.locator(".date-range-footer").getByRole("button", { name: "Listo", exact: true }).click();
 }
-module.exports = { test, expect, login, logout, openModule, setNoe, setCalendarMonth };
+module.exports = { test, expect, setPermission, login, logout, openModule, setNoe, setCalendarMonth };

@@ -1,5 +1,5 @@
 const { randomUUID } = require("node:crypto");
-const { test, expect, login, logout } = require("./fixtures.cjs");
+const { test, expect, setPermission, login, logout } = require("./fixtures.cjs");
 
 const permissions = ["access.users", "access.roles", "access.links", "access.recover"].map((capability) => ({
   capability,
@@ -150,22 +150,20 @@ test("roles usan lenguaje humano, conservan cambios y persisten alcances", async
   await expect(page).toHaveURL(/#roles$/);
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   await page.getByLabel("Nombre del rol", { exact: true }).fill("Ventas limitadas");
-  await page.getByLabel("Consultar · Ventas / Desglose", { exact: true }).selectOption("assigned");
-  await page
-    .getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true })
-    .selectOption("assigned");
+  await setPermission(page, "Consultar · Ventas / Desglose", "assigned");
+  await setPermission(page, "Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", "assigned");
   await expect(page.getByText("sales.financial", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Volver a roles", exact: true }).click();
   await page
     .getByRole("dialog", { name: "¿Descartar los cambios?", exact: true })
     .getByRole("button", { name: "Seguir editando", exact: true })
     .click();
-  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
   await expect(page.getByLabel("Motivo del cambio de rol", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Rol guardado" })).toBeVisible();
   await page.getByRole("button", { name: "Editar Ventas limitadas", exact: true }).click();
-  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
   const role = await environment.db("dmmarket_auth_roles").where("name", "Ventas limitadas").first();
   expect(
     await environment

@@ -69,6 +69,7 @@ export function Field({
     spellCheck,
     className = 'my-3',
     describedBy,
+    form,
     required = true,
 }) {
     const id = `auth-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
@@ -92,6 +93,7 @@ export function Field({
                 autoCapitalize={autoCapitalize}
                 spellCheck={spellCheck}
                 aria-describedby={describedBy}
+                form={form}
                 required={required}
                 onChange={onChange ? (event) => onChange(event.target.value) : undefined}
             />
