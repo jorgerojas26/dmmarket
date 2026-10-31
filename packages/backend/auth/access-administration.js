@@ -53,6 +53,25 @@ function optionalReason(value) {
   return value === undefined || value === null || value === "" ? null : validateReason(value);
 }
 
+async function userAccess(connection, id) {
+  const roles = await connection("dmmarket_auth_roles").select("id", "name").orderBy("name");
+  const grants = await connection("dmmarket_auth_role_capabilities")
+    .select("role_id", "capability")
+    .orderBy("capability");
+  return {
+    id,
+    roleIds: await connection("dmmarket_auth_user_roles").where("user_id", id).orderBy("role_id").pluck("role_id"),
+    permissions: await connection("dmmarket_auth_user_capabilities")
+      .where("user_id", id)
+      .select("capability")
+      .orderBy("capability"),
+    roles: roles.map((role) => ({
+      ...role,
+      permissions: grants.filter((grant) => grant.role_id === role.id).map(({ capability }) => ({ capability })),
+    })),
+  };
+}
+
 async function createAccessAdministration({ db, sessions, now = Date.now }) {
   await assertAuthSchema(db);
   const administer = (sid, capability, recent, work) =>
@@ -142,6 +161,67 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         if (!(await connection("dmmarket_auth_users").where("id", identifier(id)).first()))
           fail(404, "La cuenta no está disponible.");
         return commercialProfile(connection, id);
+      });
+    },
+    userAccess(sid, id) {
+      return administer(sid, "access.roles.read", false, async (connection) => {
+        if (!(await connection("dmmarket_auth_users").where("id", identifier(id)).first()))
+          fail(404, "La cuenta no está disponible.");
+        return userAccess(connection, id);
+      });
+    },
+    setUserAccess(sid, id, input) {
+      const ids = roleIds(input.roleIds);
+      const grants = permissions(input.permissions).sort((a, b) => a.capability.localeCompare(b.capability));
+      return administer(sid, "access.roles.assign", true, async (connection, actorId) => {
+        await target(connection, "dmmarket_auth_users", id);
+        const previous = await userAccess(connection, id);
+        if (ids.some((id) => !previous.roles.some((role) => role.id === id)))
+          fail(400, "Uno de los roles no está disponible.");
+        const rolesAdded = ids.filter((id) => !previous.roleIds.includes(id));
+        const rolesRemoved = previous.roleIds.filter((id) => !ids.includes(id));
+        const selected = grants.map((grant) => grant.capability);
+        const old = previous.permissions.map((grant) => grant.capability);
+        const added = selected.filter((capability) => !old.includes(capability));
+        const removed = old.filter((capability) => !selected.includes(capability));
+        if (!rolesAdded.length && !rolesRemoved.length && !added.length && !removed.length) return previous;
+        if (rolesAdded.length || rolesRemoved.length) {
+          await connection("dmmarket_auth_user_roles").where("user_id", id).delete();
+          if (ids.length)
+            await connection("dmmarket_auth_user_roles").insert(
+              ids.map((roleId) => ({ user_id: id, role_id: roleId })),
+            );
+        }
+        if (added.length || removed.length) {
+          await connection("dmmarket_auth_user_capabilities").where("user_id", id).delete();
+          if (grants.length)
+            await connection("dmmarket_auth_user_capabilities").insert(
+              grants.map((grant) => ({ user_id: id, ...grant })),
+            );
+        }
+        if (
+          requiresCommercialProfile(await grantsFor(connection, id)) &&
+          !(await connection("dmmarket_auth_commercial_profiles").where("user_id", id).first())
+        )
+          fail(400, "El acceso seleccionado requiere un perfil comercial individual.");
+        await assertAdministratorRemains(connection);
+        const occurredMs = now();
+        if (!Number.isSafeInteger(occurredMs) || occurredMs <= 0)
+          throw new Error("El reloj del servidor no es válido.");
+        await invalidateUser(connection, id, occurredMs, "user-access-changed");
+        const roleDetails = (ids) =>
+          ids.map((id) => {
+            const role = previous.roles.find((role) => role.id === id);
+            return { id, name: role.name };
+          });
+        await appendEvent(connection, {
+          actorId,
+          targetId: id,
+          action: "auth.user_access_changed",
+          details: { rolesAdded: roleDetails(rolesAdded), rolesRemoved: roleDetails(rolesRemoved), added, removed },
+          occurredMs,
+        });
+        return userAccess(connection, id);
       });
     },
     userPermissions(sid, id) {

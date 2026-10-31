@@ -407,8 +407,11 @@ export default function Users({
     );
     useEffect(() => {
         if (userId) lastUser.current = userId;
-        else if (lastUser.current) (userLink.current || listHeading.current)?.focus();
-    }, [userId]);
+        else if (lastUser.current) {
+            (userLink.current || listHeading.current)?.focus();
+            mutate().catch(() => undefined);
+        }
+    }, [userId, mutate]);
     const done = async (result) => {
         if (creating) onCreated();
         setOperation(null);

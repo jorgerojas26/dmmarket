@@ -339,10 +339,10 @@ test("Crear rol permite volver desde arriba y asignar roles no exige un motivo",
   await expect(page.getByRole("button", { name: "Crear rol", exact: true })).toBeVisible();
   await page.locator(".clients-sidebar").getByRole("button", { name: "Usuarios", exact: true }).click();
   const panel = await openUser(page, target.username);
-  await panel.getByRole("checkbox", { name: "Asignación sin motivo", exact: true }).check();
+  await panel.getByRole("combobox", { name: "Añadir rol", exact: true }).selectOption(roleId);
   await expect(panel.getByLabel("Motivo de asignación de roles", { exact: true })).toHaveCount(0);
-  await panel.getByRole("button", { name: "Guardar roles del usuario", exact: true }).click();
-  await expect(panel.getByRole("status").filter({ hasText: "Roles asignados" })).toBeVisible();
+  await panel.getByRole("button", { name: "Guardar acceso", exact: true }).click();
+  await expect(panel.getByRole("status").filter({ hasText: "Acceso guardado" })).toBeVisible();
   expect(await environment.db("dmmarket_auth_user_roles").where({ user_id: target.id, role_id: roleId })).toHaveLength(
     1,
   );

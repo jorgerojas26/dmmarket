@@ -36,6 +36,7 @@ export const auditActivities = [
             'auth.role_changed': 'Rol actualizado',
             'auth.role_renamed': 'Rol renombrado',
             'auth.user_permissions_changed': 'Permisos adicionales actualizados',
+            'auth.user_access_changed': 'Acceso del usuario actualizado',
             'auth.user_roles_changed': 'Roles del usuario actualizados',
             'auth.user_sellers_changed': 'Vendedores vinculados actualizados',
             'auth.commercial_profile_changed': 'Perfil comercial actualizado',

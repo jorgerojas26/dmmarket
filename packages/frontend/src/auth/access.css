@@ -1193,13 +1193,17 @@
     color: #9dc7ff;
 }
 
-.access-user-permissions .access-success {
+.access-user-access .access-success {
     margin: 12px 16px;
 }
 
 .access-permission-source {
     font-size: 10px;
     line-height: 10px;
+    max-width: 112px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: #9ca9bb;
 }
 
@@ -1258,7 +1262,9 @@
 
 .access-user-overview {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 680px;
+    margin-top: 32px;
     align-items: start;
     gap: 24px;
 }
@@ -1281,18 +1287,19 @@
     font-weight: 600;
 }
 
-.access-user-detail .access-user-permissions {
-    margin-top: 32px;
+.access-user-detail .access-user-access {
+    margin-top: 0;
     padding-top: 0;
     border: 0;
 }
 
-.access-user-detail .access-user-permissions .access-role-editor {
+.access-user-detail .access-user-access .access-role-editor {
+    height: clamp(440px, calc(100dvh - 450px), 720px);
     border: 1px solid #2d3138;
     overflow: hidden;
 }
 
-.access-user-detail .access-user-permissions .access-permission-table-scroll {
+.access-user-detail .access-user-access .access-permission-table-scroll {
     overflow-y: auto;
 }
 
@@ -1326,4 +1333,83 @@
     .access-user-detail-header {
         gap: 16px;
     }
+}
+
+.access-user-access-title {
+    margin-bottom: 16px;
+}
+
+.access-user-access-title h3 {
+    margin: 0;
+}
+
+.access-user-role-picker {
+    margin: 0 0 20px;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+.access-user-role-picker legend {
+    float: none;
+    margin-bottom: 8px;
+    color: #a3adbb;
+    font-size: 12px;
+}
+
+.access-user-role-selection {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.access-selected-role {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-height: 40px;
+    padding: 4px 8px 4px 12px;
+    gap: 8px;
+    border: 1px solid #3c506b;
+    border-radius: 8px;
+    background: #243247;
+    color: #d0e0f7;
+}
+
+.access-selected-role > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.access-selected-role button {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    font-size: 20px;
+}
+
+.access-selected-role button:hover {
+    background: #354966;
+}
+
+.access-user-role-picker .access-add-role {
+    width: 200px;
+    min-width: 160px;
+    max-width: 100%;
+    min-height: 40px;
+    font-size: 13px;
+}
+
+.access-change-summary {
+    margin: 12px 16px 0;
+    color: #bdc6d3;
+    font-size: 12px;
 }

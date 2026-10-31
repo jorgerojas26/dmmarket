@@ -22,7 +22,7 @@ for (const width of [390, 1440])
     await expect(page.getByRole("button", { name: "Menú de cuenta", exact: true, includeHidden: true })).toBeAttached();
     await page.goto(`${environment.origin}/acceso`);
     await page.getByRole("link", { name: `Administrar ${user.username}`, exact: true }).click();
-    const section = page.getByRole("region", { name: "Permisos adicionales", exact: true });
+    const section = page.getByRole("region", { name: "Acceso del usuario", exact: true });
     await section.getByRole("button", { name: "Inventario", exact: true }).click();
     const inherited = section
       .getByRole("row", { name: /Desglose/ })
@@ -37,24 +37,29 @@ for (const width of [390, 1440])
       .first();
     await rates.check();
     await expect(section.getByRole("textbox", { name: /motivo/i })).toHaveCount(0);
-    await section.getByRole("button", { name: "Guardar permisos adicionales", exact: true }).click();
-    await expect(section.getByRole("status")).toContainText("Permisos adicionales guardados");
+    await section.getByRole("button", { name: "Guardar acceso", exact: true }).click();
+    await expect(section.getByRole("status")).toContainText("Acceso guardado");
     expect(
       await environment.db("dmmarket_auth_user_capabilities").where("user_id", user.id).pluck("capability"),
     ).toEqual(["settings.rates.read"]);
     const event = await environment
       .db("dmmarket_auth_events")
-      .where({ target_user_id: user.id, action: "auth.user_permissions_changed" })
+      .where({ target_user_id: user.id, action: "auth.user_access_changed" })
       .first();
-    expect(JSON.parse(event.details)).toEqual({ added: ["settings.rates.read"], removed: [] });
+    expect(JSON.parse(event.details)).toEqual({
+      rolesAdded: [],
+      rolesRemoved: [],
+      added: ["settings.rates.read"],
+      removed: [],
+    });
     await rates.uncheck();
-    await section.getByRole("button", { name: "Guardar permisos adicionales", exact: true }).click();
-    await expect(section.getByRole("button", { name: "Guardar permisos adicionales", exact: true })).toBeDisabled();
+    await section.getByRole("button", { name: "Guardar acceso", exact: true }).click();
+    await expect(section.getByRole("button", { name: "Guardar acceso", exact: true })).toBeDisabled();
     expect(await environment.db("dmmarket_auth_user_capabilities").where("user_id", user.id)).toHaveLength(0);
     await page.goto(`${environment.origin}/acceso#auditoria`);
-    await page.getByRole("combobox", { name: "Actividad", exact: true }).selectOption("auth.user_permissions_changed");
+    await page.getByRole("combobox", { name: "Actividad", exact: true }).selectOption("auth.user_access_changed");
     await page
-      .getByRole("button", { name: "Ver detalle: Permisos adicionales actualizados", exact: true })
+      .getByRole("button", { name: "Ver detalle: Acceso del usuario actualizado", exact: true })
       .first()
       .click();
     await expect(page.getByText("Permisos retirados", { exact: true })).toBeVisible();

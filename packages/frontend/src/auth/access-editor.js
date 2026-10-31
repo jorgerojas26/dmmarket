@@ -10,7 +10,7 @@ import { useAuth } from './context';
 import { Field } from './forms';
 import { RoleModules, RolePermissionMatrix } from './role-permissions';
 import { authRequest } from './transport';
-import UserPermissions from './user-permissions';
+import UserAccess from './user-access';
 
 function grantsFor(role) {
     return (role?.permissions || []).reduce((grants, grant) => {
@@ -291,120 +291,32 @@ export default function AccessEditor({ onDirtyChange }) {
     );
 }
 
-function RolesAssignment({ id, initial, roles, onDirtyChange, onBusyChange, onSaved }) {
-    const { check } = useAuth();
-    const [selected, setSelected] = useState(initial);
-    const [saved, setSaved] = useState(initial);
-    const [message, setMessage] = useState('');
-    const changed = [...selected].sort().join(',') !== [...saved].sort().join(',');
-    useEffect(() => {
-        if (!changed) {
-            setSelected(initial);
-            setSaved(initial);
-        }
-    }, [initial, changed]);
-    useEffect(() => {
-        onDirtyChange(changed);
-    }, [changed, onDirtyChange]);
-    return (
-        <section className="access-assignment" aria-label="Roles del usuario">
-            <h3>Roles</h3>
-            <p className="access-muted">Selecciona uno o varios perfiles para esta cuenta.</p>
-            <ManagementForm
-                button="Guardar roles del usuario"
-                disabled={!changed}
-                onBusyChange={onBusyChange}
-                onSubmit={async () => {
-                    await authRequest(`users/${id}/roles`, { roleIds: selected }, 'PUT');
-                    await onSaved(selected);
-                    setSaved(selected);
-                    setMessage('Roles asignados y sesiones del usuario revocadas.');
-                    await check(false);
-                }}
-            >
-                <fieldset className="access-checklist" aria-label="Roles asignados">
-                    {roles.map((role) => (
-                        <label className="access-check" key={role.id}>
-                            <input
-                                type="checkbox"
-                                checked={selected.includes(role.id)}
-                                onChange={(event) =>
-                                    setSelected(
-                                        event.target.checked
-                                            ? [...selected, role.id]
-                                            : selected.filter((value) => value !== role.id),
-                                    )
-                                }
-                            />
-                            <span>{role.name}</span>
-                        </label>
-                    ))}
-                    {!roles.length && (
-                        <p className="access-muted">No hay roles disponibles. Crea uno en la sección Roles.</p>
-                    )}
-                </fieldset>
-                <p className="access-muted">Guardar los cambios cerrará las sesiones de este usuario.</p>
-                {message && (
-                    <p role="status" className="access-success">
-                        {message}
-                    </p>
-                )}
-            </ManagementForm>
-        </section>
-    );
-}
-
 export function Assignments({ id, onDirtyChange, onBusyChange }) {
     const { can } = useAuth();
-    const roles = useSWR(can('access.roles.read') ? '/api/auth/roles' : null, fetcher);
-    const assignedRoles = useSWR(can('access.roles.read') ? `/api/auth/users/${id}/roles` : null, fetcher);
-    const individual = useSWR(can('access.roles.read') ? `/api/auth/users/${id}/permissions` : null, fetcher);
+    const access = useSWR(can('access.roles.read') ? `/api/auth/users/${id}/access` : null, fetcher);
     const profile = useSWR(can('access.profile.read') ? `/api/auth/users/${id}/commercial-profile` : null, fetcher);
-    const [rolesDirty, setRolesDirty] = useState(false);
+    const [accessDirty, setAccessDirty] = useState(false);
     const [profileDirty, setProfileDirty] = useState(false);
-    const [permissionsDirty, setPermissionsDirty] = useState(false);
     useEffect(() => {
-        onDirtyChange(rolesDirty || profileDirty || permissionsDirty);
-    }, [rolesDirty, profileDirty, permissionsDirty, onDirtyChange]);
+        onDirtyChange(accessDirty || profileDirty);
+    }, [accessDirty, profileDirty, onDirtyChange]);
     return (
         <div className="access-user-assignments">
-            <div className="access-user-overview">
-                {can('access.roles.read') && (
-                    <LoadState
-                        error={roles.error || assignedRoles.error}
-                        loading={!roles.data || !assignedRoles.data}
-                        onRetry={() => {
-                            roles.mutate();
-                            assignedRoles.mutate();
-                        }}
-                    >
-                        {can('access.roles.assign') ? (
-                            <RolesAssignment
-                                id={id}
-                                initial={assignedRoles.data?.data || []}
-                                roles={roles.data?.data || []}
-                                onSaved={async (data) => {
-                                    await assignedRoles.mutate({ data }, false);
-                                    await individual.mutate();
-                                }}
-                                onDirtyChange={setRolesDirty}
-                                onBusyChange={onBusyChange}
-                            />
-                        ) : (
-                            <section className="access-assignment" aria-label="Roles del usuario">
-                                <h3>Roles</h3>
-                                <ul>
-                                    {(roles.data?.data || [])
-                                        .filter((role) => assignedRoles.data?.data.includes(role.id))
-                                        .map((role) => (
-                                            <li key={role.id}>{role.name}</li>
-                                        ))}
-                                </ul>
-                            </section>
-                        )}
-                    </LoadState>
-                )}
-                {can('access.profile.read') && (
+            {can('access.roles.read') && (
+                <LoadState error={access.error} loading={!access.data} onRetry={access.mutate}>
+                    {access.data && (
+                        <UserAccess
+                            id={id}
+                            initial={access.data}
+                            onSaved={(data) => access.mutate(data, false)}
+                            onDirtyChange={setAccessDirty}
+                            onBusyChange={onBusyChange}
+                        />
+                    )}
+                </LoadState>
+            )}
+            {can('access.profile.read') && (
+                <div className="access-user-overview">
                     <LoadState error={profile.error} loading={profile.data === undefined} onRetry={profile.mutate}>
                         {can('access.profile.update') ? (
                             <CommercialProfileForm
@@ -421,20 +333,7 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
                             </section>
                         )}
                     </LoadState>
-                )}
-            </div>
-            {can('access.roles.read') && (
-                <LoadState error={individual.error} loading={!individual.data} onRetry={individual.mutate}>
-                    {individual.data && (
-                        <UserPermissions
-                            id={id}
-                            initial={individual.data}
-                            onSaved={() => individual.mutate()}
-                            onDirtyChange={setPermissionsDirty}
-                            onBusyChange={onBusyChange}
-                        />
-                    )}
-                </LoadState>
+                </div>
             )}
         </div>
     );

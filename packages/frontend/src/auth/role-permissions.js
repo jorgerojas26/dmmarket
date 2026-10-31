@@ -33,9 +33,11 @@ export function RoleModules({ modules, catalog, grants, selected, onSelect, busy
     );
 }
 
-function PermissionControl({ entry, module, resource, grants, inherited, setGrants }) {
+function PermissionControl({ entry, module, resource, grants, inherited, sources, showSources, setGrants }) {
     const fromRole = Boolean(inherited[entry.capability]);
     const direct = Boolean(grants[entry.capability]);
+    const names = sources[entry.capability] || [];
+    const origin = names.length ? `Por ${names.join(', ')}` : 'Concedido por rol';
     return (
         <div className="access-permission-control">
             <label className="access-permission-checkbox">
@@ -47,8 +49,8 @@ function PermissionControl({ entry, module, resource, grants, inherited, setGran
                     title={
                         fromRole
                             ? direct
-                                ? 'Por rol y adicional. Desmarcar retira solo el adicional.'
-                                : 'Concedido por rol'
+                                ? `${origin} y adicional. Desmarcar retira solo el adicional.`
+                                : `${origin}. Para retirarlo, quita el rol correspondiente.`
                             : undefined
                     }
                     onChange={(event) => {
@@ -57,12 +59,35 @@ function PermissionControl({ entry, module, resource, grants, inherited, setGran
                     }}
                 />
             </label>
-            {fromRole && <span className="access-permission-source">{direct ? 'Rol + adicional' : 'Rol'}</span>}
+            {(fromRole || (showSources && direct)) && (
+                <span
+                    className="access-permission-source"
+                    title={fromRole ? origin : 'Concedido directamente al usuario'}
+                >
+                    {fromRole
+                        ? direct
+                            ? 'Rol + adicional'
+                            : names.length === 1
+                              ? `Por ${names[0]}`
+                              : names.length > 1
+                                ? `${names.length} roles`
+                                : 'Rol'
+                        : 'Adicional'}
+                </span>
+            )}
         </div>
     );
 }
 
-export function RolePermissionMatrix({ module, catalog, grants, setGrants, inherited = {} }) {
+export function RolePermissionMatrix({
+    module,
+    catalog,
+    grants,
+    setGrants,
+    inherited = {},
+    sources = {},
+    showSources = false,
+}) {
     const entries = catalog.filter((entry) => entry.module === module.key);
     const labels = {
         read: 'Consulta',
@@ -152,6 +177,8 @@ export function RolePermissionMatrix({ module, catalog, grants, setGrants, inher
                                                         resource={resource}
                                                         grants={grants}
                                                         inherited={inherited}
+                                                        sources={sources}
+                                                        showSources={showSources}
                                                         setGrants={setGrants}
                                                     />
                                                 ) : (

@@ -63,6 +63,28 @@ function EventDetail({ event, onClose, onFilter }) {
                     </dd>
                 </div>
                 {event.details &&
+                    ['rolesAdded', 'rolesRemoved']
+                        .filter((key) => event.details[key])
+                        .map((key) => (
+                            <div key={key}>
+                                <dt>{key === 'rolesAdded' ? 'Roles añadidos' : 'Roles retirados'}</dt>
+                                <dd>
+                                    {event.details[key].length ? (
+                                        <ul>
+                                            {event.details[key].map((role) => (
+                                                <li key={role.id}>
+                                                    <span>{role.name}</span>
+                                                    <code>{role.id}</code>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        'Ninguno'
+                                    )}
+                                </dd>
+                            </div>
+                        ))}
+                {event.details &&
                     ['added', 'removed'].map((key) => (
                         <div key={key}>
                             <dt>{key === 'added' ? 'Permisos añadidos' : 'Permisos retirados'}</dt>
@@ -100,7 +122,8 @@ function EventDetail({ event, onClose, onFilter }) {
             </dl>
             <p className="access-muted audit-detail-note">
                 Los nombres corresponden a los registros actuales. Los identificadores permiten reconocer las cuentas y
-                roles del evento original.
+                roles del evento original.{' '}
+                {event.details?.rolesAdded && 'Los cambios de roles conservan el nombre registrado al guardar.'}
             </p>
             <div className="audit-detail-filters">
                 <h4>Continuar la consulta</h4>

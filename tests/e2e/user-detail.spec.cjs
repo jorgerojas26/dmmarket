@@ -32,16 +32,16 @@ for (const width of [390, 1440, 1920])
     await expect(screen).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(screen.getByRole("heading", { name: "Ana Pérez", exact: true })).toBeFocused();
-    await expect(screen.getByRole("region", { name: "Roles del usuario", exact: true })).toBeVisible();
+    await expect(screen.getByRole("group", { name: "Roles del usuario", exact: true })).toBeVisible();
     await expect(screen.getByRole("region", { name: "Identidad comercial de la cuenta", exact: true })).toBeVisible();
-    await expect(screen.getByRole("region", { name: "Permisos adicionales", exact: true })).toBeVisible();
+    await expect(screen.getByRole("region", { name: "Acceso del usuario", exact: true })).toBeVisible();
     const frame = await screen.boundingBox();
     const workspace = await page.locator(".access-workspace").boundingBox();
     expect(Math.abs(frame.width - workspace.width)).toBeLessThan(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath("user-detail.png") });
     await screen
-      .getByRole("region", { name: "Permisos adicionales", exact: true })
+      .getByRole("region", { name: "Acceso del usuario", exact: true })
       .screenshot({ path: test.info().outputPath("user-permissions.png") });
     await page.goBack();
     await expect(page.getByRole("searchbox", { name: "Buscar usuarios", exact: true })).toHaveValue(target.username);
@@ -59,14 +59,14 @@ test("la navegación protege cambios sin guardar y conserva el borrador al cance
   await administrator(page, environment);
   await page.goto(`${environment.origin}/acceso/usuarios/${target.id}`);
   const screen = page.getByRole("region", { name: `Administrar ${target.username}`, exact: true });
-  const roles = screen.getByRole("region", { name: "Roles del usuario", exact: true });
-  const checkbox = roles.getByRole("checkbox").first();
-  const checked = await checkbox.isChecked();
-  await checkbox.setChecked(!checked);
+  const roles = screen.getByRole("group", { name: "Roles del usuario", exact: true });
+  const selected = roles.getByRole("button", { name: /^Quitar rol / });
+  const count = await selected.count();
+  await roles.getByRole("combobox", { name: "Añadir rol", exact: true }).selectOption({ index: 1 });
   await screen.getByRole("button", { name: "Volver a usuarios", exact: true }).click();
   const discard = page.getByRole("dialog", { name: "¿Descartar los cambios?", exact: true });
   await discard.getByRole("button", { name: "Seguir editando", exact: true }).click();
-  await expect(checkbox).toBeChecked({ checked: !checked });
+  await expect(selected).toHaveCount(count + 1);
   await screen.getByRole("button", { name: "Volver a usuarios", exact: true }).click();
   await discard.getByRole("button", { name: "Descartar cambios", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Administración de usuarios", exact: true })).toBeVisible();

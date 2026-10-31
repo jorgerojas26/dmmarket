@@ -447,9 +447,9 @@ test("editor crea rol, habilita otros datos y administra identidad revocando ses
   await page.locator(".clients-sidebar").getByRole("button", { name: "Usuarios", exact: true }).click();
   await page.getByLabel("Buscar usuarios", { exact: true }).fill(user.username);
   await page.getByRole("link", { name: `Administrar ${user.username}`, exact: true }).click();
-  await page.getByRole("checkbox", { name, exact: true }).check();
-  await page.getByRole("button", { name: "Guardar roles del usuario", exact: true }).click();
-  await expect(page.getByText("Roles asignados y sesiones del usuario revocadas.", { exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "Añadir rol", exact: true }).selectOption({ label: name });
+  await page.getByRole("button", { name: "Guardar acceso", exact: true }).click();
+  await expect(page.getByText("Acceso guardado. Se cerraron las sesiones del usuario.", { exact: true })).toBeVisible();
   const context = await browser.newContext();
   try {
     const reader = await context.newPage();
