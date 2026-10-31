@@ -1193,23 +1193,6 @@
     color: #9dc7ff;
 }
 
-.access-user-permissions .access-role-modules {
-    border-right: 0;
-    padding: 16px;
-}
-
-.access-user-permissions .access-role-module-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.access-user-permissions .access-role-module-list button {
-    padding: 8px;
-}
-
-.access-user-permissions .access-permission-table-scroll {
-    flex: none;
-}
-
 .access-user-permissions .access-success {
     margin: 12px 16px;
 }
@@ -1218,4 +1201,129 @@
     font-size: 10px;
     line-height: 10px;
     color: #9ca9bb;
+}
+
+.access-user-detail {
+    width: 100%;
+    min-width: 0;
+}
+
+.access-user-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin: 16px 0 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #2d3138;
+}
+
+.access-user-detail .access-user-summary {
+    flex: 1 1 360px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.access-user-detail .access-user-summary > div {
+    min-width: 0;
+}
+
+.access-user-detail h2 {
+    margin: 0 0 4px;
+    font-size: clamp(22px, 2vw, 28px);
+    font-weight: 650;
+    letter-spacing: -0.5px;
+    overflow-wrap: anywhere;
+}
+
+.access-user-detail .access-eyebrow {
+    margin-bottom: 4px;
+}
+
+.access-user-detail p {
+    overflow-wrap: anywhere;
+}
+
+.access-user-actions .access-muted {
+    margin: 8px 0 0;
+    font-size: 12px;
+}
+
+.access-user-detail > fieldset {
+    min-width: 0;
+}
+
+.access-user-overview {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 24px;
+}
+
+.access-user-detail .access-user-overview > * {
+    min-width: 0;
+    margin: 0;
+    padding: 24px;
+    border: 1px solid #2d3138;
+    border-radius: 12px;
+    background: #1e2126;
+}
+
+.access-user-overview > :only-child {
+    grid-column: 1 / -1;
+}
+
+.access-user-detail .access-assignment h3 {
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.access-user-detail .access-user-permissions {
+    margin-top: 32px;
+    padding-top: 0;
+    border: 0;
+}
+
+.access-user-detail .access-user-permissions .access-role-editor {
+    border: 1px solid #2d3138;
+    overflow: hidden;
+}
+
+.access-user-detail .access-user-permissions .access-permission-table-scroll {
+    overflow-y: auto;
+}
+
+.access-user-link:hover {
+    color: #b8d7fc;
+    text-decoration: none;
+}
+
+.access-user-detail .access-back:focus-visible,
+.access-user-link:focus-visible {
+    outline: 2px solid #8dbbfa;
+    outline-offset: 4px;
+}
+
+@media (max-width: 1000px) {
+    .access-user-overview {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .access-user-detail .access-user-summary {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .access-user-detail .access-user-overview > * {
+        padding: 16px;
+    }
+
+    .access-user-detail-header {
+        gap: 16px;
+    }
 }

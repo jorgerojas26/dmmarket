@@ -18,19 +18,28 @@ function forbidden() {
   throw error;
 }
 
+const directoryCapabilities = ["access.users.read", "access.roles.read", "access.profile.read", "access.recovery.read"];
+
 function createAccessDirectory(sessions) {
   return {
+    user(sid, id) {
+      if (typeof id !== "string" || !/^[a-f0-9-]{36}$/i.test(id)) invalid();
+      return sessions.withSession(sid, { readOnly: true }, async ({ access, transaction }) => {
+        if (!directoryCapabilities.some((key) => access.hasGlobal(key))) forbidden();
+        const user = await transaction("dmmarket_auth_users")
+          .where("id", id)
+          .select("id", "username", "display_name", "enabled")
+          .first();
+        if (!user) throw Object.assign(new Error("La cuenta no está disponible."), { status: 404 });
+        return user;
+      });
+    },
     users(sid, query) {
       const { page, search } = filters(query);
       const state = query.state || "all";
       if (!["all", "enabled", "disabled"].includes(state)) invalid();
       return sessions.withSession(sid, { readOnly: true }, async ({ access, transaction }) => {
-        if (
-          !["access.users.read", "access.roles.read", "access.profile.read", "access.recovery.read"].some((key) =>
-            access.hasGlobal(key),
-          )
-        )
-          forbidden();
+        if (!directoryCapabilities.some((key) => access.hasGlobal(key))) forbidden();
         const directory = transaction("dmmarket_auth_users");
         if (search)
           directory.where((builder) =>

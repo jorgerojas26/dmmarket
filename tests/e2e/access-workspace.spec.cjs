@@ -18,8 +18,8 @@ async function enter(page, environment, grants = permissions) {
 
 async function openUser(page, username) {
   await page.getByLabel("Buscar usuarios", { exact: true }).fill(username);
-  await page.getByRole("button", { name: `Administrar ${username}`, exact: true }).click();
-  return page.getByRole("dialog", { name: `Administrar ${username}`, exact: true });
+  await page.getByRole("link", { name: `Administrar ${username}`, exact: true }).click();
+  return page.getByRole("region", { name: `Administrar ${username}`, exact: true });
 }
 
 test("directorio filtra en servidor, pagina y muestra roles sin formularios permanentes", async ({

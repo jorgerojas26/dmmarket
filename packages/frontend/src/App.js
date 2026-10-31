@@ -61,7 +61,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
         { path: '/acceso', allowed: access, content: <AccessWorkspace /> },
         { path: '/cuenta', allowed: true, content: <Account /> },
     ].filter((view) => view.allowed);
-    const path = pathname.replace(/\/+$/, '') || '/';
+    const path = /^\/acceso\/usuarios\/[^/]+\/?$/.test(pathname) ? '/acceso' : pathname.replace(/\/+$/, '') || '/';
     const view = views.find((item) => item.path === path);
     const module = modules.find((item) => path === item.path || path.startsWith(`${item.path}/`));
     return (

@@ -98,30 +98,38 @@ export default function AccessWorkspace() {
     const location = useLocation();
     const history = useHistory();
     const [dirty, setDirty] = useState(false);
+    const [busy, setBusy] = useState(false);
     const allowNavigation = useRef(false);
-    const { requestClose, confirmation } = useDiscardChanges(dirty);
-    const creating = location.hash === '#nuevo-usuario' && can('access.users.create') && can('access.roles.assign');
+    const { requestClose, confirmation } = useDiscardChanges(dirty || busy);
+    const userId = location.pathname.match(/^\/acceso\/usuarios\/([^/]+)\/?$/)?.[1] || null;
+    const creating =
+        !userId && location.hash === '#nuevo-usuario' && can('access.users.create') && can('access.roles.assign');
     const users = ['access.users.read', 'access.profile.read', 'access.recovery.read'].some(can);
     const items = [
         ...(users ? [{ eventKey: 'usuarios', label: 'Usuarios', icon: usersIcon }] : []),
         ...(can('access.roles.read') ? [{ eventKey: 'roles', label: 'Roles', icon: rolesIcon }] : []),
         ...(can('audit.read') ? [{ eventKey: 'auditoria', label: 'Auditoría', icon: auditIcon }] : []),
     ];
-    const view = items.find((item) => location.hash === `#${item.eventKey}`)?.eventKey || items[0]?.eventKey;
+    const view = userId
+        ? 'usuarios'
+        : items.find((item) => location.hash === `#${item.eventKey}`)?.eventKey || items[0]?.eventKey;
     useEffect(() => {
-        if (!creating && location.hash !== `#${view}`) history.replace({ ...location, hash: `#${view}` });
-    }, [view, location, history, creating]);
-    const navigate = (hash) =>
+        if (!userId && !creating && location.hash !== `#${view}`) history.replace({ ...location, hash: `#${view}` });
+    }, [view, location, history, creating, userId]);
+    const navigate = (hash) => {
+        if (busy) return;
         requestClose(() => {
             allowNavigation.current = dirty;
             setDirty(false);
-            history.push({ ...location, hash });
+            history.push({ pathname: '/acceso', search: location.search, hash });
         });
+    };
     return (
         <section aria-label="Acceso" className="clientes-layout access-layout p-0">
             <Prompt
-                when={dirty}
+                when={dirty || busy}
                 message={() => {
+                    if (busy) return false;
                     if (allowNavigation.current) {
                         allowNavigation.current = false;
                         return true;
@@ -134,12 +142,7 @@ export default function AccessWorkspace() {
                     activeKey={view}
                     items={items}
                     onSelect={(next) => {
-                        if (next !== view)
-                            requestClose(() => {
-                                allowNavigation.current = dirty;
-                                setDirty(false);
-                                history.push({ ...location, hash: `#${next}` });
-                            });
+                        if (next !== view || userId) navigate(`#${next}`);
                     }}
                 />
                 <div className="clientes-content access-content">
@@ -147,8 +150,11 @@ export default function AccessWorkspace() {
                         {view === 'usuarios' ? (
                             <Users
                                 onDirtyChange={setDirty}
+                                onBusyChange={setBusy}
+                                userId={userId}
+                                onReturn={() => navigate('#usuarios')}
                                 creating={creating}
-                                onCreate={() => history.push({ ...location, hash: '#nuevo-usuario' })}
+                                onCreate={() => history.push({ pathname: '/acceso', hash: '#nuevo-usuario' })}
                                 onCancelCreate={() => navigate('#usuarios')}
                                 onCreated={() => {
                                     allowNavigation.current = dirty;

@@ -143,7 +143,7 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await expect(reader.getByRole("heading", { name: "Cambiar contraseña temporal" })).toBeVisible();
     await changePassword(reader, temporaryPassword, randomBytes(24).toString("base64url"));
     await expect(reader.getByRole("status", { name: "Usuario conectado" })).toHaveText(username);
-    await page.getByRole("button", { name: `Administrar ${username}`, exact: true }).click();
+    await page.getByRole("link", { name: `Administrar ${username}`, exact: true }).click();
     await page.getByRole("button", { name: "Recuperar acceso", exact: true }).click();
     await page.getByRole("textbox", { name: "Motivo de la operación" }).fill("Recuperación real de prueba");
     await page.getByRole("button", { name: "Confirmar operación", exact: true }).click();
@@ -151,6 +151,7 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     const replacement = await credential.inputValue();
     expect(replacement).not.toBe(temporaryPassword);
     await page.getByRole("button", { name: "Cerrar credencial temporal", exact: true }).click();
+    await page.getByRole("button", { name: "Volver a usuarios", exact: true }).click();
     await reader.reload();
     await expect(reader.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
     await login(reader, environment, { username, password: temporaryPassword });
@@ -159,12 +160,12 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await expect(reader.getByRole("heading", { name: "Cambiar contraseña temporal" })).toBeVisible();
     await changePassword(reader, replacement, randomBytes(24).toString("base64url"));
     await expect(reader.getByRole("status", { name: "Usuario conectado" })).toHaveText(username);
-    await page.getByRole("button", { name: `Administrar ${username}`, exact: true }).click();
+    await page.getByRole("link", { name: `Administrar ${username}`, exact: true }).click();
     await page.getByRole("button", { name: "Deshabilitar usuario", exact: true }).click();
     const disable = page.getByRole("dialog", { name: "Deshabilitar usuario", exact: true });
     await disable.getByRole("textbox", { name: "Motivo de la operación" }).fill("Bloqueo real de prueba");
     await disable.getByRole("button", { name: "Deshabilitar usuario", exact: true }).click();
-    await expect(page.getByRole("row").filter({ hasText: username })).toContainText("Deshabilitado");
+    await expect(page.locator(".access-user-summary")).toContainText("Deshabilitado");
     expect(
       (await context.request.get(`${environment.origin}/api/currency_rates`, { ignoreHTTPSErrors: true })).status(),
     ).toBe(401);
@@ -445,7 +446,7 @@ test("editor crea rol, habilita otros datos y administra identidad revocando ses
   await expect(page.getByText("Rol guardado.", { exact: false })).toBeVisible();
   await page.locator(".clients-sidebar").getByRole("button", { name: "Usuarios", exact: true }).click();
   await page.getByLabel("Buscar usuarios", { exact: true }).fill(user.username);
-  await page.getByRole("button", { name: `Administrar ${user.username}`, exact: true }).click();
+  await page.getByRole("link", { name: `Administrar ${user.username}`, exact: true }).click();
   await page.getByRole("checkbox", { name, exact: true }).check();
   await page.getByRole("button", { name: "Guardar roles del usuario", exact: true }).click();
   await expect(page.getByText("Roles asignados y sesiones del usuario revocadas.", { exact: true })).toBeVisible();

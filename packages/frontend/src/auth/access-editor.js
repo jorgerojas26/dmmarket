@@ -367,42 +367,62 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
         onDirtyChange(rolesDirty || profileDirty || permissionsDirty);
     }, [rolesDirty, profileDirty, permissionsDirty, onDirtyChange]);
     return (
-        <>
-            {can('access.roles.read') && (
-                <LoadState
-                    error={roles.error || assignedRoles.error}
-                    loading={!roles.data || !assignedRoles.data}
-                    onRetry={() => {
-                        roles.mutate();
-                        assignedRoles.mutate();
-                    }}
-                >
-                    {can('access.roles.assign') ? (
-                        <RolesAssignment
-                            id={id}
-                            initial={assignedRoles.data?.data || []}
-                            roles={roles.data?.data || []}
-                            onSaved={async (data) => {
-                                await assignedRoles.mutate({ data }, false);
-                                await individual.mutate();
-                            }}
-                            onDirtyChange={setRolesDirty}
-                            onBusyChange={onBusyChange}
-                        />
-                    ) : (
-                        <section aria-label="Roles del usuario">
-                            <h3>Roles</h3>
-                            <ul>
-                                {(roles.data?.data || [])
-                                    .filter((role) => assignedRoles.data?.data.includes(role.id))
-                                    .map((role) => (
-                                        <li key={role.id}>{role.name}</li>
-                                    ))}
-                            </ul>
-                        </section>
-                    )}
-                </LoadState>
-            )}
+        <div className="access-user-assignments">
+            <div className="access-user-overview">
+                {can('access.roles.read') && (
+                    <LoadState
+                        error={roles.error || assignedRoles.error}
+                        loading={!roles.data || !assignedRoles.data}
+                        onRetry={() => {
+                            roles.mutate();
+                            assignedRoles.mutate();
+                        }}
+                    >
+                        {can('access.roles.assign') ? (
+                            <RolesAssignment
+                                id={id}
+                                initial={assignedRoles.data?.data || []}
+                                roles={roles.data?.data || []}
+                                onSaved={async (data) => {
+                                    await assignedRoles.mutate({ data }, false);
+                                    await individual.mutate();
+                                }}
+                                onDirtyChange={setRolesDirty}
+                                onBusyChange={onBusyChange}
+                            />
+                        ) : (
+                            <section className="access-assignment" aria-label="Roles del usuario">
+                                <h3>Roles</h3>
+                                <ul>
+                                    {(roles.data?.data || [])
+                                        .filter((role) => assignedRoles.data?.data.includes(role.id))
+                                        .map((role) => (
+                                            <li key={role.id}>{role.name}</li>
+                                        ))}
+                                </ul>
+                            </section>
+                        )}
+                    </LoadState>
+                )}
+                {can('access.profile.read') && (
+                    <LoadState error={profile.error} loading={profile.data === undefined} onRetry={profile.mutate}>
+                        {can('access.profile.update') ? (
+                            <CommercialProfileForm
+                                id={id}
+                                initial={profile.data}
+                                onSaved={(data) => profile.mutate(data, false)}
+                                onDirtyChange={setProfileDirty}
+                                onBusyChange={onBusyChange}
+                            />
+                        ) : (
+                            <section className="access-assignment" aria-label="Identidad comercial de la cuenta">
+                                <h3>Perfil comercial</h3>
+                                <p>{profile.data?.name || 'Sin perfil comercial'}</p>
+                            </section>
+                        )}
+                    </LoadState>
+                )}
+            </div>
             {can('access.roles.read') && (
                 <LoadState error={individual.error} loading={!individual.data} onRetry={individual.mutate}>
                     {individual.data && (
@@ -416,24 +436,6 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
                     )}
                 </LoadState>
             )}
-            {can('access.profile.read') && (
-                <LoadState error={profile.error} loading={profile.data === undefined} onRetry={profile.mutate}>
-                    {can('access.profile.update') ? (
-                        <CommercialProfileForm
-                            id={id}
-                            initial={profile.data}
-                            onSaved={(data) => profile.mutate(data, false)}
-                            onDirtyChange={setProfileDirty}
-                            onBusyChange={onBusyChange}
-                        />
-                    ) : (
-                        <section aria-label="Identidad comercial de la cuenta">
-                            <h3>Perfil comercial</h3>
-                            <p>{profile.data?.name || 'Sin perfil comercial'}</p>
-                        </section>
-                    )}
-                </LoadState>
-            )}
-        </>
+        </div>
     );
 }

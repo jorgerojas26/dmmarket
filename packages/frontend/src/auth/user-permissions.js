@@ -48,47 +48,49 @@ export default function UserPermissions({ id, initial, onSaved, onDirtyChange, o
             </p>
             <LoadState error={catalog.error} loading={!catalog.data} onRetry={catalog.mutate}>
                 <div className="access-role-editor">
-                    <RoleModules
-                        modules={MODULES}
-                        catalog={catalog.data?.data || []}
-                        grants={{ ...inherited, ...Object.fromEntries(selected.map((key) => [key, true])) }}
-                        selected={selectedModule}
-                        onSelect={setSelectedModule}
-                        busy={busy}
-                    />
-                    <ManagementForm
-                        button="Guardar permisos adicionales"
-                        readOnly={!can('access.roles.assign')}
-                        disabled={!changed}
-                        onBusyChange={(value) => {
-                            setBusy(value);
-                            onBusyChange(value);
-                        }}
-                        onSubmit={async () => {
-                            await authRequest(
-                                `users/${id}/permissions`,
-                                { permissions: selected.map((capability) => ({ capability })) },
-                                'PUT',
-                            );
-                            setSaved({ ...grants });
-                            await onSaved();
-                            setMessage('Permisos adicionales guardados. Se cerraron las sesiones del usuario.');
-                            await check(false);
-                        }}
-                    >
-                        <RolePermissionMatrix
-                            module={module}
+                    <div className="access-role-layout">
+                        <RoleModules
+                            modules={MODULES}
                             catalog={catalog.data?.data || []}
-                            grants={grants}
-                            inherited={inherited}
-                            setGrants={setGrants}
+                            grants={{ ...inherited, ...Object.fromEntries(selected.map((key) => [key, true])) }}
+                            selected={selectedModule}
+                            onSelect={setSelectedModule}
+                            busy={busy}
                         />
-                        {message && (
-                            <p role="status" className="access-success">
-                                {message}
-                            </p>
-                        )}
-                    </ManagementForm>
+                        <ManagementForm
+                            button="Guardar permisos adicionales"
+                            readOnly={!can('access.roles.assign')}
+                            disabled={!changed}
+                            onBusyChange={(value) => {
+                                setBusy(value);
+                                onBusyChange(value);
+                            }}
+                            onSubmit={async () => {
+                                await authRequest(
+                                    `users/${id}/permissions`,
+                                    { permissions: selected.map((capability) => ({ capability })) },
+                                    'PUT',
+                                );
+                                setSaved({ ...grants });
+                                await onSaved();
+                                setMessage('Permisos adicionales guardados. Se cerraron las sesiones del usuario.');
+                                await check(false);
+                            }}
+                        >
+                            <RolePermissionMatrix
+                                module={module}
+                                catalog={catalog.data?.data || []}
+                                grants={grants}
+                                inherited={inherited}
+                                setGrants={setGrants}
+                            />
+                            {message && (
+                                <p role="status" className="access-success">
+                                    {message}
+                                </p>
+                            )}
+                        </ManagementForm>
+                    </div>
                 </div>
             </LoadState>
         </section>

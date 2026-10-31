@@ -222,6 +222,10 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
     }),
   );
   router.get(
+    "/users/:id",
+    handler(async (req, res) => res.json(await directory.user(req.sessionID, req.params.id))),
+  );
+  router.get(
     "/roles",
     handler(async (req, res) => {
       const roles = await sessions.withSession(req.sessionID, { readOnly: true }, async ({ access, transaction }) => {

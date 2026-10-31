@@ -2,6 +2,7 @@ import { requiresCommercialProfile } from '@dmmarket/permissions';
 import { useEffect, useRef, useState } from 'react';
 import Dropdown from 'react-bootstrap/Dropdown';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { Assignments } from './access-editor';
@@ -269,112 +270,157 @@ function UserOperation({ user, operation, onClose, onDone }) {
     );
 }
 
-function UserPanel({ user, onClose, onDone, onDirtyChange }) {
+function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, message }) {
     const { session, can } = useAuth();
+    const heading = useRef(null);
     const [dirty, setDirty] = useState(false);
     const [busy, setBusy] = useState(false);
     const [operation, setOperation] = useState(null);
+    const [revision, setRevision] = useState(0);
     const { requestClose, confirmation } = useDiscardChanges(dirty);
+    const changeBusy = (value) => {
+        setBusy(value);
+        onBusyChange(value);
+    };
+    const beginOperation = (next) =>
+        requestClose(() => {
+            setRevision((value) => value + 1);
+            setDirty(false);
+            setOperation(next);
+        });
+    useEffect(() => {
+        heading.current?.focus();
+    }, [user.id]);
     useEffect(() => {
         onDirtyChange(dirty);
         return () => onDirtyChange(false);
     }, [dirty, onDirtyChange]);
     return (
         <>
-            <AccessDialog
-                title={`Administrar ${user.username}`}
-                panel
-                onClose={onClose}
-                dirty={dirty}
-                busy={busy || Boolean(operation)}
-            >
-                <div className="access-user-summary">
-                    <span className="access-avatar" aria-hidden="true">
-                        {(user.display_name || user.username).slice(0, 1).toLocaleUpperCase()}
-                    </span>
-                    <div>
-                        <h3>{user.display_name}</h3>
-                        <p>
-                            @{user.username}
-                            {user.id === session.user.id ? ' · Tu cuenta' : ''}
-                        </p>
-                    </div>
-                    <span className={`access-status ${Number(user.enabled) ? 'is-enabled' : ''}`}>
-                        {Number(user.enabled) ? 'Habilitado' : 'Deshabilitado'}
-                    </span>
-                </div>
-                {(can('access.users') || can('access.recover')) && (
-                    <section className="access-account-actions" aria-label="Acciones de la cuenta">
-                        <div className="access-inline-actions">
-                            {can('access.recover') && user.id !== session.user.id && (
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-light"
-                                    disabled={busy}
-                                    onClick={() => requestClose(() => setOperation('reset'))}
-                                >
-                                    Recuperar acceso
-                                </button>
-                            )}
-                            {can('access.users') && (
-                                <button
-                                    type="button"
-                                    className={`btn ${Number(user.enabled) ? 'btn-outline-danger' : 'btn-outline-light'}`}
-                                    disabled={busy || user.id === session.user.id}
-                                    onClick={() =>
-                                        requestClose(() => setOperation(Number(user.enabled) ? 'disable' : 'enable'))
-                                    }
-                                >
-                                    {Number(user.enabled) ? 'Deshabilitar usuario' : 'Habilitar usuario'}
-                                </button>
-                            )}
+            <section className="access-user-detail" aria-label={`Administrar ${user.username}`}>
+                <button type="button" className="access-back" onClick={onClose} disabled={busy || Boolean(operation)}>
+                    <span aria-hidden="true">←</span> Volver a usuarios
+                </button>
+                <header className="access-user-detail-header">
+                    <div className="access-user-summary">
+                        <span className="access-avatar" aria-hidden="true">
+                            {(user.display_name || user.username).slice(0, 1).toLocaleUpperCase()}
+                        </span>
+                        <div>
+                            <span className="access-eyebrow">Administrar usuario</span>
+                            <h2 ref={heading} tabIndex={-1}>
+                                {user.display_name}
+                            </h2>
+                            <p>
+                                @{user.username}
+                                {user.id === session.user.id ? ' · Tu cuenta' : ''}
+                            </p>
                         </div>
-                        {can('access.users') && user.id === session.user.id && (
-                            <p className="access-muted">No puedes deshabilitar tu propia cuenta.</p>
-                        )}
-                    </section>
+                        <span className={`access-status ${Number(user.enabled) ? 'is-enabled' : ''}`}>
+                            {Number(user.enabled) ? 'Habilitado' : 'Deshabilitado'}
+                        </span>
+                    </div>
+                    {(can('access.users') || can('access.recover')) && (
+                        <section className="access-user-actions" aria-label="Acciones de la cuenta">
+                            <div className="access-inline-actions">
+                                {can('access.recover') && user.id !== session.user.id && (
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-light"
+                                        disabled={busy || Boolean(operation)}
+                                        onClick={() => beginOperation('reset')}
+                                    >
+                                        Recuperar acceso
+                                    </button>
+                                )}
+                                {can('access.users') && (
+                                    <button
+                                        type="button"
+                                        className={`btn ${Number(user.enabled) ? 'btn-outline-danger' : 'btn-outline-light'}`}
+                                        disabled={busy || Boolean(operation) || user.id === session.user.id}
+                                        onClick={() => beginOperation(Number(user.enabled) ? 'disable' : 'enable')}
+                                    >
+                                        {Number(user.enabled) ? 'Deshabilitar usuario' : 'Habilitar usuario'}
+                                    </button>
+                                )}
+                            </div>
+                            {can('access.users') && user.id === session.user.id && (
+                                <p className="access-muted">No puedes deshabilitar tu propia cuenta.</p>
+                            )}
+                        </section>
+                    )}
+                </header>
+                {message && (
+                    <p role="status" className="access-success">
+                        {message}
+                    </p>
                 )}
-                <fieldset disabled={busy}>
-                    <Assignments id={user.id} onDirtyChange={setDirty} onBusyChange={setBusy} />
+                <fieldset disabled={busy || Boolean(operation)}>
+                    <Assignments key={revision} id={user.id} onDirtyChange={setDirty} onBusyChange={changeBusy} />
                 </fieldset>
                 {!can('access.roles.read') && !can('access.profile.read') && (
                     <p className="access-muted">
                         Desde aquí puedes administrar el estado y la recuperación de esta cuenta, según tus permisos.
                     </p>
                 )}
-            </AccessDialog>
+            </section>
             {operation && (
-                <UserOperation user={user} operation={operation} onClose={() => setOperation(null)} onDone={onDone} />
+                <UserOperation
+                    user={user}
+                    operation={operation}
+                    onClose={() => setOperation(null)}
+                    onDone={async (result) => {
+                        await onDone(result);
+                        setOperation(null);
+                    }}
+                />
             )}
             {confirmation}
         </>
     );
 }
 
-export default function Users({ onDirtyChange, creating, onCreate, onCancelCreate, onCreated }) {
+export default function Users({
+    onDirtyChange,
+    onBusyChange,
+    userId,
+    onReturn,
+    creating,
+    onCreate,
+    onCancelCreate,
+    onCreated,
+}) {
     const { can, session } = useAuth();
+    const listHeading = useRef(null);
+    const lastUser = useRef(null);
+    const userLink = useRef(null);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState('');
     const [state, setState] = useState('all');
     const [operation, setOperation] = useState(null);
-    const [selected, setSelected] = useState(null);
     const [credential, setCredential] = useState(null);
     const [message, setMessage] = useState('');
+    const detail = useSWR(userId ? `/api/auth/users/${encodeURIComponent(userId)}` : null, fetcher);
     const { data, error, mutate } = useSWR(
         `/api/auth/directory?page=${page}&search=${encodeURIComponent(search)}&state=${state}`,
         fetcher,
     );
+    useEffect(() => {
+        if (userId) lastUser.current = userId;
+        else if (lastUser.current) (userLink.current || listHeading.current)?.focus();
+    }, [userId]);
     const done = async (result) => {
         if (creating) onCreated();
-        setSelected(null);
         setOperation(null);
         if (result.temporaryPassword) {
             setCredential(result);
-            setSearch(result.username);
-            setState('all');
-            setPage(1);
+            if (!userId) {
+                setSearch(result.username);
+                setState('all');
+                setPage(1);
+            }
         } else {
-            setPage(1);
+            if (!userId) setPage(1);
             setMessage(
                 result.enabled
                     ? 'Usuario habilitado. Ya puede volver a ingresar.'
@@ -382,13 +428,51 @@ export default function Users({ onDirtyChange, creating, onCreate, onCancelCreat
             );
         }
         await mutate();
+        if (userId) await detail.mutate();
     };
+    if (userId)
+        return (
+            <>
+                {detail.data && !detail.error ? (
+                    <UserDetail
+                        key={userId}
+                        user={detail.data}
+                        onClose={onReturn}
+                        onDone={done}
+                        onDirtyChange={onDirtyChange}
+                        onBusyChange={onBusyChange}
+                        message={message}
+                    />
+                ) : (
+                    <section className="access-user-detail" aria-label="Detalle de usuario">
+                        <button type="button" className="access-back" onClick={onReturn}>
+                            <span aria-hidden="true">←</span> Volver a usuarios
+                        </button>
+                        {[400, 403, 404].includes(detail.error?.status) ? (
+                            <div className="access-empty" role="alert">
+                                <h2>{detail.error.status === 403 ? 'Acceso no permitido' : 'Usuario no disponible'}</h2>
+                                <p>
+                                    {detail.error.status === 403
+                                        ? 'No tienes permiso para consultar esta cuenta.'
+                                        : 'La cuenta no existe o ya no está disponible.'}
+                                </p>
+                            </div>
+                        ) : (
+                            <LoadState error={detail.error} loading={!detail.data} onRetry={detail.mutate} />
+                        )}
+                    </section>
+                )}
+                {credential && <TemporaryCredential credential={credential} onClose={() => setCredential(null)} />}
+            </>
+        );
     if (creating) return <CreateUser onClose={onCancelCreate} onCreated={done} onDirtyChange={onDirtyChange} />;
     return (
         <>
             <header className="access-header">
                 <div>
-                    <h2>Administración de usuarios</h2>
+                    <h2 ref={listHeading} tabIndex={-1}>
+                        Administración de usuarios
+                    </h2>
                 </div>
                 {can('access.users.create') && can('access.roles.assign') && (
                     <button
@@ -454,15 +538,16 @@ export default function Users({ onDirtyChange, creating, onCreate, onCancelCreat
                                     {data?.data.map((user) => (
                                         <tr key={user.id}>
                                             <td>
-                                                <button
-                                                    type="button"
+                                                <Link
+                                                    ref={user.id === lastUser.current ? userLink : null}
                                                     className="access-user-link"
                                                     aria-label={`Administrar ${user.username}`}
-                                                    onClick={() => setSelected(user)}
+                                                    to={`/acceso/usuarios/${user.id}`}
+                                                    onClick={() => setMessage('')}
                                                 >
                                                     <strong>{user.display_name}</strong>
                                                     <span>@{user.username}</span>
-                                                </button>
+                                                </Link>
                                             </td>
                                             {can('access.roles') && (
                                                 <td>
@@ -500,8 +585,9 @@ export default function Users({ onDirtyChange, creating, onCreate, onCancelCreat
                                                             popperConfig={{ strategy: 'fixed' }}
                                                         >
                                                             <Dropdown.Item
-                                                                as="button"
-                                                                onClick={() => setSelected(user)}
+                                                                as={Link}
+                                                                to={`/acceso/usuarios/${user.id}`}
+                                                                onClick={() => setMessage('')}
                                                             >
                                                                 Administrar acceso
                                                             </Dropdown.Item>
@@ -571,18 +657,6 @@ export default function Users({ onDirtyChange, creating, onCreate, onCancelCreat
                     {data && <Pagination page={page} total={data.total} onChange={setPage} />}
                 </LoadState>
             </div>
-            {selected && (
-                <UserPanel
-                    key={selected.id}
-                    user={selected}
-                    onClose={() => {
-                        setSelected(null);
-                        mutate();
-                    }}
-                    onDone={done}
-                    onDirtyChange={onDirtyChange}
-                />
-            )}
             {operation && (
                 <UserOperation
                     user={operation.user}

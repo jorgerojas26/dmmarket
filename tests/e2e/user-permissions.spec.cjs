@@ -21,7 +21,7 @@ for (const width of [390, 1440])
     await verified;
     await expect(page.getByRole("button", { name: "Menú de cuenta", exact: true, includeHidden: true })).toBeAttached();
     await page.goto(`${environment.origin}/acceso`);
-    await page.getByRole("button", { name: `Administrar ${user.username}`, exact: true }).click();
+    await page.getByRole("link", { name: `Administrar ${user.username}`, exact: true }).click();
     const section = page.getByRole("region", { name: "Permisos adicionales", exact: true });
     await section.getByRole("button", { name: "Inventario", exact: true }).click();
     const inherited = section
