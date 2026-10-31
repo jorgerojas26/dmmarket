@@ -74,13 +74,19 @@ async function audit(transaction, query) {
       action: "e.action",
       outcome: "e.outcome",
       reason: "e.reason",
+      details: "e.details",
       occurredMs: "e.occurred_ms",
     })
     .orderBy("e.occurred_ms", "desc")
     .orderBy("e.id", "desc")
     .limit(query.limit)
     .offset((query.page - 1) * query.limit);
-  return { data, total: Number(total), page: query.page, limit: query.limit };
+  return {
+    data: data.map((row) => ({ ...row, details: row.details === null ? null : JSON.parse(row.details) })),
+    total: Number(total),
+    page: query.page,
+    limit: query.limit,
+  };
 }
 
 module.exports = { audit, options, fail };

@@ -8,7 +8,10 @@ async function administrator(page, environment) {
   const user = await environment.seedUser({ permissions, enrolled: true });
   await login(page, environment, user);
   await page.getByRole("textbox", { name: "Código MFA", exact: true }).fill(await environment.token(user.secret));
+  const verified = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/auth/mfa");
   await page.getByRole("button", { name: "Verificar código", exact: true }).click();
+  expect((await verified).status()).toBe(200);
+  await expect(page.getByRole("button", { name: "Menú de cuenta", exact: true })).toBeVisible();
 }
 
 test("la matriz usa permisos binarios y un permiso explícito de datos de otros vendedores", async ({

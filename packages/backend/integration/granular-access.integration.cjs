@@ -215,7 +215,7 @@ test("clientes vinculados no incluyen identidades ni RIF de clientes ajenos", as
 });
 
 test("consulta global de clientes incluye la identificación de los registros autorizados", async () => {
-  const client = await actor([grant("clients.directory.read"), grant("clients.directory.personal", "assigned")]);
+  const client = await actor([grant("clients.directory.read"), grant("clients.directory.personal")]);
   const response = await client.request(`/api/clients/list?${range}`);
   expect(response.status).toBe(200);
   expect(response.body.data.find((row) => row.IdCliente === "C")).toHaveProperty("rif", "PRIVATE-IDENTIFICATION");

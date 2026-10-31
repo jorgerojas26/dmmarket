@@ -21,7 +21,7 @@ async function grants(id) {
 }
 async function matrix() {
   const rows = await roles();
-  expect(rows).toHaveLength(5);
+  expect(rows).toHaveLength(7);
   expect(rows.map((row) => row.name).sort()).toEqual(Object.keys(expected).sort());
   for (const row of rows)
     expect(await grants(row.id)).toEqual(
@@ -48,7 +48,7 @@ beforeEach(async () => {
     await environment.db(table).delete();
 });
 
-test("seed crea exactamente los cinco roles acordados sin cuentas, credenciales ni asignaciones", async () => {
+test("seed crea exactamente los siete roles acordados sin cuentas, credenciales ni asignaciones", async () => {
   await seed(environment.db);
   const created = await matrix();
   for (const table of [
@@ -59,7 +59,7 @@ test("seed crea exactamente los cinco roles acordados sin cuentas, credenciales 
   ])
     expect(Number((await environment.db(table).count("* as n").first()).n)).toBe(0);
   const events = await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created");
-  expect(events).toHaveLength(5);
+  expect(events).toHaveLength(7);
   expect(events.every((row) => row.actor_id === null && created.some((role) => role.id === row.target_role_id))).toBe(
     true,
   );
@@ -77,18 +77,19 @@ test("Administrador no recibe técnicos, Consultor no recibe finanzas y Superusu
     "clients.receivables.void",
     "clients.receivables.close",
     "sales.dashboard.financial",
+    "access.recovery.execute",
+    "audit.events.read",
+    "sellers.commissions.update",
+    "clients.receivables.reopen",
   ])
     expect(direction.hasGlobal(cap)).toBe(true);
   for (const cap of [
-    "access.recovery.execute",
     "settings.backups.read",
     "settings.backups.create",
     "settings.updates.read",
     "settings.updates.execute",
     "settings.rates.sync",
     "settings.cache.clear",
-    "audit.events.read",
-    "sellers.commissions.update",
   ])
     expect(direction.hasGlobal(cap)).toBe(false);
   const superuser = await access("Superusuario");
@@ -96,7 +97,8 @@ test("Administrador no recibe técnicos, Consultor no recibe finanzas y Superusu
   const operational = await access("Consultor");
   expect(operational.canRecord("sales.dashboard.read", "B")).toBe(true);
   expect(operational.hasGlobal("sales.dashboard.financial")).toBe(false);
-  expect(operational.hasGlobal("sales.breakdown.export")).toBe(false);
+  expect(operational.hasGlobal("sales.breakdown.read")).toBe(true);
+  expect(operational.hasGlobal("sales.breakdown.financial")).toBe(false);
   expect(operational.privileged).toBe(false);
   const collection = await access("Cobranza");
   expect(collection.hasGlobal("clients.receivables.payment")).toBe(true);
@@ -104,23 +106,17 @@ test("Administrador no recibe técnicos, Consultor no recibe finanzas y Superusu
   expect(collection.privileged).toBe(true);
 });
 
-test("repetir seed preserva IDs, nombres personalizados y permisos vaciados o modificados", async () => {
+test("repetir seed restablece las definiciones seed y no revoca sesiones cuando no hay cambios", async () => {
   await seed(environment.db);
-  const rows = await roles(),
-    id = rows.find((row) => row.name === "Administrador").id,
-    empty = rows.find((row) => row.name === "Cobranza").id;
+  const rows = await roles();
+  const id = rows.find((row) => row.name === "Administrador").id;
   await environment.db("dmmarket_auth_roles").where("id", id).update({ name: "Administrador personalizada" });
-  await environment.db("dmmarket_auth_role_capabilities").whereIn("role_id", [id, empty]).delete();
-  await environment.db("dmmarket_auth_role_capabilities").insert({ role_id: id, capability: "settings.rates.read" });
-  const before = await roles(),
-    permissions = await environment.db("dmmarket_auth_role_capabilities").orderBy("role_id").orderBy("capability");
+  await environment.db("dmmarket_auth_role_capabilities").where("role_id", id).delete();
   await seed(environment.db);
+  await matrix();
+  const before = await environment.db("dmmarket_auth_events").orderBy("id");
   await seed(environment.db);
-  expect(await roles()).toEqual(before);
-  expect(await environment.db("dmmarket_auth_role_capabilities").orderBy("role_id").orderBy("capability")).toEqual(
-    permissions,
-  );
-  expect(await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created")).toHaveLength(5);
+  expect(await environment.db("dmmarket_auth_events").orderBy("id")).toEqual(before);
 });
 
 test("usuarios, sesiones y asignaciones existentes no se modifican al instalar ni repetir", async () => {
@@ -147,7 +143,7 @@ test("usuarios, sesiones y asignaciones existentes no se modifican al instalar n
 test("dos ejecuciones concurrentes no duplican roles, permisos ni eventos", async () => {
   await Promise.all([seed(environment.db), seed(environment.db)]);
   await matrix();
-  expect(await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created")).toHaveLength(5);
+  expect(await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created")).toHaveLength(7);
 });
 
 test("colisión con nombre de rol propio detiene toda la siembra sin adoptar ni sobrescribir", async () => {

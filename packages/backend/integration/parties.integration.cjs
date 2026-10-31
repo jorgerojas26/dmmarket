@@ -233,7 +233,7 @@ test("directorios analíticos no fusionan identidades históricas por la colaci�
       grant("sellers.read"),
       grant("clients.read"),
       grant("sales.read"),
-      grant("sellers.personal", "assigned"),
+      grant("sellers.personal"),
     ]);
     const sellers = await all.request("/api/sellers/list?from=2026-04-01&to=2026-04-30");
     expect(sellers.status).toBe(200);

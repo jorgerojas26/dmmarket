@@ -49,7 +49,7 @@ test("MySQL de Compose persiste todas las tablas propias en InnoDB/utf8_bin", as
     .db("information_schema.TABLES")
     .whereRaw("TABLE_SCHEMA = DATABASE()")
     .select("TABLE_NAME", "ENGINE", "TABLE_COLLATION");
-  expect(rows).toHaveLength(migration.tables.length + 4);
+  expect(rows).toHaveLength(migration.tables.length + 5);
   expect(
     rows.every(
       (row) =>

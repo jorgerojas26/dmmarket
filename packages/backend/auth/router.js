@@ -258,6 +258,16 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
     handler(async (req, res) => res.json(await administration.setRoles(req.sessionID, req.params.id, req.body))),
   );
   router.get(
+    "/users/:id/permissions",
+    handler(async (req, res) => res.json(await administration.userPermissions(req.sessionID, req.params.id))),
+  );
+  router.put(
+    "/users/:id/permissions",
+    handler(async (req, res) =>
+      res.json(await administration.setUserPermissions(req.sessionID, req.params.id, req.body)),
+    ),
+  );
+  router.get(
     "/users/:id/commercial-profile",
     handler(async (req, res) => res.json(await administration.profile(req.sessionID, req.params.id))),
   );

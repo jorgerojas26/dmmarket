@@ -26,6 +26,8 @@ const params = (filters) => {
 export const fetchReceivableBanks = () => request('/banks');
 export const fetchReceivables = (filters) => request(`?${params(filters)}`);
 export const fetchReceivableClient = (id, filters) => request(`/${encodeURIComponent(id)}?${params(filters)}`);
+export const fetchReceivableInvoice = (clientId, invoiceId) =>
+    request(`/${encodeURIComponent(clientId)}/invoices/${encodeURIComponent(invoiceId)}`);
 const post = (id, endpoint, body) =>
     request(`/${encodeURIComponent(id)}/${endpoint}`, {
         method: 'POST',

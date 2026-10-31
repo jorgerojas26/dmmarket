@@ -3,6 +3,7 @@ const { CAPABILITIES, validateGrants } = require("./capabilities");
 const { requiresCommercialProfile, validateCommercialProfile, commercialProfile } = require("./commercial-profile");
 const {
   assertAuthSchema,
+  grantsFor,
   appendEvent,
   invalidateUser,
   assertAdministratorRemains,
@@ -143,6 +144,58 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         return commercialProfile(connection, id);
       });
     },
+    userPermissions(sid, id) {
+      return administer(sid, "access.roles.read", false, async (connection) => {
+        if (!(await connection("dmmarket_auth_users").where("id", identifier(id)).first()))
+          fail(404, "La cuenta no está disponible.");
+        return {
+          permissions: await connection("dmmarket_auth_user_capabilities")
+            .where("user_id", id)
+            .select("capability")
+            .orderBy("capability"),
+          inherited: await connection("dmmarket_auth_role_capabilities as p")
+            .join("dmmarket_auth_user_roles as r", "r.role_id", "p.role_id")
+            .where("r.user_id", id)
+            .distinct("p.capability")
+            .orderBy("p.capability"),
+        };
+      });
+    },
+    setUserPermissions(sid, id, input) {
+      const grants = permissions(input.permissions).sort((a, b) => a.capability.localeCompare(b.capability));
+      return administer(sid, "access.roles.assign", true, async (connection, actorId) => {
+        await target(connection, "dmmarket_auth_users", id);
+        const previous = await connection("dmmarket_auth_user_capabilities")
+          .where("user_id", id)
+          .orderBy("capability")
+          .pluck("capability");
+        const selected = grants.map((grant) => grant.capability);
+        const added = selected.filter((capability) => !previous.includes(capability));
+        const removed = previous.filter((capability) => !selected.includes(capability));
+        if (!added.length && !removed.length) return { id, permissions: grants };
+        await connection("dmmarket_auth_user_capabilities").where("user_id", id).delete();
+        if (grants.length)
+          await connection("dmmarket_auth_user_capabilities").insert(
+            grants.map((grant) => ({ user_id: id, ...grant })),
+          );
+        if (
+          requiresCommercialProfile(await grantsFor(connection, id)) &&
+          !(await connection("dmmarket_auth_commercial_profiles").where("user_id", id).first())
+        )
+          fail(400, "Los permisos seleccionados requieren un perfil comercial individual.");
+        await assertAdministratorRemains(connection);
+        const occurredMs = now();
+        await invalidateUser(connection, id, occurredMs, "user-permissions-changed");
+        await appendEvent(connection, {
+          actorId,
+          targetId: id,
+          action: "auth.user_permissions_changed",
+          details: { added, removed },
+          occurredMs,
+        });
+        return { id, permissions: grants };
+      });
+    },
     setRoles(sid, id, input) {
       const ids = roleIds(input.roleIds);
       const reason = optionalReason(input.reason);
@@ -155,8 +208,11 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
               await connection("dmmarket_auth_role_capabilities").whereIn("role_id", ids).select("capability"),
             )
           : [];
+        const individual = await connection("dmmarket_auth_user_capabilities")
+          .where("user_id", id)
+          .select("capability");
         if (
-          requiresCommercialProfile(grants) &&
+          requiresCommercialProfile([...grants, ...individual]) &&
           !(await connection("dmmarket_auth_commercial_profiles").where("user_id", id).first())
         )
           fail(400, "Los roles seleccionados requieren un perfil comercial individual.");
@@ -177,12 +233,9 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         await target(connection, "dmmarket_auth_users", id);
         const identity = await validateCommercialProfile(connection, input.sellerId, id);
         if (identity === null) {
-          const grants = await connection("dmmarket_auth_role_capabilities as p")
-            .join("dmmarket_auth_user_roles as r", "r.role_id", "p.role_id")
-            .where("r.user_id", id)
-            .select("p.capability");
+          const grants = await grantsFor(connection, id);
           if (requiresCommercialProfile(grants))
-            fail(409, "Retira primero los roles que requieren esta identidad comercial.");
+            fail(409, "Retira primero los roles o permisos individuales que requieren esta identidad comercial.");
         }
         await connection("dmmarket_auth_commercial_profiles").where("user_id", id).delete();
         if (identity)

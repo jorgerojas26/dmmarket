@@ -4,6 +4,7 @@ const { createReceivablesService } = require("../receivables");
 const { requireReceivables, requireReceivablesOperation } = require("../controllers/receivables-policy");
 const { assertWritableReceivables } = require("../receivables-storage");
 const { appendEvent } = require("../auth/identity");
+const { invoiceDetail } = require("../controllers/sales");
 
 function options(input, keys) {
   if (
@@ -38,9 +39,9 @@ function createReceivablesRoutes({ sessions, security }) {
             db: transaction,
             personal: access.hasGlobal("personal"),
             referenceRate: access.hasGlobal("settings.rates.read"),
-            canReadSale: (sellerId) => access.canRecord("clients.documents.read", sellerId),
+            canReadSale: () => true,
           });
-          return work(service, req, query, transaction);
+          return work(service, req, query, transaction, access);
         }),
       );
     } catch (error) {
@@ -77,6 +78,22 @@ function createReceivablesRoutes({ sessions, security }) {
       (service, req, query) => service.detail(clientId(req.params.clientId), query),
       ["page", "timelinePage", "documents"],
     ),
+  );
+  router.get(
+    "/receivables/:clientId/invoices/:invoiceId",
+    handle(async (_service, req, _query, transaction, access) => {
+      const id = clientId(req.params.clientId);
+      const invoiceId = req.params.invoiceId;
+      if (typeof invoiceId !== "string" || !invoiceId || invoiceId.length > 128)
+        throw Object.assign(new Error("Factura no válida."), { status: 400 });
+      const document = await transaction("cxc_documentos")
+        .whereRaw("BINARY IdCliente = ?", [id])
+        .whereRaw("BINARY IdFactura = ?", [invoiceId])
+        .first("IdDocumento");
+      if (!document) throw Object.assign(new Error("Factura no disponible en esta cuenta."), { status: 404 });
+      const result = await invoiceDetail(transaction, access, { showNoe: "false", clientId: id }, invoiceId);
+      return result;
+    }, []),
   );
   router.use("/receivables", security.csrfProtection);
   for (const [endpoint, commit] of [

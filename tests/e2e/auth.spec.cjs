@@ -905,7 +905,7 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
     await setNoe(page, noe, environment);
     await expect(panel.getByRole("cell", { name: "Producto reciente", exact: true })).toBeVisible();
     await expect(panel.getByRole("cell", { name: "2026-06-02", exact: true })).toBeVisible();
-    await expect(panel.getByRole("columnheader", { name: "Valor inventario", exact: true }).first()).toBeVisible();
+    await expect(panel.getByRole("columnheader", { name: "Valor inventario", exact: true })).toHaveCount(0);
     await expect(
       panel.getByRole("table").first().getByRole("cell", { name: "Producto reciente", exact: true }),
     ).toHaveCount(0);
@@ -933,7 +933,7 @@ test("Pareto original de compras sin vender exige lectura global y oculta invent
   await page.getByRole("button", { name: "Compras sin vender", exact: true }).click();
   await expect(page.getByRole("cell", { name: "Producto sin vender", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "$200,00", exact: true })).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Valor inventario", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Valor inventario", exact: true })).toHaveCount(0);
   await expect(page.getByRole("cell", { name: "Producto maduro", exact: true })).toHaveCount(0);
 });
 

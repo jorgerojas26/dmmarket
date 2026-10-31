@@ -1,3 +1,4 @@
+import { CAPABILITIES, MODULES } from '@dmmarket/permissions';
 import DateRangePicker from 'components/DateRangePicker';
 import useSWR from 'hooks/swr-wrapper';
 import { useEffect, useState } from 'react';
@@ -61,10 +62,41 @@ function EventDetail({ event, onClose, onFilter }) {
                         {event.roleId && <code>{event.roleId}</code>}
                     </dd>
                 </div>
-                <div>
-                    <dt>{reference ? 'Referencia de operación' : 'Motivo registrado'}</dt>
-                    <dd className="audit-reason">{event.reason || 'Sin motivo registrado'}</dd>
-                </div>
+                {event.details &&
+                    ['added', 'removed'].map((key) => (
+                        <div key={key}>
+                            <dt>{key === 'added' ? 'Permisos añadidos' : 'Permisos retirados'}</dt>
+                            <dd>
+                                {event.details[key]?.length ? (
+                                    <ul>
+                                        {event.details[key].map((capability) => {
+                                            const entry = CAPABILITIES[capability];
+                                            const module =
+                                                entry && MODULES.find((module) => module.key === entry.module);
+                                            const resource = module?.resources.find(
+                                                (resource) => resource.resource === entry.resource,
+                                            );
+                                            return (
+                                                <li key={capability}>
+                                                    {entry
+                                                        ? `${module.label} / ${resource.label} · ${entry.label}`
+                                                        : capability}
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                ) : (
+                                    'Ninguno'
+                                )}
+                            </dd>
+                        </div>
+                    ))}
+                {(!event.details || event.reason) && (
+                    <div>
+                        <dt>{reference ? 'Referencia de operación' : 'Motivo registrado'}</dt>
+                        <dd className="audit-reason">{event.reason || 'Sin motivo registrado'}</dd>
+                    </div>
+                )}
             </dl>
             <p className="access-muted audit-detail-note">
                 Los nombres corresponden a los registros actuales. Los identificadores permiten reconocer las cuentas y

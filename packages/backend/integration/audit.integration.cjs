@@ -80,6 +80,7 @@ test("rango inclusivo, orden estable y páginas conservan el total filtrado", as
       "actorId",
       "actorName",
       "actorUsername",
+      "details",
       "id",
       "occurredMs",
       "outcome",

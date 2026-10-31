@@ -50,6 +50,7 @@ test("migra identidades únicas y roles uniformes sin modificar ventas, credenci
   expect(await environment.db("dmmarket_auth_users").orderBy("id")).toEqual(
     users.map((user) => ({ ...user, session_version: Number(user.session_version) + 1 })),
   );
+  await require("../migrations/20261107_individual_permissions").up(environment.db);
   await require("../auth/identity").assertAuthSchema(environment.db);
   const sellerRole = await environment.db("dmmarket_auth_roles").where("name", "Vendedor").first();
   expect(sellerRole).toBeTruthy();

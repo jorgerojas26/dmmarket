@@ -2,7 +2,7 @@ const OPERATION_CAPABILITIES = Object.freeze({
   payment: "payment",
   void: "void",
   close: "close",
-  reopen: "void",
+  reopen: "reopen",
 });
 
 function denied() {

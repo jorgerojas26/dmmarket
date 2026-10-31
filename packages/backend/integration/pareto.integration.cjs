@@ -74,11 +74,11 @@ test("cobertura financiera se exige sobre todo el conjunto, no basta una capacid
   }
 });
 
-test("la consulta del análisis incluye inventario actual; datos desconocidos no se convierten en cero", async () => {
+test("la valoración requiere permiso de inventario y los datos desconocidos no se convierten en cero", async () => {
   const onlyRead = await reader([...own, grant("inventory.read")]);
   const hidden = await onlyRead.request(`/api/dashboard/pareto?${range}&metric=rawProfit`);
-  expect(hidden.body.products.every((row) => Object.hasOwn(row, "inventoryValue"))).toBe(true);
-  const allowed = await reader([...own, grant("sales.pareto.inventory")]);
+  expect(hidden.body.products.every((row) => !Object.hasOwn(row, "inventoryValue"))).toBe(true);
+  const allowed = await reader([...own, grant("inventory.read"), grant("inventory.costs")]);
   const result = await allowed.request(`/api/dashboard/pareto?${range}&metric=rawProfit&sortBy=inventoryValue`);
   expect(result.body.products.map((row) => [row.productId, row.inventoryValue])).toEqual([
     ["Q", 500],

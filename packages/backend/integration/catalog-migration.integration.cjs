@@ -62,8 +62,9 @@ test("los roles base tienen todos sus permisos nuevos y no se convierten tablas 
       .map((grant) => grant.capability)
       .sort(),
   ).toEqual(
-    Object.keys(CAPABILITIES)
-      .filter((capability) => capability !== "sales.others.read")
+    require("../../../tests/support/legacy-seed-roles.json")
+      .find((role) => role.name === "Superusuario")
+      .permissions.filter((capability) => capability !== "sales.others.read")
       .map((capability) => capability.replace(/^access\.profile\./, "access.links."))
       .sort(),
   );

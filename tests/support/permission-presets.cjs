@@ -151,6 +151,14 @@ function legacyScenarioPermissions(permissions) {
 function scenarioPermissions(permissions) {
   const expanded = legacyScenarioPermissions(permissions);
   const result = expanded.map(({ capability }) => ({ capability }));
+  if (permissions.some((grant) => Object.hasOwn(grant, "scope"))) {
+    for (const grant of expanded) {
+      const definition = CAPABILITIES[grant.capability];
+      const personal = `${definition.resource}.personal`;
+      if (definition.action === "read" && definition.completeConsultation && CAPABILITIES[personal])
+        result.push({ capability: personal });
+    }
+  }
   if (
     expanded.some(
       (grant) =>

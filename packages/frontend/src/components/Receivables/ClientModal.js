@@ -406,7 +406,7 @@ export default function ClientModal({
                 )}
             </div>
         ) : null;
-    if (invoice) return <InvoiceDetailModal invoiceId={invoice.id} onClose={closeInvoice} />;
+    if (invoice) return <InvoiceDetailModal invoiceId={invoice.id} clientId={client.id} onClose={closeInvoice} />;
     return (
         <>
             <Modal

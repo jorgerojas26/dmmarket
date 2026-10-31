@@ -10,6 +10,7 @@ import { useAuth } from './context';
 import { Field } from './forms';
 import { RoleModules, RolePermissionMatrix } from './role-permissions';
 import { authRequest } from './transport';
+import UserPermissions from './user-permissions';
 
 function grantsFor(role) {
     return (role?.permissions || []).reduce((grants, grant) => {
@@ -357,12 +358,14 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
     const { can } = useAuth();
     const roles = useSWR(can('access.roles.read') ? '/api/auth/roles' : null, fetcher);
     const assignedRoles = useSWR(can('access.roles.read') ? `/api/auth/users/${id}/roles` : null, fetcher);
+    const individual = useSWR(can('access.roles.read') ? `/api/auth/users/${id}/permissions` : null, fetcher);
     const profile = useSWR(can('access.profile.read') ? `/api/auth/users/${id}/commercial-profile` : null, fetcher);
     const [rolesDirty, setRolesDirty] = useState(false);
     const [profileDirty, setProfileDirty] = useState(false);
+    const [permissionsDirty, setPermissionsDirty] = useState(false);
     useEffect(() => {
-        onDirtyChange(rolesDirty || profileDirty);
-    }, [rolesDirty, profileDirty, onDirtyChange]);
+        onDirtyChange(rolesDirty || profileDirty || permissionsDirty);
+    }, [rolesDirty, profileDirty, permissionsDirty, onDirtyChange]);
     return (
         <>
             {can('access.roles.read') && (
@@ -379,7 +382,10 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
                             id={id}
                             initial={assignedRoles.data?.data || []}
                             roles={roles.data?.data || []}
-                            onSaved={(data) => assignedRoles.mutate({ data }, false)}
+                            onSaved={async (data) => {
+                                await assignedRoles.mutate({ data }, false);
+                                await individual.mutate();
+                            }}
                             onDirtyChange={setRolesDirty}
                             onBusyChange={onBusyChange}
                         />
@@ -394,6 +400,19 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
                                     ))}
                             </ul>
                         </section>
+                    )}
+                </LoadState>
+            )}
+            {can('access.roles.read') && (
+                <LoadState error={individual.error} loading={!individual.data} onRetry={individual.mutate}>
+                    {individual.data && (
+                        <UserPermissions
+                            id={id}
+                            initial={individual.data}
+                            onSaved={() => individual.mutate()}
+                            onDirtyChange={setPermissionsDirty}
+                            onBusyChange={onBusyChange}
+                        />
                     )}
                 </LoadState>
             )}

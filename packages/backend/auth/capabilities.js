@@ -27,7 +27,6 @@ function createAccess(grants, commercialSellerId = null) {
   const rules = [];
   for (const capability of capabilities) {
     const definition = CAPABILITIES[capability];
-    if (definition.requiresAllSellers && !allSellers) continue;
     if (definition.sellerScoped && !allSellers) {
       if (identity) rules.push({ action: capability, subject: "record", conditions: { sellerId: identity } });
     } else rules.push({ action: capability, subject: "record" });
@@ -48,11 +47,7 @@ function createAccess(grants, commercialSellerId = null) {
     Object.hasOwn(CAPABILITIES, capability) &&
     dependencies(capability).every((key) => {
       const definition = CAPABILITIES[key];
-      return (
-        capabilities.has(key) &&
-        (!definition.sellerScoped || allSellers) &&
-        (!definition.requiresAllSellers || allSellers)
-      );
+      return capabilities.has(key) && (!definition.sellerScoped || allSellers);
     });
   const canRecord = (capability, recordSellerId) =>
     Object.hasOwn(CAPABILITIES, capability) &&

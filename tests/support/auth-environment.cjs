@@ -202,7 +202,11 @@ async function startEnvironment({
     await backend("./migrations/20261101_add_system_preferences").up(db);
     await backend("./migrations/20261028_add_report_settings").up(db);
     await backend("./migrations/20261102_add_user_mfa_requirement").up(db);
-    if (!legacyAuth) await backend("./migrations/20261105_individual_commercial_identity").up(db);
+    if (!legacyAuth) {
+      await backend("./migrations/20261105_individual_commercial_identity").up(db);
+      await backend("./migrations/20261106_minimum_operational_roles").up(db);
+      await backend("./migrations/20261107_individual_permissions").up(db);
+    }
     environment.db = db;
     environment.configuration = configuration;
     environment.mfa = createMfa(configuration.AUTH_MFA_KEY);

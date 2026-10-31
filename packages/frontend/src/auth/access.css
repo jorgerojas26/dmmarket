@@ -1192,3 +1192,30 @@
     background: #25344b;
     color: #9dc7ff;
 }
+
+.access-user-permissions .access-role-modules {
+    border-right: 0;
+    padding: 16px;
+}
+
+.access-user-permissions .access-role-module-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.access-user-permissions .access-role-module-list button {
+    padding: 8px;
+}
+
+.access-user-permissions .access-permission-table-scroll {
+    flex: none;
+}
+
+.access-user-permissions .access-success {
+    margin: 12px 16px;
+}
+
+.access-permission-source {
+    font-size: 10px;
+    line-height: 10px;
+    color: #9ca9bb;
+}

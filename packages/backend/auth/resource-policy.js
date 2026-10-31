@@ -124,9 +124,7 @@ function projectInformation(value, access, query = {}, parent = "") {
     (typeof value.authorizedPersonal === "boolean"
       ? value.authorizedPersonal
       : groupAllowed(access, "personal", query));
-  const inventory =
-    amounts &&
-    (!RESOURCES[access.resource]?.information.includes("inventory") || groupAllowed(access, "inventory", query));
+  const inventory = amounts && groupAllowed(access, "inventory", query);
   const output = {};
   for (const [key, item] of Object.entries(value)) {
     if (

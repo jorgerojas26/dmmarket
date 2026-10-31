@@ -33,6 +33,8 @@ async function prepareAccessSchema(configuration, { firstInstallation = false } 
     await require("./migrations/20261029_add_initial_setup_state").up(db);
     await require("./migrations/20261102_add_user_mfa_requirement").up(db);
     await require("./migrations/20261105_individual_commercial_identity").up(db);
+    await require("./migrations/20261106_minimum_operational_roles").up(db);
+    await require("./migrations/20261107_individual_permissions").up(db);
     await assertAuthSchema(db);
     await require("./migrations/20261030_rename_initial_superuser").up(db);
     await require("./seeds/001_default_roles").seed(db);

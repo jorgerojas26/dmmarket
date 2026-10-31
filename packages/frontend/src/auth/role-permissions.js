@@ -33,25 +33,36 @@ export function RoleModules({ modules, catalog, grants, selected, onSelect, busy
     );
 }
 
-function PermissionControl({ entry, module, resource, grants, setGrants }) {
+function PermissionControl({ entry, module, resource, grants, inherited, setGrants }) {
+    const fromRole = Boolean(inherited[entry.capability]);
+    const direct = Boolean(grants[entry.capability]);
     return (
         <div className="access-permission-control">
             <label className="access-permission-checkbox">
                 <input
                     type="checkbox"
                     aria-label={`${entry.label} · ${module.label} / ${resource.label}`}
-                    checked={Boolean(grants[entry.capability])}
+                    checked={direct || fromRole}
+                    disabled={fromRole && !direct}
+                    title={
+                        fromRole
+                            ? direct
+                                ? 'Por rol y adicional. Desmarcar retira solo el adicional.'
+                                : 'Concedido por rol'
+                            : undefined
+                    }
                     onChange={(event) => {
                         const enabled = event.target.checked;
                         setGrants((previous) => ({ ...previous, [entry.capability]: enabled }));
                     }}
                 />
             </label>
+            {fromRole && <span className="access-permission-source">{direct ? 'Rol + adicional' : 'Rol'}</span>}
         </div>
     );
 }
 
-export function RolePermissionMatrix({ module, catalog, grants, setGrants }) {
+export function RolePermissionMatrix({ module, catalog, grants, setGrants, inherited = {} }) {
     const entries = catalog.filter((entry) => entry.module === module.key);
     const labels = {
         read: 'Consulta',
@@ -140,6 +151,7 @@ export function RolePermissionMatrix({ module, catalog, grants, setGrants }) {
                                                         module={module}
                                                         resource={resource}
                                                         grants={grants}
+                                                        inherited={inherited}
                                                         setGrants={setGrants}
                                                     />
                                                 ) : (

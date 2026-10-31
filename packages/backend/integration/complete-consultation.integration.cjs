@@ -89,12 +89,12 @@ test("cartera de consulta incluye saldos, historial, detalle e impresión sin pe
     expect((await client.request("/api/receivables/C/preview", { method: "POST", body: { type } })).status).toBe(403);
 });
 
-test("abonar, anular y cerrar son acciones independientes", async () => {
-  for (const action of ["payment", "void", "close"]) {
+test("abonar, anular, cerrar y reabrir son acciones independientes", async () => {
+  for (const action of ["payment", "void", "close", "reopen"]) {
     const client = await actor([grant("clients.receivables.read"), grant(`clients.receivables.${action}`)]);
     for (const type of ["payment", "void", "close", "reopen"]) {
       const response = await client.request("/api/receivables/C/preview", { method: "POST", body: { type } });
-      const permitted = type === action || (type === "reopen" && action === "void");
+      const permitted = type === action;
       if (permitted) expect(response.status).not.toBe(403);
       else expect(response.status).toBe(403);
     }
@@ -126,7 +126,6 @@ test("el catálogo no ofrece controles redundantes ni fragmenta los análisis de
     "purchases.dashboard.amounts",
     "clients.receivables.amounts",
     "clients.receivables.export",
-    "clients.receivables.reopen",
     "sales.breakdown.amounts",
     "sales.breakdown.export",
   ])
@@ -136,6 +135,7 @@ test("el catálogo no ofrece controles redundantes ni fragmenta los análisis de
     "clients.dashboard.financial",
     "sales.dispatch.amounts",
     "inventory.stock.amounts",
+    "clients.receivables.reopen",
   ])
     expect(Object.hasOwn(CAPABILITIES, key)).toBe(true);
 });

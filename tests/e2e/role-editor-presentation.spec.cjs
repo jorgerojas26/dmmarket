@@ -187,7 +187,7 @@ for (const width of [390, 1440]) {
       await expect(table.getByRole("columnheader", { name: label, exact: true })).toBeVisible();
     for (const [name, count] of [
       ["Dashboard", 2],
-      ["Desglose", 2],
+      ["Desglose", 3],
       ["Despacho", 4],
     ]) {
       const resource = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
@@ -195,7 +195,7 @@ for (const width of [390, 1440]) {
       await expect(resource.getByRole("combobox")).toHaveCount(0);
     }
     await expect(table.getByRole("switch")).toHaveCount(0);
-    await expect(table.getByRole("cell", { name: "No aplica", exact: true })).toHaveCount(7);
+    await expect(table.getByRole("cell", { name: "No aplica", exact: true })).toHaveCount(6);
     if (width > 1100) {
       expect(await table.evaluate((element) => element.scrollWidth <= element.parentElement.clientWidth)).toBe(true);
     }

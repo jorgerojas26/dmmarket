@@ -21,11 +21,11 @@ const DEFINITIONS = [
     "clients",
     "Clientes",
     [
-      ["dashboard", "Dashboard", ["amounts", "financial"], ["export"]],
+      ["dashboard", "Dashboard", ["amounts", "financial", "personal"], ["export"]],
       ["directory", "Desglose", ["amounts", "financial", "personal"], ["export"]],
-      ["details", "Resumen del cliente", ["amounts", "financial"], []],
+      ["details", "Resumen del cliente", ["amounts", "financial", "personal"], []],
       ["documents", "Documentos del cliente", ["amounts", "financial", "personal"], ["export"]],
-      ["receivables", "Cuentas por cobrar", ["amounts", "personal"], ["export", "payment", "void", "close"]],
+      ["receivables", "Cuentas por cobrar", ["amounts", "personal"], ["export", "payment", "void", "close", "reopen"]],
     ],
   ],
   [
@@ -91,7 +91,7 @@ const LABELS = {
   sync: "Sincronizar",
   clear: "Vaciar caché",
   payment: "Registrar abonos",
-  void: "Anular abonos y cierres",
+  void: "Anular abonos",
   close: "Cerrar deuda",
   reopen: "Reabrir deuda",
 };
@@ -131,9 +131,10 @@ const RESOURCES = Object.fromEntries(
           label,
           completeConsultation,
           exportable: business,
-          information: completeConsultation ? information.filter((kind) => kind === "financial") : information,
+          information: completeConsultation
+            ? information.filter((kind) => ["financial", "personal"].includes(kind))
+            : information,
           actions: business ? actions.filter((action) => action !== "export") : actions,
-          requiresAllSellers: resource === "clients.receivables",
           sellerScoped:
             sellerScoped ||
             (module === "clients" && key !== "receivables") ||
@@ -178,11 +179,11 @@ function permissionKey(capability) {
   const resource = RESOURCE_ALIASES[`${parts[0]}.${parts[1]}`] || `${parts[0]}.${parts[1]}`;
   const definition = RESOURCES[resource];
   let action = parts[2];
-  if (resource === "clients.receivables" && action === "reopen") action = "void";
+  if (action === "inventory" && definition && BUSINESS_MODULES.includes(definition.module))
+    return "inventory.stock.amounts";
   if (
     definition &&
-    ((definition.exportable && action === "export") ||
-      (definition.completeConsultation && ["amounts", "personal", "inventory"].includes(action)))
+    ((definition.exportable && action === "export") || (definition.completeConsultation && action === "amounts"))
   )
     action = "read";
   return `${resource}.${action}`;

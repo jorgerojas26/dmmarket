@@ -8,6 +8,7 @@ const AUTH_TABLES = [
   "dmmarket_auth_roles",
   "dmmarket_auth_role_capabilities",
   "dmmarket_auth_user_roles",
+  "dmmarket_auth_user_capabilities",
   "dmmarket_auth_commercial_profiles",
   "dmmarket_auth_sessions",
   "dmmarket_auth_session_state",
@@ -40,6 +41,10 @@ async function assertAuthSchema(db) {
     throw new Error(
       "El catálogo de acceso requiere preparar las migraciones propias desde el instalador actualizado, con la web detenida.",
     );
+  if (await db("dmmarket_auth_user_capabilities").whereNotIn("capability", Object.keys(CAPABILITIES)).first())
+    throw new Error("El catálogo de permisos individuales contiene permisos no admitidos.");
+  if (!(await db.schema.hasColumn("dmmarket_auth_events", "details")))
+    throw new Error("Prepara la migración de permisos individuales y auditoría.");
   if (!(await db("dmmarket_auth_control").where("id", 1).first()))
     throw new Error("Falta el control transaccional de acceso.");
   if (
@@ -55,18 +60,33 @@ async function lockAccessMutation(connection) {
   }
 }
 
-async function accessFor(connection, userId) {
+async function grantsFor(connection, userId) {
   const grants = await connection("dmmarket_auth_role_capabilities as p")
     .join("dmmarket_auth_user_roles as r", "r.role_id", "p.role_id")
     .where("r.user_id", userId)
     .select("p.capability");
+  const individual = await connection("dmmarket_auth_user_capabilities").where("user_id", userId).select("capability");
+  return [...new Map([...grants, ...individual].map((grant) => [grant.capability, grant])).values()];
+}
+
+async function accessFor(connection, userId) {
+  const grants = await grantsFor(connection, userId);
   const profile = await connection("dmmarket_auth_commercial_profiles").where("user_id", userId).first("seller_id");
   return createAccess(grants, profile?.seller_id || null);
 }
 
 async function appendEvent(
   connection,
-  { actorId = null, targetId = null, targetRoleId = null, action, outcome = "success", reason = null, occurredMs },
+  {
+    actorId = null,
+    targetId = null,
+    targetRoleId = null,
+    action,
+    outcome = "success",
+    reason = null,
+    details = null,
+    occurredMs,
+  },
 ) {
   await connection("dmmarket_auth_events").insert({
     id: randomUUID(),
@@ -76,6 +96,7 @@ async function appendEvent(
     action,
     outcome,
     reason,
+    details: details === null ? null : JSON.stringify(details),
     occurred_ms: occurredMs,
   });
 }
@@ -105,9 +126,13 @@ async function assertAdministratorRemains(connection) {
     "access.recovery.read",
     "access.recovery.execute",
   ];
-  const owner = await connection("dmmarket_auth_users as u")
-    .join("dmmarket_auth_user_roles as r", "r.user_id", "u.id")
+  const grants = connection("dmmarket_auth_user_roles as r")
     .join("dmmarket_auth_role_capabilities as p", "p.role_id", "r.role_id")
+    .select("r.user_id", "p.capability")
+    .unionAll(connection("dmmarket_auth_user_capabilities").select("user_id", "capability"));
+  const owner = await connection
+    .from(grants.as("p"))
+    .join("dmmarket_auth_users as u", "u.id", "p.user_id")
     .where("u.enabled", true)
     .where("u.must_change_password", false)
     .whereNull("u.temporary_expires_ms")
@@ -141,6 +166,7 @@ module.exports = {
   assertAuthSchema,
   lockAccessMutation,
   accessFor,
+  grantsFor,
   appendEvent,
   invalidateUser,
   assertAdministratorRemains,
