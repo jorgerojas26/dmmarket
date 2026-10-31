@@ -2,13 +2,18 @@ const { startEnvironment } = require("../../../tests/support/auth-environment.cj
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedCommissions } = require("../../../tests/support/commission-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const range = "from=2026-12-01&to=2026-12-31";
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions, sellers = ["A"]) {
   const user = await environment.seedUser({ permissions });
-  if (sellers.length)
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", sellers[0]).delete();
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
     await environment
-      .db("dmmarket_auth_user_sellers")
+      .db("dmmarket_auth_commercial_profiles")
       .insert(sellers.map((seller_id) => ({ user_id: user.id, seller_id })));
   const client = environment.client();
   await client.login(user);
@@ -71,8 +76,7 @@ test("costos y utilidad conservan cobertura por registro sin inferirse de comisi
   const own = await finance.request(`/api/employees/sales/A?${range}&search=COM-A`);
   expect(own.body.data[0].utilidad).toBe("60.00");
   const other = await finance.request(`/api/employees/sales/B?${range}`);
-  expect(other.body.data[0]).not.toHaveProperty("utilidad");
-  expect(other.body.data[0].commissionTotal).toBe(800);
+  expect(other.status).toBe(403);
 });
 
 test("buscar y paginar nunca incluyen otro vendedor ni cambian el conteo filtrado", async () => {

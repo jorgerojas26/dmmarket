@@ -4,8 +4,8 @@ const { CAPABILITIES, createAccess } = backend("./auth/capabilities");
 const { createSalesRoutes } = backend("./routes/sales");
 const { createPartyRoutes } = backend("./routes/parties");
 const access = createAccess(
-  Object.keys(CAPABILITIES).map((capability) => ({ capability, scope: "global" })),
-  [],
+  Object.keys(CAPABILITIES).map((capability) => ({ capability })),
+  null,
 );
 let db;
 beforeAll(() => {

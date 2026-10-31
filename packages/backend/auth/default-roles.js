@@ -25,12 +25,29 @@ const roles = [
   {
     id: "9a5f7364-12b7-4ff2-8f0e-4f4723c73103",
     name: "Consultor",
-    permissions: ["sales.dashboard.read", "inventory.stock.read"],
+    permissions: ["sales.dashboard.read", "inventory.stock.read", "sales.others.read"],
   },
   {
     id: "9a5f7364-12b7-4ff2-8f0e-4f4723c73104",
     name: "Cobranza",
-    permissions: ["clients.receivables.read", "clients.receivables.payment"],
+    permissions: ["clients.receivables.read", "clients.receivables.payment", "sales.others.read"],
+  },
+  {
+    id: "9a5f7364-12b7-4ff2-8f0e-4f4723c73106",
+    name: "Vendedor",
+    permissions: [
+      "sales.dashboard.read",
+      "sales.breakdown.read",
+      "sales.dispatch.read",
+      "clients.dashboard.read",
+      "clients.directory.read",
+      "clients.details.read",
+      "clients.documents.read",
+      "sellers.directory.read",
+      "sellers.details.read",
+      "sellers.documents.read",
+      "sellers.commissions.read",
+    ],
   },
 ];
 module.exports = { roles };

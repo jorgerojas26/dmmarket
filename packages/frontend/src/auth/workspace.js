@@ -83,7 +83,7 @@ export default function AccessWorkspace() {
     const allowNavigation = useRef(false);
     const { requestClose, confirmation } = useDiscardChanges(dirty);
     const creating = location.hash === '#nuevo-usuario' && can('access.users.create') && can('access.roles.assign');
-    const users = ['access.users.read', 'access.links.read', 'access.recovery.read'].some(can);
+    const users = ['access.users.read', 'access.profile.read', 'access.recovery.read'].some(can);
     const view = (location.hash === '#roles' && can('access.roles.read')) || !users ? 'roles' : 'usuarios';
     const items = [
         ...(users ? [{ eventKey: 'usuarios', label: 'Usuarios', icon: usersIcon }] : []),

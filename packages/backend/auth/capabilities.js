@@ -1,43 +1,36 @@
 const { createMongoAbility, subject } = require("@casl/ability");
-
 const { CAPABILITIES, RESOURCES } = require("@dmmarket/permissions");
 
 function sellerId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
-  if (typeof value === "string" && /^[\p{L}\p{N}._-]{1,32}$/u.test(value)) return value;
+  if (typeof value === "string" && /^[\p{L}\p{N}._-]{1,32}$/u.test(value) && !/[\u{10000}-\u{10FFFF}]/u.test(value))
+    return value;
   return null;
 }
 
 function validateGrants(grants) {
-  if (!Array.isArray(grants)) throw new TypeError("Las concesiones deben ser una lista.");
+  if (!Array.isArray(grants)) throw new TypeError("Los permisos deben ser una lista.");
   return grants.map((grant) => {
-    if (
-      !grant ||
-      !Object.hasOwn(CAPABILITIES, grant.capability) ||
-      !["global", "assigned"].includes(grant.scope) ||
-      (grant.scope === "assigned" && !CAPABILITIES[grant.capability].assigned)
-    ) {
-      throw new TypeError("La capacidad o su alcance no están admitidos.");
-    }
-    return { capability: grant.capability, scope: grant.scope };
+    if (!grant || !Object.hasOwn(CAPABILITIES, grant.capability) || Object.hasOwn(grant, "scope"))
+      throw new TypeError("El permiso no está admitido; los alcances por permiso ya no se utilizan.");
+    return { capability: grant.capability };
   });
 }
 
-function createAccess(grants, linkedSellerIds) {
+function createAccess(grants, commercialSellerId = null) {
   const validated = validateGrants(grants);
-  if (!Array.isArray(linkedSellerIds)) throw new TypeError("Los vínculos deben ser una lista.");
-  const normalized = linkedSellerIds.map(sellerId);
-  const sellers = normalized.includes(null) ? [] : [...new Set(normalized)];
-  const scopes = new Map();
+  if (commercialSellerId !== null && !sellerId(commercialSellerId))
+    throw new TypeError("El perfil comercial requiere un único vendedor.");
+  const identity = sellerId(commercialSellerId);
+  const capabilities = new Set(validated.map(({ capability }) => capability));
+  const allSellers = capabilities.has("sales.others.read");
   const rules = [];
-  for (const { capability, scope } of validated) {
-    if (scope === "assigned" && sellers.length === 0) continue;
-    if (scopes.get(capability) !== "global") scopes.set(capability, scope);
-    rules.push({
-      action: capability,
-      subject: "record",
-      ...(scope === "assigned" ? { conditions: { sellerId: { $in: sellers } } } : {}),
-    });
+  for (const capability of capabilities) {
+    const definition = CAPABILITIES[capability];
+    if (definition.requiresAllSellers && !allSellers) continue;
+    if (definition.sellerScoped && !allSellers) {
+      if (identity) rules.push({ action: capability, subject: "record", conditions: { sellerId: identity } });
+    } else rules.push({ action: capability, subject: "record" });
   }
   const ability = createMongoAbility(rules);
   const dependencies = (capability) => {
@@ -52,13 +45,20 @@ function createAccess(grants, linkedSellerIds) {
     ];
   };
   const hasGlobal = (capability) =>
-    Object.hasOwn(CAPABILITIES, capability) && dependencies(capability).every((key) => scopes.get(key) === "global");
-  const canRecord = (capability, recordSellerId) => {
-    if (!Object.hasOwn(CAPABILITIES, capability)) return false;
-    return dependencies(capability).every((key) =>
+    Object.hasOwn(CAPABILITIES, capability) &&
+    dependencies(capability).every((key) => {
+      const definition = CAPABILITIES[key];
+      return (
+        capabilities.has(key) &&
+        (!definition.sellerScoped || allSellers) &&
+        (!definition.requiresAllSellers || allSellers)
+      );
+    });
+  const canRecord = (capability, recordSellerId) =>
+    Object.hasOwn(CAPABILITIES, capability) &&
+    dependencies(capability).every((key) =>
       ability.can(key, subject("record", { sellerId: sellerId(recordSellerId) })),
     );
-  };
   return Object.freeze({
     privileged: validated.some(({ capability }) => CAPABILITIES[capability].privileged),
     hasGlobal,
@@ -74,10 +74,10 @@ function createAccess(grants, linkedSellerIds) {
     scopeFor(capability) {
       return {
         global: hasGlobal(capability),
-        sellerIds: hasGlobal(capability) ? [] : sellers.filter((id) => canRecord(capability, id)),
+        sellerIds: !hasGlobal(capability) && identity && canRecord(capability, identity) ? [identity] : [],
       };
     },
   });
 }
 
-module.exports = { CAPABILITIES, createAccess, validateGrants };
+module.exports = { CAPABILITIES, createAccess, validateGrants, sellerId };

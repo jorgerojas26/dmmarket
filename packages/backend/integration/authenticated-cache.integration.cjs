@@ -1,6 +1,9 @@
 const { startEnvironment, backend } = require("../../../tests/support/auth-environment.cjs");
 const { CAPABILITIES } = backend("./auth/capabilities");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 let owner;
 let ownerClient;
 const range = "from=2026-01-01&to=2026-01-31&showNoe=false";
@@ -13,7 +16,8 @@ async function reader(seller = "A", financial = false) {
       ...(financial ? [{ capability: "sales.financial", scope: "assigned" }] : []),
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: seller });
+  await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", seller).delete();
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: seller });
   const client = environment.client();
   await client.login(user);
   return { user, client };
@@ -150,13 +154,14 @@ test("usuarios, permisos efectivos y vendedores vinculados nunca comparten resul
   expect(other.body.kpis).not.toHaveProperty("totalNetProfit");
   const role = await environment.db("dmmarket_auth_user_roles").where("user_id", first.user.id).first();
   await environment
-    .db("dmmarket_auth_role_permissions")
+    .db("dmmarket_auth_role_capabilities")
     .where({ role_id: role.role_id, capability: "sales.dashboard.financial" })
     .delete();
   const reduced = await first.client.request(dashboard);
   expect(reduced.headers["x-report-cache"]).toBe("MISS");
   expect(reduced.body.kpis).not.toHaveProperty("totalNetProfit");
-  await environment.db("dmmarket_auth_user_sellers").where("user_id", first.user.id).update({ seller_id: "B" });
+  await environment.db("dmmarket_auth_commercial_profiles").where("user_id", second.user.id).delete();
+  await environment.db("dmmarket_auth_commercial_profiles").where("user_id", first.user.id).update({ seller_id: "B" });
   const relinked = await first.client.request(dashboard);
   expect(relinked.headers["x-report-cache"]).toBe("MISS");
   expect(relinked.body.kpis.totalRawProfit).toBe(450);

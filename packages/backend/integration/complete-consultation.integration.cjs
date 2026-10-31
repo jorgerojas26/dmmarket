@@ -1,11 +1,17 @@
 const { startEnvironment } = require("../../../tests/support/auth-environment.cjs");
 const { CAPABILITIES } = require("@dmmarket/permissions");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const range = "from=2026-01-01&to=2026-01-31&showNoe=false";
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function actor(permissions, linked = false) {
   const user = await environment.seedUser({ permissions });
-  if (linked) await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  if (linked && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").delete();
+  if (linked && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = environment.client();
   expect((await client.login(user)).status).toBe(200);
   return client;

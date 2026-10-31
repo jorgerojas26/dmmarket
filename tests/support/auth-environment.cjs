@@ -1,4 +1,4 @@
-const { scenarioPermissions } = require("./permission-presets.cjs");
+const { scenarioPermissions, legacyScenarioPermissions } = require("./permission-presets.cjs");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -106,6 +106,7 @@ function client(environment) {
 
 async function startEnvironment({
   web = false,
+  legacyAuth = false,
   rateSource = false,
   updateSource = false,
   authKeys = null,
@@ -201,6 +202,7 @@ async function startEnvironment({
     await backend("./migrations/20261101_add_system_preferences").up(db);
     await backend("./migrations/20261028_add_report_settings").up(db);
     await backend("./migrations/20261102_add_user_mfa_requirement").up(db);
+    if (!legacyAuth) await backend("./migrations/20261105_individual_commercial_identity").up(db);
     environment.db = db;
     environment.configuration = configuration;
     environment.mfa = createMfa(configuration.AUTH_MFA_KEY);
@@ -228,11 +230,18 @@ async function startEnvironment({
         mfa_secret: enrollment?.encryptedSecret || null,
         mfa_required: mfaRequired,
       });
-      permissions = scenarioPermissions(permissions);
+      permissions = legacyAuth
+        ? legacyScenarioPermissions(permissions).map((grant) => ({
+            ...grant,
+            capability: grant.capability.replace(/^access\.profile\./, "access.links."),
+          }))
+        : scenarioPermissions(permissions);
       if (permissions.length) {
         const role = randomUUID();
         await db("dmmarket_auth_roles").insert({ id: role, name: role });
-        await db("dmmarket_auth_role_permissions").insert(permissions.map((grant) => ({ role_id: role, ...grant })));
+        await db(legacyAuth ? "dmmarket_auth_role_permissions" : "dmmarket_auth_role_capabilities").insert(
+          permissions.map((grant) => ({ role_id: role, ...grant })),
+        );
         await db("dmmarket_auth_user_roles").insert({ user_id: user.id, role_id: role });
       }
       return user;

@@ -3,7 +3,7 @@ const { test, expect, login, setNoe } = require("./fixtures.cjs");
 async function openSales(page, environment) {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-01-01&to=2026-01-31`);
   await expect(page.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" })).toContainText("$100,00");

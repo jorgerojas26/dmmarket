@@ -119,14 +119,14 @@ test("el renombrado conserva el ID, permisos y asignaciones y es idempotente", a
   const role = await environment.db("dmmarket_auth_user_roles").where("user_id", owner.id).first();
   await environment.db("dmmarket_auth_roles").where("id", role.role_id).update({ name: "Superusuario inicial" });
   const grants = await environment
-    .db("dmmarket_auth_role_permissions")
+    .db("dmmarket_auth_role_capabilities")
     .where("role_id", role.role_id)
     .orderBy("capability");
   await renameRole.up(environment.db);
   await renameRole.up(environment.db);
   expect((await environment.db("dmmarket_auth_roles").where("id", role.role_id).first()).name).toBe("Superusuario");
   expect(
-    await environment.db("dmmarket_auth_role_permissions").where("role_id", role.role_id).orderBy("capability"),
+    await environment.db("dmmarket_auth_role_capabilities").where("role_id", role.role_id).orderBy("capability"),
   ).toEqual(grants);
   expect(
     await environment.db("dmmarket_auth_user_roles").where({ user_id: owner.id, role_id: role.role_id }),

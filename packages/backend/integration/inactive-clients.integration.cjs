@@ -2,12 +2,17 @@ const { startEnvironment } = require("../../../tests/support/auth-environment.cj
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedParties } = require("../../../tests/support/party-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions, sellers = ["A"]) {
   const user = await environment.seedUser({ permissions });
-  if (sellers.length)
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", sellers[0]).delete();
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
     await environment
-      .db("dmmarket_auth_user_sellers")
+      .db("dmmarket_auth_commercial_profiles")
       .insert(sellers.map((seller_id) => ({ user_id: user.id, seller_id })));
   const client = environment.client();
   await client.login(user);

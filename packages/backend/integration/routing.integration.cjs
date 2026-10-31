@@ -1,6 +1,9 @@
 const { startEnvironment, backend } = require("../../../tests/support/auth-environment.cjs");
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 
 beforeAll(async () => {
   environment = await startEnvironment({ web: true });
@@ -36,7 +39,7 @@ test("los recursos y métodos retirados siguen denegados sin ejecutar handlers a
 
 test("el único router de ventas aplica el alcance tanto a lista como a detalle", async () => {
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = environment.client();
   await client.login(user);
   const response = await client.request("/api/sales/facturas?from=2026-01-01&to=2026-01-31");

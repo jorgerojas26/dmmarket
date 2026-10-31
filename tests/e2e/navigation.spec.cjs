@@ -18,7 +18,7 @@ test("navegación muestra sólo módulos autorizados y separa sus formularios", 
     grant("inventory.read"),
     grant("rates.read"),
   ]);
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   const navigation = page.getByRole("navigation", { name: "Módulos disponibles", exact: true });
   await expect(page).toHaveURL(/\/ventas\?/);

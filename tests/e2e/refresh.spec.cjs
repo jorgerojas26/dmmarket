@@ -11,7 +11,7 @@ async function readFromServer(page, environment, route) {
 async function salesUser(environment) {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   return user;
 }
 

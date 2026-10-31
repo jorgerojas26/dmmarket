@@ -2,6 +2,7 @@ const { randomUUID } = require("node:crypto");
 const { hashPassword, createTemporaryPassword } = require("./passwords");
 const { isLocalSource, initialSetupState } = require("./initial-setup");
 const { validateGrants } = require("./capabilities");
+const { requiresCommercialProfile, validateCommercialProfile } = require("./commercial-profile");
 const { createInitialAdministratorRole } = require("./initial-administrator");
 const {
   assertAuthSchema,
@@ -21,8 +22,8 @@ const OWNER_CAPABILITIES = [
   "access.roles.create",
   "access.roles.update",
   "access.roles.assign",
-  "access.links.read",
-  "access.links.update",
+  "access.profile.read",
+  "access.profile.update",
   "access.recovery.read",
   "access.recovery.execute",
 ];
@@ -74,9 +75,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
     if (ids.length) {
       const rows = await connection("dmmarket_auth_roles").whereIn("id", ids);
       if (rows.length !== ids.length) fail(400, "Uno de los roles no está disponible.");
-      validateGrants(
-        await connection("dmmarket_auth_role_permissions").whereIn("role_id", ids).select("capability", "scope"),
-      );
+      validateGrants(await connection("dmmarket_auth_role_capabilities").whereIn("role_id", ids).select("capability"));
     }
     return ids;
   }
@@ -127,8 +126,8 @@ async function createAccountService({ db, sessions, now = Date.now }) {
   async function recoveryRole(connection) {
     const id = randomUUID();
     await connection("dmmarket_auth_roles").insert({ id, name: `local-recovery-${id}` });
-    await connection("dmmarket_auth_role_permissions").insert(
-      OWNER_CAPABILITIES.map((capability) => ({ role_id: id, capability, scope: "global" })),
+    await connection("dmmarket_auth_role_capabilities").insert(
+      OWNER_CAPABILITIES.map((capability) => ({ role_id: id, capability })),
     );
     return id;
   }
@@ -162,7 +161,7 @@ async function createAccountService({ db, sessions, now = Date.now }) {
         return { id, username: names.username };
       });
     },
-    async createUser(sid, { username, displayName, roleIds = [], mfaRequired = false, reason }) {
+    async createUser(sid, { username, displayName, roleIds = [], sellerId = null, mfaRequired = false, reason }) {
       const names = accountNames(username, displayName);
       if (!Array.isArray(roleIds) || roleIds.length === 0) fail(400, "Selecciona al menos un rol.");
       if (typeof mfaRequired !== "boolean") fail(400, "La opción MFA no es válida.");
@@ -172,8 +171,15 @@ async function createAccountService({ db, sessions, now = Date.now }) {
         if (roles.length && !access.hasGlobal("access.roles.assign")) fail(403, "Acceso no permitido.");
         if (await connection("dmmarket_auth_users").where("username", names.username).first())
           fail(409, "El usuario ya existe.");
-        const credential = await temporaryCredential(time());
         const id = randomUUID();
+        const grants = roles.length
+          ? await connection("dmmarket_auth_role_capabilities").whereIn("role_id", roles).select("capability")
+          : [];
+        if (requiresCommercialProfile(grants) && !sellerId)
+          fail(400, "Este rol requiere un perfil comercial individual.");
+        if (sellerId !== null && !access.hasGlobal("access.profile.update")) fail(403, "Acceso no permitido.");
+        const identity = await validateCommercialProfile(connection, sellerId, id);
+        const credential = await temporaryCredential(time());
         await connection("dmmarket_auth_users").insert({
           id,
           ...names,
@@ -185,6 +191,8 @@ async function createAccountService({ db, sessions, now = Date.now }) {
           await connection("dmmarket_auth_user_roles").insert(
             roles.map((roleId) => ({ user_id: id, role_id: roleId })),
           );
+        if (identity)
+          await connection("dmmarket_auth_commercial_profiles").insert({ user_id: id, seller_id: identity });
         await audit(connection, actorId, id, "auth.user_created", motive);
         return {
           id,

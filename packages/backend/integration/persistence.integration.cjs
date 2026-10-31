@@ -12,6 +12,9 @@ const ownerPermissions = ["access.users", "access.roles", "access.links", "acces
   scope: "global",
 }));
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 let clock;
 let sessions;
 let accounts;
@@ -46,7 +49,7 @@ test("MySQL de Compose persiste todas las tablas propias en InnoDB/utf8_bin", as
     .db("information_schema.TABLES")
     .whereRaw("TABLE_SCHEMA = DATABASE()")
     .select("TABLE_NAME", "ENGINE", "TABLE_COLLATION");
-  expect(rows).toHaveLength(migration.tables.length + 2);
+  expect(rows).toHaveLength(migration.tables.length + 4);
   expect(
     rows.every(
       (row) =>
@@ -306,17 +309,17 @@ test("bloqueos cruzados concurrentes dejan un administrador habilitado", async (
   ).toHaveLength(1);
 });
 
-test("permisos cargados desde SQL conservan alcances por capacidad", async () => {
+test("permisos cargados desde SQL usan una única identidad comercial", async () => {
   const user = await environment.seedUser({
     permissions: [
       { capability: "sales.read", scope: "global" },
       { capability: "sales.financial", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const active = await login(user);
   await sessions.withSession(active.sid, {}, async ({ access }) => {
-    expect(access.canRecord("sales.breakdown.read", "B")).toBe(true);
+    expect(access.canRecord("sales.breakdown.read", "B")).toBe(false);
     expect(access.canRecord("sales.breakdown.financial", "A")).toBe(true);
     expect(access.canRecord("sales.breakdown.financial", "B")).toBe(false);
     expect(access.covers("sales.breakdown.financial", ["A", "B"])).toBe(false);

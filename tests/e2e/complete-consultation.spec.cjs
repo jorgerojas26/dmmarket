@@ -56,7 +56,7 @@ test("rentabilidad vinculada con consulta global conserva análisis comercial si
   const user = await environment.seedUser({
     permissions: [grant("sales.dashboard.read"), { capability: "sales.dashboard.financial", scope: "assigned" }],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const rejected = [];
   page.on("response", (response) => {
     if (response.url().includes("/api/dashboard/") && response.status() === 403) rejected.push(response.url());

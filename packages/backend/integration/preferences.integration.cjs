@@ -118,7 +118,7 @@ test("la migración es idempotente, propia y no concede permisos a roles existen
   const migration = backend("./migrations/20261101_add_system_preferences");
   const previous = await current();
   const grantsBefore = await environment
-    .db("dmmarket_auth_role_permissions")
+    .db("dmmarket_auth_role_capabilities")
     .select()
     .orderBy("role_id")
     .orderBy("capability");
@@ -127,7 +127,7 @@ test("la migración es idempotente, propia y no concede permisos a roles existen
   await migration.up(environment.db);
   expect(await current()).toEqual(previous);
   expect(
-    await environment.db("dmmarket_auth_role_permissions").select().orderBy("role_id").orderBy("capability"),
+    await environment.db("dmmarket_auth_role_capabilities").select().orderBy("role_id").orderBy("capability"),
   ).toEqual(grantsBefore);
 });
 

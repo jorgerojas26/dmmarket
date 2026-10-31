@@ -270,7 +270,7 @@ completeDashboardTest(
         { capability: "rates.read", scope: "global" },
       ],
     });
-    await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
     let release;
     const gate = new Promise((resolve) => {
       release = resolve;
@@ -387,7 +387,7 @@ test("MFA de login y reautenticación se verifican antes de administrar", async 
   await expect(page.getByRole("dialog", { name: "Credencial temporal", exact: true })).toBeVisible();
 });
 
-test("editor crea rol, cambia alcance y administra vínculos revocando sesiones reales", async ({
+test("editor crea rol, habilita otros datos y administra identidad revocando sesiones reales", async ({
   page,
   browser,
   environment,
@@ -411,18 +411,18 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   const name = `Rol E2E ${randomBytes(4).toString("hex")}`;
   await page.getByRole("textbox", { name: "Nombre del rol", exact: true }).fill(name);
-  await setPermission(page, "Consultar · Ventas / Desglose", "assigned");
+  await setPermission(page, "Consultar · Ventas / Desglose");
   await expect(
     page.getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true }),
   ).toBeVisible();
   for (const retired of ["sales.costs", "sales.profit", "providers.personal"])
     await expect(page.getByLabel(retired, { exact: true })).toHaveCount(0);
-  await setPermission(page, "Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", "assigned");
+  await setPermission(page, "Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose");
   await page
     .getByRole("navigation", { name: "Módulos de permisos", exact: true })
     .getByRole("button", { name: "Configuración", exact: true })
     .click();
-  await setPermission(page, "Consultar · Configuración / Tasas BCV", "global");
+  await setPermission(page, "Consultar · Configuración / Tasas BCV");
   const createdResponse = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/roles") && response.request().method() === "POST",
   );
@@ -432,11 +432,11 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
   const role = await created.json();
   await expect(page.getByText("Rol guardado.", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: `Editar ${name}`, exact: true }).click();
-  await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toBeChecked();
   await expect(
-    page.getByLabel("Alcance de Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true }),
-  ).toHaveValue("assigned");
-  await setPermission(page, "Consultar · Ventas / Desglose", "global");
+    page.getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", { exact: true }),
+  ).toBeChecked();
+  await setPermission(page, "Consultar datos de otros vendedores · Ventas / Datos de otros vendedores");
   const updatedResponse = page.waitForResponse(
     (response) => response.url().endsWith(`/api/auth/roles/${role.id}`) && response.request().method() === "PUT",
   );
@@ -455,27 +455,30 @@ test("editor crea rol, cambia alcance y administra vínculos revocando sesiones 
     await login(reader, environment, user);
     await openModule(reader, "Configuración", "Tasas BCV");
     await expect(reader.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
-    await page.getByRole("searchbox", { name: "Buscar vendedores", exact: true }).fill("A");
-    await page.getByRole("checkbox", { name: "Vendedor A · A", exact: true }).check();
-    await page.getByRole("textbox", { name: "Motivo del cambio de vínculos" }).fill("Vincular vendedor real desde UI");
-    await page.getByRole("button", { name: "Guardar vendedores vinculados", exact: true }).click();
-    await expect(page.getByText("Vínculos guardados y sesiones del usuario revocadas.", { exact: true })).toBeVisible();
+    await page.getByRole("searchbox", { name: "Buscar identidad comercial", exact: true }).fill("A");
+    await page.getByLabel("Perfil comercial", { exact: true }).selectOption("A");
+    await page.getByRole("textbox", { name: "Motivo del cambio de identidad" }).fill("Vincular vendedor real desde UI");
+    await page.getByRole("button", { name: "Guardar perfil comercial", exact: true }).click();
+    await expect(
+      page.getByText("Perfil comercial guardado. Se cerraron las sesiones de la cuenta.", { exact: true }),
+    ).toBeVisible();
     await reader.reload();
     await expect(reader.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
-    expect(await environment.db("dmmarket_auth_user_sellers").where("user_id", user.id).pluck("seller_id")).toEqual([
-      "A",
-    ]);
-    await page.getByRole("checkbox", { name: "Vendedor A · A", exact: true }).uncheck();
+    expect(
+      await environment.db("dmmarket_auth_commercial_profiles").where("user_id", user.id).pluck("seller_id"),
+    ).toEqual(["A"]);
+    await page.getByLabel("Perfil comercial", { exact: true }).selectOption("");
     await page
-      .getByRole("textbox", { name: "Motivo del cambio de vínculos" })
+      .getByRole("textbox", { name: "Motivo del cambio de identidad" })
       .fill("Quitar todos los vínculos desde UI");
     const cleared = page.waitForResponse(
       (response) =>
-        response.url().endsWith(`/api/auth/users/${user.id}/sellers`) && response.request().method() === "PUT",
+        response.url().endsWith(`/api/auth/users/${user.id}/commercial-profile`) &&
+        response.request().method() === "PUT",
     );
-    await page.getByRole("button", { name: "Guardar vendedores vinculados", exact: true }).click();
+    await page.getByRole("button", { name: "Guardar perfil comercial", exact: true }).click();
     expect((await cleared).status()).toBe(200);
-    expect(await environment.db("dmmarket_auth_user_sellers").where("user_id", user.id)).toHaveLength(0);
+    expect(await environment.db("dmmarket_auth_commercial_profiles").where("user_id", user.id)).toHaveLength(0);
   } finally {
     await context.close();
   }
@@ -487,7 +490,7 @@ test("ventas originales muestran únicamente documentos propios en ambos sistema
 }) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await openModule(page, "Ventas", "Desglose");
   await page.goto(`${environment.origin}/ventas?view=desglose&dFrom=2026-01-01&dTo=2026-01-31`);
@@ -512,7 +515,7 @@ test("detalle y dashboard originales preservan comparación y no exponen costos,
 }) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-01-01&to=2026-01-31`);
   const report = page.getByRole("region", { name: "Ventas", exact: true });
@@ -556,7 +559,7 @@ test("Vendedores original sólo muestra contactos propios y conserva resumen y c
       { capability: "sales.read", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/vendedores?view=sellers&dFrom=2026-01-01&dTo=2026-01-31`);
   const report = page.getByRole("region", { name: "Vendedores", exact: true });
@@ -588,7 +591,7 @@ test("clientes originales no convierten ventas propias en globales ni permiten i
       { capability: "sales.read", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await openModule(page, "Clientes", "Desglose");
   await page.goto(`${environment.origin}/clientes?view=clients&dFrom=2026-01-01&dTo=2026-01-31`);
@@ -619,7 +622,7 @@ test("modal original y consultas mensuales conservan alcance y año en ambos sis
       { capability: "sales.read", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await openModule(page, "Clientes", "Desglose");
   await page.goto(`${environment.origin}/clientes?view=clients&dFrom=2025-12-01&dTo=2026-02-28`);
@@ -673,7 +676,7 @@ test("dashboard original de Vendedores intersecta lectura antes de ranking, marg
       { capability: "sales.financial", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(
     `${environment.origin}/vendedores?view=dashboard&from=2026-01-01&to=2026-01-31&dFrom=2026-01-01&dTo=2026-01-31`,
@@ -721,11 +724,10 @@ test("dashboard original global oculta utilidad propia y contactos ajenos sin su
     permissions: [
       { capability: "sellers.read", scope: "global" },
       { capability: "sales.read", scope: "global" },
-      { capability: "sellers.personal", scope: "assigned" },
-      { capability: "sales.financial", scope: "assigned" },
+      { capability: "sellers.personal", scope: "global" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(
     `${environment.origin}/vendedores?view=dashboard&from=2026-01-01&to=2026-01-31&dFrom=2026-01-01&dTo=2026-01-31`,
@@ -759,7 +761,7 @@ test("clientes sin documentos conservan tabla original y sólo histórico autori
       { capability: "sales.read", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/clientes?view=dashboard&from=2026-02-01&to=2026-02-28`);
   for (const [noe, amount] of [
@@ -798,7 +800,7 @@ test("dashboard original de clientes conserva clasificación, retención y cober
       { capability: "sales.read", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/clientes?view=dashboard&from=2026-01-01&to=2026-01-31`);
   for (const [noe, amount] of [
@@ -835,10 +837,9 @@ test("dashboard original global no muestra utilidad propia ni controles financie
     permissions: [
       { capability: "clients.read", scope: "global" },
       { capability: "sales.read", scope: "global" },
-      { capability: "sales.financial", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/clientes?view=dashboard&from=2026-01-01&to=2026-01-31`);
   await expect(page.getByRole("region", { name: "Clientes", exact: true })).toBeVisible();
@@ -851,7 +852,7 @@ test("dashboard original global no muestra utilidad propia ni controles financie
   const scoped = await page.evaluate(
     async () => await (await fetch("/api/clients/dashboard?from=2026-01-01&to=2026-01-31&employeeId=A")).json(),
   );
-  expect(scoped.abcUtility.clients.some((row) => Number(row.utilidad) === 39)).toBe(true);
+  expect(scoped).not.toHaveProperty("abcUtility");
 });
 
 test("Pareto original mantiene población, maduración y privacidad y no ofrece ganancia sin permiso", async ({
@@ -866,7 +867,7 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
       { capability: "purchases.read", scope: "global" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: basic.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: basic.id, seller_id: "A" });
   await login(page, environment, basic);
   await page.goto(`${environment.origin}/ventas?view=dashboard&from=2026-06-01&to=2026-07-01`);
   await expect(page.getByRole("heading", { name: "Dashboard de Ventas", exact: true })).toBeVisible();
@@ -883,12 +884,13 @@ test("Pareto original mantiene población, maduración y privacidad y no ofrece 
     expect(JSON.stringify(payload)).not.toMatch(/netProfit|cumulativeProfit|profitPercent/);
   }
   await logout(page);
+  await environment.db("dmmarket_auth_commercial_profiles").where("user_id", basic.id).delete();
   const user = await environment.seedUser({
     permissions: ["sales.read", "sales.financial"]
       .map((capability) => ({ capability, scope: "assigned" }))
       .concat([{ capability: "purchases.read", scope: "global" }]),
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   const rejectedAnalyses = [];
   page.on("response", (response) => {
@@ -1134,7 +1136,7 @@ test("proveedor original conserva ventas propias y el detalle de su porción en 
       { capability: "sales.read", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   for (const noe of [false, true]) {
     await setNoe(page, noe, environment);
@@ -1223,7 +1225,7 @@ test("porcentajes de comisiones son sólo lectura y no conceden ventas ni otros 
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   await require("../support/commission-fixtures.cjs").seedCommissions(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "commissions.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await openModule(page, "Mi cuenta");
   await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
@@ -1248,7 +1250,7 @@ test("histórico de comisiones no duplica ventas y no muestra como cero capturas
       { capability: "sales.read", scope: "global" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await expect(page.getByRole("link", { name: "Ventas", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Comisiones", exact: true })).toHaveCount(0);
@@ -1270,7 +1272,7 @@ test("histórico de comisiones no duplica ventas y no muestra como cero capturas
   ).toBe(403);
 });
 
-test("cartera original ve deuda completa del cliente compartido sin heredar alcance de ventas propias", async ({
+test("cartera autorizada con acceso a otros vendedores ve la deuda completa del cliente compartido", async ({
   page,
   environment,
 }) => {
@@ -1279,10 +1281,11 @@ test("cartera original ve deuda completa del cliente compartido sin heredar alca
   const user = await environment.seedUser({
     permissions: [
       { capability: "receivables.read", scope: "global" },
-      { capability: "sales.read", scope: "assigned" },
+      { capability: "sales.read", scope: "global" },
+      { capability: "sales.others.read" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await openModule(page, "Cartera");
   await expect(page.getByRole("heading", { name: "Cuentas por cobrar", exact: true })).toBeVisible();
@@ -1290,7 +1293,7 @@ test("cartera original ve deuda completa del cliente compartido sin heredar alca
   const account = page.getByRole("dialog");
   await expect(account.getByRole("button", { name: "Registrar abono", exact: true })).toHaveCount(0);
   await expect(account.getByRole("button", { name: "Ver factura 1", exact: true })).toBeEnabled();
-  await expect(account.getByRole("button", { name: "Ver factura 2", exact: true })).toBeDisabled();
+  await expect(account.getByRole("button", { name: "Ver factura 2", exact: true })).toBeEnabled();
   await expect(account.getByText(/PRIVATE-IDENTIFICATION/)).toBeVisible();
   const payload = await page.evaluate(async () => await (await fetch("/api/receivables/C")).json());
   expect(Number(payload.summary.balance)).toBe(300);
@@ -1299,7 +1302,7 @@ test("cartera original ve deuda completa del cliente compartido sin heredar alca
 
 test("vendedor sin permiso de cobranza no tiene cartera ni acceso directo a saldos", async ({ page, environment }) => {
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await expect(
     page
@@ -1326,7 +1329,7 @@ test("Vendedores del proveedor original intersectan sus permisos antes de mostra
       { capability: "sales.financial", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await openModule(page, "Proveedores");
   await page.getByRole("cell", { name: "Proveedor compras A", exact: true }).click();
@@ -1357,7 +1360,7 @@ test("Clientes del proveedor original y comparación del servidor conservan pobl
       { capability: "sales.read", scope: "assigned" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await openModule(page, "Proveedores");
   await page.getByRole("cell", { name: "Proveedor compras A", exact: true }).click();

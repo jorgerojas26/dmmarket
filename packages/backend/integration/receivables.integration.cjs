@@ -2,10 +2,16 @@ const { startEnvironment } = require("../../../tests/support/auth-environment.cj
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedReceivables } = require("../../../tests/support/receivables-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions, linked = true) {
   const user = await environment.seedUser({ permissions });
-  if (linked) await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  if (linked && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").delete();
+  if (linked && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = environment.client();
   await client.login(user);
   return client;
@@ -34,7 +40,7 @@ test("vendedor, administrador de acceso o permiso de operación no conceden lect
 });
 
 test("cobranza global incluye deuda completa del cliente compartido sin heredar filtro de ventas", async () => {
-  const client = await reader([grant("receivables.read"), grant("sales.read", "assigned")]);
+  const client = await reader([grant("receivables.read"), grant("sales.read"), grant("sales.others.read")]);
   const result = await client.request("/api/receivables?limit=1");
   expect(result.status).toBe(200);
   expect(result.body).toMatchObject({

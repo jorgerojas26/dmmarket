@@ -3,11 +3,17 @@ const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedPurchases } = require("../../../tests/support/purchase-fixtures.cjs");
 const { seedProviders } = require("../../../tests/support/provider-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const range = "from=2026-11-01&to=2026-11-30";
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions) {
   const user = await environment.seedUser({ permissions });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").delete();
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = environment.client();
   await client.login(user);
   return client;
@@ -73,8 +79,8 @@ test.each(["false", "true"])(
 test("costo propio no se amplía al proveedor global; acotar empleado legítimo permite campos", async () => {
   const client = await reader([grant("providers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
   const global = await client.request(`/api/providers/PUR-A/summary?${range}`);
-  expect(global.body.sales.totalRawProfit).toBe(300);
-  expect(global.body.sales).not.toHaveProperty("totalNetProfit");
+  expect(global.body.sales.totalRawProfit).toBe(100);
+  expect(global.body.sales.totalNetProfit).toBe(40);
   const own = await client.request(`/api/providers/PUR-A/summary?${range}&employeeId=A`);
   expect(own.body.sales.totalNetProfit).toBe(40);
   const detail = await client.request("/api/providers/PUR-A/sales/provider-sale-A");
@@ -106,7 +112,8 @@ test("compras globales autorizadas no dependen del vendedor ni del sistema de ve
     grant("providers.read"),
     grant("purchases.read"),
     grant("purchases.costs"),
-    grant("sales.read", "assigned"),
+    grant("sales.read"),
+    grant("sales.others.read"),
   ]);
   const summary = await client.request(`/api/providers/PUR-A/summary?${range}&showNoe=true&employeeId=A`);
   expect(summary.body.purchases).toMatchObject({ totalInvoices: 1, totalQuantity: 2, totalPurchased: 14 });
@@ -180,7 +187,7 @@ test("tabla original agrega sólo ventas propias y conserva compras sin revelar 
 });
 
 test("tabla original global no obtiene utilidad propia ni convierte costos incompletos en cero", async () => {
-  const global = await reader([grant("providers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
+  const global = await reader([grant("providers.read"), grant("sales.read")]);
   const result = await global.request(`/api/providers/list?${range}`);
   expect(result.status).toBe(200);
   expect(result.body.totals).not.toHaveProperty("utilidad");

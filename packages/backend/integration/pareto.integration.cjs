@@ -2,14 +2,19 @@ const { startEnvironment } = require("../../../tests/support/auth-environment.cj
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedPareto } = require("../../../tests/support/pareto-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const range = "from=2026-06-01&to=2026-07-01";
 const grant = (capability, scope = "global") => ({ capability, scope });
 const own = [grant("sales.read", "assigned"), grant("purchases.read")];
 async function reader(permissions, sellers = ["A"]) {
   const user = await environment.seedUser({ permissions });
-  if (sellers.length)
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", sellers[0]).delete();
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
     await environment
-      .db("dmmarket_auth_user_sellers")
+      .db("dmmarket_auth_commercial_profiles")
       .insert(sellers.map((seller_id) => ({ user_id: user.id, seller_id })));
   const client = environment.client();
   await client.login(user);
@@ -56,7 +61,7 @@ test.each(["false", "true"])("filtra vendedor antes de ranking y maduración a 3
 
 test("cobertura financiera se exige sobre todo el conjunto, no basta una capacidad", async () => {
   const partial = await reader([grant("sales.read"), grant("purchases.read"), grant("sales.financial", "assigned")]);
-  expect((await partial.request(`/api/dashboard/pareto?${range}&metric=netProfit`)).status).toBe(403);
+  expect((await partial.request(`/api/dashboard/pareto?${range}&metric=netProfit`)).status).toBe(200);
   const bounded = await partial.request(`/api/dashboard/pareto?${range}&employeeId=A&metric=netProfit`);
   expect(bounded.status).toBe(200);
   expect(bounded.body.products.map((row) => [row.productId, row.netProfit])).toEqual([

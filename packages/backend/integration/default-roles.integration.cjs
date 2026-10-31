@@ -14,20 +14,18 @@ async function roles() {
 }
 async function grants(id) {
   return environment
-    .db("dmmarket_auth_role_permissions")
+    .db("dmmarket_auth_role_capabilities")
     .where("role_id", id)
-    .select("capability", "scope")
+    .select("capability")
     .orderBy("capability");
 }
 async function matrix() {
   const rows = await roles();
-  expect(rows).toHaveLength(4);
+  expect(rows).toHaveLength(5);
   expect(rows.map((row) => row.name).sort()).toEqual(Object.keys(expected).sort());
   for (const row of rows)
     expect(await grants(row.id)).toEqual(
-      expected[row.name]
-        .map((capability) => ({ capability, scope: "global" }))
-        .sort((a, b) => a.capability.localeCompare(b.capability)),
+      expected[row.name].map((capability) => ({ capability })).sort((a, b) => a.capability.localeCompare(b.capability)),
     );
   return rows;
 }
@@ -42,15 +40,15 @@ beforeEach(async () => {
     "dmmarket_auth_session_state",
     "dmmarket_auth_events",
     "dmmarket_auth_user_roles",
-    "dmmarket_auth_user_sellers",
-    "dmmarket_auth_role_permissions",
+    "dmmarket_auth_commercial_profiles",
+    "dmmarket_auth_role_capabilities",
     "dmmarket_auth_users",
     "dmmarket_auth_roles",
   ])
     await environment.db(table).delete();
 });
 
-test("seed crea exactamente los cuatro roles acordados sin cuentas, credenciales ni asignaciones", async () => {
+test("seed crea exactamente los cinco roles acordados sin cuentas, credenciales ni asignaciones", async () => {
   await seed(environment.db);
   const created = await matrix();
   for (const table of [
@@ -61,7 +59,7 @@ test("seed crea exactamente los cuatro roles acordados sin cuentas, credenciales
   ])
     expect(Number((await environment.db(table).count("* as n").first()).n)).toBe(0);
   const events = await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created");
-  expect(events).toHaveLength(4);
+  expect(events).toHaveLength(5);
   expect(events.every((row) => row.actor_id === null && created.some((role) => role.id === row.target_role_id))).toBe(
     true,
   );
@@ -70,12 +68,12 @@ test("seed crea exactamente los cuatro roles acordados sin cuentas, credenciales
 test("Administrador no recibe técnicos, Consultor no recibe finanzas y Superusuario tiene todo", async () => {
   await seed(environment.db);
   const rows = await roles();
-  const access = async (name) => createAccess(await grants(rows.find((row) => row.name === name).id), []);
+  const access = async (name) => createAccess(await grants(rows.find((row) => row.name === name).id), null);
   const direction = await access("Administrador");
   for (const cap of [
     "access.users.update",
     "access.roles.update",
-    "access.links.update",
+    "access.profile.update",
     "clients.receivables.void",
     "clients.receivables.close",
     "sales.dashboard.financial",
@@ -112,19 +110,17 @@ test("repetir seed preserva IDs, nombres personalizados y permisos vaciados o mo
     id = rows.find((row) => row.name === "Administrador").id,
     empty = rows.find((row) => row.name === "Cobranza").id;
   await environment.db("dmmarket_auth_roles").where("id", id).update({ name: "Administrador personalizada" });
-  await environment.db("dmmarket_auth_role_permissions").whereIn("role_id", [id, empty]).delete();
-  await environment
-    .db("dmmarket_auth_role_permissions")
-    .insert({ role_id: id, capability: "settings.rates.read", scope: "global" });
+  await environment.db("dmmarket_auth_role_capabilities").whereIn("role_id", [id, empty]).delete();
+  await environment.db("dmmarket_auth_role_capabilities").insert({ role_id: id, capability: "settings.rates.read" });
   const before = await roles(),
-    permissions = await environment.db("dmmarket_auth_role_permissions").orderBy("role_id").orderBy("capability");
+    permissions = await environment.db("dmmarket_auth_role_capabilities").orderBy("role_id").orderBy("capability");
   await seed(environment.db);
   await seed(environment.db);
   expect(await roles()).toEqual(before);
-  expect(await environment.db("dmmarket_auth_role_permissions").orderBy("role_id").orderBy("capability")).toEqual(
+  expect(await environment.db("dmmarket_auth_role_capabilities").orderBy("role_id").orderBy("capability")).toEqual(
     permissions,
   );
-  expect(await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created")).toHaveLength(4);
+  expect(await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created")).toHaveLength(5);
 });
 
 test("usuarios, sesiones y asignaciones existentes no se modifican al instalar ni repetir", async () => {
@@ -151,18 +147,16 @@ test("usuarios, sesiones y asignaciones existentes no se modifican al instalar n
 test("dos ejecuciones concurrentes no duplican roles, permisos ni eventos", async () => {
   await Promise.all([seed(environment.db), seed(environment.db)]);
   await matrix();
-  expect(await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created")).toHaveLength(4);
+  expect(await environment.db("dmmarket_auth_events").where("action", "auth.default_role_created")).toHaveLength(5);
 });
 
 test("colisión con nombre de rol propio detiene toda la siembra sin adoptar ni sobrescribir", async () => {
   const id = randomUUID();
   await environment.db("dmmarket_auth_roles").insert({ id, name: "Cobranza" });
-  await environment
-    .db("dmmarket_auth_role_permissions")
-    .insert({ role_id: id, capability: "settings.rates.read", scope: "global" });
+  await environment.db("dmmarket_auth_role_capabilities").insert({ role_id: id, capability: "settings.rates.read" });
   await expect(seed(environment.db)).rejects.toThrow("Cobranza");
   expect(await roles()).toEqual([{ id, name: "Cobranza" }]);
-  expect(await grants(id)).toEqual([{ capability: "settings.rates.read", scope: "global" }]);
+  expect(await grants(id)).toEqual([{ capability: "settings.rates.read" }]);
   expect(await environment.db("dmmarket_auth_events")).toHaveLength(0);
 });
 
@@ -181,7 +175,7 @@ test("error real de auditoría revierte también roles y permisos ya insertados"
   try {
     await expect(seed(environment.db)).rejects.toThrow();
     expect(await roles()).toHaveLength(0);
-    expect(await environment.db("dmmarket_auth_role_permissions")).toHaveLength(0);
+    expect(await environment.db("dmmarket_auth_role_capabilities")).toHaveLength(0);
   } finally {
     docker(
       "exec",
@@ -223,7 +217,7 @@ test("seed exige esquema compatible y no modifica tablas compartidas", async () 
   try {
     await expect(seed(environment.db)).rejects.toThrow("control transaccional");
   } finally {
-    await environment.db("dmmarket_auth_control").insert({ id: 1 });
+    await environment.db("dmmarket_auth_control").insert({ id: 1, commercial_model: 1 });
   }
 });
 
@@ -237,7 +231,7 @@ test("Knex seed:run ejecuta el mismo archivo real y es idempotente desde el task
 });
 
 test("recuperación de una cuenta existente no concede permisos de negocio adicionales", async () => {
-  const user = await environment.seedUser({ permissions: [{ capability: "settings.rates.read", scope: "global" }] });
+  const user = await environment.seedUser({ permissions: [{ capability: "settings.rates.read" }] });
   const accounts = await backend("./auth/accounts").createAccountService({ db: environment.db });
   await accounts.recoverLocally({
     mode: "recover",
@@ -245,10 +239,10 @@ test("recuperación de una cuenta existente no concede permisos de negocio adici
     reason: "Recuperación local sin ampliar negocio",
   });
   const grants = await environment
-    .db("dmmarket_auth_role_permissions as p")
+    .db("dmmarket_auth_role_capabilities as p")
     .join("dmmarket_auth_user_roles as r", "r.role_id", "p.role_id")
     .where("r.user_id", user.id)
-    .select("p.capability", "p.scope")
+    .select("p.capability")
     .orderBy("p.capability");
   expect(grants).toEqual(
     [
@@ -259,14 +253,14 @@ test("recuperación de una cuenta existente no concede permisos de negocio adici
       "access.roles.create",
       "access.roles.update",
       "access.roles.assign",
-      "access.links.read",
-      "access.links.update",
+      "access.profile.read",
+      "access.profile.update",
       "access.recovery.read",
       "access.recovery.execute",
       "settings.rates.read",
     ]
       .sort()
-      .map((capability) => ({ capability, scope: "global" })),
+      .map((capability) => ({ capability })),
   );
 });
 
@@ -280,15 +274,15 @@ test("bootstrap inicial explícito concede todo el catálogo sin modificar los r
     reason: "Verificar superusuario inicial",
   });
   const permissions = await environment
-    .db("dmmarket_auth_role_permissions as p")
+    .db("dmmarket_auth_role_capabilities as p")
     .join("dmmarket_auth_user_roles as r", "r.role_id", "p.role_id")
     .where("r.user_id", account.id)
-    .select("p.capability", "p.scope")
+    .select("p.capability")
     .orderBy("p.capability");
   expect(permissions).toEqual(
     Object.keys(CAPABILITIES)
       .sort()
-      .map((capability) => ({ capability, scope: "global" })),
+      .map((capability) => ({ capability })),
   );
   const superuser = await environment.db("dmmarket_auth_roles").where("name", "Superusuario").first();
   expect(

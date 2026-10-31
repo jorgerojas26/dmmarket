@@ -1,12 +1,17 @@
 const { startEnvironment } = require("../../../tests/support/auth-environment.cjs");
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const query = "from=2026-01-01&to=2026-01-31";
 async function reader(permissions, sellers = []) {
   const user = await environment.seedUser({ permissions });
-  if (sellers.length)
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", sellers[0]).delete();
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
     await environment
-      .db("dmmarket_auth_user_sellers")
+      .db("dmmarket_auth_commercial_profiles")
       .insert(sellers.map((seller_id) => ({ user_id: user.id, seller_id })));
   const client = environment.client();
   await client.login(user);
@@ -38,26 +43,26 @@ test("alcance vacío deniega y filtros no amplían a otro vendedor", async () =>
   expect((await client.request(`/api/sales/facturas?${query}`)).status).toBe(403);
 });
 
-test("lectura global más utilidad/costos propios no expone márgenes globales ni ordenación", async () => {
+test("las métricas financieras siguen la identidad comercial sin acceso a otros vendedores", async () => {
   const client = await reader(
     [
-      { capability: "sales.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
       { capability: "sales.financial", scope: "assigned" },
     ],
     ["A"],
   );
   const all = await client.request(`/api/sales/facturas?${query}`);
-  expect(all.body.pagination.total).toBe(2);
-  expect(Number(all.body.totals.monto)).toBe(300);
-  expect(all.body.totals).not.toHaveProperty("utilidad");
-  expect(all.body.data.every((row) => !Object.hasOwn(row, "utilidad"))).toBe(true);
-  expect((await client.request(`/api/sales/facturas?${query}&sortBy=utilidad`)).status).toBe(403);
-  expect((await client.request(`/api/sales/productos?${query}&sortBy=averageProfitPercent`)).status).toBe(403);
+  expect(all.body.pagination.total).toBe(1);
+  expect(Number(all.body.totals.monto)).toBe(100);
+  expect(Number(all.body.totals.utilidad)).toBe(39);
+  expect(all.body.data.every((row) => Object.hasOwn(row, "utilidad"))).toBe(true);
+  expect((await client.request(`/api/sales/facturas?${query}&sortBy=utilidad`)).status).toBe(200);
+  expect((await client.request(`/api/sales/productos?${query}&sortBy=averageProfitPercent`)).status).toBe(200);
   const own = await client.request(`/api/sales/productos?${query}&employeeId=A&sortBy=netProfit`);
   expect(own.status).toBe(200);
   expect(Number(own.body.totals.netProfit)).toBe(39);
   const other = await client.request(`/api/sales/productos?${query}&employeeId=B`);
-  expect(other.body.totals).not.toHaveProperty("netProfit");
+  expect(other.body.data).toHaveLength(0);
 });
 
 test("permisos de compras no conceden información financiera de ventas", async () => {
@@ -117,16 +122,13 @@ test("identificación exige permiso explícito y costos/utilidad respetan el ven
   expect(own.body.productos[0].costo).toBe(61);
   expect(own.body).toHaveProperty("rif", "PRIVATE-SNAPSHOT-RIF");
   const other = await client.request("/api/invoices/2/detail");
-  expect(other.status).toBe(200);
-  expect(other.body).not.toHaveProperty("utilidad");
-  expect(other.body.productos[0]).not.toHaveProperty("costo");
-  const personal = await reader(
-    [
-      { capability: "sales.read", scope: "assigned" },
-      { capability: "clients.personal", scope: "global" },
-    ],
-    ["A"],
-  );
+  expect(other.status).toBe(404);
+  const profile = await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").first();
+  const role = await environment.db("dmmarket_auth_user_roles").where("user_id", profile.user_id).first();
+  await environment
+    .db("dmmarket_auth_role_capabilities")
+    .insert({ role_id: role.role_id, capability: "sales.dispatch.personal" });
+  const personal = client;
   const response = await personal.request(`/api/invoices?${query}&sortBy=rif`);
   expect(response.status).toBe(200);
   expect(response.body.data[0].rif).toBe("PRIVATE-SNAPSHOT-RIF");
@@ -172,21 +174,21 @@ test.each(["false", "true"])(
   },
 );
 
-test("agregados globales no revelan utilidad ni ranking por utilidad propia", async () => {
+test("agregados y comparaciones respetan la identidad comercial", async () => {
   const client = await reader(
     [
-      { capability: "sales.read", scope: "global" },
+      { capability: "sales.read", scope: "assigned" },
       { capability: "sales.financial", scope: "assigned" },
     ],
     ["A"],
   );
   const result = await client.request(`/api/dashboard/sales?${query}&compareFrom=2025-12-01&compareTo=2025-12-31`);
   expect(result.status).toBe(200);
-  expect(result.body.kpis.totalRawProfit).toBe(300);
-  expect(result.body.kpis.compareRawProfit).toBe(30);
-  expect(result.body.kpis).not.toHaveProperty("compareNetProfit");
-  expect(result.body.topClients[0]).not.toHaveProperty("netProfit");
-  expect(result.body.topProducts[0]).not.toHaveProperty("netProfit");
+  expect(result.body.kpis.totalRawProfit).toBe(100);
+  expect(result.body.kpis.compareRawProfit).toBe(10);
+  expect(result.body.kpis.compareNetProfit).toBe(7);
+  expect(Number(result.body.topClients[0].netProfit)).toBe(39);
+  expect(Number(result.body.topProducts[0].netProfit)).toBe(39);
   const own = await client.request(
     `/api/dashboard/sales?${query}&employeeId=A&compareFrom=2025-12-01&compareTo=2025-12-31`,
   );

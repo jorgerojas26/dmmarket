@@ -13,9 +13,9 @@ exports.seed = async (db) => {
         throw new Error(
           `Ya existe un rol llamado ${role.name} con otro identificador. Revisa el conflicto antes de instalar; no se sobrescriben roles existentes.`,
         );
-      const permissions = validateGrants(role.permissions.map((capability) => ({ capability, scope: "global" })));
+      const permissions = validateGrants(role.permissions.map((capability) => ({ capability })));
       await transaction("dmmarket_auth_roles").insert({ id: role.id, name: role.name });
-      await transaction("dmmarket_auth_role_permissions").insert(
+      await transaction("dmmarket_auth_role_capabilities").insert(
         permissions.map((permission) => ({ role_id: role.id, ...permission })),
       );
       await appendEvent(transaction, {

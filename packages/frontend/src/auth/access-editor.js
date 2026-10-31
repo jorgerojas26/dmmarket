@@ -4,7 +4,8 @@ import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Popover from 'react-bootstrap/Popover';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
-import { LoadState, ManagementForm, Pagination, useDiscardChanges } from './access-ui';
+import { LoadState, ManagementForm, useDiscardChanges } from './access-ui';
+import { CommercialProfileForm } from './commercial-profile';
 import { useAuth } from './context';
 import { Field } from './forms';
 import { RoleModules, RolePermissionMatrix } from './role-permissions';
@@ -12,7 +13,7 @@ import { authRequest } from './transport';
 
 function grantsFor(role) {
     return (role?.permissions || []).reduce((grants, grant) => {
-        if (grants[grant.capability] !== 'global') grants[grant.capability] = grant.scope;
+        grants[grant.capability] = true;
         return grants;
     }, {});
 }
@@ -25,7 +26,7 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange, readOnly = 
     const [selectedModule, setSelectedModule] = useState(MODULES[0].key);
     const changed =
         name !== (role?.name || '') ||
-        catalog.some(({ capability }) => (grants[capability] || '') !== (grantsFor(role)[capability] || ''));
+        catalog.some(({ capability }) => Boolean(grants[capability]) !== Boolean(grantsFor(role)[capability]));
     const dirty = !readOnly && changed;
     const module = MODULES.find((module) => module.key === selectedModule);
     const moduleEntries = catalog.filter((entry) => entry.module === selectedModule);
@@ -69,16 +70,11 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange, readOnly = 
                                     <Popover.Body>
                                         <div className="kpi-help-line">Los permisos se suman entre roles.</div>
                                         <div className="kpi-help-line">
-                                            <span className="kpi-help-k">Sin acceso: </span>
-                                            este rol no concede el permiso.
+                                            Los permisos comerciales se aplican a la identidad de la cuenta.
                                         </div>
                                         <div className="kpi-help-line">
-                                            <span className="kpi-help-k">Todo el negocio: </span>
-                                            acceso a todos los datos.
-                                        </div>
-                                        <div className="kpi-help-line">
-                                            <span className="kpi-help-k">Vendedores vinculados: </span>
-                                            solo los datos de los vendedores asignados al usuario.
+                                            Consultar datos de otros vendedores requiere el permiso explícito
+                                            correspondiente.
                                         </div>
                                         <div className="kpi-help-line">
                                             <span className="kpi-help-k">Consulta: </span>
@@ -160,8 +156,8 @@ function RoleForm({ role, catalog, onSaved, onCancel, onDirtyChange, readOnly = 
                                 {
                                     name,
                                     permissions: Object.entries(grants)
-                                        .filter(([, scope]) => scope)
-                                        .map(([capability, scope]) => ({ capability, scope })),
+                                        .filter(([, enabled]) => enabled)
+                                        .map(([capability]) => ({ capability })),
                                 },
                                 role ? 'PUT' : 'POST',
                             );
@@ -357,133 +353,16 @@ function RolesAssignment({ id, initial, roles, onDirtyChange, onBusyChange, onSa
     );
 }
 
-function SellersAssignment({ id, initial, onDirtyChange, onBusyChange, onSaved }) {
-    const { check } = useAuth();
-    const [selected, setSelected] = useState(initial);
-    const [saved, setSaved] = useState(initial);
-    const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const [reason, setReason] = useState('');
-    const [message, setMessage] = useState('');
-    const { data, error, mutate } = useSWR(
-        `/api/auth/seller-options?search=${encodeURIComponent(search)}&page=${page}`,
-        fetcher,
-    );
-    const { data: selectedNames } = useSWR(
-        selected.length ? `/api/auth/seller-options?ids=${encodeURIComponent(selected.join(','))}` : null,
-        fetcher,
-    );
-    const changed = [...selected].sort().join(',') !== [...saved].sort().join(',');
-    useEffect(() => {
-        if (!changed && !reason) {
-            setSelected(initial);
-            setSaved(initial);
-        }
-    }, [initial, changed, reason]);
-    useEffect(() => {
-        onDirtyChange(changed || Boolean(reason));
-    }, [changed, reason, onDirtyChange]);
-    return (
-        <section className="access-assignment" aria-label="Vendedores vinculados">
-            <h3>Vendedores vinculados</h3>
-            <p className="access-muted">
-                Limita los permisos que usan este alcance. Sin vínculos no se concede acceso restringido.
-            </p>
-            <ManagementForm
-                button="Guardar vendedores vinculados"
-                disabled={!changed}
-                onBusyChange={onBusyChange}
-                onSubmit={async () => {
-                    await authRequest(`users/${id}/sellers`, { sellerIds: selected, reason }, 'PUT');
-                    await onSaved(selected);
-                    setSaved(selected);
-                    setReason('');
-                    setMessage('Vínculos guardados y sesiones del usuario revocadas.');
-                    await check(false);
-                }}
-            >
-                {selected.length > 0 && (
-                    <fieldset className="access-selected" aria-label="Vendedores seleccionados">
-                        {selected.map((sellerId) => (
-                            <button
-                                type="button"
-                                className="access-chip"
-                                key={sellerId}
-                                aria-label={`Quitar ${selectedNames?.data.find((seller) => seller.id === sellerId)?.name || sellerId}`}
-                                onClick={() => setSelected(selected.filter((value) => value !== sellerId))}
-                            >
-                                {selectedNames?.data.find((seller) => seller.id === sellerId)?.name || sellerId}
-                                <span aria-hidden="true"> ×</span>
-                            </button>
-                        ))}
-                    </fieldset>
-                )}
-                <input
-                    type="search"
-                    className="form-control"
-                    aria-label="Buscar vendedores"
-                    placeholder="Buscar por nombre o código…"
-                    value={search}
-                    onChange={(event) => {
-                        setSearch(event.target.value);
-                        setPage(1);
-                    }}
-                />
-                <LoadState error={error} loading={!data} onRetry={mutate}>
-                    <fieldset className="access-checklist" aria-label="Vendedores disponibles">
-                        {data?.data.map((seller) => (
-                            <label className="access-check" key={seller.id}>
-                                <input
-                                    type="checkbox"
-                                    checked={selected.includes(seller.id)}
-                                    disabled={!selected.includes(seller.id) && selected.length >= 100}
-                                    onChange={(event) =>
-                                        setSelected(
-                                            event.target.checked
-                                                ? [...selected, seller.id]
-                                                : selected.filter((value) => value !== seller.id),
-                                        )
-                                    }
-                                />
-                                <span>
-                                    {seller.name || 'Sin nombre'} · {seller.id}
-                                </span>
-                            </label>
-                        ))}
-                        {!data?.data.length && <p className="access-empty">No se encontraron vendedores.</p>}
-                    </fieldset>
-                </LoadState>
-                {data && <Pagination page={page} total={data.total} onChange={setPage} />}
-                <p className="access-muted">
-                    {selected.length} seleccionados · Guardar cerrará las sesiones de este usuario.
-                </p>
-                <Field
-                    label="Motivo del cambio de vínculos"
-                    value={reason}
-                    onChange={setReason}
-                    minLength={5}
-                    maxLength={64}
-                />
-                {message && (
-                    <p role="status" className="access-success">
-                        {message}
-                    </p>
-                )}
-            </ManagementForm>
-        </section>
-    );
-}
-
 export function Assignments({ id, onDirtyChange, onBusyChange }) {
     const { can } = useAuth();
     const roles = useSWR(can('access.roles.read') ? '/api/auth/roles' : null, fetcher);
     const assignedRoles = useSWR(can('access.roles.read') ? `/api/auth/users/${id}/roles` : null, fetcher);
-    const sellers = useSWR(can('access.links.read') ? `/api/auth/users/${id}/sellers` : null, fetcher);
+    const profile = useSWR(can('access.profile.read') ? `/api/auth/users/${id}/commercial-profile` : null, fetcher);
     const [rolesDirty, setRolesDirty] = useState(false);
-    const [sellersDirty, setSellersDirty] = useState(false);
+    const [profileDirty, setProfileDirty] = useState(false);
     useEffect(() => {
-        onDirtyChange(rolesDirty || sellersDirty);
-    }, [rolesDirty, sellersDirty, onDirtyChange]);
+        onDirtyChange(rolesDirty || profileDirty);
+    }, [rolesDirty, profileDirty, onDirtyChange]);
     return (
         <>
             {can('access.roles.read') && (
@@ -518,44 +397,24 @@ export function Assignments({ id, onDirtyChange, onBusyChange }) {
                     )}
                 </LoadState>
             )}
-            {can('access.links.read') && (
-                <LoadState error={sellers.error} loading={!sellers.data} onRetry={sellers.mutate}>
-                    {can('access.links.update') ? (
-                        <SellersAssignment
+            {can('access.profile.read') && (
+                <LoadState error={profile.error} loading={profile.data === undefined} onRetry={profile.mutate}>
+                    {can('access.profile.update') ? (
+                        <CommercialProfileForm
                             id={id}
-                            initial={sellers.data?.data || []}
-                            onSaved={(data) => sellers.mutate({ data }, false)}
-                            onDirtyChange={setSellersDirty}
+                            initial={profile.data}
+                            onSaved={(data) => profile.mutate(data, false)}
+                            onDirtyChange={setProfileDirty}
                             onBusyChange={onBusyChange}
                         />
                     ) : (
-                        <LinkedSellers initial={sellers.data?.data || []} />
+                        <section aria-label="Identidad comercial de la cuenta">
+                            <h3>Perfil comercial</h3>
+                            <p>{profile.data?.name || 'Sin perfil comercial'}</p>
+                        </section>
                     )}
                 </LoadState>
             )}
         </>
-    );
-}
-
-function LinkedSellers({ initial }) {
-    const { data, error, mutate } = useSWR(
-        initial.length ? `/api/auth/seller-options?ids=${encodeURIComponent(initial.join(','))}` : null,
-        fetcher,
-    );
-    return (
-        <section aria-label="Vendedores vinculados">
-            <h3>Vendedores vinculados</h3>
-            {initial.length ? (
-                <LoadState error={error} loading={!data} onRetry={mutate}>
-                    <ul>
-                        {data?.data.map((seller) => (
-                            <li key={seller.id}>{seller.name}</li>
-                        ))}
-                    </ul>
-                </LoadState>
-            ) : (
-                <p className="access-muted">Sin vendedores vinculados.</p>
-            )}
-        </section>
     );
 }

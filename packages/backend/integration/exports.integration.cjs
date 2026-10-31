@@ -3,12 +3,18 @@ const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedInventory } = require("../../../tests/support/inventory-fixtures.cjs");
 const { seedPurchases } = require("../../../tests/support/purchase-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const salesRange = "from=2026-01-01&to=2026-01-31";
 const buyRange = "from=2026-08-01&to=2026-08-31";
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions) {
   const user = await environment.seedUser({ permissions });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").delete();
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = environment.client();
   await client.login(user);
   return { client, user };
@@ -70,7 +76,7 @@ test("consulta global permite imprimir sin ampliar rentabilidad vinculada", asyn
   ]);
   expect((await client.request(`/api/exports/sales?${salesRange}`)).status).toBe(200);
   const other = await client.request(`/api/exports/sales?${salesRange}&employeeId=B`);
-  expect(other.status).toBe(200);
+  expect(other.status).toBe(403);
   expect(JSON.stringify(other.body)).not.toMatch(/utilidad|promedio/);
   const result = await client.request(`/api/exports/sales?${salesRange}&employeeId=A`);
   expect(result.status).toBe(200);
@@ -79,7 +85,7 @@ test("consulta global permite imprimir sin ampliar rentabilidad vinculada", asyn
 });
 
 test("exportar global no amplía privilegios financieros propios", async () => {
-  const { client } = await reader([grant("sales.read"), grant("sales.export"), grant("sales.financial", "assigned")]);
+  const { client } = await reader([grant("sales.read"), grant("sales.export")]);
   const result = await client.request(`/api/exports/sales?${salesRange}`);
   expect(result.status).toBe(200);
   expect(result.body.total).toBe(2);
@@ -179,7 +185,7 @@ test("documento exportado exige alcance del vendedor exacto y no conserva utilid
   expect(permitted.status).toBe(200);
   expect(permitted.body.utilidad).toBe(39);
   const other = await client.request("/api/exports/sales/2?showNoe=false");
-  expect(other.status).toBe(200);
+  expect(other.status).toBe(404);
   expect(other.body).not.toHaveProperty("utilidad");
   const basic = await reader([grant("sales.read"), grant("sales.export")]);
   const omitted = await basic.client.request("/api/exports/sales/1?showNoe=false");
@@ -222,7 +228,7 @@ test("despacho exporta selección completa autorizada sin reconstruir costos ni 
         body: { invoiceIds: ["1", "2"], showNoe: false },
       })
     ).status,
-  ).toBe(200);
+  ).toBe(404);
   const permitted = await own.client.request("/api/exports/sales/dispatch", {
     method: "POST",
     body: { invoiceIds: ["1"], showNoe: false },

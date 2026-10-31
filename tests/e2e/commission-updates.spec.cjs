@@ -29,7 +29,7 @@ test("edición de comisión confirma actor y no recalcula capturas históricas",
       { capability: "sales.read", scope: "global" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.getByLabel("Código MFA", { exact: true }).fill(await environment.token(user.secret));
   await page.getByRole("button", { name: "Verificar código", exact: true }).click();

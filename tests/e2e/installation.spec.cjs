@@ -59,7 +59,7 @@ test("asistente sandbox conserva claves, verifica HTTPS real y no declara listo 
     expect(await page.locator("body").innerText()).not.toContain(environment.configuration.AUTH_MFA_KEY);
     expect(Number((await environment.db("dmmarket_auth_users").count("* as n").first()).n)).toBe(0);
     expect((await environment.db("dmmarket_auth_roles").select("name")).map((role) => role.name).sort()).toEqual(
-      ["Superusuario", "Administrador", "Consultor", "Cobranza"].sort(),
+      ["Superusuario", "Administrador", "Consultor", "Cobranza", "Vendedor"].sort(),
     );
     expect(Number((await environment.db("dmmarket_auth_user_roles").count("* as n").first()).n)).toBe(0);
   } finally {
@@ -71,17 +71,18 @@ test("reinstalador compilado carga roles ausentes y conserva personalizaciones s
   page,
   environment,
 }) => {
+  await require("../support/auth-environment.cjs").backend("./seeds/001_default_roles").seed(environment.db);
   const direction = await environment.db("dmmarket_auth_roles").where("name", "Administrador").first();
   await environment.db("dmmarket_auth_roles").where("id", direction.id).update({ name: "Administrador personalizado" });
   await environment
-    .db("dmmarket_auth_role_permissions")
-    .where({ role_id: direction.id, capability: "access.links.update" })
+    .db("dmmarket_auth_role_capabilities")
+    .where({ role_id: direction.id, capability: "access.profile.update" })
     .delete();
   const collection = await environment.db("dmmarket_auth_roles").where("name", "Cobranza").first();
-  await environment.db("dmmarket_auth_role_permissions").where("role_id", collection.id).delete();
+  await environment.db("dmmarket_auth_role_capabilities").where("role_id", collection.id).delete();
   await environment.db("dmmarket_auth_roles").where("id", collection.id).delete();
   const before = await environment
-    .db("dmmarket_auth_role_permissions")
+    .db("dmmarket_auth_role_capabilities")
     .where("role_id", direction.id)
     .orderBy("capability");
   const setup = await startCompiledSetupSandbox(environment);
@@ -102,10 +103,10 @@ test("reinstalador compilado carga roles ausentes y conserva personalizaciones s
       "Administrador personalizado",
     );
     expect(
-      await environment.db("dmmarket_auth_role_permissions").where("role_id", direction.id).orderBy("capability"),
+      await environment.db("dmmarket_auth_role_capabilities").where("role_id", direction.id).orderBy("capability"),
     ).toEqual(before);
     expect((await environment.db("dmmarket_auth_roles").where("name", "Cobranza").first()).id).toBe(collection.id);
-    expect(Number((await environment.db("dmmarket_auth_roles").count("* as n").first()).n)).toBe(4);
+    expect(Number((await environment.db("dmmarket_auth_roles").count("* as n").first()).n)).toBe(5);
     expect(Number((await environment.db("dmmarket_auth_users").count("* as n").first()).n)).toBe(0);
     expect(Number((await environment.db("dmmarket_auth_user_roles").count("* as n").first()).n)).toBe(0);
   } finally {

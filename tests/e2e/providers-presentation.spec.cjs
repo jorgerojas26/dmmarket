@@ -10,7 +10,7 @@ test.beforeEach(async ({ environment }) => {
 });
 async function enter(page, environment, permissions) {
   const user = await environment.seedUser({ permissions });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await openModule(page, "Proveedores");
   await page.getByRole("cell", { name: "Proveedor compras A", exact: true }).click();

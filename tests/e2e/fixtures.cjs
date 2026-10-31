@@ -16,6 +16,7 @@ const test = base.extend({
   ],
   resetPreferences: [
     async ({ environment }, use) => {
+      await environment.db("dmmarket_auth_commercial_profiles").delete();
       await environment
         .db("dmmarket_preferences")
         .where({ id: 1, document_type: "delivery-notes" })
@@ -59,10 +60,8 @@ async function login(page, environment, user) {
   await (await response).finished();
 }
 
-async function setPermission(page, name, scope) {
-  await page.getByRole("checkbox", { name, exact: true }).setChecked(Boolean(scope));
-  const selector = page.getByRole("combobox", { name: `Alcance de ${name}`, exact: true });
-  if (scope && (await selector.count())) await selector.selectOption(scope);
+async function setPermission(page, name, enabled = true) {
+  await page.getByRole("checkbox", { name, exact: true }).setChecked(Boolean(enabled));
 }
 
 async function logout(page) {

@@ -1,3 +1,4 @@
+import { requiresCommercialProfile } from '@dmmarket/permissions';
 import { useEffect, useRef, useState } from 'react';
 import Dropdown from 'react-bootstrap/Dropdown';
 import { createPortal } from 'react-dom';
@@ -6,6 +7,7 @@ import { fetcher } from 'swr-config';
 import { Assignments } from './access-editor';
 import { permissionGroups } from './access-permissions';
 import { AccessDialog, LoadState, ManagementForm, Pagination, useDiscardChanges } from './access-ui';
+import { CommercialIdentityField } from './commercial-profile';
 import { useAuth } from './context';
 import { Field } from './forms';
 import { authRequest } from './transport';
@@ -16,11 +18,13 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
     const [username, setUsername] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [roleId, setRoleId] = useState('');
+    const [sellerId, setSellerId] = useState('');
     const [mfaRequired, setMfaRequired] = useState(false);
     const [busy, setBusy] = useState(false);
     const { data: roles, error, mutate } = useSWR(can('access.roles.read') ? '/api/auth/roles' : null, fetcher);
     const role = useSWR(roleId ? `/api/auth/roles/${roleId}` : null, fetcher);
-    const dirty = Boolean(username || displayName || roleId || mfaRequired);
+    const needsProfile = requiresCommercialProfile(role.data?.permissions || []);
+    const dirty = Boolean(username || displayName || roleId || sellerId || mfaRequired);
     useEffect(() => {
         heading.current?.focus();
     }, []);
@@ -43,13 +47,16 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
                     button="Crear usuario"
                     onBusyChange={setBusy}
                     onCancel={onClose}
-                    disabled={Boolean(!roleId || !roles || error || !role.data || role.error)}
+                    disabled={Boolean(
+                        !roleId || !roles || error || !role.data || role.error || (needsProfile && !sellerId),
+                    )}
                     onSubmit={async () =>
                         onCreated(
                             await authRequest('users', {
                                 username,
                                 displayName,
                                 roleIds: [roleId],
+                                sellerId: sellerId || null,
                                 mfaRequired,
                             }),
                         )
@@ -112,17 +119,7 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
                                                     items.flatMap(([key, label]) =>
                                                         (role.data?.permissions || [])
                                                             .filter((grant) => grant.capability === key)
-                                                            .map((grant) => (
-                                                                <li key={`${key}:${grant.scope}`}>
-                                                                    {label}{' '}
-                                                                    <span className="access-muted">
-                                                                        ·{' '}
-                                                                        {grant.scope === 'assigned'
-                                                                            ? 'Vendedores vinculados'
-                                                                            : 'Todos los datos'}
-                                                                    </span>
-                                                                </li>
-                                                            )),
+                                                            .map(() => <li key={key}>{label}</li>),
                                                     ),
                                                 )}
                                             </ul>
@@ -131,6 +128,9 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
                                 </LoadState>
                             )}
                         </LoadState>
+                        {can('access.profile.read') && (
+                            <CommercialIdentityField value={sellerId} onChange={setSellerId} required={needsProfile} />
+                        )}
                         <label className="access-mfa-option">
                             <input
                                 type="checkbox"
@@ -337,7 +337,7 @@ function UserPanel({ user, onClose, onDone, onDirtyChange }) {
                 <fieldset disabled={busy}>
                     <Assignments id={user.id} onDirtyChange={setDirty} onBusyChange={setBusy} />
                 </fieldset>
-                {!can('access.roles.read') && !can('access.links.read') && (
+                {!can('access.roles.read') && !can('access.profile.read') && (
                     <p className="access-muted">
                         Desde aquí puedes administrar el estado y la recuperación de esta cuenta, según tus permisos.
                     </p>

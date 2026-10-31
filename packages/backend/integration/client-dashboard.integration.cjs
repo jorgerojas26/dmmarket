@@ -2,13 +2,18 @@ const { startEnvironment } = require("../../../tests/support/auth-environment.cj
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedParties } = require("../../../tests/support/party-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const range = "from=2026-01-01&to=2026-01-31";
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions, sellers = ["A"]) {
   const user = await environment.seedUser({ permissions });
-  if (sellers.length)
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", sellers[0]).delete();
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
     await environment
-      .db("dmmarket_auth_user_sellers")
+      .db("dmmarket_auth_commercial_profiles")
       .insert(sellers.map((seller_id) => ({ user_id: user.id, seller_id })));
   const client = environment.client();
   await client.login(user);
@@ -66,7 +71,7 @@ test.each(["false", "true"])(
 );
 
 test("utilidad y ordenación derivada requieren costos y utilidad sobre todo el conjunto", async () => {
-  const partial = await reader([grant("clients.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
+  const partial = await reader([grant("clients.read"), grant("sales.read")]);
   const result = await partial.request(`/api/clients/dashboard?${range}`);
   expect(result.body.kpis).toMatchObject({
     activeClients: 2,
@@ -77,7 +82,12 @@ test("utilidad y ordenación derivada requieren costos y utilidad sobre todo el 
   expect(result.body.waterfall).toEqual({ retained: 1, lost: 0, gained: 1, previous: 1, current: 2 });
   expect(result.body.treemapTop50.map((row) => row.value)).toEqual([300, 250]);
   expect(result.body).not.toHaveProperty("abcUtility");
-  const narrowed = await partial.request(`/api/clients/dashboard?${range}&employeeId=A`);
+  const ownFinancial = await reader([
+    grant("clients.read", "assigned"),
+    grant("sales.read", "assigned"),
+    grant("sales.financial", "assigned"),
+  ]);
+  const narrowed = await ownFinancial.request(`/api/clients/dashboard?${range}&employeeId=A`);
   expect(narrowed.body.abcUtility.clients[0].utilidad).toBe(39);
   expect(narrowed.body.abcUtility.clients[0].total_usd).toBe(100);
   for (const capability of ["inventory.costs", "purchases.costs"]) {

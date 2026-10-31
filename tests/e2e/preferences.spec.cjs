@@ -45,7 +45,7 @@ test("guardar actualiza todas las sesiones y persiste al recargar sin mezclar re
   const viewer = await context.newPage();
   try {
     const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-    await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
     await login(viewer, environment, user);
     await viewer.goto(`${environment.origin}/ventas?view=dashboard&from=2026-01-01&to=2026-01-31`);
     const total = viewer.locator(".dashboard-kpi-card").filter({ hasText: "Venta Bruta" });
@@ -122,7 +122,7 @@ for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await seedSales(environment.db);
     const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-    await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
     let recovering = false;
     let release;
     const gate = new Promise((resolve) => {
@@ -186,10 +186,11 @@ test("el fallo de preferencias no bloquea configuración, cuenta, inventario ni 
   const user = await environment.seedUser({
     permissions: [
       ...grants("preferences.read", "rates.read", "backups.read", "inventory.read", "receivables.read", "clients.read"),
-      { capability: "sales.read", scope: "assigned" },
+      { capability: "sales.read", scope: "global" },
+      { capability: "sales.others.read" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const reports = [];
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;

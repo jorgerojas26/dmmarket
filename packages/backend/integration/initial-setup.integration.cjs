@@ -38,8 +38,8 @@ beforeEach(async () => {
     "dmmarket_auth_session_state",
     "dmmarket_auth_events",
     "dmmarket_auth_user_roles",
-    "dmmarket_auth_user_sellers",
-    "dmmarket_auth_role_permissions",
+    "dmmarket_auth_commercial_profiles",
+    "dmmarket_auth_role_capabilities",
     "dmmarket_auth_users",
     "dmmarket_auth_roles",
     "dmmarket_auth_sessions",
@@ -110,7 +110,7 @@ test("primera cuenta es superusuario global con contraseña elegida, SID nuevo y
   expect(response.body.permissions.sort((a, b) => a.capability.localeCompare(b.capability))).toEqual(
     Object.keys(CAPABILITIES)
       .sort((a, b) => a.localeCompare(b))
-      .map((capability) => ({ capability, scope: "global" })),
+      .map((capability) => ({ capability })),
   );
   const role = await environment
     .db("dmmarket_auth_roles as r")
@@ -195,7 +195,7 @@ test("MFA voluntario se configura tras volver con la misma contraseña sin abrir
   expect((await client.request("/api/currency_rates")).status).toBe(200);
   const session = await client.request("/api/auth/session");
   expect(session.body.permissions).toHaveLength(Object.keys(CAPABILITIES).length);
-  expect(session.body.permissions.every((grant) => grant.scope === "global")).toBe(true);
+  expect(session.body.permissions.every((grant) => !Object.hasOwn(grant, "scope"))).toBe(true);
 });
 
 test("reinicio real conserva cierre y sesión lista sin MFA", async () => {
@@ -220,7 +220,7 @@ test("reinstalación, cuenta deshabilitada y pérdida de cuentas no reabren el f
     "dmmarket_auth_session_state",
     "dmmarket_auth_events",
     "dmmarket_auth_user_roles",
-    "dmmarket_auth_user_sellers",
+    "dmmarket_auth_commercial_profiles",
     "dmmarket_auth_users",
   ])
     await environment.db(table).delete();

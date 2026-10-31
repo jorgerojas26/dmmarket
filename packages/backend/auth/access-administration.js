@@ -1,5 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const { CAPABILITIES, validateGrants } = require("./capabilities");
+const { requiresCommercialProfile, validateCommercialProfile, commercialProfile } = require("./commercial-profile");
 const {
   assertAuthSchema,
   appendEvent,
@@ -31,32 +32,20 @@ function roleName(value) {
 }
 
 function permissions(value) {
-  if (!Array.isArray(value) || value.length > Object.keys(CAPABILITIES).length * 2)
+  if (!Array.isArray(value) || value.length > Object.keys(CAPABILITIES).length)
     fail(400, "Los permisos no son válidos.");
   let grants;
   try {
     grants = validateGrants(value);
   } catch {
-    fail(400, "La capacidad o su alcance no están admitidos.");
+    fail(400, "El permiso no está admitido.");
   }
-  return [...new Map(grants.map((grant) => [`${grant.capability}:${grant.scope}`, grant])).values()];
+  return [...new Map(grants.map((grant) => [grant.capability, grant])).values()];
 }
 
 function roleIds(value) {
   if (!Array.isArray(value) || value.length > 100) fail(400, "La selección de roles no es válida.");
   return [...new Set(value.map(identifier))].sort();
-}
-
-function sellerIds(value) {
-  if (
-    !Array.isArray(value) ||
-    value.length > 100 ||
-    value.some(
-      (id) => typeof id !== "string" || !/^[\p{L}\p{N}._-]{1,32}$/u.test(id) || /[\u{10000}-\u{10FFFF}]/u.test(id),
-    )
-  )
-    fail(400, "La selección de vendedores no es válida.");
-  return [...new Set(value)].sort();
 }
 
 function optionalReason(value) {
@@ -92,11 +81,10 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         if (!role) fail(404, "El rol no está disponible.");
         return {
           ...role,
-          permissions: await connection("dmmarket_auth_role_permissions")
+          permissions: await connection("dmmarket_auth_role_capabilities")
             .where("role_id", id)
-            .select("capability", "scope")
-            .orderBy("capability")
-            .orderBy("scope"),
+            .select("capability")
+            .orderBy("capability"),
         };
       });
     },
@@ -110,7 +98,9 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         const id = randomUUID();
         await connection("dmmarket_auth_roles").insert({ id, name });
         if (grants.length)
-          await connection("dmmarket_auth_role_permissions").insert(grants.map((grant) => ({ role_id: id, ...grant })));
+          await connection("dmmarket_auth_role_capabilities").insert(
+            grants.map((grant) => ({ role_id: id, ...grant })),
+          );
         await event(connection, actorId, "auth.role_created", reason, null, id);
         return { id, name, permissions: grants };
       });
@@ -124,9 +114,11 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         if (await connection("dmmarket_auth_roles").where("name", name).whereNot("id", id).first())
           fail(409, "Ya existe un rol con ese nombre.");
         await connection("dmmarket_auth_roles").where("id", id).update({ name });
-        await connection("dmmarket_auth_role_permissions").where("role_id", id).delete();
+        await connection("dmmarket_auth_role_capabilities").where("role_id", id).delete();
         if (grants.length)
-          await connection("dmmarket_auth_role_permissions").insert(grants.map((grant) => ({ role_id: id, ...grant })));
+          await connection("dmmarket_auth_role_capabilities").insert(
+            grants.map((grant) => ({ role_id: id, ...grant })),
+          );
         const users = await connection("dmmarket_auth_user_roles")
           .where("role_id", id)
           .orderBy("user_id")
@@ -137,15 +129,18 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         return { id, name, permissions: grants, affectedUsers: users.length };
       });
     },
-    assignments(sid, id, kind) {
-      const roles = kind === "roles";
-      return administer(sid, roles ? "access.roles.read" : "access.links.read", false, async (connection) => {
+    assignments(sid, id) {
+      return administer(sid, "access.roles.read", false, async (connection) => {
         if (!(await connection("dmmarket_auth_users").where("id", identifier(id)).first()))
           fail(404, "La cuenta no está disponible.");
-        return connection(roles ? "dmmarket_auth_user_roles" : "dmmarket_auth_user_sellers")
-          .where("user_id", id)
-          .orderBy(roles ? "role_id" : "seller_id")
-          .pluck(roles ? "role_id" : "seller_id");
+        return connection("dmmarket_auth_user_roles").where("user_id", id).orderBy("role_id").pluck("role_id");
+      });
+    },
+    profile(sid, id) {
+      return administer(sid, "access.profile.read", false, async (connection) => {
+        if (!(await connection("dmmarket_auth_users").where("id", identifier(id)).first()))
+          fail(404, "La cuenta no está disponible.");
+        return commercialProfile(connection, id);
       });
     },
     setRoles(sid, id, input) {
@@ -155,10 +150,16 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         await target(connection, "dmmarket_auth_users", id);
         const rows = ids.length ? await connection("dmmarket_auth_roles").whereIn("id", ids).select("id") : [];
         if (rows.length !== ids.length) fail(400, "Uno de los roles no está disponible.");
-        if (ids.length)
-          validateGrants(
-            await connection("dmmarket_auth_role_permissions").whereIn("role_id", ids).select("capability", "scope"),
-          );
+        const grants = ids.length
+          ? validateGrants(
+              await connection("dmmarket_auth_role_capabilities").whereIn("role_id", ids).select("capability"),
+            )
+          : [];
+        if (
+          requiresCommercialProfile(grants) &&
+          !(await connection("dmmarket_auth_commercial_profiles").where("user_id", id).first())
+        )
+          fail(400, "Los roles seleccionados requieren un perfil comercial individual.");
         await connection("dmmarket_auth_user_roles").where("user_id", id).delete();
         if (ids.length)
           await connection("dmmarket_auth_user_roles").insert(ids.map((roleId) => ({ user_id: id, role_id: roleId })));
@@ -168,22 +169,27 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         return { id, roleIds: ids };
       });
     },
-    setSellers(sid, id, input) {
-      const ids = sellerIds(input.sellerIds);
+    setProfile(sid, id, input) {
+      if (!input || Array.isArray(input) || !Object.hasOwn(input, "sellerId"))
+        fail(400, "Indica una identidad comercial o null.");
       const reason = validateReason(input.reason);
-      return administer(sid, "access.links.update", true, async (connection, actorId) => {
+      return administer(sid, "access.profile.update", true, async (connection, actorId) => {
         await target(connection, "dmmarket_auth_users", id);
-        const rows = ids.length ? await connection("vendedores").whereIn("idVend", ids).select("idVend") : [];
-        if (rows.length !== ids.length || rows.some((row) => !ids.includes(String(row.idVend))))
-          fail(400, "Uno de los vendedores no está disponible.");
-        await connection("dmmarket_auth_user_sellers").where("user_id", id).delete();
-        if (ids.length)
-          await connection("dmmarket_auth_user_sellers").insert(
-            ids.map((sellerId) => ({ user_id: id, seller_id: sellerId })),
-          );
-        await invalidateUser(connection, id, now(), "links-changed");
-        await event(connection, actorId, "auth.user_sellers_changed", reason, id);
-        return { id, sellerIds: ids };
+        const identity = await validateCommercialProfile(connection, input.sellerId, id);
+        if (identity === null) {
+          const grants = await connection("dmmarket_auth_role_capabilities as p")
+            .join("dmmarket_auth_user_roles as r", "r.role_id", "p.role_id")
+            .where("r.user_id", id)
+            .select("p.capability");
+          if (requiresCommercialProfile(grants))
+            fail(409, "Retira primero los roles que requieren esta identidad comercial.");
+        }
+        await connection("dmmarket_auth_commercial_profiles").where("user_id", id).delete();
+        if (identity)
+          await connection("dmmarket_auth_commercial_profiles").insert({ user_id: id, seller_id: identity });
+        await invalidateUser(connection, id, now(), "commercial-profile-changed");
+        await event(connection, actorId, "auth.commercial_profile_changed", reason, id);
+        return commercialProfile(connection, id);
       });
     },
   });

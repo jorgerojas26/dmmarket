@@ -2,13 +2,18 @@ const { startEnvironment } = require("../../../tests/support/auth-environment.cj
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedParties } = require("../../../tests/support/party-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const range = "from=2026-01-01&to=2026-01-31";
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions, sellers = ["A"]) {
   const user = await environment.seedUser({ permissions });
-  if (sellers.length)
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", sellers[0]).delete();
+  if (sellers.length && permissions.some((grant) => grant.scope === "assigned"))
     await environment
-      .db("dmmarket_auth_user_sellers")
+      .db("dmmarket_auth_commercial_profiles")
       .insert(sellers.map((seller_id) => ({ user_id: user.id, seller_id })));
   const client = environment.client();
   await client.login(user);
@@ -67,7 +72,7 @@ test("vendedores propios y datos personales propios no se convierten en director
   expect(catalog.body).toHaveLength(1);
   expect(catalog.body[0]).toMatchObject({ id: "A", name: "Vendedor A", phone: "PRIVATE-PHONE-A" });
   expect((await own.request("/api/employees?search=B")).body).toEqual([]);
-  const combined = await reader([grant("sellers.read"), grant("sellers.personal", "assigned")]);
+  const combined = await reader([grant("sellers.read"), grant("sellers.personal"), grant("sales.others.read")]);
   const result = await combined.request("/api/employees");
   expect(result.status).toBe(200);
   expect(result.body.find((row) => row.id === "A").phone).toBe("PRIVATE-PHONE-A");
@@ -122,7 +127,7 @@ test.each(["false", "true"])("ventas globales se intersectan con vendedores prop
 });
 
 test("utilidad propia nunca ordena ni expone métricas del directorio global", async () => {
-  const client = await reader([grant("sellers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
+  const client = await reader([grant("sellers.read"), grant("sales.read")]);
   const result = await client.request(`/api/sellers/list?${range}`);
   expect(result.status).toBe(200);
   expect(Number(result.body.totals.sales)).toBe(550);
@@ -145,7 +150,11 @@ test("orden por utilidad de clientes exige cobertura completa, filtrado de nombr
 });
 
 test("filtro de vendedor también limita el catálogo y no inventa utilidad para otros", async () => {
-  const client = await reader([grant("sellers.read"), grant("sales.read"), grant("sales.financial", "assigned")]);
+  const client = await reader([
+    grant("sellers.read", "assigned"),
+    grant("sales.read", "assigned"),
+    grant("sales.financial", "assigned"),
+  ]);
   const result = await client.request(`/api/sellers/list?${range}&employeeId=A&sortBy=profit`);
   expect(result.status).toBe(200);
   expect(result.body.total).toBe(1);

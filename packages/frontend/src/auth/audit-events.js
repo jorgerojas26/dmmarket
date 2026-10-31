@@ -35,6 +35,8 @@ export const auditActivities = [
             'auth.role_renamed': 'Rol renombrado',
             'auth.user_roles_changed': 'Roles del usuario actualizados',
             'auth.user_sellers_changed': 'Vendedores vinculados actualizados',
+            'auth.commercial_profile_changed': 'Perfil comercial actualizado',
+            'auth.commercial_identity_migrated': 'Identidades comerciales migradas',
         },
     },
     {

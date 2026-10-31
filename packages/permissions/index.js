@@ -6,6 +6,7 @@ const DEFINITIONS = [
       ["dashboard", "Dashboard", ["amounts", "financial"], [], true],
       ["breakdown", "Desglose", ["amounts", "financial", "personal"], ["export"], true],
       ["dispatch", "Despacho", ["amounts", "financial", "personal"], ["export"], true],
+      ["others", "Datos de otros vendedores", [], []],
     ],
   ],
   [
@@ -70,7 +71,7 @@ const DEFINITIONS = [
     [
       ["users", "Usuarios", [], ["create", "update"]],
       ["roles", "Roles", [], ["create", "update", "assign"]],
-      ["links", "Vendedores vinculados", [], ["update"]],
+      ["profile", "Perfil comercial", [], ["update"]],
       ["recovery", "Recuperación de cuentas", [], ["execute"]],
     ],
   ],
@@ -104,7 +105,7 @@ const NAVIGATION = {
   providers: ["directory"],
   inventory: ["stock"],
   settings: ["preferences", "currency", "rates", "backups", "updates", "cache"],
-  access: ["users", "roles", "links", "recovery"],
+  access: ["users", "roles", "profile", "recovery"],
   audit: ["events"],
 };
 const RESOURCE_ALIASES = {
@@ -116,9 +117,9 @@ const BUSINESS_MODULES = ["sales", "purchases", "clients", "sellers", "providers
 const OPERATIONAL_RESOURCES = ["sales.dispatch", "inventory.stock"];
 const RESOURCES = Object.fromEntries(
   DEFINITIONS.flatMap(([module, moduleLabel, resources]) =>
-    resources.map(([key, label, information, actions, assigned = false]) => {
+    resources.map(([key, label, information, actions, sellerScoped = false]) => {
       const resource = `${module}.${key}`;
-      const business = BUSINESS_MODULES.includes(module);
+      const business = BUSINESS_MODULES.includes(module) && resource !== "sales.others";
       const completeConsultation = business && !OPERATIONAL_RESOURCES.includes(resource);
       return [
         resource,
@@ -132,8 +133,9 @@ const RESOURCES = Object.fromEntries(
           exportable: business,
           information: completeConsultation ? information.filter((kind) => kind === "financial") : information,
           actions: business ? actions.filter((action) => action !== "export") : actions,
-          assigned:
-            assigned ||
+          requiresAllSellers: resource === "clients.receivables",
+          sellerScoped:
+            sellerScoped ||
             (module === "clients" && key !== "receivables") ||
             (module === "providers" && ["directory", "details"].includes(key)),
         },
@@ -150,10 +152,9 @@ const CAPABILITIES = Object.fromEntries(
         {
           ...resource,
           action,
-          label: LABELS[action],
+          label: capability === "sales.others.read" ? "Consultar datos de otros vendedores" : LABELS[action],
           submoduleLabel: resource.label,
           kind: action === "read" ? "access" : INFORMATION.includes(action) ? "information" : "action",
-          assigned: resource.assigned && !PRIVILEGED.includes(action),
           privileged: PRIVILEGED.includes(action),
         },
       ];
@@ -186,4 +187,21 @@ function permissionKey(capability) {
     action = "read";
   return `${resource}.${action}`;
 }
-module.exports = { CAPABILITIES, RESOURCES, MODULES, RESOURCE_ALIASES, permissionKey, modulePermissions };
+function requiresCommercialProfile(permissions) {
+  return (
+    !permissions.some(({ capability }) => capability === "sales.others.read") &&
+    permissions.some(({ capability }) => {
+      const definition = CAPABILITIES[capability];
+      return definition ? definition.sellerScoped : false;
+    })
+  );
+}
+module.exports = {
+  CAPABILITIES,
+  RESOURCES,
+  MODULES,
+  RESOURCE_ALIASES,
+  permissionKey,
+  modulePermissions,
+  requiresCommercialProfile,
+};

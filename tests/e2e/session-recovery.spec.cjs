@@ -22,7 +22,7 @@ const grossSales = (page) => page.locator(".dashboard-kpi-card").filter({ hasTex
 async function enter(page, environment, seller = "A") {
   await seedSales(environment.db);
   const user = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: seller });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: seller });
   await login(page, environment, user);
   await expect(grossSales(page)).toContainText(seller === "A" ? "$100,00" : "$200,00");
   return user;
@@ -179,7 +179,7 @@ test("volver al acceso revoca la sesión anterior antes de entrar con otra cuent
   await enter(page, environment);
   const cookie = (await page.context().cookies()).find((value) => value.name === "__Host-dmmarket.sid");
   const second = await environment.seedUser({ permissions: [{ capability: "sales.read", scope: "assigned" }] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: second.id, seller_id: "B" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: second.id, seller_id: "B" });
   await interrupt(page);
   await page.getByRole("button", { name: "Volver a iniciar sesión", exact: true }).click();
   await page.unroute("**/api/auth/session");

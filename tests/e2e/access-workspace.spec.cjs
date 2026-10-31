@@ -1,4 +1,5 @@
 const { randomUUID } = require("node:crypto");
+const { seedSales } = require("../support/sales-fixtures.cjs");
 const { test, expect, setPermission, login, logout } = require("./fixtures.cjs");
 
 const permissions = ["access.users", "access.roles", "access.links", "access.recover"].map((capability) => ({
@@ -119,11 +120,12 @@ test("alta explica permisos reales, conserva datos ante errores y funciona con n
   environment,
 }) => {
   const owner = await enter(page, environment);
+  await seedSales(environment.db);
   const roleId = randomUUID();
   await environment.db("dmmarket_auth_roles").insert({ id: roleId, name: "Consulta personalizada" });
   await environment
-    .db("dmmarket_auth_role_permissions")
-    .insert({ role_id: roleId, capability: "sales.breakdown.read", scope: "assigned" });
+    .db("dmmarket_auth_role_capabilities")
+    .insert({ role_id: roleId, capability: "sales.breakdown.read" });
   await page.goto(`${environment.origin}/acceso#nuevo-usuario`);
   const screen = page.getByRole("region", { name: "Crear usuario", exact: true });
   await expect(screen.getByRole("heading", { name: "Crear usuario", exact: true })).toBeFocused();
@@ -133,7 +135,7 @@ test("alta explica permisos reales, conserva datos ante errores y funciona con n
   await expect(screen.getByRole("region", { name: "Permisos del rol", exact: true })).toContainText(
     "Desglose · Consultar",
   );
-  await expect(screen).toContainText("Vendedores vinculados");
+  await screen.getByLabel("Perfil comercial", { exact: true }).selectOption("A");
   await screen.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await expect(screen.getByRole("alert")).toBeVisible();
   await expect(screen.getByLabel("Nombre", { exact: true })).toHaveValue("Ana Pérez");
@@ -150,31 +152,28 @@ test("roles usan lenguaje humano, conservan cambios y persisten alcances", async
   await expect(page).toHaveURL(/#roles$/);
   await page.getByRole("button", { name: "Crear rol", exact: true }).click();
   await page.getByLabel("Nombre del rol", { exact: true }).fill("Ventas limitadas");
-  await setPermission(page, "Consultar · Ventas / Desglose", "assigned");
-  await setPermission(page, "Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose", "assigned");
+  await setPermission(page, "Consultar · Ventas / Desglose");
+  await setPermission(page, "Ver rentabilidad (costos, utilidad y margen) · Ventas / Desglose");
   await expect(page.getByText("sales.financial", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Volver a roles", exact: true }).click();
   await page
     .getByRole("dialog", { name: "¿Descartar los cambios?", exact: true })
     .getByRole("button", { name: "Seguir editando", exact: true })
     .click();
-  await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toBeChecked();
   await expect(page.getByLabel("Motivo del cambio de rol", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Rol guardado" })).toBeVisible();
   await page.getByRole("button", { name: "Editar Ventas limitadas", exact: true }).click();
-  await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toBeChecked();
   const role = await environment.db("dmmarket_auth_roles").where("name", "Ventas limitadas").first();
   expect(
     await environment
-      .db("dmmarket_auth_role_permissions")
+      .db("dmmarket_auth_role_capabilities")
       .where("role_id", role.id)
       .orderBy("capability")
-      .select("capability", "scope"),
-  ).toEqual([
-    { capability: "sales.breakdown.financial", scope: "assigned" },
-    { capability: "sales.breakdown.read", scope: "assigned" },
-  ]);
+      .select("capability"),
+  ).toEqual([{ capability: "sales.breakdown.financial" }, { capability: "sales.breakdown.read" }]);
 });
 
 test("verificación contextual conserva el alta, permite cancelar y reintenta solo tras MFA válido", async ({
@@ -246,24 +245,24 @@ test("vincula vendedores por nombre sin conceder lectura de negocio", async ({ p
   await expect(page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true })).toHaveCount(0);
   const panel = await openUser(page, target.username);
   await expect(panel.getByRole("button", { name: "Deshabilitar usuario", exact: true })).toHaveCount(0);
-  await panel.getByLabel("Buscar vendedores", { exact: true }).fill("Vendedora del selector");
-  await panel.getByRole("checkbox", { name: "Vendedora del selector · SELECTOR", exact: true }).check();
-  await panel.getByLabel("Motivo del cambio de vínculos", { exact: true }).fill("Vincular por nombre desde el panel");
-  await panel.getByRole("button", { name: "Guardar vendedores vinculados", exact: true }).click();
-  await expect(panel.getByRole("status").filter({ hasText: "Vínculos guardados" })).toBeVisible();
-  expect(await environment.db("dmmarket_auth_user_sellers").where("user_id", target.id).pluck("seller_id")).toEqual([
-    "SELECTOR",
-  ]);
-  const result = await page.evaluate(async () => {
+  await panel.getByLabel("Buscar identidad comercial", { exact: true }).fill("Vendedora del selector");
+  await panel.getByLabel("Perfil comercial", { exact: true }).selectOption("SELECTOR");
+  await panel.getByLabel("Motivo del cambio de identidad", { exact: true }).fill("Vincular por nombre desde el panel");
+  await panel.getByRole("button", { name: "Guardar perfil comercial", exact: true }).click();
+  await expect(panel.getByRole("status").filter({ hasText: "Perfil comercial guardado" })).toBeVisible();
+  expect(
+    await environment.db("dmmarket_auth_commercial_profiles").where("user_id", target.id).pluck("seller_id"),
+  ).toEqual(["SELECTOR"]);
+  const result = await page.evaluate(async (userId) => {
     const directory = await (await fetch("/api/auth/directory")).json();
-    const sellers = await (await fetch("/api/auth/seller-options?search=SELECTOR")).json();
+    const sellers = await (await fetch(`/api/auth/seller-options?search=SELECTOR&userId=${userId}`)).json();
     return {
       directory,
       sellers,
       users: (await fetch("/api/auth/users")).status,
       business: (await fetch("/api/employees")).status,
     };
-  });
+  }, target.id);
   expect(result.users).toBe(403);
   expect(result.business).toBe(403);
   expect(JSON.stringify(result)).not.toMatch(/PRIVATE-SELECTOR|password_hash|mfa_secret|passwordHash/);

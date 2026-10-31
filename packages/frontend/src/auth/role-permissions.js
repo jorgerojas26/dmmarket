@@ -33,41 +33,20 @@ export function RoleModules({ modules, catalog, grants, selected, onSelect, busy
     );
 }
 
-function PermissionScope({ entry, module, resource, grants, setGrants }) {
-    const id = `permission-${entry.capability}`;
-    const name = `${entry.label} · ${module.label} / ${resource.label}`;
-    const scope = grants[entry.capability];
-    const enabled = Boolean(scope);
+function PermissionControl({ entry, module, resource, grants, setGrants }) {
     return (
         <div className="access-permission-control">
             <label className="access-permission-checkbox">
                 <input
-                    id={id}
                     type="checkbox"
-                    aria-label={name}
-                    checked={enabled}
+                    aria-label={`${entry.label} · ${module.label} / ${resource.label}`}
+                    checked={Boolean(grants[entry.capability])}
                     onChange={(event) => {
-                        const value = event.target.checked ? (entry.assigned ? 'assigned' : 'global') : '';
-                        setGrants((previous) => ({ ...previous, [entry.capability]: value }));
+                        const enabled = event.target.checked;
+                        setGrants((previous) => ({ ...previous, [entry.capability]: enabled }));
                     }}
                 />
             </label>
-            {entry.assigned && (
-                <select
-                    className="form-select access-permission-scope"
-                    aria-hidden={!enabled}
-                    disabled={!enabled}
-                    aria-label={`Alcance de ${name}`}
-                    value={scope || 'assigned'}
-                    onChange={(event) => {
-                        const value = event.target.value;
-                        setGrants((previous) => ({ ...previous, [entry.capability]: value }));
-                    }}
-                >
-                    <option value="assigned">Vinculados</option>
-                    <option value="global">Todo el negocio</option>
-                </select>
-            )}
         </div>
     );
 }
@@ -102,7 +81,6 @@ export function RolePermissionMatrix({ module, catalog, grants, setGrants }) {
                     action,
                     group: group.key,
                     label: labels[action] || entries.find((entry) => entry.action === action).label,
-                    assigned: entries.some((entry) => entry.action === action && entry.assigned),
                 })),
         }))
         .filter((group) => group.columns.length);
@@ -132,12 +110,7 @@ export function RolePermissionMatrix({ module, catalog, grants, setGrants }) {
                         </tr>
                         <tr>
                             {columns.map((column) => (
-                                <th
-                                    scope="col"
-                                    key={column.action}
-                                    data-group={column.group}
-                                    className={column.assigned ? 'access-permission-scoped-column' : undefined}
-                                >
+                                <th scope="col" key={column.action} data-group={column.group}>
                                     {column.label}
                                 </th>
                             ))}
@@ -155,7 +128,7 @@ export function RolePermissionMatrix({ module, catalog, grants, setGrants }) {
                                         return (
                                             <td key={column.action} data-group={column.group}>
                                                 {entry ? (
-                                                    <PermissionScope
+                                                    <PermissionControl
                                                         entry={entry}
                                                         module={module}
                                                         resource={resource}

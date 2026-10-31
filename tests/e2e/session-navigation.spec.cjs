@@ -29,7 +29,7 @@ async function reportUser(environment, seller = "A") {
       { capability: "rates.read", scope: "global" },
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: seller });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: seller });
   const assignment = await environment.db("dmmarket_auth_user_roles").where("user_id", user.id).first();
   user.roleName = `Consulta ${user.username}`;
   await environment.db("dmmarket_auth_roles").where("id", assignment.role_id).update({ name: user.roleName });

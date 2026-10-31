@@ -66,11 +66,11 @@ test("catálogo cerrado, permisos separados y acceso no administrativo denegado"
   const catalog = await admin.request("/api/auth/roles/catalog");
   expect(catalog.body.data.find((entry) => entry.capability === "access.roles.update")).toMatchObject({
     privileged: true,
-    assigned: false,
+    sellerScoped: false,
   });
   expect(catalog.body.data).toHaveLength(Object.keys(require("../auth/capabilities").CAPABILITIES).length);
   expect(catalog.body.data.find((row) => row.capability === "sales.breakdown.financial")).toMatchObject({
-    assigned: true,
+    sellerScoped: true,
     privileged: false,
   });
   expect(
@@ -157,32 +157,32 @@ test("vínculos verifican IDs reales y revocan sin convertir vacío en global", 
   await reader.login(user);
   expect(
     (
-      await admin.request(`/api/auth/users/${user.id}/sellers`, {
+      await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerIds: ["not-existing"], reason: "Reject unknown seller" },
+        body: { sellerId: "not-existing", reason: "Reject unknown seller" },
       })
     ).status,
   ).toBe(400);
   expect((await reader.request("/api/currency_rates")).status).toBe(200);
   expect(
     (
-      await admin.request(`/api/auth/users/${user.id}/sellers`, {
+      await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerIds: ["A", "A"], reason: "Assign known seller" },
+        body: { sellerId: "A", reason: "Assign known seller" },
       })
     ).status,
   ).toBe(200);
   expect((await reader.request("/api/currency_rates")).status).toBe(401);
-  expect((await admin.request(`/api/auth/users/${user.id}/sellers`)).body.data).toEqual(["A"]);
+  expect((await admin.request(`/api/auth/users/${user.id}/commercial-profile`)).body).toMatchObject({ sellerId: "A" });
   expect(
     (
-      await admin.request(`/api/auth/users/${user.id}/sellers`, {
+      await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerIds: [], reason: "Remove seller assignment" },
+        body: { sellerId: null, reason: "Remove seller assignment" },
       })
     ).status,
   ).toBe(200);
-  expect((await admin.request(`/api/auth/users/${user.id}/sellers`)).body.data).toEqual([]);
+  expect((await admin.request(`/api/auth/users/${user.id}/commercial-profile`)).body).toBeNull();
 });
 
 test("no elimina permisos ni roles del último administrador", async () => {
@@ -233,9 +233,9 @@ test("fallo de auditoría revierte rol, vínculos y revocación juntos", async (
     ).toBe(503);
     expect(
       (
-        await admin.request(`/api/auth/users/${user.id}/sellers`, {
+        await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
           method: "PUT",
-          body: { sellerIds: ["A"], reason: "Audit link rollback" },
+          body: { sellerId: "A", reason: "Audit link rollback" },
         })
       ).status,
     ).toBe(503);
@@ -244,9 +244,9 @@ test("fallo de auditoría revierte rol, vínculos y revocación juntos", async (
   }
   expect((await reader.request("/api/currency_rates")).status).toBe(200);
   expect((await admin.request(`/api/auth/roles/${role.id}`)).body.permissions).toEqual([
-    { capability: "settings.rates.read", scope: "global" },
+    { capability: "settings.rates.read" },
   ]);
-  expect((await admin.request(`/api/auth/users/${user.id}/sellers`)).body.data).toEqual([]);
+  expect((await admin.request(`/api/auth/users/${user.id}/commercial-profile`)).body).toBeNull();
 });
 
 test("ediciones concurrentes de roles conservan un administrador", async () => {

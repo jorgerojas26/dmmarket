@@ -26,7 +26,7 @@ function createAccessDirectory(sessions) {
       if (!["all", "enabled", "disabled"].includes(state)) invalid();
       return sessions.withSession(sid, { readOnly: true }, async ({ access, transaction }) => {
         if (
-          !["access.users.read", "access.roles.read", "access.links.read", "access.recovery.read"].some((key) =>
+          !["access.users.read", "access.roles.read", "access.profile.read", "access.recovery.read"].some((key) =>
             access.hasGlobal(key),
           )
         )
@@ -63,20 +63,33 @@ function createAccessDirectory(sessions) {
     sellers(sid, query) {
       const { page, search } = filters(query);
       const ids = query.ids === undefined ? null : typeof query.ids === "string" ? query.ids.split(",") : invalid();
-      if (ids && (ids.length > 100 || ids.some((id) => !/^[\p{L}\p{N}._-]{1,32}$/u.test(id)))) invalid();
+      if (ids && (ids.length !== 1 || !/^[\p{L}\p{N}._-]{1,32}$/u.test(ids[0]))) invalid();
+      const userId = query.userId === undefined ? null : query.userId;
+      if (userId !== null && (typeof userId !== "string" || !/^[a-f0-9-]{36}$/i.test(userId))) invalid();
       return sessions.withSession(sid, { readOnly: true }, async ({ access, transaction }) => {
-        if (!access.hasGlobal("access.links.read")) forbidden();
-        const sellers = transaction("vendedores");
-        if (ids) sellers.whereIn("idVend", ids);
+        if (!access.hasGlobal("access.profile.read")) forbidden();
+        if (!(await transaction.schema.hasTable("vendedores"))) return { data: [], total: 0, page };
+        const nameColumn = (await transaction.schema.hasColumn("vendedores", "Empresa"))
+          ? "vendedores.Empresa"
+          : "vendedores.idVend";
+        const sellers = transaction("vendedores")
+          .leftJoin("dmmarket_auth_commercial_profiles as profile", function () {
+            this.on(transaction.raw("BINARY profile.seller_id = BINARY vendedores.idVend"));
+          })
+          .where((builder) => {
+            builder.whereNull("profile.user_id");
+            if (userId) builder.orWhere("profile.user_id", userId);
+          });
+        if (ids) sellers.whereIn("vendedores.idVend", ids);
         if (search)
           sellers.where((builder) =>
-            builder.where("idVend", "like", `%${search}%`).orWhere("Empresa", "like", `%${search}%`),
+            builder.where("vendedores.idVend", "like", `%${search}%`).orWhere(nameColumn, "like", `%${search}%`),
           );
         const total = Number((await sellers.clone().count("* as total").first()).total);
         const data = await sellers
-          .select({ id: "idVend", name: "Empresa" })
-          .orderBy("Empresa")
-          .orderBy("idVend")
+          .select({ id: "vendedores.idVend", name: nameColumn })
+          .orderBy(nameColumn)
+          .orderBy("vendedores.idVend")
           .limit(100)
           .offset((page - 1) * 100);
         return { data: data.map(({ id, name }) => ({ id: String(id), name })), total, page };

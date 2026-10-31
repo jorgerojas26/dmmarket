@@ -19,8 +19,7 @@ function sessionView(context) {
     mfaRequired: context.mfaRequired,
     permissions: Object.keys(CAPABILITIES).flatMap((capability) => {
       const scope = context.access.scopeFor(capability);
-      if (scope.global) return [{ capability, scope: "global" }];
-      if (scope.sellerIds.length) return [{ capability, scope: "assigned" }];
+      if (scope.global || scope.sellerIds.length) return [{ capability }];
       return [];
     }),
   };
@@ -259,14 +258,12 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
     handler(async (req, res) => res.json(await administration.setRoles(req.sessionID, req.params.id, req.body))),
   );
   router.get(
-    "/users/:id/sellers",
-    handler(async (req, res) =>
-      res.json({ data: await administration.assignments(req.sessionID, req.params.id, "sellers") }),
-    ),
+    "/users/:id/commercial-profile",
+    handler(async (req, res) => res.json(await administration.profile(req.sessionID, req.params.id))),
   );
   router.put(
-    "/users/:id/sellers",
-    handler(async (req, res) => res.json(await administration.setSellers(req.sessionID, req.params.id, req.body))),
+    "/users/:id/commercial-profile",
+    handler(async (req, res) => res.json(await administration.setProfile(req.sessionID, req.params.id, req.body))),
   );
   router.post(
     "/users",
@@ -276,6 +273,7 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
           username: req.body.username,
           displayName: req.body.displayName,
           roleIds: req.body.roleIds,
+          sellerId: req.body.sellerId,
           mfaRequired: req.body.mfaRequired,
           reason: req.body.reason,
         }),

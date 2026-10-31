@@ -3,11 +3,17 @@ const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedPurchases } = require("../../../tests/support/purchase-fixtures.cjs");
 const { seedProviders } = require("../../../tests/support/provider-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const range = "from=2026-11-01&to=2026-11-30";
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions) {
   const user = await environment.seedUser({ permissions });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").delete();
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = environment.client();
   await client.login(user);
   return client;
@@ -68,12 +74,7 @@ test("vendedores propios intersectan ventas globales antes de agregar utilidad",
       clientCount: 1,
     },
   ]);
-  const global = await reader([
-    grant("providers.read"),
-    grant("sellers.read"),
-    grant("sales.read"),
-    grant("sales.financial", "assigned"),
-  ]);
+  const global = await reader([grant("providers.read"), grant("sellers.read"), grant("sales.read")]);
   const rows = await global.request(`/api/providers/PUR-A/sellers?${range}`);
   expect(rows.body.pagination.total).toBe(2);
   expect(rows.body.data.every((row) => !Object.hasOwn(row, "profit"))).toBe(true);

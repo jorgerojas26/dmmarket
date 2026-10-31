@@ -3,11 +3,17 @@ const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedPurchases } = require("../../../tests/support/purchase-fixtures.cjs");
 const { seedProviders } = require("../../../tests/support/provider-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const range = "from=2026-11-01&to=2026-11-30";
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function reader(permissions) {
   const user = await environment.seedUser({ permissions });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").delete();
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = environment.client();
   await client.login(user);
   return client;

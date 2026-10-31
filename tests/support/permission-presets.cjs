@@ -46,15 +46,23 @@ const presets = {
   "updates.execute": ["settings.updates.execute"],
   "access.users": ["access.users.read", "access.users.create", "access.users.update"],
   "access.roles": ["access.roles.read", "access.roles.create", "access.roles.update", "access.roles.assign"],
-  "access.links": ["access.links.read", "access.links.update"],
+  "access.links": ["access.profile.read", "access.profile.update"],
   "access.recover": ["access.recovery.read", "access.recovery.execute"],
   "audit.read": ["audit.events.read"],
 };
-function scenarioPermissions(permissions) {
+function legacyScenarioPermissions(permissions) {
+  permissions = permissions.map((grant) => ({
+    ...grant,
+    capability: grant.capability.replace(/^access\.links\./, "access.profile."),
+  }));
   let result = permissions.flatMap(({ capability, scope }) =>
     (presets[capability] || [capability]).map((key) => ({
       capability: key,
-      scope: scope === "assigned" && !CAPABILITIES[permissionKey(key)]?.assigned ? "global" : scope,
+      scope:
+        scope === "assigned" &&
+        !(CAPABILITIES[permissionKey(key)]?.sellerScoped && !CAPABILITIES[permissionKey(key)]?.privileged)
+          ? "global"
+          : scope,
     })),
   );
   const find = (capability) => permissions.find((grant) => grant.capability === capability);
@@ -112,7 +120,11 @@ function scenarioPermissions(permissions) {
         const key = `${target}.${action}`;
         const scope =
           action === "financial" ? find("sales.financial").scope : action === "export" ? exporting.scope : readScope;
-        if (CAPABILITIES[key]) result.push({ capability: key, scope: CAPABILITIES[key].assigned ? scope : "global" });
+        if (CAPABILITIES[key])
+          result.push({
+            capability: key,
+            scope: CAPABILITIES[key].sellerScoped && !CAPABILITIES[key].privileged ? scope : "global",
+          });
       }
     }
   }
@@ -136,4 +148,18 @@ function scenarioPermissions(permissions) {
   });
   return [...new Map(result.map((grant) => [`${grant.capability}:${grant.scope}`, grant])).values()];
 }
-module.exports = { scenarioPermissions };
+function scenarioPermissions(permissions) {
+  const expanded = legacyScenarioPermissions(permissions);
+  const result = expanded.map(({ capability }) => ({ capability }));
+  if (
+    expanded.some(
+      (grant) =>
+        grant.scope === "global" &&
+        (CAPABILITIES[grant.capability].sellerScoped || CAPABILITIES[grant.capability].requiresAllSellers),
+    ) &&
+    !expanded.some((grant) => grant.scope === "assigned")
+  )
+    result.push({ capability: "sales.others.read" });
+  return [...new Map(result.map((grant) => [grant.capability, grant])).values()];
+}
+module.exports = { scenarioPermissions, legacyScenarioPermissions };

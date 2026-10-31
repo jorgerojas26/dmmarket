@@ -39,8 +39,7 @@ function verifiedSession(data) {
                 (data.user.displayName != null && typeof data.user.displayName !== 'string') ||
                 !Array.isArray(data.permissions) ||
                 !data.permissions.every(
-                    (grant) =>
-                        grant && typeof grant.capability === 'string' && ['global', 'assigned'].includes(grant.scope),
+                    (grant) => grant && typeof grant.capability === 'string' && !Object.hasOwn(grant, 'scope'),
                 ))) ||
         (!authenticated && data.user != null)
     ) {
@@ -424,9 +423,7 @@ export function AuthProvider({ children }) {
     }, [checking, degraded, session?.stage, check]);
 
     const can = (capability) =>
-        !checking &&
-        !failure &&
-        session?.permissions?.some((grant) => grant.capability === capability && grant.scope === 'global');
+        !checking && !failure && session?.permissions?.some((grant) => grant.capability === capability);
     return (
         <AuthContext.Provider
             value={{

@@ -53,7 +53,7 @@ test("la consulta incluye impresión sin conceder valores monetarios de inventar
   expect(await page.evaluate(async () => (await fetch("/api/exports/inventory")).status)).toBe(200);
 });
 
-test("cambiar filtros originales no conserva columnas financieras propias mientras la consulta global está bloqueada", async ({
+test("cambiar filtros retira resultados durante la carga y conserva la autorización de la identidad", async ({
   page,
   environment,
 }) => {
@@ -66,7 +66,7 @@ test("cambiar filtros originales no conserva columnas financieras propias mientr
       grant("sales.financial", "assigned"),
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(
     `${environment.origin}/ventas?view=desglose&dFrom=2026-01-01&dTo=2026-01-31&employeeId=A&employeeName=Vendedor+A`,
@@ -81,14 +81,15 @@ test("cambiar filtros originales no conserva columnas financieras propias mientr
     await sales.getByRole("button", { name: "Quitar filtro Vendedor", exact: true }).click();
     await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
     await expect(sales.getByRole("button", { name: "Imprimir", exact: true })).toHaveCount(0);
+
     await environment.db.raw("UNLOCK TABLES").connection(connection);
     locked = false;
     await expect(sales.getByRole("cell", { name: "Producto sintético", exact: true })).toBeVisible();
-    await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toHaveCount(0);
+    await expect(sales.getByRole("columnheader", { name: "Utilidad", exact: true })).toBeVisible();
     const response = await page.evaluate(
       async () => await (await fetch("/api/exports/sales?from=2026-01-01&to=2026-01-31")).json(),
     );
-    expect(response.columns.some((column) => column.key === "utilidad")).toBe(false);
+    expect(response.columns.some((column) => column.key === "utilidad")).toBe(true);
   } finally {
     if (locked) await environment.db.raw("UNLOCK TABLES").connection(connection);
     await environment.db.client.releaseConnection(connection);
@@ -101,7 +102,7 @@ test("despacho original conserva selección al imprimir y sólo exporta document
 }) => {
   await require("../support/sales-fixtures.cjs").seedSales(environment.db);
   const user = await environment.seedUser({ permissions: [grant("sales.read"), grant("sales.export", "assigned")] });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/ventas?view=despacho&from=2026-01-01&to=2026-01-31`);
   const report = page.getByRole("region", { name: "Ventas", exact: true });

@@ -6,9 +6,9 @@ const AUTH_TABLES = [
   "dmmarket_auth_control",
   "dmmarket_auth_users",
   "dmmarket_auth_roles",
-  "dmmarket_auth_role_permissions",
+  "dmmarket_auth_role_capabilities",
   "dmmarket_auth_user_roles",
-  "dmmarket_auth_user_sellers",
+  "dmmarket_auth_commercial_profiles",
   "dmmarket_auth_sessions",
   "dmmarket_auth_session_state",
   "dmmarket_auth_events",
@@ -36,12 +36,17 @@ async function assertAuthSchema(db) {
     throw new Error("El esquema de acceso requiere preparar la política MFA por usuario.");
   if (!(await db.schema.hasColumn("dmmarket_auth_events", "target_role_id")))
     throw new Error("El esquema de acceso requiere la migración manual del objetivo de roles.");
-  if (await db("dmmarket_auth_role_permissions").whereNotIn("capability", Object.keys(CAPABILITIES)).first())
+  if (await db("dmmarket_auth_role_capabilities").whereNotIn("capability", Object.keys(CAPABILITIES)).first())
     throw new Error(
       "El catálogo de acceso requiere preparar las migraciones propias desde el instalador actualizado, con la web detenida.",
     );
   if (!(await db("dmmarket_auth_control").where("id", 1).first()))
     throw new Error("Falta el control transaccional de acceso.");
+  if (
+    !(await db.schema.hasColumn("dmmarket_auth_control", "commercial_model")) ||
+    Number((await db("dmmarket_auth_control").where("id", 1).first())?.commercial_model) !== 1
+  )
+    throw new Error("Prepara la migración de identidad comercial individual antes de iniciar acceso.");
 }
 
 async function lockAccessMutation(connection) {
@@ -51,12 +56,12 @@ async function lockAccessMutation(connection) {
 }
 
 async function accessFor(connection, userId) {
-  const grants = await connection("dmmarket_auth_role_permissions as p")
+  const grants = await connection("dmmarket_auth_role_capabilities as p")
     .join("dmmarket_auth_user_roles as r", "r.role_id", "p.role_id")
     .where("r.user_id", userId)
-    .select("p.capability", "p.scope");
-  const links = await connection("dmmarket_auth_user_sellers").where("user_id", userId).pluck("seller_id");
-  return createAccess(grants, links);
+    .select("p.capability");
+  const profile = await connection("dmmarket_auth_commercial_profiles").where("user_id", userId).first("seller_id");
+  return createAccess(grants, profile?.seller_id || null);
 }
 
 async function appendEvent(
@@ -95,18 +100,17 @@ async function assertAdministratorRemains(connection) {
     "access.roles.read",
     "access.roles.update",
     "access.roles.assign",
-    "access.links.read",
-    "access.links.update",
+    "access.profile.read",
+    "access.profile.update",
     "access.recovery.read",
     "access.recovery.execute",
   ];
   const owner = await connection("dmmarket_auth_users as u")
     .join("dmmarket_auth_user_roles as r", "r.user_id", "u.id")
-    .join("dmmarket_auth_role_permissions as p", "p.role_id", "r.role_id")
+    .join("dmmarket_auth_role_capabilities as p", "p.role_id", "r.role_id")
     .where("u.enabled", true)
     .where("u.must_change_password", false)
     .whereNull("u.temporary_expires_ms")
-    .where("p.scope", "global")
     .whereIn("p.capability", capabilities)
     .groupBy("u.id")
     .havingRaw("COUNT(DISTINCT p.capability) = ?", [capabilities.length])

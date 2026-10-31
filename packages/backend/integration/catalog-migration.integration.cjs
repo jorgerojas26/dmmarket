@@ -4,7 +4,7 @@ const { CAPABILITIES } = require("../auth/capabilities");
 const migration = require("../migrations/20261103_rebuild_permission_catalog");
 let environment;
 beforeEach(async () => {
-  environment = await startEnvironment();
+  environment = await startEnvironment({ legacyAuth: true });
 });
 afterEach(async () => {
   await environment?.close();
@@ -18,7 +18,7 @@ test("la sustitución de catálogo no conserva concesiones antiguas ni elimina c
     .db("dmmarket_auth_role_permissions")
     .where("role_id", role.role_id)
     .update({ capability: "sales.read" });
-  await expect(require("../auth/identity").assertAuthSchema(environment.db)).rejects.toThrow("catálogo");
+  await expect(require("../auth/identity").assertAuthSchema(environment.db)).rejects.toThrow(/esquema|catálogo/);
   await migration.up(environment.db);
   await require("../migrations/20261104_complete_functional_consultation").up(environment.db);
   expect(await environment.db("dmmarket_auth_roles").where("id", role.role_id)).toHaveLength(1);
@@ -26,7 +26,7 @@ test("la sustitución de catálogo no conserva concesiones antiguas ni elimina c
   expect(await environment.db("dmmarket_auth_user_sellers").where("user_id", user.id)).toHaveLength(1);
   expect(await environment.db("dmmarket_auth_role_permissions").where("role_id", role.role_id)).toEqual([]);
   for (const grant of await environment.db("dmmarket_auth_role_permissions"))
-    expect(Object.hasOwn(CAPABILITIES, grant.capability)).toBe(true);
+    expect(Object.hasOwn(CAPABILITIES, grant.capability.replace(/^access\.links\./, "access.profile."))).toBe(true);
   expect((await environment.db("dmmarket_auth_users").where("id", user.id).first()).session_version).toBe(3);
 });
 
@@ -61,7 +61,12 @@ test("los roles base tienen todos sus permisos nuevos y no se convierten tablas 
     (await environment.db("dmmarket_auth_role_permissions").where("role_id", superuser.id))
       .map((grant) => grant.capability)
       .sort(),
-  ).toEqual(Object.keys(CAPABILITIES).sort());
+  ).toEqual(
+    Object.keys(CAPABILITIES)
+      .filter((capability) => capability !== "sales.others.read")
+      .map((capability) => capability.replace(/^access\.profile\./, "access.links."))
+      .sort(),
+  );
   const [tables] = await environment.db.raw("SHOW TABLE STATUS LIKE 'business_catalog_sentinel'");
   expect(tables[0].Engine).toBe("MyISAM");
   expect(await environment.db("business_catalog_sentinel")).toEqual([{ value: "unchanged" }]);

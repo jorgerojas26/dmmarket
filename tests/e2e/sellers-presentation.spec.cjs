@@ -15,7 +15,7 @@ test("directorio incluye ventas e identidad propias sin conceder otras vistas an
   const user = await environment.seedUser({
     permissions: [grant("sellers.directory.read", "assigned")],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const analytics = [];
   page.on("request", (request) => {
     if (/\/api\/sellers\/(dashboard|[^/]+\/(summary|sales))/.test(request.url())) analytics.push(request.url());
@@ -40,7 +40,7 @@ test("PDF original del directorio requiere exportación de vendedores, no conced
   const user = await environment.seedUser({
     permissions: [grant("sellers.read", "assigned"), grant("sellers.export", "assigned"), grant("sales.read")],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/vendedores?view=sellers&dFrom=2026-01-01&dTo=2026-01-31`);
   await page.getByRole("cell", { name: "Vendedor A", exact: true }).waitFor();
@@ -78,7 +78,7 @@ test("PDF original del perfil conserva vendedor y filtros tras revalidar la sesi
       grant("sales.export", "assigned"),
     ],
   });
-  await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   await login(page, environment, user);
   await page.goto(`${environment.origin}/vendedores?view=sellers&dFrom=2026-01-01&dTo=2026-01-31`);
   await page.getByRole("cell", { name: "Vendedor A", exact: true }).click();

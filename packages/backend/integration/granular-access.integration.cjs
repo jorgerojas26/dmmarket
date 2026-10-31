@@ -3,10 +3,16 @@ const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedParties } = require("../../../tests/support/party-fixtures.cjs");
 const { seedInventory } = require("../../../tests/support/inventory-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 const grant = (capability, scope = "global") => ({ capability, scope });
 async function actor(permissions, linked = true) {
   const user = await environment.seedUser({ permissions });
-  if (linked) await environment.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  if (linked && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").delete();
+  if (linked && permissions.some((grant) => grant.scope === "assigned"))
+    await environment.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = environment.client();
   await client.login(user);
   return client;
@@ -172,37 +178,20 @@ test("el catálogo entrega la jerarquía completa y rechaza nombres del catálog
   ).toBe(400);
 });
 
-test("la reconfiguración conserva cuentas y vínculos, vacía roles personalizados y redefine solo los roles base", async () => {
+test("la migración confirmada conserva los roles y perfiles actuales al repetirse", async () => {
   const user = await environment.seedUser({ permissions: [grant("sales.dispatch.read")] });
-  const rolesBefore = await environment.db("dmmarket_auth_roles").select("id", "name");
-  const usersBefore = await environment.db("dmmarket_auth_users").select("id", "username");
-  const [{ total: invoicesBefore }] = await environment.db("masterfact").count("* as total");
-  const fs = require("node:fs");
-  const os = require("node:os");
-  const path = require("node:path");
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-catalog-migration-"));
-  try {
-    const migration = path.join(directory, "migration.cjs");
-    fs.copyFileSync(path.join(__dirname, "../migrations/20261103_rebuild_permission_catalog.js"), migration);
-    await require(migration).up(environment.db);
-    await require("../migrations/20261104_complete_functional_consultation").up(environment.db);
-  } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
-  expect(await environment.db("dmmarket_auth_users").select("id", "username")).toEqual(usersBefore);
-  expect(Number((await environment.db("masterfact").count("* as total").first()).total)).toBe(Number(invoicesBefore));
-  for (const role of rolesBefore) {
-    expect(await environment.db("dmmarket_auth_roles").where("id", role.id).first()).toMatchObject(role);
-    expect(await environment.db("dmmarket_auth_role_permissions").where("role_id", role.id)).toEqual([]);
-  }
+  const rolesBefore = await environment.db("dmmarket_auth_roles").orderBy("id");
+  const grantsBefore = await environment.db("dmmarket_auth_role_capabilities").orderBy("role_id").orderBy("capability");
+  const usersBefore = await environment.db("dmmarket_auth_users").orderBy("id");
+  const invoicesBefore = await environment.db("masterfact").orderBy("IdFactura");
+  await require("../migrations/20261105_individual_commercial_identity").up(environment.db);
+  expect(await environment.db("dmmarket_auth_roles").orderBy("id")).toEqual(rolesBefore);
+  expect(await environment.db("dmmarket_auth_role_capabilities").orderBy("role_id").orderBy("capability")).toEqual(
+    grantsBefore,
+  );
+  expect(await environment.db("dmmarket_auth_users").orderBy("id")).toEqual(usersBefore);
+  expect(await environment.db("masterfact").orderBy("IdFactura")).toEqual(invoicesBefore);
   expect(await environment.db("dmmarket_auth_user_roles").where("user_id", user.id)).toHaveLength(1);
-  expect(
-    (
-      await environment
-        .db("dmmarket_auth_roles")
-        .whereIn("name", ["Superusuario", "Administrador", "Consultor", "Cobranza"])
-    ).length,
-  ).toBe(4);
 });
 
 test("clientes vinculados no incluyen identidades ni RIF de clientes ajenos", async () => {

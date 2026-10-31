@@ -5,8 +5,8 @@ const { CAPABILITIES, createAccess } = backend("./auth/capabilities");
 const { salesBase } = backend("./controllers/sales");
 const { purchaseBase } = backend("./controllers/purchases");
 const access = createAccess(
-  Object.keys(CAPABILITIES).map((capability) => ({ capability, scope: "global" })),
-  [],
+  Object.keys(CAPABILITIES).map((capability) => ({ capability })),
+  null,
 );
 let db;
 

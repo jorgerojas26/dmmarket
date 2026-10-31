@@ -1,7 +1,7 @@
 const { startEnvironment } = require("../../../tests/support/auth-environment.cjs");
 let environment;
 beforeEach(async () => {
-  environment = await startEnvironment();
+  environment = await startEnvironment({ legacyAuth: true });
 });
 afterEach(async () => environment?.close());
 const migration = () => require("../migrations/20261104_complete_functional_consultation");

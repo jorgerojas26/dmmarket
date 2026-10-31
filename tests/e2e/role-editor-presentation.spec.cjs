@@ -1,6 +1,6 @@
 const { randomUUID } = require("node:crypto");
 const { test, expect, setPermission, login } = require("./fixtures.cjs");
-const grant = (capability, scope = "global") => ({ capability, scope });
+const grant = (capability) => ({ capability });
 
 async function openEditor(page, environment, readOnly = false) {
   await login(
@@ -102,7 +102,7 @@ for (const width of [390, 1440]) {
       await expect(resource.getByRole("combobox")).toHaveCount(0);
     }
     await expect(table.getByRole("switch")).toHaveCount(0);
-    await expect(table.getByRole("cell", { name: "No aplica", exact: true })).toHaveCount(4);
+    await expect(table.getByRole("cell", { name: "No aplica", exact: true })).toHaveCount(7);
     if (width > 1100) {
       expect(await table.evaluate((element) => element.scrollWidth <= element.parentElement.clientWidth)).toBe(true);
     }
@@ -111,16 +111,11 @@ for (const width of [390, 1440]) {
     await dashboardToggle.focus();
     await page.keyboard.press("Space");
     await expect(dashboardToggle).toBeChecked();
-    const dashboardScope = page.getByRole("combobox", {
-      name: "Alcance de Consultar · Ventas / Dashboard",
-      exact: true,
-    });
-    await expect(dashboardScope).toHaveValue("assigned");
-    expect((await dashboardScope.boundingBox()).width).toBeLessThanOrEqual(124);
+    await expect(page.getByRole("combobox")).toHaveCount(0);
     await page.keyboard.press("Space");
     await expect(dashboardToggle).not.toBeChecked();
-    await expect(dashboardScope).toHaveCount(0);
-    await setPermission(page, "Consultar · Ventas / Desglose", "assigned");
+    await expect(page.getByRole("combobox")).toHaveCount(0);
+    await setPermission(page, "Consultar · Ventas / Desglose");
     await expect(page.getByRole("button", { name: "Quitar permisos de Ventas", exact: true })).toBeVisible();
     const settings = modules.getByRole("button", { name: "Configuración", exact: true });
     await settings.focus();
@@ -131,15 +126,15 @@ for (const width of [390, 1440]) {
     await expect(settingsTable.getByRole("columnheader", { name: "Información comercial", exact: true })).toHaveCount(
       0,
     );
-    await setPermission(page, "Consultar · Configuración / Tasas BCV", "global");
+    await setPermission(page, "Consultar · Configuración / Tasas BCV");
     await modules.getByRole("button", { name: "Ventas", exact: true }).click();
-    await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+    await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toBeChecked();
     await expect(page.getByRole("button", { name: "Guardar rol", exact: true })).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole("button", { name: "Volver a roles", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "¿Descartar los cambios?", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Seguir editando", exact: true }).click();
-    await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+    await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toBeChecked();
   });
 }
 
@@ -150,21 +145,21 @@ test("los permisos se editan por fila sin activar otros y se guardan junto a sus
   const modules = await openEditor(page, environment);
   const name = `Matriz ${randomUUID().slice(0, 8)}`;
   await page.getByLabel("Nombre del rol", { exact: true }).fill(name);
-  await setPermission(page, "Consultar · Ventas / Desglose", "assigned");
+  await setPermission(page, "Consultar · Ventas / Desglose");
   await expect(page.getByRole("button", { name: "Activar consultas", exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Alcance de las nuevas consultas", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("las nuevas consultas", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Consultar · Ventas / Dashboard", { exact: true })).not.toBeChecked();
   await expect(page.getByLabel("Consultar · Ventas / Despacho", { exact: true })).not.toBeChecked();
-  await setPermission(page, "Consultar · Ventas / Dashboard", "global");
-  await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
-  await expect(page.getByLabel("Alcance de Consultar · Ventas / Dashboard", { exact: true })).toHaveValue("global");
+  await setPermission(page, "Consultar · Ventas / Dashboard");
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("Consultar · Ventas / Dashboard", { exact: true })).toBeChecked();
   await expect(
     page.getByLabel("Ver rentabilidad (costos, utilidad y margen) · Ventas / Dashboard", { exact: true }),
   ).not.toBeChecked();
   await expect(page.getByLabel("Ver importes comerciales · Ventas / Despacho", { exact: true })).not.toBeChecked();
   await modules.getByRole("button", { name: "Clientes", exact: true }).click();
   await expect(page.getByRole("combobox")).toHaveCount(0);
-  await setPermission(page, "Consultar · Clientes / Cuentas por cobrar", "global");
+  await setPermission(page, "Consultar · Clientes / Cuentas por cobrar");
   await expect(page.getByRole("combobox")).toHaveCount(0);
   await expect(page.getByLabel("Registrar abonos · Clientes / Cuentas por cobrar", { exact: true })).not.toBeChecked();
   await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
@@ -172,17 +167,13 @@ test("los permisos se editan por fila sin activar otros y se guardan junto a sus
   const role = await environment.db("dmmarket_auth_roles").where("name", name).first();
   expect(
     await environment
-      .db("dmmarket_auth_role_permissions")
+      .db("dmmarket_auth_role_capabilities")
       .where("role_id", role.id)
       .orderBy("capability")
-      .select("capability", "scope"),
-  ).toEqual([
-    grant("clients.receivables.read"),
-    grant("sales.breakdown.read", "assigned"),
-    grant("sales.dashboard.read"),
-  ]);
+      .select("capability"),
+  ).toEqual([grant("clients.receivables.read"), grant("sales.breakdown.read"), grant("sales.dashboard.read")]);
   await page.getByRole("button", { name: `Editar ${name}`, exact: true }).click();
-  await expect(page.getByLabel("Alcance de Consultar · Ventas / Desglose", { exact: true })).toHaveValue("assigned");
+  await expect(page.getByLabel("Consultar · Ventas / Desglose", { exact: true })).toBeChecked();
   await page.getByRole("button", { name: "Quitar permisos de Ventas", exact: true }).click();
   await expect(page.getByText("Cambios sin guardar", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Quitar permisos de Ventas", exact: true })).toHaveCount(0);
@@ -222,6 +213,7 @@ for (const width of [390, 1440]) {
             return { x, y, width, height };
           }),
         );
+    await expect(page.getByRole("table", { name: "Permisos de Ventas", exact: true })).toBeVisible();
     const initial = await positions();
     const checkbox = page.getByRole("checkbox", { name: "Consultar · Ventas / Dashboard", exact: true });
     await checkbox.check();
@@ -242,7 +234,7 @@ for (const width of [390, 1440]) {
 
 test("el nombre general del rol conserva validación nativa fuera de los paneles", async ({ page, environment }) => {
   await openEditor(page, environment);
-  await setPermission(page, "Consultar · Ventas / Dashboard", "assigned");
+  await setPermission(page, "Consultar · Ventas / Dashboard");
   await page.getByRole("button", { name: "Guardar rol", exact: true }).click();
   const name = page.getByLabel("Nombre del rol", { exact: true });
   await expect(name).toBeFocused();

@@ -35,7 +35,7 @@ const operations = {
     'audit.read': 'audit.events.read',
     'access.users': 'access.users.update',
     'access.roles': 'access.roles.update',
-    'access.links': 'access.links.update',
+    'access.profile': 'access.profile.update',
     'access.recover': 'access.recovery.execute',
     'commissions.read': 'sellers.commissions.read',
     'commissions.update': 'sellers.commissions.update',

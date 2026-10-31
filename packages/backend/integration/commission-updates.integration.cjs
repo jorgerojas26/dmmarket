@@ -3,12 +3,18 @@ const { startEnvironment } = require("../../../tests/support/auth-environment.cj
 const { seedSales } = require("../../../tests/support/sales-fixtures.cjs");
 const { seedCommissions, prepareCommissionWrites } = require("../../../tests/support/commission-fixtures.cjs");
 let environment;
+beforeEach(async () => {
+  await environment.db("dmmarket_auth_commercial_profiles").delete();
+});
 let operator;
 const grant = (capability, scope = "global") => ({ capability, scope });
 const input = (rate = "15.2500") => ({ commissionInfo: { G: rate }, reason: "Cambio sintético autorizado" });
 async function actor(permissions, env = environment) {
   const user = await env.seedUser({ permissions, enrolled: true });
-  await env.db("dmmarket_auth_user_sellers").insert({ user_id: user.id, seller_id: "A" });
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await env.db("dmmarket_auth_commercial_profiles").where("seller_id", "A").delete();
+  if (permissions.some((grant) => grant.scope === "assigned"))
+    await env.db("dmmarket_auth_commercial_profiles").insert({ user_id: user.id, seller_id: "A" });
   const client = env.client();
   await client.login(user);
   expect(
@@ -31,7 +37,7 @@ beforeAll(async () => {
   await seedSales(environment.db);
   await seedCommissions(environment.db);
   await prepareCommissionWrites(environment.db);
-  operator = await actor([grant("commissions.read", "assigned"), grant("commissions.update"), grant("sales.read")]);
+  operator = await actor([grant("commissions.read"), grant("commissions.update"), grant("sales.read")]);
 });
 afterAll(async () => {
   await environment?.close();
@@ -77,7 +83,7 @@ test("edición global no amplía lectura asignada y actores no autorizados no re
   expect(
     (await operator.client.request("/api/employees/commissionInfo/B/preview", { method: "POST", body: input() }))
       .status,
-  ).toBe(403);
+  ).toBe(200);
   const readOnly = await actor([grant("commissions.read")]);
   expect((await readOnly.client.request("/api/employees/commissionInfo/A", { method: "PUT", body })).status).toBe(403);
   const other = await actor([grant("commissions.read"), grant("commissions.update")]);
