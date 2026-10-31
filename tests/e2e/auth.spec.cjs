@@ -1188,7 +1188,7 @@ test("compras originales del proveedor requieren su permiso y no abren facturas 
 test("auditoría permite consultar login real sin dar administración de cuentas", async ({ page, environment }) => {
   const user = await environment.seedUser({ permissions: [{ capability: "audit.read", scope: "global" }] });
   await login(page, environment, user);
-  await openModule(page, "Auditoría");
+  await openModule(page, "Acceso", "Auditoría");
   const report = page.getByRole("region", { name: "Consulta autorizada de auditoría", exact: true });
   await report.getByRole("searchbox", { name: "Buscar en el historial", exact: true }).fill(user.id);
   await report.getByLabel("Actividad", { exact: true }).selectOption("auth.login_succeeded");
@@ -1201,11 +1201,8 @@ test("auditoría permite consultar login real sin dar administración de cuentas
   await expect(detail.getByText("auth.login_succeeded", { exact: true })).toBeVisible();
   await expect(detail.getByText(user.id, { exact: true })).toHaveCount(2);
   await detail.getByRole("button", { name: "Cerrar", exact: true }).click();
-  await expect(
-    page
-      .getByRole("navigation", { name: "Módulos disponibles", exact: true })
-      .getByRole("link", { name: "Acceso", exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Acceso", exact: true })).toBeVisible();
+  await expect(page.locator(".clients-sidebar").getByRole("button", { name: /^(Usuarios|Roles)$/ })).toHaveCount(0);
   const today = new Date().toISOString().slice(0, 10);
   const data = await page.evaluate(
     async ({ today, userId }) =>

@@ -25,12 +25,6 @@ function MenuIcon({ name }) {
                 <path d="m8 12 3 3 5-6" />
             </>
         ),
-        audit: (
-            <>
-                <rect x="5" y="4" width="14" height="17" rx="2" />
-                <path d="M9 4V2h6v2M9 10h6M9 14h6M9 18h3" />
-            </>
-        ),
         logout: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
     };
     return (
@@ -135,7 +129,7 @@ export default function UserMenu({ configuration, onLogout, onNavigate, administ
                 </Dropdown.Item>
                 {administration.map((item) => (
                     <Dropdown.Item key={item.path} as={NavLink} to={item.path} onClick={onNavigate}>
-                        <MenuIcon name={item.path === '/acceso' ? 'access' : 'audit'} />
+                        <MenuIcon name="access" />
                         {item.label}
                     </Dropdown.Item>
                 ))}

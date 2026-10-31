@@ -91,11 +91,11 @@ async function openModule(page, name, view) {
     if (await toggle.isVisible()) {
       if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     }
-    if (["Configuración", "Mi cuenta", "Acceso", "Auditoría"].includes(name))
+    if (["Configuración", "Mi cuenta", "Acceso"].includes(name))
       await navigation.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
   }
   await link.click();
-  if (view && ["Compras", "Ventas", "Clientes", "Vendedores", "Configuración"].includes(name)) {
+  if (view && ["Compras", "Ventas", "Clientes", "Vendedores", "Configuración", "Acceso"].includes(name)) {
     await page
       .locator(".clients-sidebar")
       .getByRole("button", { name: new RegExp(view) })

@@ -4,6 +4,7 @@ import { Prompt, useHistory, useLocation } from 'react-router-dom';
 import AccessEditor from './access-editor';
 import { useDiscardChanges } from './access-ui';
 import Users from './access-users';
+import Audit from './audit';
 import { useAuth } from './context';
 import { DisableMfaForm, EnrollmentForm, PasswordForm } from './forms';
 import './access.css';
@@ -75,6 +76,23 @@ const rolesIcon = (
     </svg>
 );
 
+const auditIcon = (
+    <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+    >
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+        <path d="M3 3v5h5M12 7v5l3 2" />
+    </svg>
+);
+
 export default function AccessWorkspace() {
     const { can } = useAuth();
     const location = useLocation();
@@ -84,11 +102,12 @@ export default function AccessWorkspace() {
     const { requestClose, confirmation } = useDiscardChanges(dirty);
     const creating = location.hash === '#nuevo-usuario' && can('access.users.create') && can('access.roles.assign');
     const users = ['access.users.read', 'access.profile.read', 'access.recovery.read'].some(can);
-    const view = (location.hash === '#roles' && can('access.roles.read')) || !users ? 'roles' : 'usuarios';
     const items = [
         ...(users ? [{ eventKey: 'usuarios', label: 'Usuarios', icon: usersIcon }] : []),
         ...(can('access.roles.read') ? [{ eventKey: 'roles', label: 'Roles', icon: rolesIcon }] : []),
+        ...(can('audit.read') ? [{ eventKey: 'auditoria', label: 'Auditoría', icon: auditIcon }] : []),
     ];
+    const view = items.find((item) => location.hash === `#${item.eventKey}`)?.eventKey || items[0]?.eventKey;
     useEffect(() => {
         if (!creating && location.hash !== `#${view}`) history.replace({ ...location, hash: `#${view}` });
     }, [view, location, history, creating]);
@@ -137,6 +156,8 @@ export default function AccessWorkspace() {
                                     history.replace({ ...location, hash: '#usuarios' });
                                 }}
                             />
+                        ) : view === 'auditoria' ? (
+                            <Audit />
                         ) : (
                             <AccessEditor onDirtyChange={setDirty} />
                         )}

@@ -1,5 +1,70 @@
 const { randomUUID } = require("node:crypto");
-const { test, expect, login } = require("./fixtures.cjs");
+const { test, expect, login, openModule } = require("./fixtures.cjs");
+
+for (const width of [390, 1440]) {
+  test(`Auditoría se abre desde el sidebar de Acceso y no desde el usermenu a ${width}px`, async ({
+    page,
+    environment,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const user = await environment.seedUser({
+      permissions: [
+        { capability: "audit.events.read" },
+        { capability: "access.users.read" },
+        { capability: "access.roles.read" },
+      ],
+    });
+    await login(page, environment, user);
+    await openModule(page, "Acceso");
+    await expect(page.locator(".clients-sidebar").getByRole("button", { name: "Usuarios", exact: true })).toBeVisible();
+    await expect(page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true })).toBeVisible();
+    const audit = page.locator(".clients-sidebar").getByRole("button", { name: "Auditoría", exact: true });
+    await expect(audit).toBeVisible();
+    await audit.click();
+    await expect(page).toHaveURL(`${environment.origin}/acceso#auditoria`);
+    await expect(audit).toHaveClass(/active/);
+    await expect(page.getByRole("heading", { name: "Auditoría", exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole("navigation", { name: "Módulos disponibles", exact: true })
+        .getByRole("link", { name: "Auditoría", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.locator(".access-content .access-content")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Auditoría", exact: true })).toBeVisible();
+    await page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Roles", exact: true })).toBeVisible();
+  });
+}
+
+test("lector exclusivo de auditoría entra a Acceso sin obtener administración y conserva enlaces anteriores", async ({
+  page,
+  environment,
+}) => {
+  await login(page, environment, await environment.seedUser({ permissions: [{ capability: "audit.events.read" }] }));
+  await expect(page).toHaveURL(`${environment.origin}/acceso#auditoria`);
+  await expect(page.locator(".clients-sidebar").getByRole("button", { name: /^(Usuarios|Roles)$/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Auditoría", exact: true })).toBeVisible();
+  expect(await page.evaluate(async () => (await fetch("/api/auth/directory")).status)).toBe(403);
+  await page.goto(`${environment.origin}/auditoria`);
+  await expect(page).toHaveURL(`${environment.origin}/acceso#auditoria`);
+  await expect(page.getByRole("heading", { name: "Auditoría", exact: true })).toBeVisible();
+});
+
+test("administrar roles no permite consultar auditoría ni solicitar sus datos", async ({ page, environment }) => {
+  await login(page, environment, await environment.seedUser({ permissions: [{ capability: "access.roles.read" }] }));
+  const requests = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/auth/audit") requests.push(request.url());
+  });
+  await page.goto(`${environment.origin}/acceso#auditoria`);
+  await expect(page.getByRole("heading", { name: "Roles", exact: true })).toBeVisible();
+  await expect(page.locator(".clients-sidebar").getByRole("button", { name: "Auditoría", exact: true })).toHaveCount(0);
+  await page.goto(`${environment.origin}/auditoria`);
+  await expect(page.getByRole("heading", { name: "Acceso restringido", exact: true })).toBeVisible();
+  expect(requests).toEqual([]);
+});
 
 async function openAudit(page, environment) {
   await environment.db("dmmarket_auth_events").delete();

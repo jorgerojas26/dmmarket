@@ -176,8 +176,9 @@ test("superusuario conserva barra original en una fila y administración en men�
     expect(sizing.document).toBeLessThanOrEqual(width);
   }
   await navbar.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
-  for (const name of ["Configuración", "Mi cuenta", "Acceso", "Auditoría"])
+  for (const name of ["Configuración", "Mi cuenta", "Acceso"])
     await expect(navbar.getByRole("link", { name, exact: true })).toBeVisible();
+  await expect(navbar.getByRole("link", { name: "Auditoría", exact: true })).toHaveCount(0);
   await navbar.getByRole("link", { name: "Mi cuenta", exact: true }).click();
   await expect(page).toHaveURL(`${environment.origin}/cuenta`);
   await expect(navbar.getByRole("link", { name: "Acceso", exact: true })).not.toBeVisible();

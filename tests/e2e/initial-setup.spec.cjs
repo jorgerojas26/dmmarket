@@ -57,7 +57,7 @@ test("primera apertura tras instalador compilado crea administrador sin obligar 
     expect(permissions.map((grant) => grant.capability).sort()).toEqual(Object.keys(CAPABILITIES).sort());
     expect(permissions.every((grant) => !Object.hasOwn(grant, "scope"))).toBe(true);
     await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
-    for (const name of ["Configuración", "Auditoría", "Acceso", "Mi cuenta"])
+    for (const name of ["Configuración", "Acceso", "Mi cuenta"])
       await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Menú de cuenta", exact: true }).click();
     const ready = await setup.request("status");

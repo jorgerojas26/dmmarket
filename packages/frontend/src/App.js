@@ -11,7 +11,6 @@ import Container from 'react-bootstrap/Container';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { NavLink, Redirect, useLocation } from 'react-router-dom';
-import Audit from './auth/audit';
 import { useAuth } from './auth/context';
 import AccessWorkspace, { Account } from './auth/workspace';
 import Clients from './pages/clientes';
@@ -35,7 +34,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
     const [expanded, setExpanded] = useState(false);
     const hasModule = (module) => !pending && modulePermissions(session?.permissions || [], module).length > 0;
     const configuration = hasModule('settings');
-    const access = hasModule('access');
+    const access = hasModule('access') || hasModule('audit');
     const modules = [
         { path: '/ventas', label: 'Ventas', allowed: hasModule('sales') },
         { path: '/compras', label: 'Compras', allowed: hasModule('purchases') },
@@ -44,7 +43,6 @@ export default function App({ onLogout, logoutError, pending = false }) {
         { path: '/vendedores', label: 'Vendedores', allowed: hasModule('sellers') },
         { path: '/inventario', label: 'Inventario', allowed: hasModule('inventory') },
         { path: '/configuracion', label: 'Configuración', allowed: configuration },
-        { path: '/auditoria', label: 'Auditoría', allowed: hasModule('audit') },
         { path: '/acceso', label: 'Acceso', allowed: access },
     ].filter((module) => module.allowed);
     const views = [
@@ -59,7 +57,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
         { path: '/vendedores', allowed: hasModule('sellers'), content: <Sellers /> },
         { path: '/inventario', allowed: hasModule('inventory'), content: <Inventory /> },
         { path: '/configuracion', allowed: configuration, content: <Configuration /> },
-        { path: '/auditoria', allowed: hasModule('audit'), content: <Audit /> },
+        { path: '/auditoria', allowed: hasModule('audit'), content: <Redirect to="/acceso#auditoria" /> },
         { path: '/acceso', allowed: access, content: <AccessWorkspace /> },
         { path: '/cuenta', allowed: true, content: <Account /> },
     ].filter((view) => view.allowed);
@@ -104,10 +102,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                                 <Navbar.Collapse id="basic-navbar-nav">
                                     <Nav className="me-auto app-navbar-links">
                                         {modules
-                                            .filter(
-                                                (item) =>
-                                                    !['/configuracion', '/auditoria', '/acceso'].includes(item.path),
-                                            )
+                                            .filter((item) => !['/configuracion', '/acceso'].includes(item.path))
                                             .map((item) => (
                                                 <Nav.Link
                                                     key={item.path}
@@ -148,9 +143,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                                                 configuration={configuration}
                                                 onLogout={onLogout}
                                                 onNavigate={() => setExpanded(false)}
-                                                administration={modules.filter((item) =>
-                                                    ['/acceso', '/auditoria'].includes(item.path),
-                                                )}
+                                                administration={modules.filter((item) => item.path === '/acceso')}
                                             />
                                         </div>
                                     </div>
