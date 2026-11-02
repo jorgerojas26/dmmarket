@@ -15,6 +15,7 @@ import { CommercialIdentity, SellerSelect } from './commercial-profile';
 import { useAuth } from './context';
 import { Field } from './forms';
 import { authRequest } from './transport';
+import UserTimeline from './user-timeline';
 
 const accountStates = {
     enabled: { label: 'Habilitado', className: 'is-enabled' },
@@ -472,6 +473,7 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
                         {message}
                     </p>
                 )}
+                {can('audit.read') && <UserTimeline user={user} />}
                 <fieldset disabled={busy || Boolean(operation)}>
                     <Assignments key={revision} id={user.id} onDirtyChange={setAccessDirty} onBusyChange={changeBusy} />
                 </fieldset>

@@ -1783,3 +1783,109 @@
     gap: 8px;
     margin-top: 9px;
 }
+
+.access-user-detail .access-timeline {
+    margin-top: 24px;
+    border: 1px solid #2d3138;
+    border-radius: 12px;
+    background: #1e2126;
+    overflow: hidden;
+}
+
+.access-timeline .access-section-head {
+    padding-bottom: 14px;
+}
+
+.access-timeline .access-section-head .btn {
+    flex-shrink: 0;
+}
+
+.access-timeline-list {
+    margin: 0;
+    padding: 0 22px 18px 22px;
+    list-style: none;
+}
+
+.access-timeline-item {
+    position: relative;
+    padding: 0 0 14px 20px;
+}
+
+.access-timeline-item::before {
+    content: "";
+    position: absolute;
+    top: 15px;
+    bottom: 0;
+    left: 3px;
+    width: 1px;
+    background: #2d3138;
+}
+
+.access-timeline-item::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #8b95a4;
+}
+
+.access-timeline-item[data-outcome="success"]::after {
+    background: #5ec294;
+}
+
+.access-timeline-item[data-outcome="failure"]::after {
+    background: #e08a8a;
+}
+
+.access-timeline-item:last-child {
+    padding-bottom: 0;
+}
+
+.access-timeline-item:last-child::before {
+    display: none;
+}
+
+.access-timeline-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0;
+}
+
+.access-timeline-link {
+    min-width: 0;
+    color: #e4e6ea;
+    font-size: 13.5px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.access-timeline-link:hover {
+    color: #b5d2fa;
+    text-decoration: underline;
+}
+
+.access-timeline-row time {
+    flex-shrink: 0;
+    color: #8c96a4;
+    font-size: 12px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.access-timeline-context {
+    margin: 3px 0 0;
+    color: #a3adbb;
+    font-size: 12.5px;
+}
+
+.access-timeline-empty {
+    margin: 0;
+    padding: 0 22px 20px;
+    color: #a3adbb;
+    font-size: 13px;
+}

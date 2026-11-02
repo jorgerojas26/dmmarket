@@ -54,6 +54,39 @@ for (const width of [390, 1440, 1920])
     await expect(page).toHaveURL(/\/acceso#usuarios$/);
   });
 
+test("el detalle muestra la actividad de la cuenta antes del acceso", async ({ page, environment }) => {
+  const target = await environment.seedUser({ permissions: [] });
+  await environment.db("dmmarket_auth_users").where("id", target.id).update({ display_name: "Ana Pérez" });
+  await environment.db("dmmarket_auth_events").insert({
+    id: randomUUID(),
+    actor_id: target.id,
+    target_user_id: target.id,
+    action: "auth.password_changed",
+    outcome: "success",
+    occurred_ms: Date.now(),
+  });
+  await administrator(page, environment);
+  await page.goto(`${environment.origin}/acceso/usuarios/${target.id}`);
+  const screen = page.getByRole("region", { name: `Administrar ${target.username}`, exact: true });
+  const timeline = screen.getByRole("region", { name: "Actividad", exact: true });
+  const entry = timeline.getByRole("link", { name: "Contraseña actualizada", exact: true });
+  await expect(entry).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const activity = document.querySelector(".access-timeline");
+      const access = document.querySelector(".access-user-access");
+      return Boolean(activity.compareDocumentPosition(access) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }),
+  ).toBe(true);
+  await entry.click();
+  await expect(page.getByRole("region", { name: "Detalle del evento", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contraseña actualizada", exact: true })).toBeVisible();
+  await page.goBack();
+  await screen.getByRole("link", { name: "Ver en auditoría", exact: true }).click();
+  await expect(page).toHaveURL(`${environment.origin}/acceso#auditoria`);
+  await expect(page.getByRole("button", { name: "Quitar filtro de cuenta", exact: true })).toContainText("Ana Pérez");
+});
+
 test("la navegación protege cambios sin guardar y conserva el borrador al cancelar", async ({ page, environment }) => {
   const target = await environment.seedUser({ permissions: [] });
   await administrator(page, environment);
