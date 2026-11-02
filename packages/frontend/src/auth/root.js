@@ -10,7 +10,7 @@ import { fetcher, swrConfig } from 'swr-config';
 import App from '../App';
 import { AuthProvider, useAuth } from './context';
 import { EnrollmentForm, InitialAccountForm, LoginForm, MfaForm, PasswordForm, ReauthenticationDialog } from './forms';
-import AuthPresentation from './presentation';
+import AuthPresentation, { AuthStage } from './presentation';
 import SessionRecovery, { ConnectionNotice } from './recovery';
 import { authTransportGeneration } from './transport';
 
@@ -77,7 +77,7 @@ function BoundaryContent() {
     if (session?.stage === 'anonymous' || session?.stage === 'mfa') {
         return (
             <AuthPresentation
-                mfa={session.stage === 'mfa'}
+                identified={session.stage === 'mfa'}
                 username={session.user?.username}
                 onLogout={signOut}
                 logoutError={logoutError}
@@ -88,50 +88,30 @@ function BoundaryContent() {
             </AuthPresentation>
         );
     }
-    return (
-        <main className="bg-dark text-light" style={{ height: '100vh', overflowY: 'auto' }}>
-            <div className="container py-4" style={{ maxWidth: 1000 }}>
-                <header className="d-flex justify-content-between align-items-center mb-4">
-                    <h1 className="h3">DMMarket</h1>
-                    {!checking && session?.user && (
-                        <div>
-                            <span className="me-3" role="status" aria-label="Usuario conectado">
-                                {session.user.username}
-                            </span>
-                            <button
-                                type="button"
-                                data-auth-logout="true"
-                                className="btn btn-outline-light"
-                                onClick={signOut}
-                            >
-                                Salir
-                            </button>
-                        </div>
-                    )}
-                </header>
-                {logoutError && (
-                    <p role="alert" className="text-warning">
-                        {logoutError}
-                    </p>
-                )}
-                <div key={`${epoch}:${session?.stage}`}>
-                    {session?.stage === 'setup-required' && (
-                        <section>
-                            <h2 className="h4">Configuración inicial pendiente</h2>
-                            <p>Completa la creación del primer administrador desde el propio servidor de DMMarket.</p>
-                            <button type="button" className="btn btn-primary" onClick={() => check()}>
-                                Actualizar estado
-                            </button>
-                        </section>
-                    )}
-                    {session?.stage === 'anonymous' && <LoginForm />}
-                    {session?.stage === 'password' && <PasswordForm />}
-                    {session?.stage === 'mfa' && <MfaForm />}
-                    {session?.stage === 'mfa-enrollment' && <EnrollmentForm />}
+    if (session?.stage === 'setup-required') {
+        return (
+            <AuthPresentation setup>
+                <AuthStage
+                    title="Configuración inicial pendiente"
+                    description="Completa la creación del primer administrador desde el propio servidor de DMMarket."
+                >
+                    <button type="button" className="btn btn-primary" onClick={() => check()}>
+                        Actualizar estado
+                    </button>
+                </AuthStage>
+            </AuthPresentation>
+        );
+    }
+    if (session?.stage === 'password' || session?.stage === 'mfa-enrollment') {
+        return (
+            <AuthPresentation identified username={session.user?.username} onLogout={signOut} logoutError={logoutError}>
+                <div key={`${epoch}:${session.stage}`}>
+                    {session.stage === 'password' ? <PasswordForm panel /> : <EnrollmentForm panel />}
                 </div>
-            </div>
-        </main>
-    );
+            </AuthPresentation>
+        );
+    }
+    return null;
 }
 
 function Boundary() {

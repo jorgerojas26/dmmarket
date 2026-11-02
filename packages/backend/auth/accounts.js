@@ -184,7 +184,9 @@ async function createAccountService({ db, sessions, now = Date.now }) {
           id,
           ...names,
           password_hash: credential.passwordHash,
+          must_change_password: true,
           temporary_expires_ms: credential.expiresAtMs,
+          temporary_consumed: false,
           mfa_required: mfaRequired,
         });
         if (roles.length)

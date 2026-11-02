@@ -16,6 +16,47 @@ import { useAuth } from './context';
 import { Field } from './forms';
 import { authRequest } from './transport';
 
+const accountStates = {
+    enabled: { label: 'Habilitado', className: 'is-enabled' },
+    disabled: { label: 'Deshabilitado', className: '' },
+    pending: { label: 'Activación pendiente', className: 'is-pending' },
+    expired: { label: 'Credencial vencida', className: 'is-expired' },
+};
+
+function accountState(user, now = Date.now()) {
+    if (Number(user.enabled) !== 1) return 'disabled';
+    if (Number(user.must_change_password) === 1) {
+        if (user.temporary_expires_ms !== null && now >= Number(user.temporary_expires_ms)) return 'expired';
+        return 'pending';
+    }
+    return 'enabled';
+}
+
+function accountHint(user, state) {
+    if (state === 'expired') return 'La credencial temporal venció y la cuenta no puede ingresar hasta regenerarla.';
+    if (state === 'pending') {
+        const time = new Intl.DateTimeFormat('es-VE', { hour: '2-digit', minute: '2-digit' }).format(
+            new Date(Number(user.temporary_expires_ms)),
+        );
+        return `La cuenta se activa al ingresar por primera vez y cambiar la contraseña temporal. Vence a las ${time}.`;
+    }
+    return undefined;
+}
+
+function AccountStatus({ user }) {
+    const state = accountState(user);
+    return (
+        <span className={`access-status ${accountStates[state].className}`} title={accountHint(user, state)}>
+            {accountStates[state].label}
+        </span>
+    );
+}
+
+function recoveryLabel(user) {
+    const state = accountState(user);
+    return state === 'pending' || state === 'expired' ? 'Regenerar credencial' : 'Recuperar acceso';
+}
+
 function CreateUser({ onClose, onCreated, onDirtyChange }) {
     const { can } = useAuth();
     const heading = useRef(null);
@@ -259,7 +300,7 @@ function UserOperation({ user, operation, onClose, onDone }) {
     const close = () => requestClose(onClose);
     const title =
         operation === 'reset'
-            ? 'Recuperar acceso'
+            ? recoveryLabel(user)
             : operation === 'enable'
               ? 'Habilitar usuario'
               : 'Deshabilitar usuario';
@@ -367,9 +408,7 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
                             <h2 ref={heading} tabIndex={-1}>
                                 {user.display_name}
                             </h2>
-                            <span className={`access-status ${Number(user.enabled) ? 'is-enabled' : ''}`}>
-                                {Number(user.enabled) ? 'Habilitado' : 'Deshabilitado'}
-                            </span>
+                            <AccountStatus user={user} />
                             {user.id === session.user.id && <span className="access-self-badge">Tu cuenta</span>}
                         </div>
                         <p className="access-identity-handle">@{user.username}</p>
@@ -383,7 +422,7 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
                                     disabled={busy || Boolean(operation)}
                                     onClick={() => beginOperation('reset')}
                                 >
-                                    Recuperar acceso
+                                    {recoveryLabel(user)}
                                 </button>
                             )}
                             {can('access.users') &&
@@ -643,11 +682,7 @@ export default function Users({
                                                 </td>
                                             )}
                                             <td>
-                                                <span
-                                                    className={`access-status ${Number(user.enabled) ? 'is-enabled' : ''}`}
-                                                >
-                                                    {Number(user.enabled) ? 'Habilitado' : 'Deshabilitado'}
-                                                </span>
+                                                <AccountStatus user={user} />
                                             </td>
                                             <td>
                                                 <Dropdown align="end" className="access-row-dropdown">
@@ -683,7 +718,7 @@ export default function Users({
                                                                         setOperation({ user, kind: 'reset' })
                                                                     }
                                                                 >
-                                                                    Recuperar acceso
+                                                                    {recoveryLabel(user)}
                                                                 </Dropdown.Item>
                                                             )}
                                                             {can('access.users') && (

@@ -28,7 +28,7 @@ function createAccessDirectory(sessions) {
         if (!directoryCapabilities.some((key) => access.hasGlobal(key))) forbidden();
         const user = await transaction("dmmarket_auth_users")
           .where("id", id)
-          .select("id", "username", "display_name", "enabled")
+          .select("id", "username", "display_name", "enabled", "must_change_password", "temporary_expires_ms")
           .first();
         if (!user) throw Object.assign(new Error("La cuenta no está disponible."), { status: 404 });
         return user;
@@ -48,7 +48,7 @@ function createAccessDirectory(sessions) {
         if (state !== "all") directory.where("enabled", state === "enabled");
         const total = Number((await directory.clone().count("* as total").first()).total);
         const rows = await directory
-          .select("id", "username", "display_name", "enabled")
+          .select("id", "username", "display_name", "enabled", "must_change_password", "temporary_expires_ms")
           .orderBy("username")
           .limit(100)
           .offset((page - 1) * 100);

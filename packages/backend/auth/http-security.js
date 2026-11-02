@@ -98,6 +98,13 @@ function authErrorHandler(error, req, res, next) {
     415: "El formato de la solicitud no está permitido.",
     429: "Demasiados intentos de acceso. Vuelve a intentarlo más tarde.",
   };
+  const temporaryCredentialMessage =
+    "La contraseña temporal venció o ya fue utilizada. Pide a un administrador que restablezca tu acceso.";
+  const exposedCodes = {
+    RECENT_AUTH_REQUIRED: 403,
+    CXC_SCHEMA_UNAVAILABLE: 503,
+    TEMPORARY_CREDENTIAL_EXPIRED: 401,
+  };
   const knownStatus = Object.hasOwn(messages, error.status);
   const status = knownStatus ? Number(error.status) : 503;
   if (!knownStatus && error.status !== 503) {
@@ -140,13 +147,14 @@ function authErrorHandler(error, req, res, next) {
       Number.isSafeInteger(error.retryAfterSeconds) && error.retryAfterSeconds > 0 ? error.retryAfterSeconds : 1;
     res.set("Retry-After", String(seconds));
   }
+  const code = exposedCodes[error.code] === status ? error.code : null;
   return res.status(status).json({
     error: {
-      message: messages[status] || "El servicio de acceso no está disponible.",
-      ...((status === 403 && error.code === "RECENT_AUTH_REQUIRED") ||
-      (status === 503 && error.code === "CXC_SCHEMA_UNAVAILABLE")
-        ? { code: error.code }
-        : {}),
+      message:
+        code === "TEMPORARY_CREDENTIAL_EXPIRED"
+          ? temporaryCredentialMessage
+          : messages[status] || "El servicio de acceso no está disponible.",
+      ...(code ? { code } : {}),
     },
   });
 }

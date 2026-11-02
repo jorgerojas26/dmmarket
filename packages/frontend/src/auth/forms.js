@@ -2,7 +2,7 @@ import Modal from 'components/Modal';
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { useAuth } from './context';
-import { AuthIcon } from './presentation';
+import { AuthIcon, AuthStage } from './presentation';
 
 export function AccessForm({
     title,
@@ -220,18 +220,12 @@ export function LoginForm() {
     );
 }
 
-export function PasswordForm() {
+export function PasswordForm({ panel = false }) {
     const { action, session } = useAuth();
-    return (
-        <AccessForm
-            title={session.stage === 'password' ? 'Cambiar contraseña temporal' : 'Cambiar mi contraseña'}
-            button="Guardar contraseña"
-            onSubmit={async ({ currentPassword, newPassword, confirmation, token = '' }) => {
-                if (newPassword !== confirmation) throw new Error('Las contraseñas nuevas no coinciden.');
-                await action('password', { currentPassword, newPassword, token });
-            }}
-        >
-            <p>Usa al menos 15 caracteres. No reutilices la contraseña temporal.</p>
+    const temporary = session.stage === 'password';
+    const title = temporary ? 'Cambiar contraseña temporal' : 'Cambiar mi contraseña';
+    const fields = (
+        <>
             <Field label="Contraseña actual" name="currentPassword" type="password" autoComplete="current-password" />
             <Field
                 label="Contraseña nueva"
@@ -256,6 +250,31 @@ export function PasswordForm() {
                     autoComplete="one-time-code"
                 />
             )}
+        </>
+    );
+    const submit = async ({ currentPassword, newPassword, confirmation, token = '' }) => {
+        if (newPassword !== confirmation) throw new Error('Las contraseñas nuevas no coinciden.');
+        await action('password', { currentPassword, newPassword, token });
+    };
+    if (panel)
+        return (
+            <AuthStage
+                title={title}
+                description={
+                    temporary
+                        ? 'Es obligatorio: reemplaza la contraseña temporal por una permanente antes de entrar a DMMarket.'
+                        : 'Elige una contraseña nueva de al menos 15 caracteres.'
+                }
+            >
+                <AccessForm embedded button="Guardar contraseña" onSubmit={submit}>
+                    {fields}
+                </AccessForm>
+            </AuthStage>
+        );
+    return (
+        <AccessForm title={title} button="Guardar contraseña" onSubmit={submit}>
+            <p>Usa al menos 15 caracteres. No reutilices la contraseña temporal.</p>
+            {fields}
         </AccessForm>
     );
 }
@@ -364,7 +383,7 @@ function ManualMfaConfiguration({ uri }) {
     );
 }
 
-export function EnrollmentForm() {
+export function EnrollmentForm({ panel = false }) {
     const { action, session } = useAuth();
     const [uri, setUri] = useState('');
     const [qr, setQr] = useState('');
@@ -380,8 +399,29 @@ export function EnrollmentForm() {
             active = false;
         };
     }, [uri]);
+    const intro = session.mfaRequired
+        ? 'Tu cuenta requiere MFA. Confirma tu contraseña para generar la configuración.'
+        : 'Activa un segundo factor para proteger tu cuenta. Confirma tu contraseña.';
     if (!uri)
-        return (
+        return panel ? (
+            <AuthStage icon="code" title="Configurar segundo factor" description={intro}>
+                <AccessForm
+                    embedded
+                    button="Generar configuración MFA"
+                    onSubmit={async ({ password }) => {
+                        const data = await action('mfa/enrollment', { password });
+                        setUri(data.uri);
+                    }}
+                >
+                    <Field
+                        label="Contraseña para configurar MFA"
+                        name="password"
+                        type="password"
+                        autoComplete="current-password"
+                    />
+                </AccessForm>
+            </AuthStage>
+        ) : (
             <AccessForm
                 title="Configurar segundo factor"
                 button="Generar configuración MFA"
@@ -390,12 +430,7 @@ export function EnrollmentForm() {
                     setUri(data.uri);
                 }}
             >
-                <p>
-                    {session.mfaRequired
-                        ? 'Tu cuenta requiere MFA.'
-                        : 'Activa un segundo factor para proteger tu cuenta.'}{' '}
-                    Confirma tu contraseña.
-                </p>
+                <p>{intro}</p>
                 <Field
                     label="Contraseña para configurar MFA"
                     name="password"
@@ -404,17 +439,15 @@ export function EnrollmentForm() {
                 />
             </AccessForm>
         );
-    return (
-        <AccessForm
-            title="Confirmar configuración MFA"
-            button="Confirmar MFA"
-            onSubmit={({ token }) => action('mfa/enrollment/confirm', { token })}
-        >
+    const confirm = (
+        <>
             <p>
                 Escanea este código con tu autenticador. La configuración vence en cinco minutos y no se mostrará de
                 nuevo.
             </p>
-            {qr && <img src={qr} width="240" height="240" alt="Código QR de configuración MFA" />}
+            {qr && (
+                <img className="auth-entry-qr" src={qr} width="240" height="240" alt="Código QR de configuración MFA" />
+            )}
             <ManualMfaConfiguration key={uri} uri={uri} />
             <Field
                 label="Código de confirmación MFA"
@@ -433,6 +466,27 @@ export function EnrollmentForm() {
             >
                 Generar otra configuración
             </button>
+        </>
+    );
+    if (panel)
+        return (
+            <AuthStage icon="code" title="Confirmar configuración MFA">
+                <AccessForm
+                    embedded
+                    button="Confirmar MFA"
+                    onSubmit={({ token }) => action('mfa/enrollment/confirm', { token })}
+                >
+                    {confirm}
+                </AccessForm>
+            </AuthStage>
+        );
+    return (
+        <AccessForm
+            title="Confirmar configuración MFA"
+            button="Confirmar MFA"
+            onSubmit={({ token }) => action('mfa/enrollment/confirm', { token })}
+        >
+            {confirm}
         </AccessForm>
     );
 }

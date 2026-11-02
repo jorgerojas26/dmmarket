@@ -142,6 +142,7 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await login(reader, environment, { username, password: temporaryPassword });
     await expect(reader.getByRole("heading", { name: "Cambiar contraseña temporal" })).toBeVisible();
     await changePassword(reader, temporaryPassword, randomBytes(24).toString("base64url"));
+    await expect(reader.locator(".app-navbar-ref")).toBeVisible();
     await expect(reader.getByRole("status", { name: "Usuario conectado" })).toHaveText(username);
     await page.getByRole("link", { name: `Administrar ${username}`, exact: true }).click();
     await page.getByRole("button", { name: "Recuperar acceso", exact: true }).click();
@@ -158,6 +159,7 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await login(reader, environment, { username, password: replacement });
     await expect(reader.getByRole("heading", { name: "Cambiar contraseña temporal" })).toBeVisible();
     await changePassword(reader, replacement, randomBytes(24).toString("base64url"));
+    await expect(reader.locator(".app-navbar-ref")).toBeVisible();
     await expect(reader.getByRole("status", { name: "Usuario conectado" })).toHaveText(username);
     await page.getByRole("link", { name: `Administrar ${username}`, exact: true }).click();
     await page.getByRole("button", { name: "Deshabilitar usuario", exact: true }).click();

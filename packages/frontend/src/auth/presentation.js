@@ -33,7 +33,27 @@ export function AuthIcon({ kind = 'shield' }) {
     );
 }
 
-export default function AuthPresentation({ setup = false, mfa, children, username, onLogout, logoutError }) {
+export function AuthStage({ icon = 'shield', title, description, children }) {
+    return (
+        <div className="auth-entry-form">
+            <div className="auth-entry-form-icon">
+                <AuthIcon kind={icon} />
+            </div>
+            <h2>{title}</h2>
+            {description && <p className="auth-entry-description">{description}</p>}
+            {children}
+        </div>
+    );
+}
+
+export default function AuthPresentation({
+    setup = false,
+    identified = false,
+    children,
+    username,
+    onLogout,
+    logoutError,
+}) {
     return (
         <main className={`auth-entry${setup ? ' auth-entry-setup' : ''}`}>
             <header className="auth-entry-header">
@@ -53,7 +73,7 @@ export default function AuthPresentation({ setup = false, mfa, children, usernam
                 <div className="auth-entry-panel">
                     <div className={setup ? 'auth-entry-initial' : 'auth-entry-card'}>
                         {children}
-                        {mfa && (
+                        {identified && (
                             <div className="auth-entry-account">
                                 <span role="status" aria-label="Usuario conectado">
                                     {username}

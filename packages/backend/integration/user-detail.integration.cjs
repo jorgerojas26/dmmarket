@@ -14,7 +14,14 @@ test("el detalle obtiene una cuenta por ID sin exponer credenciales ni depender 
   await client.login(owner);
   const result = await client.request(`/api/auth/users/${target.id}`);
   expect(result.status).toBe(200);
-  expect(Object.keys(result.body).sort()).toEqual(["display_name", "enabled", "id", "username"]);
+  expect(Object.keys(result.body).sort()).toEqual([
+    "display_name",
+    "enabled",
+    "id",
+    "must_change_password",
+    "temporary_expires_ms",
+    "username",
+  ]);
   expect(result.body).toMatchObject({ id: target.id, username: target.username, enabled: 0 });
   expect((await client.request(`/api/auth/users/${randomUUID()}`)).status).toBe(404);
   expect((await client.request("/api/auth/users/not-an-id")).status).toBe(400);

@@ -210,10 +210,10 @@
     align-items: center;
     gap: 7px;
     padding: 1px 9px 1px 8px;
-    border: 1px solid #463036;
+    border: 1px solid #3a424d;
     border-radius: 999px;
-    background: #2a2124;
-    color: #e0a9ae;
+    background: #242a33;
+    color: #b9c2cf;
     font-size: 12px;
     line-height: 1.7;
     white-space: nowrap;
@@ -225,7 +225,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #d4717a;
+    background: #8b95a4;
 }
 
 .access-status.is-enabled {
@@ -236,6 +236,26 @@
 
 .access-status.is-enabled::before {
     background: #5ec294;
+}
+
+.access-status.is-pending {
+    border-color: #4a3f2a;
+    background: #2a2620;
+    color: #e2bd82;
+}
+
+.access-status.is-pending::before {
+    background: #e2bd82;
+}
+
+.access-status.is-expired {
+    border-color: #463036;
+    background: #2a2124;
+    color: #e0a9ae;
+}
+
+.access-status.is-expired::before {
+    background: #d4717a;
 }
 
 .access-muted {

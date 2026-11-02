@@ -135,7 +135,7 @@ test("alta explica permisos reales, conserva datos ante errores y funciona con n
   await screen.getByLabel("Username", { exact: true }).fill(owner.username);
   await screen.getByLabel("Rol", { exact: true }).selectOption(roleId);
   await screen.getByRole("button", { name: "Ver permisos de Consulta personalizada", exact: true }).click();
-  await expect(screen.getByText("Desglose · Consultar", { exact: true })).toBeVisible();
+  await expect(page.getByText("Desglose · Consultar", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await screen.getByRole("combobox", { name: "Perfil comercial", exact: true }).click();
   await page.locator(".search-select__option", { hasText: /^Vendedor A$/ }).click();

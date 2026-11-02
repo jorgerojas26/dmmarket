@@ -155,6 +155,41 @@
     background: #304058;
     color: #d5e5ff;
 }
+.auth-entry-notice {
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border: 1px solid #4a3f2a;
+    border-radius: 7px;
+    background: rgb(226 189 130 / 8%);
+    color: #e2bd82;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.auth-entry-qr {
+    display: block;
+    width: 100%;
+    max-width: 230px;
+    height: auto;
+    margin: 0 auto 18px;
+    padding: 10px;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.auth-entry .btn-outline-light {
+    min-height: 44px;
+    border-color: #495361;
+    border-radius: 8px;
+    color: #d8dfe9;
+}
+
+.auth-entry .btn-outline-light:hover {
+    background: #304058;
+    border-color: #5c6c84;
+    color: #edf1f7;
+}
+
 .auth-entry-help {
     color: var(--entry-muted);
     font-size: 12px;

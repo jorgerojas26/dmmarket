@@ -223,17 +223,27 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
             ? await connection("dmmarket_auth_users").where("id", before.id).forUpdate().first()
             : null;
           const current = time();
-          if (
-            !matches ||
-            !user ||
-            Number(user.enabled) !== 1 ||
-            user.password_hash !== before.password_hash ||
-            user.session_version !== before.session_version ||
-            (user.temporary_expires_ms !== null &&
-              (Number(user.temporary_consumed) === 1 || current >= Number(user.temporary_expires_ms)))
-          ) {
+          const valid =
+            Boolean(matches) &&
+            Boolean(user) &&
+            Number(user.enabled) === 1 &&
+            user.password_hash === before.password_hash &&
+            user.session_version === before.session_version;
+          if (!valid) {
             await event(connection, { targetId: user?.id || null, action: "auth.login_failed", outcome: "failure" });
             return denied();
+          }
+          if (
+            user.temporary_expires_ms !== null &&
+            (Number(user.temporary_consumed) === 1 || current >= Number(user.temporary_expires_ms))
+          ) {
+            await event(connection, {
+              targetId: user.id,
+              action: "auth.login_failed",
+              outcome: "failure",
+              reason: "temporary-credential",
+            });
+            return denied(401, "TEMPORARY_CREDENTIAL_EXPIRED");
           }
           const state = {
             sid_hash: hash,
