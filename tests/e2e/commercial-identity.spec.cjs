@@ -52,8 +52,10 @@ test("crear una cuenta Vendedor selecciona una única identidad comercial y no u
   const username = `comercial-${randomUUID().slice(0, 8)}`;
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Rol", { exact: true }).selectOption({ label: "Vendedor" });
-  await expect(page.getByLabel("Perfil comercial", { exact: true })).toHaveAttribute("required", "");
-  await page.getByLabel("Perfil comercial", { exact: true }).selectOption("A");
+  await expect(page.getByRole("button", { name: "Crear usuario", exact: true })).toBeDisabled();
+  await page.getByRole("combobox", { name: "Perfil comercial", exact: true }).click();
+  await page.locator(".search-select__option", { hasText: /^Vendedor A$/ }).click();
+  await expect(page.getByRole("button", { name: "Crear usuario", exact: true })).toBeEnabled();
   await expect(page.getByText("Vendedores vinculados", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Credencial temporal", exact: true })).toBeVisible();

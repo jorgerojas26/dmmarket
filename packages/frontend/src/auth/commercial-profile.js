@@ -2,62 +2,54 @@ import SearchInput from 'components/SearchInput';
 import { useCallback, useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
-import { LoadState, Pagination } from './access-ui';
 import { useAuth } from './context';
 import { authRequest } from './transport';
 
-export function CommercialIdentityField({ value, onChange, userId, required = false }) {
-    const [search, setSearch] = useState('');
-    const [page, setPage] = useState(1);
-    const owner = userId ? `&userId=${encodeURIComponent(userId)}` : '';
-    const options = useSWR(
-        `/api/auth/seller-options?search=${encodeURIComponent(search)}&page=${page}${owner}`,
-        fetcher,
-    );
-    const selected = useSWR(
-        value ? `/api/auth/seller-options?ids=${encodeURIComponent(value)}${owner}` : null,
-        fetcher,
+export function SellerSelect({
+    inputId,
+    value,
+    onChange,
+    userId,
+    compact = false,
+    placeholder = 'Sin perfil comercial',
+    disabled = false,
+}) {
+    const [error, setError] = useState('');
+    const loadOptions = useCallback(
+        async (input) => {
+            try {
+                const owner = userId ? `&userId=${encodeURIComponent(userId)}` : '';
+                const result = await fetcher(`/api/auth/seller-options?search=${encodeURIComponent(input)}${owner}`);
+                return result.data.map((seller) => ({ value: seller.id, label: seller.name || seller.id }));
+            } catch (failure) {
+                setError('No se pudieron cargar los vendedores.');
+                throw failure;
+            }
+        },
+        [userId],
     );
     return (
-        <div className="access-commercial-identity">
-            <label className="form-label" htmlFor="commercial-seller">
-                Perfil comercial
-            </label>
-            <input
-                type="search"
-                className="form-control mb-2"
-                aria-label="Buscar identidad comercial"
-                placeholder="Buscar por nombre o código…"
-                value={search}
-                onChange={(event) => {
-                    setSearch(event.target.value);
-                    setPage(1);
+        <>
+            <SearchInput
+                inputId={inputId}
+                variant={compact ? 'compact' : 'form'}
+                ariaLabel="Perfil comercial"
+                placeholder={placeholder}
+                loadOptions={loadOptions}
+                defaultOptions
+                defaultValue={value}
+                onSelect={(option) => {
+                    setError('');
+                    onChange(option ? { value: option.value, label: option.label } : null);
                 }}
+                disabled={disabled}
             />
-            <select
-                id="commercial-seller"
-                className="form-select"
-                name="sellerId"
-                value={value}
-                onChange={(event) => onChange(event.target.value)}
-                required={required}
-            >
-                <option value="">{required ? 'Selecciona un vendedor' : 'Sin perfil comercial'}</option>
-                {value && !options.data?.data.some((seller) => seller.id === value) && (
-                    <option value={value}>
-                        {selected.data?.data[0]?.name || value} · {value}
-                    </option>
-                )}
-                {options.data?.data.map((seller) => (
-                    <option key={seller.id} value={seller.id}>
-                        {seller.name || 'Sin nombre'} · {seller.id}
-                    </option>
-                ))}
-            </select>
-            <LoadState error={options.error} loading={!options.data} onRetry={options.mutate}>
-                {options.data?.total > 100 && <Pagination page={page} total={options.data.total} onChange={setPage} />}
-            </LoadState>
-        </div>
+            {error && (
+                <p role="alert" className="access-error">
+                    {error}
+                </p>
+            )}
+        </>
     );
 }
 
@@ -75,15 +67,6 @@ export function CommercialIdentity({ id, disabled = false, onDirtyChange, onBusy
     const currentOption = draft === undefined ? savedOption : draft;
     const current = currentOption?.value ?? null;
     const changed = current !== (savedOption?.value ?? null);
-    const loadOptions = useCallback(
-        async (input) => {
-            const result = await fetcher(
-                `/api/auth/seller-options?search=${encodeURIComponent(input)}&userId=${encodeURIComponent(id)}`,
-            );
-            return result.data.map((seller) => ({ value: seller.id, label: seller.name || seller.id }));
-        },
-        [id],
-    );
     useEffect(() => {
         onDirtyChange(changed);
     }, [changed, onDirtyChange]);
@@ -129,15 +112,11 @@ export function CommercialIdentity({ id, disabled = false, onDirtyChange, onBusy
             {can('access.profile.update') ? (
                 <form className="access-commercial-form" onSubmit={submit}>
                     <div className="access-commercial-select">
-                        <SearchInput
-                            ariaLabel="Perfil comercial"
-                            placeholder="Sin perfil comercial"
-                            loadOptions={loadOptions}
-                            defaultOptions
-                            defaultValue={currentOption}
-                            onSelect={(option) =>
-                                setDraft(option ? { value: option.value, label: option.label } : null)
-                            }
+                        <SellerSelect
+                            value={currentOption}
+                            onChange={setDraft}
+                            userId={id}
+                            compact
                             disabled={disabled || busy}
                         />
                     </div>

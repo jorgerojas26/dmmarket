@@ -12,9 +12,11 @@ const SearchInput = ({
     defaultValue,
     debounceMs = 700,
     ariaLabel,
+    inputId,
+    variant,
     disabled = false,
 }) => {
-    const customStyles = useDarkSelectStyles();
+    const customStyles = useDarkSelectStyles(variant);
     const debouncedLoadOptions = useMemo(
         () => debounce((inputValue, callback) => loadOptions(inputValue, callback), debounceMs),
         [loadOptions, debounceMs],
@@ -33,6 +35,7 @@ const SearchInput = ({
             isClearable
             isDisabled={disabled}
             aria-label={ariaLabel}
+            inputId={inputId}
             classNamePrefix="search-select"
             styles={customStyles}
             menuPortalTarget={document.body}

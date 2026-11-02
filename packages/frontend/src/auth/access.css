@@ -727,6 +727,12 @@
     margin: 0 0 28px;
 }
 
+.access-field-hint {
+    color: #8b93a1;
+    font-size: 12px;
+    font-weight: 400;
+}
+
 .access-back {
     display: inline-flex;
     align-items: center;
@@ -770,19 +776,98 @@
     margin: 20px 0;
 }
 
-.access-role-preview summary {
+.access-field-label {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.access-field-label .form-label {
+    margin-bottom: 0;
+}
+
+.access-permissions-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: #a9cfff;
-    cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
+    line-height: 1.4;
 }
 
-.access-role-preview ul {
-    margin: 16px 0 0;
-    padding-left: 20px;
+.access-permissions-link:hover {
+    color: #d5e8ff;
+    text-decoration: underline;
 }
 
-.access-role-preview li + li {
-    margin-top: 8px;
+.access-role-error {
+    margin: 10px 0 0;
+    font-size: 12px;
+}
+
+.access-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #a9cfff;
+    font-size: inherit;
+    text-decoration: underline;
+}
+
+.access-role-permissions-popover.popover {
+    max-width: 360px;
+}
+
+.access-role-permissions-popover .popover-body {
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 12px 16px;
+}
+
+.access-role-permissions-popover .popover-arrow::before,
+.access-role-permissions-popover .popover-arrow::after {
+    border-color: transparent;
+}
+
+.access-role-permissions-popover[data-popper-placement^="bottom"] .popover-arrow::before {
+    border-bottom-color: #2d3138;
+}
+
+.access-role-permissions-popover[data-popper-placement^="bottom"] .popover-arrow::after {
+    border-bottom-color: #1e2126;
+}
+
+.access-role-permissions-popover[data-popper-placement^="top"] .popover-arrow::before {
+    border-top-color: #2d3138;
+}
+
+.access-role-permissions-popover[data-popper-placement^="top"] .popover-arrow::after {
+    border-top-color: #1e2126;
+}
+
+.access-role-permissions section + section {
+    margin-top: 12px;
+}
+
+.access-role-permissions h4 {
+    margin: 0 0 4px;
+    color: #9dc7ff;
+    font-size: 10.5px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.access-role-permissions ul {
+    margin: 0;
+    padding-left: 16px;
+    color: #cbd5e1;
+    font-size: 12.5px;
+    list-style: disc;
+}
+
+.access-role-permissions li + li {
+    margin-top: 3px;
 }
 
 @media (max-width: 575.98px) {
@@ -1195,10 +1280,6 @@
     background: #252b35;
     color: #a7cfb7;
     box-shadow: inset 0 -2px 0 #4c7259;
-}
-
-.access-commercial-identity {
-    margin-bottom: 24px;
 }
 
 .access-permission-table-compact {

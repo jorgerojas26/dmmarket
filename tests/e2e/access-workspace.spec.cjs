@@ -93,8 +93,8 @@ test("alta en pantalla propia protege borradores y muestra la credencial una sol
   await expect(panel.getByLabel("Rol", { exact: true })).toHaveAttribute("required", "");
   await expect(panel.getByLabel("Rol", { exact: true })).toHaveValue("");
   await expect(panel.getByRole("option", { name: /Sin rol|Sin permisos/ })).toHaveCount(0);
-  await expect(panel.getByLabel("Nombre", { exact: true })).toHaveAttribute("placeholder", "Ana Pérez");
-  await expect(panel.getByLabel("Username", { exact: true })).toHaveAttribute("placeholder", "ana.perez");
+  await expect(panel.getByLabel("Nombre", { exact: true })).toHaveAttribute("placeholder", "Jorge Rojas");
+  await expect(panel.getByLabel("Username", { exact: true })).toHaveAttribute("placeholder", "jorgerojas26");
   await panel.getByLabel("Username", { exact: true }).fill("nuevo-contextual");
   await panel.getByRole("button", { name: "Volver a usuarios", exact: true }).click();
   const discard = page.getByRole("dialog", { name: "¿Descartar los cambios?", exact: true });
@@ -134,10 +134,11 @@ test("alta explica permisos reales, conserva datos ante errores y funciona con n
   await screen.getByLabel("Nombre", { exact: true }).fill("Ana Pérez");
   await screen.getByLabel("Username", { exact: true }).fill(owner.username);
   await screen.getByLabel("Rol", { exact: true }).selectOption(roleId);
-  await expect(screen.getByRole("region", { name: "Permisos del rol", exact: true })).toContainText(
-    "Desglose · Consultar",
-  );
-  await screen.getByLabel("Perfil comercial", { exact: true }).selectOption("A");
+  await screen.getByRole("button", { name: "Ver permisos de Consulta personalizada", exact: true }).click();
+  await expect(screen.getByText("Desglose · Consultar", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await screen.getByRole("combobox", { name: "Perfil comercial", exact: true }).click();
+  await page.locator(".search-select__option", { hasText: /^Vendedor A$/ }).click();
   await screen.getByRole("button", { name: "Crear usuario", exact: true }).click();
   await expect(screen.getByRole("alert")).toBeVisible();
   await expect(screen.getByLabel("Nombre", { exact: true })).toHaveValue("Ana Pérez");

@@ -2,6 +2,7 @@ import { requiresCommercialProfile } from '@dmmarket/permissions';
 import { useEffect, useRef, useState } from 'react';
 import Dropdown from 'react-bootstrap/Dropdown';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import Popover from 'react-bootstrap/Popover';
 import Tooltip from 'react-bootstrap/Tooltip';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
@@ -10,7 +11,7 @@ import { fetcher } from 'swr-config';
 import { Assignments } from './access-editor';
 import { permissionGroups } from './access-permissions';
 import { AccessDialog, LoadState, ManagementForm, Pagination, useDiscardChanges } from './access-ui';
-import { CommercialIdentity, CommercialIdentityField } from './commercial-profile';
+import { CommercialIdentity, SellerSelect } from './commercial-profile';
 import { useAuth } from './context';
 import { Field } from './forms';
 import { authRequest } from './transport';
@@ -21,13 +22,20 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
     const [username, setUsername] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [roleId, setRoleId] = useState('');
-    const [sellerId, setSellerId] = useState('');
+    const [seller, setSeller] = useState(null);
     const [mfaRequired, setMfaRequired] = useState(false);
     const [busy, setBusy] = useState(false);
     const { data: roles, error, mutate } = useSWR(can('access.roles.read') ? '/api/auth/roles' : null, fetcher);
     const role = useSWR(roleId ? `/api/auth/roles/${roleId}` : null, fetcher);
     const needsProfile = requiresCommercialProfile(role.data?.permissions || []);
-    const dirty = Boolean(username || displayName || roleId || sellerId || mfaRequired);
+    const granted = new Set((role.data?.permissions || []).map((grant) => grant.capability));
+    const permissionPreview = permissionGroups
+        .map(([label, items]) => ({
+            label,
+            items: items.filter(([capability]) => granted.has(capability)).map(([, text]) => text),
+        }))
+        .filter((group) => group.items.length);
+    const dirty = Boolean(username || displayName || roleId || seller || mfaRequired);
     useEffect(() => {
         heading.current?.focus();
     }, []);
@@ -51,7 +59,7 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
                     onBusyChange={setBusy}
                     onCancel={onClose}
                     disabled={Boolean(
-                        !roleId || !roles || error || !role.data || role.error || (needsProfile && !sellerId),
+                        !roleId || !roles || error || !role.data || role.error || (needsProfile && !seller),
                     )}
                     onSubmit={async () =>
                         onCreated(
@@ -59,7 +67,7 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
                                 username,
                                 displayName,
                                 roleIds: [roleId],
-                                sellerId: sellerId || null,
+                                sellerId: seller?.value || null,
                                 mfaRequired,
                             }),
                         )
@@ -74,7 +82,7 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
                             onChange={setDisplayName}
                             autoComplete="off"
                             maxLength={128}
-                            placeholder="Ana Pérez"
+                            placeholder="Jorge Rojas"
                         />
                         <Field
                             label="Username"
@@ -87,13 +95,51 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
                             spellCheck={false}
                             maxLength={64}
                             pattern={'[a-zA-Z0-9._\\-]+'}
-                            placeholder="ana.perez"
+                            placeholder="jorgerojas26"
                         />
                         <LoadState error={error} loading={!roles} onRetry={mutate}>
                             <div className="access-create-field">
-                                <label className="form-label" htmlFor="initial-role">
-                                    Rol
-                                </label>
+                                <div className="access-field-label">
+                                    <label className="form-label" htmlFor="initial-role">
+                                        Rol
+                                    </label>
+                                    {role.data && (
+                                        <OverlayTrigger
+                                            trigger="click"
+                                            rootClose
+                                            placement="bottom-start"
+                                            overlay={
+                                                <Popover
+                                                    id="role-permissions-preview"
+                                                    className="kpi-help-popover access-role-permissions-popover"
+                                                >
+                                                    <Popover.Body>
+                                                        <div className="access-role-permissions">
+                                                            {permissionPreview.map((group) => (
+                                                                <section key={group.label}>
+                                                                    <h4>{group.label}</h4>
+                                                                    <ul>
+                                                                        {group.items.map((item) => (
+                                                                            <li key={item}>{item}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </section>
+                                                            ))}
+                                                        </div>
+                                                    </Popover.Body>
+                                                </Popover>
+                                            }
+                                        >
+                                            <button
+                                                type="button"
+                                                className="access-permissions-link"
+                                                aria-label={`Ver permisos de ${role.data.name}`}
+                                            >
+                                                {role.data.permissions.length} permisos
+                                            </button>
+                                        </OverlayTrigger>
+                                    )}
+                                </div>
                                 <select
                                     id="initial-role"
                                     name="roleId"
@@ -111,28 +157,32 @@ function CreateUser({ onClose, onCreated, onDirtyChange }) {
                                         </option>
                                     ))}
                                 </select>
+                                {role.error && (
+                                    <p role="alert" className="access-error access-role-error">
+                                        No se pudieron cargar los permisos del rol.{' '}
+                                        <button type="button" className="access-link" onClick={() => role.mutate()}>
+                                            Reintentar
+                                        </button>
+                                    </p>
+                                )}
                             </div>
-                            {roleId && (
-                                <LoadState error={role.error} loading={!role.data} onRetry={role.mutate}>
-                                    <section className="access-role-preview" aria-label="Permisos del rol">
-                                        <details key={roleId}>
-                                            <summary>Ver permisos ({role.data?.permissions.length || 0})</summary>
-                                            <ul>
-                                                {permissionGroups.flatMap(([, items]) =>
-                                                    items.flatMap(([key, label]) =>
-                                                        (role.data?.permissions || [])
-                                                            .filter((grant) => grant.capability === key)
-                                                            .map(() => <li key={key}>{label}</li>),
-                                                    ),
-                                                )}
-                                            </ul>
-                                        </details>
-                                    </section>
-                                </LoadState>
-                            )}
                         </LoadState>
                         {can('access.profile.read') && (
-                            <CommercialIdentityField value={sellerId} onChange={setSellerId} required={needsProfile} />
+                            <div className="access-create-field">
+                                <label className="form-label" htmlFor="commercial-seller">
+                                    Perfil comercial{' '}
+                                    <span className="access-field-hint">
+                                        {needsProfile ? 'requerido por el rol' : 'opcional'}
+                                    </span>
+                                </label>
+                                <SellerSelect
+                                    inputId="commercial-seller"
+                                    value={seller}
+                                    onChange={setSeller}
+                                    placeholder={needsProfile ? 'Selecciona un vendedor' : 'Sin perfil comercial'}
+                                    disabled={busy}
+                                />
+                            </div>
                         )}
                         <label className="access-mfa-option">
                             <input
