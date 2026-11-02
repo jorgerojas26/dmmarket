@@ -172,8 +172,12 @@ function acquireSession() {
 async function main() {
   switch (command) {
     case "start": {
-      const release = acquireSession();
+      const release = await acquireSession();
       try {
+        for (const service of ["backend", "frontend"]) {
+          const releaseService = await acquireDevelopmentLock(directory, service);
+          releaseService();
+        }
         await prepare();
         await run(["mprocs", "--config", path.join(root, "mprocs.yaml")]);
       } finally {
@@ -182,7 +186,7 @@ async function main() {
       break;
     }
     case "prepare": {
-      const release = acquireSession();
+      const release = await acquireSession();
       try {
         await prepare();
       } finally {
@@ -191,11 +195,12 @@ async function main() {
       break;
     }
     case "backend": {
-      const release = acquireDevelopmentLock(directory, "backend");
+      const release = await acquireDevelopmentLock(directory, "backend");
       try {
         await run(["portless", "--name", backend, "bun", path.join(root, "scripts/dev.mjs"), "backend:serve"], {
           env: databaseEnvironment(),
           processGroup: true,
+          onSpawn: release.trackChild,
         });
       } finally {
         release();
@@ -242,12 +247,13 @@ async function main() {
       break;
     }
     case "frontend": {
-      const release = acquireDevelopmentLock(directory, "frontend");
+      const release = await acquireDevelopmentLock(directory, "frontend");
       try {
         databaseEnvironment();
         await run(["portless", "--name", frontend, "bun", "run", "start"], {
           cwd: path.join(root, "packages/frontend"),
           processGroup: true,
+          onSpawn: release.trackChild,
           env: environment({
             DMMARKET_API_URL: serviceUrl(backend),
             BROWSER: "none",
@@ -280,7 +286,7 @@ async function main() {
       break;
     case "down":
     case "reset": {
-      const release = acquireSession();
+      const release = await acquireSession();
       try {
         if (command === "reset") {
           if (process.argv[3] !== "--confirm" || process.argv[4] !== project)

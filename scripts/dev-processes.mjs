@@ -1,21 +1,71 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-export function acquireDevelopmentLock(directory, name) {
+function processIdentity(pid) {
+  const result = Bun.spawnSync(["ps", "-p", String(pid), "-o", "pid=,pgid=,lstart="], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode === 1 && !result.stdout.toString().trim()) return null;
+  if (result.exitCode !== 0) throw new Error(`No se pudo verificar el proceso ${pid}.`);
+  return result.stdout.toString().trim().replace(/\s+/g, " ");
+}
+
+function groupAlive(pid) {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+async function recoverGroup(group) {
+  if (!group || process.platform === "win32" || !groupAlive(group.pid)) return;
+  if (processIdentity(group.pid) !== group.identity)
+    throw new Error(`No se puede verificar el grupo abandonado ${group.pid}; no se detuvo ningún proceso.`);
+  process.kill(-group.pid, "SIGTERM");
+  const deadline = Date.now() + 3000;
+  while (groupAlive(group.pid) && Date.now() < deadline) await Bun.sleep(50);
+  if (groupAlive(group.pid)) {
+    process.kill(-group.pid, "SIGKILL");
+    const forcedDeadline = Date.now() + 3000;
+    while (groupAlive(group.pid) && Date.now() < forcedDeadline) await Bun.sleep(50);
+  }
+  if (groupAlive(group.pid)) throw new Error(`El grupo abandonado ${group.pid} no se detuvo.`);
+}
+
+export async function acquireDevelopmentLock(directory, name) {
   mkdirSync(directory, { recursive: true });
   const file = path.join(directory, `${name}.json`);
   if (existsSync(file)) {
     const previous = JSON.parse(readFileSync(file, "utf8"));
     try {
       process.kill(previous.pid, 0);
-      throw new Error(`Ya hay un proceso ${name} activo en este worktree (PID ${previous.pid}).`);
+      if (!previous.identity || processIdentity(previous.pid) === previous.identity)
+        throw new Error(`Ya hay un proceso ${name} activo en este worktree (PID ${previous.pid}).`);
     } catch (error) {
       if (error.code !== "ESRCH") throw error;
     }
+    await recoverGroup(previous.group);
+    if (readFileSync(file, "utf8") !== JSON.stringify(previous))
+      throw new Error(`El marcador ${name} cambió durante la recuperación.`);
     rmSync(file);
   }
-  writeFileSync(file, JSON.stringify({ pid: process.pid }), { flag: "wx", mode: 0o600 });
-  return () => rmSync(file, { force: true });
+  const state = { pid: process.pid, identity: process.platform === "win32" ? null : processIdentity(process.pid) };
+  writeFileSync(file, JSON.stringify(state), { flag: "wx", mode: 0o600 });
+  const release = () => {
+    if (existsSync(file) && readFileSync(file, "utf8") === JSON.stringify(state)) rmSync(file);
+  };
+  release.trackChild = (child) => {
+    if (process.platform === "win32") return;
+    const identity = processIdentity(child.pid);
+    if (!identity) return;
+    state.group = { pid: child.pid, identity };
+    writeFileSync(file, JSON.stringify(state), { mode: 0o600 });
+  };
+  return release;
 }
 
 export async function run(args, options = {}) {

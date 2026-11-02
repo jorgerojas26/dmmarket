@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -8,6 +8,7 @@ const moduleUrl = new URL("./dev-processes.mjs", import.meta.url).href;
 const fixture = path.join(directory, "fixture.mjs");
 const descendant = path.join(directory, "descendant.mjs");
 const children = [];
+const abandonedPids = [];
 
 async function waitFor(check) {
   const deadline = Date.now() + 8000;
@@ -34,18 +35,24 @@ function start(name) {
 }
 
 try {
-  writeFileSync(descendant, `import { writeFileSync } from "node:fs";
+  writeFileSync(
+    descendant,
+    `import { writeFileSync } from "node:fs";
 writeFileSync(process.argv[2], String(process.pid));
 setInterval(() => {}, 1000);
-`);
-  writeFileSync(fixture, `import { acquireDevelopmentLock, run } from ${JSON.stringify(moduleUrl)};
-const release = acquireDevelopmentLock(process.argv[2], process.argv[3]);
+`,
+  );
+  writeFileSync(
+    fixture,
+    `import { acquireDevelopmentLock, run } from ${JSON.stringify(moduleUrl)};
+const release = await acquireDevelopmentLock(process.argv[2], process.argv[3]);
 try {
-  await run(["bun", ${JSON.stringify(descendant)}, process.argv[2] + "/" + process.argv[3] + ".pid"], { processGroup: true, stdin: "ignore", stdout: "ignore" });
+  await run(["bun", ${JSON.stringify(descendant)}, process.argv[2] + "/" + process.argv[3] + ".pid"], { processGroup: true, stdin: "ignore", stdout: "ignore", onSpawn: release.trackChild });
 } finally {
   release();
 }
-`);
+`,
+  );
   const first = start("backend");
   await waitFor(() => existsSync(path.join(directory, "backend.pid")));
   const descendantPid = Number(readFileSync(path.join(directory, "backend.pid"), "utf8"));
@@ -63,9 +70,12 @@ try {
   restarted.kill("SIGTERM");
   await restarted.exited;
   const wrapperFile = path.join(directory, "wrapper.mjs");
-  writeFileSync(wrapperFile, `Bun.spawn(["bun", ${JSON.stringify(fixture)}, ${JSON.stringify(directory)}, "orphan"], { stdout: "ignore", stderr: "ignore" });
+  writeFileSync(
+    wrapperFile,
+    `Bun.spawn(["bun", ${JSON.stringify(fixture)}, ${JSON.stringify(directory)}, "orphan"], { stdout: "ignore", stderr: "ignore" });
 setInterval(() => {}, 1000);
-`);
+`,
+  );
   const wrapper = Bun.spawn(["bun", wrapperFile], { stdout: "ignore", stderr: "inherit" });
   children.push(wrapper);
   await waitFor(() => existsSync(path.join(directory, "orphan.pid")));
@@ -74,9 +84,41 @@ setInterval(() => {}, 1000);
   await wrapper.exited;
   await waitFor(() => !alive(orphanPid));
   await waitFor(() => !existsSync(path.join(directory, "orphan.json")));
-  console.log("Desarrollo: exclusión por servicio, reinicio y cierre de descendientes al perder el supervisor verificados.");
+  const abandoned = start("abandoned");
+  await waitFor(() => existsSync(path.join(directory, "abandoned.pid")));
+  await waitFor(() => JSON.parse(readFileSync(path.join(directory, "abandoned.json"), "utf8")).group);
+  const abandonedPid = Number(readFileSync(path.join(directory, "abandoned.pid"), "utf8"));
+  abandonedPids.push(abandonedPid);
+  abandoned.kill("SIGKILL");
+  await abandoned.exited;
+  assert.ok(alive(abandonedPid));
+  const abandonedLock = path.join(directory, "abandoned.json");
+  const abandonedState = readFileSync(abandonedLock, "utf8");
+  const mismatchedState = JSON.parse(abandonedState);
+  mismatchedState.group.identity = "another process";
+  writeFileSync(abandonedLock, JSON.stringify(mismatchedState));
+  const refused = start("abandoned");
+  assert.notEqual(await refused.exited, 0);
+  assert.match(await new Response(refused.stderr).text(), /No se puede verificar/);
+  assert.ok(alive(abandonedPid), "No debe detener un grupo cuya identidad no coincide.");
+  writeFileSync(abandonedLock, abandonedState);
+  rmSync(path.join(directory, "abandoned.pid"));
+  const recovered = start("abandoned");
+  await waitFor(() => existsSync(path.join(directory, "abandoned.pid")));
+  assert.ok(!alive(abandonedPid), "El reinicio debe detener el grupo del wrapper muerto.");
+  recovered.kill("SIGTERM");
+  await recovered.exited;
+  console.log("Desarrollo: exclusión, reinicio, pérdida del supervisor y recuperación tras SIGKILL verificados.");
 } finally {
   for (const child of children) if (child.exitCode === null) child.kill("SIGTERM");
   await Promise.all(children.map((child) => child.exited));
+  for (const pid of abandonedPids) if (alive(pid)) process.kill(pid, "SIGKILL");
+  for (const name of ["backend", "orphan", "abandoned"]) {
+    const file = path.join(directory, `${name}.pid`);
+    if (existsSync(file)) {
+      const pid = Number(readFileSync(file, "utf8"));
+      if (alive(pid)) process.kill(pid, "SIGKILL");
+    }
+  }
   rmSync(directory, { recursive: true, force: true });
 }
