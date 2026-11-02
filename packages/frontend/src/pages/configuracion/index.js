@@ -9,7 +9,6 @@ import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
 import ReactMarkdown from 'react-markdown';
 import { useHistory, useLocation } from 'react-router-dom';
 import BackupsPanel from './BackupsPanel';
-import CachePanel from './CachePanel';
 import PreferencesPanel from './PreferencesPanel';
 import RatesPanel from './RatesPanel';
 import './styles.css';
@@ -111,7 +110,6 @@ const sidebarItems = [
 ];
 
 const VIEWS = {
-    '#cache': 'cache',
     '#reportes': 'preferences',
     '#preferencias': 'preferences',
     '#acercade': 'about',
@@ -120,7 +118,6 @@ const VIEWS = {
 };
 const HASHES = {
     preferences: '#preferencias',
-    cache: '#cache',
     about: '#acercade',
     backups: '#respaldos',
     rates: '#tasas',
@@ -131,7 +128,6 @@ const ConfiguracionPage = () => {
     const availableViews = [
         ...(can('settings.preferences.read') || can('settings.currency.read') ? ['preferences'] : []),
         ...(can('updates.read') ? ['about'] : []),
-        ...(can('settings.cache.read') ? ['cache'] : []),
         ...(['backups.read', 'backups.create'].some(can) ? ['backups'] : []),
         ...(['rates.read', 'rates.sync'].some(can) ? ['rates'] : []),
     ];
@@ -193,21 +189,13 @@ const ConfiguracionPage = () => {
 
     const sidebarItemsMemo = sidebarItems.filter((item) => availableViews.includes(item.eventKey));
 
-    if (deniedView) return <AccessDenied />;
+    if (deniedView || !availableViews.length) return <AccessDenied />;
     return (
         <Container as="section" aria-label="Configuración" fluid className="clientes-layout p-0">
             <div className="clientes-row">
-                <Sidebar
-                    activeKey={activeView}
-                    onSelect={selectView}
-                    items={[
-                        ...sidebarItemsMemo,
-                        ...(can('settings.cache.read') ? [{ eventKey: 'cache', label: 'Caché', icon: null }] : []),
-                    ]}
-                />
+                <Sidebar activeKey={activeView} onSelect={selectView} items={sidebarItemsMemo} />
                 <div className="clientes-content p-4">
                     {activeView === 'preferences' && <PreferencesPanel />}
-                    {activeView === 'cache' && <CachePanel />}
                     {activeView === 'backups' && <BackupsPanel />}
                     {activeView === 'rates' && <RatesPanel />}
                     {activeView === 'about' && (

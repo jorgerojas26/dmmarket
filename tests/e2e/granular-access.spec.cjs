@@ -108,16 +108,12 @@ test("documentos del vendedor se abren sin consultar su resumen ni Ventas", asyn
   expect(summaries).toEqual([]);
 });
 
-test("Configuración ofrece caché por separado sin habilitar actualizaciones o preferencias", async ({
-  page,
-  environment,
-}) => {
+test("la caché ya no ofrece una pantalla propia dentro de Configuración", async ({ page, environment }) => {
   await login(page, environment, await environment.seedUser({ permissions: [grant("settings.cache.read")] }));
+  await expect(page.getByRole("link", { name: "Configuración", exact: true })).toHaveCount(0);
   await page.goto(`${environment.origin}/configuracion#cache`);
-  await expect(page.getByRole("heading", { name: "Caché de reportes", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Actualizar reportes", exact: true })).toHaveCount(0);
-  await page.goto(`${environment.origin}/configuracion#preferencias`);
   await expect(page.getByRole("heading", { name: "Acceso restringido", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Caché de reportes", exact: true })).toHaveCount(0);
 });
 
 test("consultar un rol permite inspeccionar sus permisos sin ofrecer guardado", async ({ page, environment }) => {

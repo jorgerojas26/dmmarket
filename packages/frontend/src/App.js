@@ -33,7 +33,14 @@ export default function App({ onLogout, logoutError, pending = false }) {
     }, [currencies, setCurrencyRate]);
     const [expanded, setExpanded] = useState(false);
     const hasModule = (module) => !pending && modulePermissions(session?.permissions || [], module).length > 0;
-    const configuration = hasModule('settings');
+    const configuration =
+        can('preferences.read') ||
+        can('settings.currency.read') ||
+        can('updates.read') ||
+        can('backups.read') ||
+        can('backups.create') ||
+        can('rates.read') ||
+        can('rates.sync');
     const access = hasModule('access') || hasModule('audit');
     const modules = [
         { path: '/ventas', label: 'Ventas', allowed: hasModule('sales') },
