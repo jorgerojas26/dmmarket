@@ -1,204 +1,55 @@
-import { CAPABILITIES, MODULES } from '@dmmarket/permissions';
 import DateRangePicker from 'components/DateRangePicker';
 import useSWR from 'hooks/swr-wrapper';
 import { useEffect, useState } from 'react';
 import { fetcher } from 'swr-config';
-import { AccessDialog, LoadState, Pagination } from './access-ui';
+import { LoadState, Pagination } from './access-ui';
+import { Outcome } from './audit-event';
 import { auditActivities, auditActivity, auditDate } from './audit-events';
 import './access.css';
 import './audit.css';
+
+const accountIcon = (
+    <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        aria-hidden="true"
+    >
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3 21v-2a6 6 0 0 1 12 0v2" />
+    </svg>
+);
+
+const roleIcon = (
+    <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+    >
+        <path d="m12 3 8 4v5c0 5-8 9-8 9s-8-4-8-9V7l8-4Z" />
+        <path d="m8 12 3 3 5-6" />
+    </svg>
+);
 
 function initialFilters() {
     const today = new Date().toISOString().slice(0, 10);
     return { from: `${today.slice(0, 7)}-01`, to: today, search: '', action: '', outcome: '', page: 1 };
 }
 
-function Outcome({ value }) {
-    return (
-        <span
-            className={`audit-outcome${value === 'success' ? ' is-success' : value === 'failure' ? ' is-failure' : ''}`}
-        >
-            {value === 'success' ? 'Correcto' : value === 'failure' ? 'Fallido' : value}
-        </span>
-    );
-}
-
-function EventDetail({ event, onClose, onFilter }) {
-    const reference = /^[a-f0-9-]{36}$/i.test(event.reason || '');
-    return (
-        <AccessDialog title="Detalle del evento" panel onClose={onClose}>
-            <div className="audit-detail-heading">
-                <span className="access-eyebrow">Historial de actividad</span>
-                <h3>{auditActivity(event.action)}</h3>
-                <Outcome value={event.outcome} />
-                <p>
-                    {auditDate(event.occurredMs)} · {auditDate(event.occurredMs, true)} UTC
-                </p>
-            </div>
-            <dl className="audit-detail-fields">
-                <div>
-                    <dt>Responsable</dt>
-                    <dd>
-                        <strong>
-                            {event.actorName ||
-                                (event.actorId ? 'Cuenta no disponible' : 'Sin responsable identificado')}
-                        </strong>
-                        {event.actorUsername && <span>@{event.actorUsername}</span>}
-                        {event.actorId && <code>{event.actorId}</code>}
-                    </dd>
-                </div>
-                <div>
-                    <dt>Cuenta afectada</dt>
-                    <dd>
-                        <strong>{event.targetName || (event.targetId ? 'Cuenta no disponible' : 'No aplica')}</strong>
-                        {event.targetUsername && <span>@{event.targetUsername}</span>}
-                        {event.targetId && <code>{event.targetId}</code>}
-                    </dd>
-                </div>
-                <div>
-                    <dt>Rol afectado</dt>
-                    <dd>
-                        <strong>{event.roleName || (event.roleId ? 'Rol no disponible' : 'No aplica')}</strong>
-                        {event.roleId && <code>{event.roleId}</code>}
-                    </dd>
-                </div>
-                {event.details &&
-                    ['rolesAdded', 'rolesRemoved']
-                        .filter((key) => event.details[key])
-                        .map((key) => (
-                            <div key={key}>
-                                <dt>{key === 'rolesAdded' ? 'Roles añadidos' : 'Roles retirados'}</dt>
-                                <dd>
-                                    {event.details[key].length ? (
-                                        <ul>
-                                            {event.details[key].map((role) => (
-                                                <li key={role.id}>
-                                                    <span>{role.name}</span>
-                                                    <code>{role.id}</code>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        'Ninguno'
-                                    )}
-                                </dd>
-                            </div>
-                        ))}
-                {event.details &&
-                    ['added', 'removed'].map((key) => (
-                        <div key={key}>
-                            <dt>{key === 'added' ? 'Permisos añadidos' : 'Permisos retirados'}</dt>
-                            <dd>
-                                {event.details[key]?.length ? (
-                                    <ul>
-                                        {event.details[key].map((capability) => {
-                                            const entry = CAPABILITIES[capability];
-                                            const module =
-                                                entry && MODULES.find((module) => module.key === entry.module);
-                                            const resource = module?.resources.find(
-                                                (resource) => resource.resource === entry.resource,
-                                            );
-                                            return (
-                                                <li key={capability}>
-                                                    {entry
-                                                        ? `${module.label} / ${resource.label} · ${entry.label}`
-                                                        : capability}
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                ) : (
-                                    'Ninguno'
-                                )}
-                            </dd>
-                        </div>
-                    ))}
-                {(!event.details || event.reason) && (
-                    <div>
-                        <dt>{reference ? 'Referencia de operación' : 'Motivo registrado'}</dt>
-                        <dd className="audit-reason">{event.reason || 'Sin motivo registrado'}</dd>
-                    </div>
-                )}
-            </dl>
-            <p className="access-muted audit-detail-note">
-                Los nombres corresponden a los registros actuales. Los identificadores permiten reconocer las cuentas y
-                roles del evento original.{' '}
-                {event.details?.rolesAdded && 'Los cambios de roles conservan el nombre registrado al guardar.'}
-            </p>
-            <div className="audit-detail-filters">
-                <h4>Continuar la consulta</h4>
-                {event.actorId && (
-                    <button
-                        type="button"
-                        onClick={() =>
-                            onFilter(
-                                'actorId',
-                                event.actorId,
-                                event.actorName || event.actorUsername || 'Cuenta no disponible',
-                            )
-                        }
-                    >
-                        Ver actividad de esta persona <span aria-hidden="true">→</span>
-                    </button>
-                )}
-                {event.targetId && (
-                    <button
-                        type="button"
-                        onClick={() =>
-                            onFilter(
-                                'targetId',
-                                event.targetId,
-                                event.targetName || event.targetUsername || 'Cuenta no disponible',
-                            )
-                        }
-                    >
-                        Ver eventos de esta cuenta <span aria-hidden="true">→</span>
-                    </button>
-                )}
-                {event.roleId && (
-                    <button
-                        type="button"
-                        onClick={() => onFilter('roleId', event.roleId, event.roleName || 'Rol no disponible')}
-                    >
-                        Ver eventos de este rol <span aria-hidden="true">→</span>
-                    </button>
-                )}
-                <button type="button" onClick={() => onFilter('action', event.action)}>
-                    Ver eventos de esta actividad <span aria-hidden="true">→</span>
-                </button>
-            </div>
-            <details className="audit-technical">
-                <summary>Referencia técnica</summary>
-                <dl className="audit-detail-fields">
-                    <div>
-                        <dt>Código de actividad</dt>
-                        <dd>
-                            <code>{event.action}</code>
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>ID del evento</dt>
-                        <dd>
-                            <code>{event.id}</code>
-                        </dd>
-                    </div>
-                    <div>
-                        <dt>Fecha exacta (UTC)</dt>
-                        <dd>
-                            <code>{new Date(Number(event.occurredMs)).toISOString()}</code>
-                        </dd>
-                    </div>
-                </dl>
-            </details>
-        </AccessDialog>
-    );
-}
-
-export default function Audit() {
-    const [filters, setFilters] = useState(initialFilters);
-    const [search, setSearch] = useState('');
-    const [entityLabels, setEntityLabels] = useState({});
-    const [selected, setSelected] = useState(null);
+export default function Audit({ initial, onOpenEvent }) {
+    const [filters, setFilters] = useState(() => ({ ...initialFilters(), ...(initial?.filters || {}) }));
+    const [search, setSearch] = useState(filters.search || '');
+    const [entityLabels, setEntityLabels] = useState(initial?.labels || {});
     const [calendarKey, setCalendarKey] = useState(0);
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -211,7 +62,7 @@ export default function Audit() {
     const query = Object.fromEntries(Object.entries({ ...filters, limit: 20 }).filter(([, value]) => value !== ''));
     const span = Date.parse(filters.to) - Date.parse(filters.from);
     const rangeError = !Number.isFinite(span) || span < 0 || span > 366 * 86400000;
-    const { data, error, isLoading, isValidating, mutate } = useSWR(
+    const { data, error, isValidating, mutate } = useSWR(
         rangeError ? null : `/api/auth/audit?${new URLSearchParams(query)}`,
         fetcher,
     );
@@ -241,9 +92,7 @@ export default function Audit() {
         <section aria-label="Consulta autorizada de auditoría" className="audit-layout audit-workspace">
             <header className="access-header audit-header">
                 <div>
-                    <span className="access-eyebrow">Seguridad y seguimiento</span>
                     <h2>Auditoría</h2>
-                    <p>Consulta quién hizo qué y cuándo. Un historial de solo lectura.</p>
                 </div>
                 <div className="audit-header-actions">
                     <DateRangePicker
@@ -252,26 +101,6 @@ export default function Audit() {
                         initialTo={filters.to}
                         onChange={change}
                     />
-                    <button
-                        type="button"
-                        className="btn btn-outline-light audit-refresh"
-                        aria-label="Actualizar historial"
-                        disabled={rangeError || isValidating}
-                        onClick={() => mutate()}
-                    >
-                        <svg
-                            width="17"
-                            height="17"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                            aria-hidden="true"
-                        >
-                            <path d="M20 7v5h-5M4 17v-5h5" />
-                            <path d="M6 7a7 7 0 0 1 12-2l2 3M18 17a7 7 0 0 1-12 2l-2-3" />
-                        </svg>
-                    </button>
                 </div>
             </header>
             <div className="access-card audit-card">
@@ -336,21 +165,16 @@ export default function Audit() {
                         </select>
                     </div>
                 </div>
-                <div className="audit-results-heading">
-                    <span role="status" aria-live="polite">
-                        {isLoading
-                            ? 'Consultando historial…'
-                            : data
-                              ? `${data.total} ${data.total === 1 ? 'evento' : 'eventos'}`
-                              : 'Historial de actividad'}
-                    </span>
-                    {isValidating && data && <span className="access-muted">Actualizando…</span>}
-                    {hasFilters && (
-                        <button type="button" onClick={clear}>
-                            Limpiar filtros
-                        </button>
-                    )}
-                </div>
+                {(hasFilters || (isValidating && data)) && (
+                    <div className="audit-results-heading">
+                        {isValidating && data && <span className="access-muted">Actualizando…</span>}
+                        {hasFilters && (
+                            <button type="button" onClick={clear}>
+                                Limpiar filtros
+                            </button>
+                        )}
+                    </div>
+                )}
                 {focused.some(([key]) => filters[key]) && (
                     <div className="audit-focused-filters">
                         {focused
@@ -392,10 +216,12 @@ export default function Audit() {
                                         <table className="access-table audit-table" aria-label="Historial de actividad">
                                             <thead>
                                                 <tr>
+                                                    <th scope="col">Fecha</th>
                                                     <th scope="col">
-                                                        Fecha y hora <span>UTC</span>
+                                                        Hora <span>UTC</span>
                                                     </th>
                                                     <th scope="col">Actividad</th>
+                                                    <th scope="col">Cuenta / Rol</th>
                                                     <th scope="col">Responsable</th>
                                                     <th scope="col">Resultado</th>
                                                     <th scope="col">
@@ -406,45 +232,48 @@ export default function Audit() {
                                             <tbody>
                                                 {data.data.map((event) => (
                                                     <tr key={event.id}>
-                                                        <td className="audit-timestamp">
-                                                            <time
-                                                                dateTime={new Date(
-                                                                    Number(event.occurredMs),
-                                                                ).toISOString()}
-                                                            >
-                                                                {auditDate(event.occurredMs)}
-                                                            </time>
-                                                            <span>{auditDate(event.occurredMs, true)}</span>
+                                                        <td className="audit-date">{auditDate(event.occurredMs)}</td>
+                                                        <td className="audit-time">
+                                                            {auditDate(event.occurredMs, true)}
                                                         </td>
                                                         <td>
                                                             <button
                                                                 type="button"
                                                                 className="audit-event-link"
-                                                                onClick={() => setSelected(event)}
+                                                                onClick={() =>
+                                                                    onOpenEvent(event, filters, entityLabels)
+                                                                }
                                                             >
                                                                 {auditActivity(event.action)}
                                                             </button>
-                                                            <span className="audit-event-target">
-                                                                {event.roleId
-                                                                    ? `Rol: ${event.roleName || 'No disponible'}`
-                                                                    : event.targetId
-                                                                      ? `Cuenta: ${event.targetName || event.targetUsername || 'No disponible'}`
-                                                                      : 'Sin cuenta o rol asociado'}
-                                                            </span>
                                                         </td>
-                                                        <td>
-                                                            <span className="audit-person">
-                                                                {event.actorName ||
-                                                                    event.actorUsername ||
-                                                                    (event.actorId
-                                                                        ? 'Cuenta no disponible'
-                                                                        : 'Sin responsable identificado')}
-                                                            </span>
-                                                            {event.actorUsername && (
-                                                                <span className="audit-person-username">
-                                                                    @{event.actorUsername}
+                                                        <td className="audit-affected">
+                                                            {event.roleId ? (
+                                                                <span className="audit-target">
+                                                                    {roleIcon}
+                                                                    <span className="visually-hidden">Rol: </span>
+                                                                    <span>{event.roleName || 'No disponible'}</span>
                                                                 </span>
+                                                            ) : event.targetId ? (
+                                                                <span className="audit-target">
+                                                                    {accountIcon}
+                                                                    <span className="visually-hidden">Cuenta: </span>
+                                                                    <span>
+                                                                        {event.targetName ||
+                                                                            event.targetUsername ||
+                                                                            'No disponible'}
+                                                                    </span>
+                                                                </span>
+                                                            ) : (
+                                                                <span className="access-muted">—</span>
                                                             )}
+                                                        </td>
+                                                        <td className="audit-person">
+                                                            {event.actorName ||
+                                                                event.actorUsername ||
+                                                                (event.actorId
+                                                                    ? 'Cuenta no disponible'
+                                                                    : 'Sin responsable identificado')}
                                                         </td>
                                                         <td>
                                                             <Outcome value={event.outcome} />
@@ -454,7 +283,9 @@ export default function Audit() {
                                                                 type="button"
                                                                 className="audit-open-detail"
                                                                 aria-label={`Ver detalle: ${auditActivity(event.action)}`}
-                                                                onClick={() => setSelected(event)}
+                                                                onClick={() =>
+                                                                    onOpenEvent(event, filters, entityLabels)
+                                                                }
                                                             >
                                                                 <span aria-hidden="true">→</span>
                                                             </button>
@@ -479,17 +310,6 @@ export default function Audit() {
             <p className="audit-footnote">
                 Más recientes primero · Fechas y horas en UTC · No permite modificar ni eliminar eventos.
             </p>
-            {selected && (
-                <EventDetail
-                    event={selected}
-                    onClose={() => setSelected(null)}
-                    onFilter={(key, value, label) => {
-                        if (label) setEntityLabels((previous) => ({ ...previous, [key]: label }));
-                        change({ [key]: value });
-                        setSelected(null);
-                    }}
-                />
-            )}
         </section>
     );
 }

@@ -7,6 +7,7 @@ import AccessEditor from './access-editor';
 import { useDiscardChanges } from './access-ui';
 import Users from './access-users';
 import Audit from './audit';
+import AuditEvent from './audit-event';
 import { useAuth } from './context';
 import { DisableMfaForm, EnrollmentForm, PasswordForm } from './forms';
 import './access.css';
@@ -158,6 +159,7 @@ export default function AccessWorkspace() {
     const allowNavigation = useRef(false);
     const { requestClose, confirmation } = useDiscardChanges(dirty || busy);
     const userId = location.pathname.match(/^\/acceso\/usuarios\/([^/]+)\/?$/)?.[1] || null;
+    const auditEventId = location.pathname.match(/^\/acceso\/auditoria\/([^/]+)\/?$/)?.[1] || null;
     const creating =
         !userId && location.hash === '#nuevo-usuario' && can('access.users.create') && can('access.roles.assign');
     const users = ['access.users.read', 'access.profile.read', 'access.recovery.read'].some(can);
@@ -168,10 +170,13 @@ export default function AccessWorkspace() {
     ];
     const view = userId
         ? 'usuarios'
-        : items.find((item) => location.hash === `#${item.eventKey}`)?.eventKey || items[0]?.eventKey;
+        : auditEventId
+          ? 'auditoria'
+          : items.find((item) => location.hash === `#${item.eventKey}`)?.eventKey || items[0]?.eventKey;
     useEffect(() => {
-        if (!userId && !creating && location.hash !== `#${view}`) history.replace({ ...location, hash: `#${view}` });
-    }, [view, location, history, creating, userId]);
+        if (!userId && !auditEventId && !creating && location.hash !== `#${view}`)
+            history.replace({ ...location, hash: `#${view}` });
+    }, [view, location, history, creating, userId, auditEventId]);
     const navigate = (hash) => {
         if (busy) return;
         requestClose(() => {
@@ -218,8 +223,32 @@ export default function AccessWorkspace() {
                                     history.replace({ ...location, hash: '#usuarios' });
                                 }}
                             />
+                        ) : view === 'auditoria' && auditEventId ? (
+                            <AuditEvent
+                                eventId={auditEventId}
+                                context={location.state?.audit}
+                                onBack={() =>
+                                    history.push({
+                                        pathname: '/acceso',
+                                        search: location.search,
+                                        hash: '#auditoria',
+                                        state: location.state,
+                                    })
+                                }
+                                onContinue={(audit) =>
+                                    history.push({ pathname: '/acceso', hash: '#auditoria', state: { audit } })
+                                }
+                            />
                         ) : view === 'auditoria' ? (
-                            <Audit />
+                            <Audit
+                                initial={location.state?.audit}
+                                onOpenEvent={(event, filters, labels) =>
+                                    history.push({
+                                        pathname: `/acceso/auditoria/${event.id}`,
+                                        state: { audit: { filters, labels } },
+                                    })
+                                }
+                            />
                         ) : (
                             <AccessEditor onDirtyChange={setDirty} />
                         )}

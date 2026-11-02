@@ -93,7 +93,8 @@ async function openAudit(page, environment) {
   await expect(page.getByRole("heading", { name: "Auditoría", exact: true })).toBeVisible();
   const report = page.getByRole("region", { name: "Consulta autorizada de auditoría", exact: true });
   await report.getByRole("searchbox", { name: "Buscar en el historial", exact: true }).fill("Lucía Torres");
-  await expect(report.getByRole("status").filter({ hasText: "27 eventos" })).toBeVisible();
+  await expect(report.getByRole("table", { name: "Historial de actividad", exact: true })).toBeVisible();
+  await expect(report.getByRole("row")).toHaveCount(21);
   return { report, actor, target, role, roleName, reader };
 }
 
@@ -123,15 +124,16 @@ test("detalle contextual conserva identificadores, motivo y nombres actuales sin
   const { report, actor, target, role, roleName } = await openAudit(page, environment);
   await report.getByLabel("Actividad", { exact: true }).selectOption("auth.role_changed");
   await report.getByRole("button", { name: "Rol actualizado", exact: true }).first().click();
-  const panel = page.getByRole("dialog", { name: "Detalle del evento", exact: true });
-  await panel.getByText("Referencia técnica", { exact: true }).click();
+  const detail = page.getByRole("region", { name: "Detalle del evento", exact: true });
+  await expect(page).toHaveURL(/\/acceso\/auditoria\/[a-f0-9-]{36}$/);
+  await detail.getByText("Referencia técnica", { exact: true }).click();
   for (const text of ["Ana Pérez", "Lucía Torres", roleName, actor.id, target.id, role, "auth.role_changed"])
-    await expect(panel.getByText(text, { exact: true })).toBeVisible();
-  await expect(panel.getByText(/Revisión de permisos/)).toBeVisible();
-  await expect(panel.getByText(/Los nombres corresponden a los registros actuales/)).toBeVisible();
-  await expect(panel.getByRole("button", { name: /Guardar|Eliminar|Editar/ })).toHaveCount(0);
-  await panel.getByRole("button", { name: "Ver actividad de esta persona", exact: true }).click();
-  await expect(panel).toHaveCount(0);
+    await expect(detail.getByText(text, { exact: true })).toBeVisible();
+  await expect(detail.getByText(/Revisión de permisos/)).toBeVisible();
+  await expect(detail.getByText(/Los nombres corresponden a los registros actuales/)).toBeVisible();
+  await expect(detail.getByRole("button", { name: /Guardar|Eliminar|Editar/ })).toHaveCount(0);
+  await detail.getByRole("button", { name: "Ver actividad de esta persona", exact: true }).click();
+  await expect(detail).toHaveCount(0);
   await expect(report.getByRole("button", { name: "Quitar filtro de responsable", exact: true })).toContainText(
     "Ana Pérez",
   );
@@ -142,10 +144,10 @@ test("detalle contextual conserva identificadores, motivo y nombres actuales sin
 test("eventos no catalogados conservan su código en el detalle y el filtro exacto", async ({ page, environment }) => {
   const { report } = await openAudit(page, environment);
   await report.getByRole("button", { name: "Evento del sistema", exact: true }).click();
-  const panel = page.getByRole("dialog", { name: "Detalle del evento", exact: true });
-  await panel.getByText("Referencia técnica", { exact: true }).click();
-  await expect(panel.getByText("legacy.unknown_event", { exact: true })).toBeVisible();
-  await panel.getByRole("button", { name: "Ver eventos de esta actividad", exact: true }).click();
+  const detail = page.getByRole("region", { name: "Detalle del evento", exact: true });
+  await detail.getByText("Referencia técnica", { exact: true }).click();
+  await expect(detail.getByText("legacy.unknown_event", { exact: true })).toBeVisible();
+  await detail.getByRole("button", { name: "Ver eventos de esta actividad", exact: true }).click();
   await expect(report.getByText("1–1 de 1", { exact: true })).toBeVisible();
 });
 
@@ -161,8 +163,6 @@ test("búsqueda vacía y error recuperable conservan filtros y un marco estable"
     }),
   );
   await report.getByRole("searchbox", { name: "Buscar en el historial", exact: true }).fill("Lucía Torres");
-  await expect(report.getByRole("status").filter({ hasText: "27 eventos" })).toBeVisible();
-  await report.getByRole("button", { name: "Actualizar historial", exact: true }).click();
   await expect(report.getByRole("alert")).toContainText("No se pudo cargar la información.");
   await expect(report.getByRole("searchbox", { name: "Buscar en el historial", exact: true })).toHaveValue(
     "Lucía Torres",
@@ -191,9 +191,24 @@ test("Auditoría móvil mantiene filtros y detalle accesibles sin desbordar la p
   ).toBe(true);
   await calendar.getByRole("button", { name: "Listo", exact: true }).click();
   await report.getByRole("button", { name: "Rol actualizado", exact: true }).first().click();
-  const panel = page.getByRole("dialog", { name: "Detalle del evento", exact: true });
-  await expect(panel).toBeVisible();
-  expect(await panel.evaluate((element) => element.getBoundingClientRect().width <= innerWidth)).toBe(true);
-  await panel.getByRole("button", { name: "Cerrar", exact: true }).click();
-  await expect(panel).toHaveCount(0);
+  const detail = page.getByRole("region", { name: "Detalle del evento", exact: true });
+  await expect(detail).toBeVisible();
+  expect(await detail.evaluate((element) => element.getBoundingClientRect().width <= innerWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await detail.getByRole("button", { name: "Volver a auditoría", exact: true }).click();
+  await expect(report.getByRole("table", { name: "Historial de actividad", exact: true })).toBeVisible();
+});
+
+test("el detalle de un evento tiene URL propia y sobrevive a la recarga", async ({ page, environment }) => {
+  await openAudit(page, environment);
+  const event = await environment.db("dmmarket_auth_events").where("action", "legacy.unknown_event").first();
+  await page.goto(`${environment.origin}/acceso/auditoria/${event.id}`);
+  const detail = page.getByRole("region", { name: "Detalle del evento", exact: true });
+  await expect(detail.getByRole("heading", { name: "Evento del sistema", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(detail).toBeVisible();
+  await expect(page).toHaveURL(`${environment.origin}/acceso/auditoria/${event.id}`);
+  await detail.getByRole("button", { name: "Volver a auditoría", exact: true }).click();
+  await expect(page).toHaveURL(`${environment.origin}/acceso#auditoria`);
+  await expect(page.getByRole("table", { name: "Historial de actividad", exact: true })).toBeVisible();
 });
