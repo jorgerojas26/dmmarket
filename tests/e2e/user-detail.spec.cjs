@@ -106,7 +106,6 @@ test("recuperar acceso conserva la pantalla y los filtros del directorio al volv
   await page.getByRole("link", { name: `Administrar ${target.username}`, exact: true }).click();
   await page.getByRole("button", { name: "Recuperar acceso", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Recuperar acceso", exact: true });
-  await dialog.getByLabel("Motivo de la operación", { exact: true }).fill("Recuperación conservando el contexto");
   await dialog.getByRole("button", { name: "Confirmar operación", exact: true }).click();
   const credential = page.getByRole("dialog", { name: "Credencial temporal", exact: true });
   await credential.getByRole("button", { name: "Cerrar credencial temporal", exact: true }).click();

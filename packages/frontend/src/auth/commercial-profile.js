@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import SearchInput from 'components/SearchInput';
+import { useCallback, useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
-import { LoadState, ManagementForm, Pagination } from './access-ui';
+import { LoadState, Pagination } from './access-ui';
 import { useAuth } from './context';
-import { Field } from './forms';
 import { authRequest } from './transport';
 
 export function CommercialIdentityField({ value, onChange, userId, required = false }) {
@@ -61,56 +61,110 @@ export function CommercialIdentityField({ value, onChange, userId, required = fa
     );
 }
 
-export function CommercialProfileForm({ id, initial, onDirtyChange, onBusyChange, onSaved }) {
-    const { check } = useAuth();
-    const [selected, setSelected] = useState(initial?.sellerId || '');
-    const [saved, setSaved] = useState(initial?.sellerId || '');
-    const [reason, setReason] = useState('');
+export function CommercialIdentity({ id, disabled = false, onDirtyChange, onBusyChange }) {
+    const { can, check, runPrivileged } = useAuth();
+    const { data, error, mutate } = useSWR(
+        can('access.profile.read') ? `/api/auth/users/${id}/commercial-profile` : null,
+        fetcher,
+    );
+    const [draft, setDraft] = useState(undefined);
+    const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
-    const changed = selected !== saved;
+    const [failure, setFailure] = useState('');
+    const savedOption = data?.sellerId ? { value: data.sellerId, label: data.name || data.sellerId } : null;
+    const currentOption = draft === undefined ? savedOption : draft;
+    const current = currentOption?.value ?? null;
+    const changed = current !== (savedOption?.value ?? null);
+    const loadOptions = useCallback(
+        async (input) => {
+            const result = await fetcher(
+                `/api/auth/seller-options?search=${encodeURIComponent(input)}&userId=${encodeURIComponent(id)}`,
+            );
+            return result.data.map((seller) => ({ value: seller.id, label: seller.name || seller.id }));
+        },
+        [id],
+    );
     useEffect(() => {
-        if (!changed && !reason) {
-            setSelected(initial?.sellerId || '');
-            setSaved(initial?.sellerId || '');
+        onDirtyChange(changed);
+    }, [changed, onDirtyChange]);
+    const discard = () => {
+        setDraft(undefined);
+        setFailure('');
+        setMessage('');
+    };
+    const submit = async (event) => {
+        event.preventDefault();
+        setFailure('');
+        setMessage('');
+        setBusy(true);
+        onBusyChange(true);
+        try {
+            const profile = await runPrivileged(() =>
+                authRequest(`users/${id}/commercial-profile`, { sellerId: current }, 'PUT'),
+            );
+            await mutate(profile, false);
+            setDraft(undefined);
+            setMessage('Perfil comercial guardado. Se cerraron las sesiones de la cuenta.');
+            await check(false);
+        } catch (error) {
+            if (error.name !== 'AbortError')
+                setFailure(`${error.message}${error.retryAfter ? ` Espera ${error.retryAfter} segundos.` : ''}`);
+        } finally {
+            setBusy(false);
+            onBusyChange(false);
         }
-    }, [initial, changed, reason]);
-    useEffect(() => {
-        onDirtyChange(changed || Boolean(reason));
-    }, [changed, reason, onDirtyChange]);
+    };
+    if (error)
+        return (
+            <section className="access-commercial" aria-label="Identidad comercial de la cuenta">
+                <span className="access-commercial-label">Identidad comercial</span>
+                <button type="button" className="btn btn-outline-light btn-sm" onClick={() => mutate()}>
+                    Reintentar
+                </button>
+            </section>
+        );
     return (
-        <section className="access-assignment" aria-label="Identidad comercial de la cuenta">
-            <h3>Perfil comercial</h3>
-            <ManagementForm
-                button="Guardar perfil comercial"
-                disabled={!changed}
-                onBusyChange={onBusyChange}
-                onSubmit={async () => {
-                    const profile = await authRequest(
-                        `users/${id}/commercial-profile`,
-                        { sellerId: selected || null, reason },
-                        'PUT',
-                    );
-                    await onSaved(profile);
-                    setSaved(selected);
-                    setReason('');
-                    setMessage('Perfil comercial guardado. Se cerraron las sesiones de la cuenta.');
-                    await check(false);
-                }}
-            >
-                <CommercialIdentityField value={selected} onChange={setSelected} userId={id} />
-                <Field
-                    label="Motivo del cambio de identidad"
-                    value={reason}
-                    onChange={setReason}
-                    minLength={5}
-                    maxLength={64}
-                />
-                {message && (
-                    <p role="status" className="access-success">
-                        {message}
-                    </p>
-                )}
-            </ManagementForm>
+        <section className="access-commercial" aria-label="Identidad comercial de la cuenta">
+            <span className="access-commercial-label">Identidad comercial</span>
+            {can('access.profile.update') ? (
+                <form className="access-commercial-form" onSubmit={submit}>
+                    <div className="access-commercial-select">
+                        <SearchInput
+                            ariaLabel="Perfil comercial"
+                            placeholder="Sin perfil comercial"
+                            loadOptions={loadOptions}
+                            defaultOptions
+                            defaultValue={currentOption}
+                            onSelect={(option) =>
+                                setDraft(option ? { value: option.value, label: option.label } : null)
+                            }
+                            disabled={disabled || busy}
+                        />
+                    </div>
+                    {changed && (
+                        <div className="access-commercial-actions">
+                            <button type="button" className="btn btn-outline-light btn-sm" onClick={discard}>
+                                Descartar
+                            </button>
+                            <button type="submit" className="btn btn-primary btn-sm" disabled={disabled || busy}>
+                                {busy ? 'Guardando…' : 'Guardar'}
+                            </button>
+                        </div>
+                    )}
+                </form>
+            ) : (
+                <span className="access-commercial-value">{data?.name || 'Sin perfil comercial'}</span>
+            )}
+            {failure && (
+                <p role="alert" className="access-error">
+                    {failure}
+                </p>
+            )}
+            {message && (
+                <p role="status" className="access-success">
+                    {message}
+                </p>
+            )}
         </section>
     );
 }

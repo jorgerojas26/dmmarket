@@ -314,7 +314,6 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
       res.json(
         await accounts.resetCredentials(req.sessionID, req.params.id, {
           resetMfa: req.body.resetMfa,
-          reason: req.body.reason,
         }),
       ),
     ),

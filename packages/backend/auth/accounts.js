@@ -215,11 +215,10 @@ async function createAccountService({ db, sessions, now = Date.now }) {
         return { id, enabled };
       });
     },
-    async resetCredentials(sid, id, { resetMfa = false, reason }) {
+    async resetCredentials(sid, id, { resetMfa = false } = {}) {
       if (typeof resetMfa !== "boolean") fail(400, "La recuperación MFA no es válida.");
-      const motive = validateReason(reason);
       return administrator(sid, "access.recovery.execute", async (connection, actorId) =>
-        reset(connection, await targetUser(connection, id), actorId, resetMfa, motive),
+        reset(connection, await targetUser(connection, id), actorId, resetMfa, null),
       );
     },
     async recoverLocally({ mode, username, displayName, reason }) {

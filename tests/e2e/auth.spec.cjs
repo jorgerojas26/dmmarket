@@ -145,7 +145,6 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     await expect(reader.getByRole("status", { name: "Usuario conectado" })).toHaveText(username);
     await page.getByRole("link", { name: `Administrar ${username}`, exact: true }).click();
     await page.getByRole("button", { name: "Recuperar acceso", exact: true }).click();
-    await page.getByRole("textbox", { name: "Motivo de la operación" }).fill("Recuperación real de prueba");
     await page.getByRole("button", { name: "Confirmar operación", exact: true }).click();
     await expect(credential).toBeVisible();
     const replacement = await credential.inputValue();
@@ -169,6 +168,8 @@ test("alta, recuperación y bloqueo de usuario desde administrador con MFA real"
     expect(
       (await context.request.get(`${environment.origin}/api/currency_rates`, { ignoreHTTPSErrors: true })).status(),
     ).toBe(401);
+    await reader.bringToFront();
+    await reader.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
     await expect(reader.getByRole("heading", { name: "Iniciar sesión" })).toBeVisible();
   } finally {
     await context.close();
@@ -456,10 +457,10 @@ test("editor crea rol, habilita otros datos y administra identidad revocando ses
     await login(reader, environment, user);
     await openModule(reader, "Configuración", "Tasas BCV");
     await expect(reader.locator(".app-navbar-ref").getByText("42.125000", { exact: true })).toBeVisible();
-    await page.getByRole("searchbox", { name: "Buscar identidad comercial", exact: true }).fill("A");
-    await page.getByLabel("Perfil comercial", { exact: true }).selectOption("A");
-    await page.getByRole("textbox", { name: "Motivo del cambio de identidad" }).fill("Vincular vendedor real desde UI");
-    await page.getByRole("button", { name: "Guardar perfil comercial", exact: true }).click();
+    const profile = page.getByRole("combobox", { name: "Perfil comercial", exact: true });
+    await profile.fill("A");
+    await page.locator(".search-select__option", { hasText: /^Vendedor A$/ }).click();
+    await page.getByRole("button", { name: "Guardar", exact: true }).click();
     await expect(
       page.getByText("Perfil comercial guardado. Se cerraron las sesiones de la cuenta.", { exact: true }),
     ).toBeVisible();
@@ -468,16 +469,14 @@ test("editor crea rol, habilita otros datos y administra identidad revocando ses
     expect(
       await environment.db("dmmarket_auth_commercial_profiles").where("user_id", user.id).pluck("seller_id"),
     ).toEqual(["A"]);
-    await page.getByLabel("Perfil comercial", { exact: true }).selectOption("");
-    await page
-      .getByRole("textbox", { name: "Motivo del cambio de identidad" })
-      .fill("Quitar todos los vínculos desde UI");
+    await profile.click();
+    await page.keyboard.press("Backspace");
     const cleared = page.waitForResponse(
       (response) =>
         response.url().endsWith(`/api/auth/users/${user.id}/commercial-profile`) &&
         response.request().method() === "PUT",
     );
-    await page.getByRole("button", { name: "Guardar perfil comercial", exact: true }).click();
+    await page.getByRole("button", { name: "Guardar", exact: true }).click();
     expect((await cleared).status()).toBe(200);
     expect(await environment.db("dmmarket_auth_commercial_profiles").where("user_id", user.id)).toHaveLength(0);
   } finally {

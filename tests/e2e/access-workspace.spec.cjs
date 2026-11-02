@@ -49,7 +49,9 @@ test("directorio filtra en servidor, pagina y muestra roles sin formularios perm
   await expect(page.getByText("101–105 de 105", { exact: true })).toBeVisible();
   await page.getByLabel("Estado de los usuarios", { exact: true }).selectOption("disabled");
   await expect(page.getByText("1–1 de 1", { exact: true })).toBeVisible();
-  const row = page.getByRole("row").filter({ hasText: rows[104].username });
+  const row = page.getByRole("row").filter({
+    has: page.getByRole("link", { name: `Administrar ${rows[104].username}`, exact: true }),
+  });
   await expect(row).toContainText("Ventas de prueba");
   await expect(row).toContainText("Deshabilitado");
   await page.getByLabel("Buscar usuarios", { exact: true }).fill("sin-coincidencias");
@@ -245,10 +247,9 @@ test("vincula vendedores por nombre sin conceder lectura de negocio", async ({ p
   await expect(page.locator(".clients-sidebar").getByRole("button", { name: "Roles", exact: true })).toHaveCount(0);
   const panel = await openUser(page, target.username);
   await expect(panel.getByRole("button", { name: "Deshabilitar usuario", exact: true })).toHaveCount(0);
-  await panel.getByLabel("Buscar identidad comercial", { exact: true }).fill("Vendedora del selector");
-  await panel.getByLabel("Perfil comercial", { exact: true }).selectOption("SELECTOR");
-  await panel.getByLabel("Motivo del cambio de identidad", { exact: true }).fill("Vincular por nombre desde el panel");
-  await panel.getByRole("button", { name: "Guardar perfil comercial", exact: true }).click();
+  await panel.getByRole("combobox", { name: "Perfil comercial", exact: true }).fill("Vendedora del selector");
+  await page.locator(".search-select__option", { hasText: /^Vendedora del selector$/ }).click();
+  await panel.getByRole("button", { name: "Guardar", exact: true }).click();
   await expect(panel.getByRole("status").filter({ hasText: "Perfil comercial guardado" })).toBeVisible();
   expect(
     await environment.db("dmmarket_auth_commercial_profiles").where("user_id", target.id).pluck("seller_id"),

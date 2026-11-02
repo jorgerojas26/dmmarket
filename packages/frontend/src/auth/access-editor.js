@@ -5,7 +5,6 @@ import Popover from 'react-bootstrap/Popover';
 import useSWR from 'swr';
 import { fetcher } from 'swr-config';
 import { LoadState, ManagementForm, useDiscardChanges } from './access-ui';
-import { CommercialProfileForm } from './commercial-profile';
 import { useAuth } from './context';
 import { Field } from './forms';
 import { RoleModules, RolePermissionMatrix } from './role-permissions';
@@ -294,47 +293,24 @@ export default function AccessEditor({ onDirtyChange }) {
 export function Assignments({ id, onDirtyChange, onBusyChange }) {
     const { can } = useAuth();
     const access = useSWR(can('access.roles.read') ? `/api/auth/users/${id}/access` : null, fetcher);
-    const profile = useSWR(can('access.profile.read') ? `/api/auth/users/${id}/commercial-profile` : null, fetcher);
     const [accessDirty, setAccessDirty] = useState(false);
-    const [profileDirty, setProfileDirty] = useState(false);
     useEffect(() => {
-        onDirtyChange(accessDirty || profileDirty);
-    }, [accessDirty, profileDirty, onDirtyChange]);
+        onDirtyChange(accessDirty);
+    }, [accessDirty, onDirtyChange]);
+    if (!can('access.roles.read')) return null;
     return (
         <div className="access-user-assignments">
-            {can('access.roles.read') && (
-                <LoadState error={access.error} loading={!access.data} onRetry={access.mutate}>
-                    {access.data && (
-                        <UserAccess
-                            id={id}
-                            initial={access.data}
-                            onSaved={(data) => access.mutate(data, false)}
-                            onDirtyChange={setAccessDirty}
-                            onBusyChange={onBusyChange}
-                        />
-                    )}
-                </LoadState>
-            )}
-            {can('access.profile.read') && (
-                <div className="access-user-overview">
-                    <LoadState error={profile.error} loading={profile.data === undefined} onRetry={profile.mutate}>
-                        {can('access.profile.update') ? (
-                            <CommercialProfileForm
-                                id={id}
-                                initial={profile.data}
-                                onSaved={(data) => profile.mutate(data, false)}
-                                onDirtyChange={setProfileDirty}
-                                onBusyChange={onBusyChange}
-                            />
-                        ) : (
-                            <section className="access-assignment" aria-label="Identidad comercial de la cuenta">
-                                <h3>Perfil comercial</h3>
-                                <p>{profile.data?.name || 'Sin perfil comercial'}</p>
-                            </section>
-                        )}
-                    </LoadState>
-                </div>
-            )}
+            <LoadState error={access.error} loading={!access.data} onRetry={access.mutate}>
+                {access.data && (
+                    <UserAccess
+                        id={id}
+                        initial={access.data}
+                        onSaved={(data) => access.mutate(data, false)}
+                        onDirtyChange={setAccessDirty}
+                        onBusyChange={onBusyChange}
+                    />
+                )}
+            </LoadState>
         </div>
     );
 }

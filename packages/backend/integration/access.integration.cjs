@@ -159,7 +159,7 @@ test("vínculos verifican IDs reales y revocan sin convertir vacío en global", 
     (
       await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerId: "not-existing", reason: "Reject unknown seller" },
+        body: { sellerId: "not-existing" },
       })
     ).status,
   ).toBe(400);
@@ -168,7 +168,7 @@ test("vínculos verifican IDs reales y revocan sin convertir vacío en global", 
     (
       await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerId: "A", reason: "Assign known seller" },
+        body: { sellerId: "A" },
       })
     ).status,
   ).toBe(200);
@@ -178,7 +178,7 @@ test("vínculos verifican IDs reales y revocan sin convertir vacío en global", 
     (
       await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerId: null, reason: "Remove seller assignment" },
+        body: { sellerId: null },
       })
     ).status,
   ).toBe(200);
@@ -235,7 +235,7 @@ test("fallo de auditoría revierte rol, vínculos y revocación juntos", async (
       (
         await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
           method: "PUT",
-          body: { sellerId: "A", reason: "Audit link rollback" },
+          body: { sellerId: "A" },
         })
       ).status,
     ).toBe(503);

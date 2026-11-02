@@ -87,6 +87,7 @@ export function ManagementForm({
     button,
     disabled = false,
     onCancel,
+    cancelLabel = 'Cancelar',
     onBusyChange,
     readOnly = false,
 }) {
@@ -123,7 +124,7 @@ export function ManagementForm({
                         {secondaryAction}
                         {onCancel && (
                             <button type="button" className="btn btn-outline-light" onClick={onCancel}>
-                                Cancelar
+                                {cancelLabel}
                             </button>
                         )}
                         <button type="submit" className="btn btn-primary" disabled={disabled}>

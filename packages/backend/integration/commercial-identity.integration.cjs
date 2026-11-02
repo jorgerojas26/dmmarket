@@ -108,7 +108,7 @@ test("un solo perfil por cuenta, exclusivo, validado contra Solser y con auditor
   const { user, client } = await seller(["settings.rates.read"], null);
   const result = await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
     method: "PUT",
-    body: { sellerId: "A", reason: "Identidad comercial verificada" },
+    body: { sellerId: "A" },
   });
   expect(result.status).toBe(200);
   expect(result.body).toMatchObject({ sellerId: "A", name: "Vendedor A" });
@@ -119,7 +119,7 @@ test("un solo perfil por cuenta, exclusivo, validado contra Solser y con auditor
     (
       await admin.request(`/api/auth/users/${other.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerId: "A", reason: "Intento de identidad duplicada" },
+        body: { sellerId: "A" },
       })
     ).status,
   ).toBe(409);
@@ -128,7 +128,7 @@ test("un solo perfil por cuenta, exclusivo, validado contra Solser y con auditor
       (
         await admin.request(`/api/auth/users/${other.id}/commercial-profile`, {
           method: "PUT",
-          body: { sellerId, reason: "Identidad comercial inválida" },
+          body: { sellerId },
         })
       ).status,
     ).toBe(400);
@@ -169,7 +169,7 @@ test("cambiar roles no elimina el perfil y retirar un perfil requerido se rechaz
     (
       await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerId: null, reason: "Retirar identidad requerida" },
+        body: { sellerId: null },
       })
     ).status,
   ).toBe(409);
@@ -186,7 +186,7 @@ test("cambiar roles no elimina el perfil y retirar un perfil requerido se rechaz
     (
       await admin.request(`/api/auth/users/${user.id}/commercial-profile`, {
         method: "PUT",
-        body: { sellerId: null, reason: "Cuenta sin funciones comerciales" },
+        body: { sellerId: null },
       })
     ).status,
   ).toBe(200);

@@ -71,8 +71,10 @@ export default function UserAccess({ id, initial, onSaved, onDirtyChange, onBusy
     }, [changed, onDirtyChange]);
     return (
         <section className="access-assignment access-user-access" aria-label="Acceso del usuario">
-            <div className="panel-help-title access-user-access-title">
-                <h3>Acceso</h3>
+            <header className="access-section-head">
+                <div>
+                    <h3>Acceso</h3>
+                </div>
                 <OverlayTrigger
                     trigger="click"
                     rootClose
@@ -80,12 +82,16 @@ export default function UserAccess({ id, initial, onSaved, onDirtyChange, onBusy
                     overlay={
                         <Popover id="user-access-help" className="kpi-help-popover">
                             <Popover.Body>
-                                <div className="kpi-help-line">Los roles se suman y sus cambios se propagan.</div>
                                 <div className="kpi-help-line">
-                                    Los permisos por rol se retiran quitando el rol correspondiente.
+                                    Para retirar un permiso heredado, quita el rol que lo concede.
                                 </div>
-                                <div className="kpi-help-line">Los adicionales solo afectan a esta cuenta.</div>
-                                <div className="kpi-help-line">Guardar cierra las sesiones del usuario.</div>
+                                <div className="kpi-help-line">
+                                    Los permisos adicionales solo afectan a esta cuenta.
+                                </div>
+                                <div className="kpi-help-line">
+                                    Los cambios de un rol alcanzan a todas las cuentas que lo tienen asignado.
+                                </div>
+                                <div className="kpi-help-line">Guardar el acceso cierra las sesiones del usuario.</div>
                             </Popover.Body>
                         </Popover>
                     }
@@ -94,7 +100,7 @@ export default function UserAccess({ id, initial, onSaved, onDirtyChange, onBusy
                         ?
                     </button>
                 </OverlayTrigger>
-            </div>
+            </header>
             <fieldset
                 className="access-user-role-picker"
                 aria-label="Roles del usuario"
@@ -157,6 +163,23 @@ export default function UserAccess({ id, initial, onSaved, onDirtyChange, onBusy
                             button="Guardar acceso"
                             readOnly={!can('access.roles.assign')}
                             disabled={!changed}
+                            cancelLabel="Descartar cambios"
+                            onCancel={
+                                changed
+                                    ? () => {
+                                          setMessage('');
+                                          setDraft(null);
+                                      }
+                                    : undefined
+                            }
+                            secondaryAction={
+                                changed && (
+                                    <span className="access-save-state">
+                                        Cambios sin guardar
+                                        {added || removed ? ` · ${added} permisos nuevos, ${removed} retirados` : ''}
+                                    </span>
+                                )
+                            }
                             onBusyChange={(value) => {
                                 setBusy(value);
                                 onBusyChange(value);
@@ -182,13 +205,6 @@ export default function UserAccess({ id, initial, onSaved, onDirtyChange, onBusy
                                 showSources
                                 setGrants={changeGrants}
                             />
-                            {changed && (
-                                <p className="access-change-summary" aria-live="polite">
-                                    {added || removed
-                                        ? `Permisos nuevos: ${added} · Retirados: ${removed}`
-                                        : 'Se actualizará la configuración de acceso.'}
-                                </p>
-                            )}
                             {message && (
                                 <p role="status" className="access-success">
                                     {message}

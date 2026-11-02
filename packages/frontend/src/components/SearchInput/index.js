@@ -11,6 +11,8 @@ const SearchInput = ({
     onSelect,
     defaultValue,
     debounceMs = 700,
+    ariaLabel,
+    disabled = false,
 }) => {
     const customStyles = useDarkSelectStyles();
     const debouncedLoadOptions = useMemo(
@@ -29,6 +31,8 @@ const SearchInput = ({
             loadingMessage={() => 'Cargando...'}
             noOptionsMessage={() => 'Sin resultados'}
             isClearable
+            isDisabled={disabled}
+            aria-label={ariaLabel}
             classNamePrefix="search-select"
             styles={customStyles}
             menuPortalTarget={document.body}

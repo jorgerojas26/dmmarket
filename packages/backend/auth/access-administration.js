@@ -308,7 +308,6 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
     setProfile(sid, id, input) {
       if (!input || Array.isArray(input) || !Object.hasOwn(input, "sellerId"))
         fail(400, "Indica una identidad comercial o null.");
-      const reason = validateReason(input.reason);
       return administer(sid, "access.profile.update", true, async (connection, actorId) => {
         await target(connection, "dmmarket_auth_users", id);
         const identity = await validateCommercialProfile(connection, input.sellerId, id);
@@ -321,7 +320,7 @@ async function createAccessAdministration({ db, sessions, now = Date.now }) {
         if (identity)
           await connection("dmmarket_auth_commercial_profiles").insert({ user_id: id, seller_id: identity });
         await invalidateUser(connection, id, now(), "commercial-profile-changed");
-        await event(connection, actorId, "auth.commercial_profile_changed", reason, id);
+        await event(connection, actorId, "auth.commercial_profile_changed", null, id);
         return commercialProfile(connection, id);
       });
     },

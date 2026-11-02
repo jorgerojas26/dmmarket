@@ -1,6 +1,8 @@
 import { requiresCommercialProfile } from '@dmmarket/permissions';
 import { useEffect, useRef, useState } from 'react';
 import Dropdown from 'react-bootstrap/Dropdown';
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import Tooltip from 'react-bootstrap/Tooltip';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
@@ -8,7 +10,7 @@ import { fetcher } from 'swr-config';
 import { Assignments } from './access-editor';
 import { permissionGroups } from './access-permissions';
 import { AccessDialog, LoadState, ManagementForm, Pagination, useDiscardChanges } from './access-ui';
-import { CommercialIdentityField } from './commercial-profile';
+import { CommercialIdentity, CommercialIdentityField } from './commercial-profile';
 import { useAuth } from './context';
 import { Field } from './forms';
 import { authRequest } from './transport';
@@ -203,7 +205,7 @@ function UserOperation({ user, operation, onClose, onDone }) {
     const [reason, setReason] = useState('');
     const [resetMfa, setResetMfa] = useState(false);
     const [busy, setBusy] = useState(false);
-    const { requestClose, confirmation } = useDiscardChanges(Boolean(reason || resetMfa));
+    const { requestClose, confirmation } = useDiscardChanges(operation === 'reset' ? resetMfa : Boolean(reason));
     const close = () => requestClose(onClose);
     const title =
         operation === 'reset'
@@ -231,7 +233,7 @@ function UserOperation({ user, operation, onClose, onDone }) {
                     onSubmit={async () => {
                         const result =
                             operation === 'reset'
-                                ? await authRequest(`users/${user.id}/reset`, { resetMfa, reason })
+                                ? await authRequest(`users/${user.id}/reset`, { resetMfa })
                                 : await authRequest(`users/${user.id}/enabled`, {
                                       enabled: operation === 'enable',
                                       reason,
@@ -256,13 +258,15 @@ function UserOperation({ user, operation, onClose, onDone }) {
                             </p>
                         </>
                     )}
-                    <Field
-                        label="Motivo de la operación"
-                        value={reason}
-                        onChange={setReason}
-                        minLength={5}
-                        maxLength={64}
-                    />
+                    {operation !== 'reset' && (
+                        <Field
+                            label="Motivo de la operación"
+                            value={reason}
+                            onChange={setReason}
+                            minLength={5}
+                            maxLength={64}
+                        />
+                    )}
                 </ManagementForm>
             </AccessDialog>
             {confirmation}
@@ -273,10 +277,12 @@ function UserOperation({ user, operation, onClose, onDone }) {
 function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, message }) {
     const { session, can } = useAuth();
     const heading = useRef(null);
-    const [dirty, setDirty] = useState(false);
+    const [accessDirty, setAccessDirty] = useState(false);
+    const [profileDirty, setProfileDirty] = useState(false);
     const [busy, setBusy] = useState(false);
     const [operation, setOperation] = useState(null);
     const [revision, setRevision] = useState(0);
+    const dirty = accessDirty || profileDirty;
     const { requestClose, confirmation } = useDiscardChanges(dirty);
     const changeBusy = (value) => {
         setBusy(value);
@@ -285,7 +291,8 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
     const beginOperation = (next) =>
         requestClose(() => {
             setRevision((value) => value + 1);
-            setDirty(false);
+            setAccessDirty(false);
+            setProfileDirty(false);
             setOperation(next);
         });
     useEffect(() => {
@@ -301,53 +308,74 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
                 <button type="button" className="access-back" onClick={onClose} disabled={busy || Boolean(operation)}>
                     <span aria-hidden="true">←</span> Volver a usuarios
                 </button>
-                <header className="access-user-detail-header">
-                    <div className="access-user-summary">
-                        <span className="access-avatar" aria-hidden="true">
-                            {(user.display_name || user.username).slice(0, 1).toLocaleUpperCase()}
-                        </span>
-                        <div>
-                            <span className="access-eyebrow">Administrar usuario</span>
+                <header className="access-identity access-user-summary">
+                    <span className="access-avatar" aria-hidden="true">
+                        {(user.display_name || user.username).slice(0, 1).toLocaleUpperCase()}
+                    </span>
+                    <div className="access-identity-body">
+                        <div className="access-identity-title">
                             <h2 ref={heading} tabIndex={-1}>
                                 {user.display_name}
                             </h2>
-                            <p>
-                                @{user.username}
-                                {user.id === session.user.id ? ' · Tu cuenta' : ''}
-                            </p>
+                            <span className={`access-status ${Number(user.enabled) ? 'is-enabled' : ''}`}>
+                                {Number(user.enabled) ? 'Habilitado' : 'Deshabilitado'}
+                            </span>
+                            {user.id === session.user.id && <span className="access-self-badge">Tu cuenta</span>}
                         </div>
-                        <span className={`access-status ${Number(user.enabled) ? 'is-enabled' : ''}`}>
-                            {Number(user.enabled) ? 'Habilitado' : 'Deshabilitado'}
-                        </span>
+                        <p className="access-identity-handle">@{user.username}</p>
                     </div>
                     {(can('access.users') || can('access.recover')) && (
-                        <section className="access-user-actions" aria-label="Acciones de la cuenta">
-                            <div className="access-inline-actions">
-                                {can('access.recover') && user.id !== session.user.id && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-outline-light"
-                                        disabled={busy || Boolean(operation)}
-                                        onClick={() => beginOperation('reset')}
+                        <section className="access-identity-actions" aria-label="Acciones de la cuenta">
+                            {can('access.recover') && user.id !== session.user.id && (
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-light"
+                                    disabled={busy || Boolean(operation)}
+                                    onClick={() => beginOperation('reset')}
+                                >
+                                    Recuperar acceso
+                                </button>
+                            )}
+                            {can('access.users') &&
+                                (user.id === session.user.id ? (
+                                    <OverlayTrigger
+                                        placement="top"
+                                        overlay={
+                                            <Tooltip id="access-self-disable">
+                                                No puedes deshabilitar tu propia cuenta.
+                                            </Tooltip>
+                                        }
                                     >
-                                        Recuperar acceso
-                                    </button>
-                                )}
-                                {can('access.users') && (
+                                        <span className="access-self-action">
+                                            <button
+                                                type="button"
+                                                className={`btn ${Number(user.enabled) ? 'btn-outline-danger' : 'btn-outline-light'}`}
+                                                disabled
+                                            >
+                                                {Number(user.enabled) ? 'Deshabilitar usuario' : 'Habilitar usuario'}
+                                            </button>
+                                        </span>
+                                    </OverlayTrigger>
+                                ) : (
                                     <button
                                         type="button"
                                         className={`btn ${Number(user.enabled) ? 'btn-outline-danger' : 'btn-outline-light'}`}
-                                        disabled={busy || Boolean(operation) || user.id === session.user.id}
+                                        disabled={busy || Boolean(operation)}
                                         onClick={() => beginOperation(Number(user.enabled) ? 'disable' : 'enable')}
                                     >
                                         {Number(user.enabled) ? 'Deshabilitar usuario' : 'Habilitar usuario'}
                                     </button>
-                                )}
-                            </div>
-                            {can('access.users') && user.id === session.user.id && (
-                                <p className="access-muted">No puedes deshabilitar tu propia cuenta.</p>
-                            )}
+                                ))}
                         </section>
+                    )}
+                    {can('access.profile.read') && (
+                        <CommercialIdentity
+                            key={user.id}
+                            id={user.id}
+                            disabled={busy || Boolean(operation)}
+                            onDirtyChange={setProfileDirty}
+                            onBusyChange={changeBusy}
+                        />
                     )}
                 </header>
                 {message && (
@@ -356,7 +384,7 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
                     </p>
                 )}
                 <fieldset disabled={busy || Boolean(operation)}>
-                    <Assignments key={revision} id={user.id} onDirtyChange={setDirty} onBusyChange={changeBusy} />
+                    <Assignments key={revision} id={user.id} onDirtyChange={setAccessDirty} onBusyChange={changeBusy} />
                 </fieldset>
                 {!can('access.roles.read') && !can('access.profile.read') && (
                     <p className="access-muted">
@@ -549,7 +577,6 @@ export default function Users({
                                                     onClick={() => setMessage('')}
                                                 >
                                                     <strong>{user.display_name}</strong>
-                                                    <span>@{user.username}</span>
                                                 </Link>
                                             </td>
                                             {can('access.roles') && (
