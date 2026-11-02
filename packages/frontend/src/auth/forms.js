@@ -148,7 +148,7 @@ export function InitialAccountForm() {
                                 name={name}
                                 className="auth-initial-password-field"
                                 type={visible[name] ? 'text' : 'password'}
-                                minLength={15}
+                                minLength={8}
                                 autoComplete="new-password"
                                 describedBy={name === 'password' ? 'initial-password-help' : undefined}
                             />
@@ -164,7 +164,7 @@ export function InitialAccountForm() {
                         </div>
                         {name === 'password' && (
                             <p id="initial-password-help" className="auth-initial-hint">
-                                Mínimo 15 caracteres.
+                                Mínimo 8 caracteres.
                             </p>
                         )}
                     </div>
@@ -232,14 +232,14 @@ export function PasswordForm({ panel = false }) {
                 name="newPassword"
                 type="password"
                 autoComplete="new-password"
-                minLength={15}
+                minLength={8}
             />
             <Field
                 label="Confirmar contraseña nueva"
                 name="confirmation"
                 type="password"
                 autoComplete="new-password"
-                minLength={15}
+                minLength={8}
             />
             {session.stage === 'ready' && session.mfaEnabled && (
                 <Field
@@ -263,7 +263,7 @@ export function PasswordForm({ panel = false }) {
                 description={
                     temporary
                         ? 'Es obligatorio: reemplaza la contraseña temporal por una permanente antes de entrar a DMMarket.'
-                        : 'Elige una contraseña nueva de al menos 15 caracteres.'
+                        : 'Elige una contraseña nueva de al menos 8 caracteres.'
                 }
             >
                 <AccessForm embedded button="Guardar contraseña" onSubmit={submit}>
@@ -273,7 +273,7 @@ export function PasswordForm({ panel = false }) {
         );
     return (
         <AccessForm title={title} button="Guardar contraseña" onSubmit={submit}>
-            <p>Usa al menos 15 caracteres. No reutilices la contraseña temporal.</p>
+            <p>Usa al menos 8 caracteres. No reutilices la contraseña temporal.</p>
             {fields}
         </AccessForm>
     );

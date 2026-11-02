@@ -14,8 +14,8 @@ function validPasswordInput(password) {
 }
 
 function validateNewPassword(password) {
-  if (!validPasswordInput(password) || Array.from(password).length < 15) {
-    const error = new Error("Usa al menos 15 caracteres y como máximo 4096 bytes para la contraseña.");
+  if (!validPasswordInput(password) || Array.from(password).length < 8) {
+    const error = new Error("Usa al menos 8 caracteres y como máximo 4096 bytes para la contraseña.");
     error.status = 400;
     throw error;
   }
