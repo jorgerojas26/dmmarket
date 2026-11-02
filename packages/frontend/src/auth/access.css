@@ -1699,3 +1699,87 @@
         margin-right: 0;
     }
 }
+
+.account {
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.account-title {
+    margin: 0 0 20px;
+    font-size: clamp(22px, 2vw, 26px);
+    font-weight: 650;
+    letter-spacing: -0.5px;
+}
+
+.access-workspace .form-label {
+    margin-bottom: 7px;
+    font-size: 13px;
+    color: #c8d0dc;
+}
+
+.account-identity {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    border: 1px solid #2d3138;
+    border-radius: 12px;
+    background: #1e2126;
+}
+
+.account-identity h3 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 650;
+    letter-spacing: -0.3px;
+    overflow-wrap: anywhere;
+}
+
+.account-identity p {
+    margin: 3px 0 0;
+}
+
+.account-card {
+    margin-top: 16px;
+}
+
+.account-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 18px 20px;
+}
+
+.account-card-head h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.account-card-head p {
+    margin: 4px 0 0;
+}
+
+.account-card-head .btn {
+    flex-shrink: 0;
+}
+
+.account-card-body {
+    padding: 14px 20px 20px;
+    border-top: 1px solid #2d3138;
+}
+
+.account-card-body > .access-embedded-form > form > p:first-child {
+    margin: 0 0 4px;
+}
+
+.account-mfa-status {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 9px;
+}

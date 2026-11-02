@@ -272,8 +272,8 @@ export function PasswordForm({ panel = false }) {
             </AuthStage>
         );
     return (
-        <AccessForm title={title} button="Guardar contraseña" onSubmit={submit}>
-            <p>Usa al menos 8 caracteres. No reutilices la contraseña temporal.</p>
+        <AccessForm embedded button="Guardar contraseña" onSubmit={submit}>
+            <p className="access-muted">Usa al menos 8 caracteres.</p>
             {fields}
         </AccessForm>
     );
@@ -429,8 +429,8 @@ export function EnrollmentForm({ panel = false }) {
                 </AccessForm>
             </AuthStage>
         ) : (
-            <AccessForm title="Configurar segundo factor" button="Generar configuración MFA" onSubmit={start}>
-                <p>{intro}</p>
+            <AccessForm embedded button="Generar configuración MFA" onSubmit={start}>
+                <p className="access-muted">{intro}</p>
                 {noticeNode}
                 <Field
                     label="Contraseña para configurar MFA"
@@ -479,7 +479,7 @@ export function EnrollmentForm({ panel = false }) {
             </AuthStage>
         );
     return (
-        <AccessForm title="Confirmar configuración MFA" button="Confirmar MFA" onSubmit={submitEnrollment}>
+        <AccessForm embedded button="Confirmar MFA" onSubmit={submitEnrollment}>
             {confirm}
         </AccessForm>
     );
@@ -489,7 +489,7 @@ export function DisableMfaForm() {
     const { action } = useAuth();
     return (
         <AccessForm
-            title="Desactivar MFA"
+            embedded
             button="Confirmar desactivación"
             onSubmit={({ password, token }) => action('mfa/disable', { password, token })}
         >

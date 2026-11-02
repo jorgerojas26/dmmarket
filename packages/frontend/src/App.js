@@ -215,7 +215,7 @@ export default function App({ onLogout, logoutError, pending = false }) {
                             aria-label={module?.label || 'Mi cuenta'}
                             className="flex-grow-1 overflow-auto p-4 text-light"
                         >
-                            <h2 className="h4">{module?.label || 'Mi cuenta'}</h2>
+                            {module?.label && <h2 className="h4">{module.label}</h2>}
                             {!modules.length && (
                                 <p>No tienes módulos habilitados. Consulta al responsable de acceso.</p>
                             )}

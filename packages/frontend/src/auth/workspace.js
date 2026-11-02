@@ -1,6 +1,8 @@
 import Sidebar from 'components/Sidebar';
 import { useEffect, useRef, useState } from 'react';
 import { Prompt, useHistory, useLocation } from 'react-router-dom';
+import useSWR from 'swr';
+import { fetcher } from 'swr-config';
 import AccessEditor from './access-editor';
 import { useDiscardChanges } from './access-ui';
 import Users from './access-users';
@@ -13,34 +15,88 @@ export function Account() {
     const { session } = useAuth();
     const [changePassword, setChangePassword] = useState(false);
     const [configuringMfa, setConfiguringMfa] = useState(false);
+    const { data: profile, error } = useSWR('/api/auth/profile', fetcher);
+    useEffect(() => {
+        setConfiguringMfa(false);
+    }, [session.mfaEnabled]);
+    const name = session.user.displayName || session.user.username;
+    const initials = name
+        .trim()
+        .split(/\s+/)
+        .map((part) => Array.from(part)[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('')
+        .toLocaleUpperCase();
+    const roles = profile
+        ? profile.roles.map((role) => role.name).join(' · ') || 'Sin rol asignado'
+        : error
+          ? 'Rol no disponible'
+          : '';
+    const mfaAction = session.mfaEnabled ? 'Desactivar MFA' : 'Activar MFA';
     return (
-        <>
-            <button
-                type="button"
-                className="btn btn-outline-light my-3"
-                onClick={() => setChangePassword(!changePassword)}
-            >
-                {changePassword ? 'Ocultar cambio de contraseña' : 'Cambiar mi contraseña'}
-            </button>
-            {changePassword && <PasswordForm />}
-            <section className="my-4" aria-label="Segundo factor">
-                <h2 className="h5">Segundo factor (MFA)</h2>
-                <p>
-                    {session.mfaEnabled ? 'Activado' : 'Desactivado'}
-                    {session.mfaRequired ? ' · Requerido por el administrador' : ''}
-                </p>
-                {(!session.mfaEnabled || !session.mfaRequired) && (
+        <div className="access-workspace account">
+            <h2 className="account-title">Mi cuenta</h2>
+            <div className="account-identity">
+                <span className="access-avatar" aria-hidden="true">
+                    {initials}
+                </span>
+                <div className="access-identity-body">
+                    <h3>{name}</h3>
+                    <p className="access-muted">@{session.user.username}</p>
+                    {roles && <p className="access-muted">{roles}</p>}
+                </div>
+            </div>
+            <section className="access-card account-card" aria-labelledby="account-password">
+                <div className="account-card-head">
+                    <div>
+                        <h3 id="account-password">Contraseña</h3>
+                        <p className="access-muted">La clave con la que entras a DMMarket.</p>
+                    </div>
                     <button
                         type="button"
                         className="btn btn-outline-light"
-                        onClick={() => setConfiguringMfa(!configuringMfa)}
+                        aria-expanded={changePassword}
+                        onClick={() => setChangePassword(!changePassword)}
                     >
-                        {configuringMfa ? 'Cancelar' : session.mfaEnabled ? 'Desactivar MFA' : 'Activar MFA'}
+                        {changePassword ? 'Cancelar' : 'Cambiar mi contraseña'}
                     </button>
+                </div>
+                {changePassword && (
+                    <div className="account-card-body">
+                        <PasswordForm />
+                    </div>
                 )}
-                {configuringMfa && (session.mfaEnabled ? <DisableMfaForm /> : <EnrollmentForm />)}
             </section>
-        </>
+            <section className="access-card account-card" aria-labelledby="account-mfa">
+                <div className="account-card-head">
+                    <div>
+                        <h3 id="account-mfa">Segundo factor (MFA)</h3>
+                        <div className="account-mfa-status">
+                            <span className={`access-status${session.mfaEnabled ? ' is-enabled' : ''}`}>
+                                {session.mfaEnabled ? 'Activado' : 'Desactivado'}
+                            </span>
+                            {session.mfaRequired && <span className="access-chip">Requerido</span>}
+                        </div>
+                    </div>
+                    {(!session.mfaEnabled || !session.mfaRequired) && (
+                        <button
+                            type="button"
+                            className="btn btn-outline-light"
+                            aria-expanded={configuringMfa}
+                            onClick={() => setConfiguringMfa(!configuringMfa)}
+                        >
+                            {configuringMfa ? 'Cancelar' : mfaAction}
+                        </button>
+                    )}
+                </div>
+                {configuringMfa && (
+                    <div className="account-card-body">
+                        {session.mfaEnabled ? <DisableMfaForm /> : <EnrollmentForm />}
+                    </div>
+                )}
+            </section>
+        </div>
     );
 }
 
