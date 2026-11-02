@@ -180,6 +180,13 @@ export default function UserAccess({ id, initial, onSaved, onDirtyChange, onBusy
                                     </span>
                                 )
                             }
+                            status={
+                                message && (
+                                    <span role="status" className="access-form-status">
+                                        {message}
+                                    </span>
+                                )
+                            }
                             onBusyChange={(value) => {
                                 setBusy(value);
                                 onBusyChange(value);
@@ -205,11 +212,6 @@ export default function UserAccess({ id, initial, onSaved, onDirtyChange, onBusy
                                 showSources
                                 setGrants={changeGrants}
                             />
-                            {message && (
-                                <p role="status" className="access-success">
-                                    {message}
-                                </p>
-                            )}
                         </ManagementForm>
                     </div>
                 </div>

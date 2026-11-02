@@ -83,6 +83,7 @@ export function ManagementForm({
     id,
     children,
     secondaryAction,
+    status,
     onSubmit,
     button,
     disabled = false,
@@ -122,6 +123,7 @@ export function ManagementForm({
                 {!readOnly && (
                     <div className="access-form-actions">
                         {secondaryAction}
+                        {status}
                         {onCancel && (
                             <button type="button" className="btn btn-outline-light" onClick={onCancel}>
                                 {cancelLabel}
