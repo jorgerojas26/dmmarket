@@ -329,53 +329,52 @@ function ManualMfaConfiguration({ uri }) {
     const [message, setMessage] = useState('');
     const secret = new URL(uri).searchParams.get('secret');
     return (
-        <div className="mt-3">
+        <div className="auth-entry-manual">
             <label className="form-label" htmlFor="mfa-secret">
                 Configuración manual MFA
             </label>
-            <p id="mfa-secret-help">
-                Si no puedes escanear el QR, añade una clave de configuración en tu autenticador. Usa esta clave con
-                códigos basados en tiempo (TOTP), 6 dígitos, intervalo de 30 segundos y algoritmo SHA-1.
-            </p>
-            <input
-                id="mfa-secret"
-                autoComplete="off"
-                aria-describedby="mfa-secret-help"
-                type={visible ? 'text' : 'password'}
-                className="form-control"
-                value={secret}
-                readOnly
-                spellCheck={false}
-                onFocus={(event) => {
-                    if (visible) event.target.select();
-                }}
-            />
-            <div className="d-flex flex-wrap gap-2 mt-2">
-                <button
-                    type="button"
-                    className="btn btn-outline-light"
-                    aria-pressed={visible}
-                    onClick={() => setVisible(!visible)}
-                >
-                    {visible ? 'Ocultar clave MFA' : 'Mostrar clave MFA'}
-                </button>
-                <button
-                    type="button"
-                    className="btn btn-outline-light"
-                    onClick={async () => {
-                        try {
-                            await navigator.clipboard.writeText(secret);
-                            setMessage('Clave copiada. Pégala en tu autenticador.');
-                        } catch {
-                            setMessage('No se pudo copiar. Pulsa Mostrar clave MFA y cópiala manualmente.');
-                        }
+            <div className="auth-entry-secret">
+                <input
+                    id="mfa-secret"
+                    autoComplete="off"
+                    type={visible ? 'text' : 'password'}
+                    className="form-control"
+                    value={secret}
+                    readOnly
+                    spellCheck={false}
+                    onFocus={(event) => {
+                        if (visible) event.target.select();
                     }}
-                >
-                    Copiar clave MFA
-                </button>
+                />
+                <div className="auth-entry-secret-actions">
+                    <button
+                        type="button"
+                        className="btn btn-outline-light"
+                        aria-pressed={visible}
+                        aria-label={visible ? 'Ocultar clave MFA' : 'Mostrar clave MFA'}
+                        onClick={() => setVisible(!visible)}
+                    >
+                        <AuthIcon kind={visible ? 'eyeOff' : 'eye'} />
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-outline-light"
+                        aria-label="Copiar clave MFA"
+                        onClick={async () => {
+                            try {
+                                await navigator.clipboard.writeText(secret);
+                                setMessage('Clave copiada. Pégala en tu autenticador.');
+                            } catch {
+                                setMessage('No se pudo copiar. Pulsa Mostrar y cópiala manualmente.');
+                            }
+                        }}
+                    >
+                        <AuthIcon kind="copy" />
+                    </button>
+                </div>
             </div>
             {message && (
-                <p role="status" className="mt-2">
+                <p role="status" className="auth-entry-help">
                     {message}
                 </p>
             )}
@@ -387,6 +386,8 @@ export function EnrollmentForm({ panel = false }) {
     const { action, session } = useAuth();
     const [uri, setUri] = useState('');
     const [qr, setQr] = useState('');
+    const [expiresAt, setExpiresAt] = useState(0);
+    const [notice, setNotice] = useState('');
     useEffect(() => {
         let active = true;
         if (uri)
@@ -402,17 +403,23 @@ export function EnrollmentForm({ panel = false }) {
     const intro = session.mfaRequired
         ? 'Tu cuenta requiere MFA. Confirma tu contraseña para generar la configuración.'
         : 'Activa un segundo factor para proteger tu cuenta. Confirma tu contraseña.';
+    const start = async ({ password }) => {
+        const data = await action('mfa/enrollment', { password });
+        setExpiresAt(data.expiresAtMs);
+        setNotice('');
+        setUri(data.uri);
+    };
+    const minutes = expiresAt ? Math.max(1, Math.round((expiresAt - Date.now()) / 60000)) : 0;
+    const noticeNode = notice && (
+        <p className="auth-entry-notice" role="status">
+            {notice}
+        </p>
+    );
     if (!uri)
         return panel ? (
             <AuthStage icon="code" title="Configurar segundo factor" description={intro}>
-                <AccessForm
-                    embedded
-                    button="Generar configuración MFA"
-                    onSubmit={async ({ password }) => {
-                        const data = await action('mfa/enrollment', { password });
-                        setUri(data.uri);
-                    }}
-                >
+                <AccessForm embedded button="Generar configuración MFA" onSubmit={start}>
+                    {noticeNode}
                     <Field
                         label="Contraseña para configurar MFA"
                         name="password"
@@ -422,15 +429,9 @@ export function EnrollmentForm({ panel = false }) {
                 </AccessForm>
             </AuthStage>
         ) : (
-            <AccessForm
-                title="Configurar segundo factor"
-                button="Generar configuración MFA"
-                onSubmit={async ({ password }) => {
-                    const data = await action('mfa/enrollment', { password });
-                    setUri(data.uri);
-                }}
-            >
+            <AccessForm title="Configurar segundo factor" button="Generar configuración MFA" onSubmit={start}>
                 <p>{intro}</p>
+                {noticeNode}
                 <Field
                     label="Contraseña para configurar MFA"
                     name="password"
@@ -439,53 +440,46 @@ export function EnrollmentForm({ panel = false }) {
                 />
             </AccessForm>
         );
+    const submitEnrollment = async ({ token }) => {
+        try {
+            await action('mfa/enrollment/confirm', { token });
+        } catch (error) {
+            if (error.code !== 'MFA_ENROLLMENT_EXPIRED') throw error;
+            setNotice('La configuración venció. Confirma tu contraseña para generar una nueva.');
+            setUri('');
+            setQr('');
+        }
+    };
     const confirm = (
         <>
-            <p>
-                Escanea este código con tu autenticador. La configuración vence en cinco minutos y no se mostrará de
-                nuevo.
-            </p>
             {qr && (
-                <img className="auth-entry-qr" src={qr} width="240" height="240" alt="Código QR de configuración MFA" />
+                <img className="auth-entry-qr" src={qr} width="168" height="168" alt="Código QR de configuración MFA" />
             )}
-            <ManualMfaConfiguration key={uri} uri={uri} />
+            <ManualMfaConfiguration uri={uri} />
             <Field
                 label="Código de confirmación MFA"
                 name="token"
                 maxLength={6}
                 inputMode="numeric"
                 autoComplete="one-time-code"
+                placeholder="000000"
             />
-            <button
-                type="button"
-                className="btn btn-outline-light mt-2"
-                onClick={() => {
-                    setUri('');
-                    setQr('');
-                }}
-            >
-                Generar otra configuración
-            </button>
         </>
     );
     if (panel)
         return (
-            <AuthStage icon="code" title="Confirmar configuración MFA">
-                <AccessForm
-                    embedded
-                    button="Confirmar MFA"
-                    onSubmit={({ token }) => action('mfa/enrollment/confirm', { token })}
-                >
+            <AuthStage
+                icon={false}
+                title="Confirmar configuración MFA"
+                description={`Escanea el QR y confirma el código. Tienes ${minutes} minutos.`}
+            >
+                <AccessForm embedded button="Confirmar MFA" onSubmit={submitEnrollment}>
                     {confirm}
                 </AccessForm>
             </AuthStage>
         );
     return (
-        <AccessForm
-            title="Confirmar configuración MFA"
-            button="Confirmar MFA"
-            onSubmit={({ token }) => action('mfa/enrollment/confirm', { token })}
-        >
+        <AccessForm title="Confirmar configuración MFA" button="Confirmar MFA" onSubmit={submitEnrollment}>
             {confirm}
         </AccessForm>
     );

@@ -2,7 +2,7 @@ const { createHash, randomBytes } = require("node:crypto");
 const { assertAuthSchema, lockAccessMutation, accessFor, appendEvent, invalidateUser } = require("./identity");
 const { hashPassword, verifyPassword } = require("./passwords");
 const { normalizeSource } = require("./attempts");
-const { ABSOLUTE_SESSION_MS, IDLE_SESSION_MS, RECENT_AUTH_MS } = require("./http-security");
+const { ABSOLUTE_SESSION_MS, IDLE_SESSION_MS, RECENT_AUTH_MS, MFA_ENROLLMENT_MS } = require("./http-security");
 
 const MAX_CREDENTIAL_REQUESTS = 8;
 let activeCredentialRequests = 0;
@@ -378,7 +378,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
             .where("sid_hash", context.state.sid_hash)
             .update({
               pending_mfa_secret: enrollment.encryptedSecret,
-              pending_mfa_expires_ms: current + RECENT_AUTH_MS,
+              pending_mfa_expires_ms: current + MFA_ENROLLMENT_MS,
               password_ms: current,
               activity_ms: current,
             });
@@ -389,7 +389,7 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
           });
           context.state.activity_ms = current;
           context.state.password_ms = current;
-          return { value: { uri: enrollment.uri, expiresAtMs: current + RECENT_AUTH_MS } };
+          return { value: { uri: enrollment.uri, expiresAtMs: current + MFA_ENROLLMENT_MS } };
         },
         { accessMutation: true, source: normalizeSource(source) },
       );
@@ -403,12 +403,14 @@ async function createSessionService({ db, statusDb = db, mfa, attempts, now = Da
           if (
             !["mfa-enrollment", "ready"].includes(context.stage) ||
             context.user.mfa_secret ||
-            !context.state.pending_mfa_secret ||
-            !Number.isSafeInteger(Number(context.state.pending_mfa_expires_ms)) ||
-            Number(context.state.pending_mfa_expires_ms) <= current ||
-            current - Number(context.state.password_ms) >= RECENT_AUTH_MS
+            !context.state.pending_mfa_secret
           )
             return denied(403);
+          if (
+            !Number.isSafeInteger(Number(context.state.pending_mfa_expires_ms)) ||
+            Number(context.state.pending_mfa_expires_ms) <= current
+          )
+            return denied(403, "MFA_ENROLLMENT_EXPIRED");
           const checked = await mfa.verifyToken({
             userId: context.user.id,
             encryptedSecret: context.state.pending_mfa_secret,

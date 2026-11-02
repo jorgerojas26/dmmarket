@@ -13,6 +13,17 @@ export function AuthIcon({ kind = 'shield' }) {
         >
             {kind === 'arrow' ? (
                 <path d="M5 12h14m-5-5 5 5-5 5" />
+            ) : kind === 'copy' ? (
+                <>
+                    <rect x="9" y="9" width="12" height="12" rx="2.5" />
+                    <path d="M15 5.5A2.5 2.5 0 0 0 12.5 3h-7A2.5 2.5 0 0 0 3 5.5v7A2.5 2.5 0 0 0 5.5 15h1" />
+                </>
+            ) : kind === 'eyeOff' ? (
+                <>
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="m4 4 16 16" />
+                </>
             ) : kind === 'eye' ? (
                 <>
                     <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
@@ -36,9 +47,11 @@ export function AuthIcon({ kind = 'shield' }) {
 export function AuthStage({ icon = 'shield', title, description, children }) {
     return (
         <div className="auth-entry-form">
-            <div className="auth-entry-form-icon">
-                <AuthIcon kind={icon} />
-            </div>
+            {icon && (
+                <div className="auth-entry-form-icon">
+                    <AuthIcon kind={icon} />
+                </div>
+            )}
             <h2>{title}</h2>
             {description && <p className="auth-entry-description">{description}</p>}
             {children}

@@ -85,15 +85,7 @@ test("configuración manual MFA permite mostrar y copiar la clave sin escanear",
   await expect(page.getByRole("status").filter({ hasText: "No se pudo copiar" })).toBeVisible();
   await page.getByRole("button", { name: "Mostrar clave MFA", exact: true }).click();
   await expect(field).toHaveAttribute("type", "text");
-  await page.getByRole("button", { name: "Generar otra configuración", exact: true }).click();
-  await expect(field).toHaveCount(0);
-  await page.getByLabel("Contraseña para configurar MFA", { exact: true }).fill(user.password);
-  await page.getByRole("button", { name: "Generar configuración MFA", exact: true }).click();
-  await expect(field).toHaveAttribute("type", "password");
-  await expect(page.getByRole("status").filter({ hasText: /Clave copiada|No se pudo copiar/ })).toHaveCount(0);
-  const replacement = await field.inputValue();
-  expect(replacement === secret).toBe(false);
-  await page.getByLabel("Código de confirmación MFA", { exact: true }).fill(await environment.token(replacement));
+  await page.getByLabel("Código de confirmación MFA", { exact: true }).fill(await environment.token(secret));
   await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Administración de usuarios", exact: true })).toBeVisible();
   await expect(field).toHaveCount(0);

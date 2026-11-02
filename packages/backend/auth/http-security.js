@@ -21,6 +21,7 @@ const { csrfSync } = require("csrf-sync");
 const ABSOLUTE_SESSION_MS = 12 * 60 * 60 * 1000;
 const IDLE_SESSION_MS = 30 * 60 * 1000;
 const RECENT_AUTH_MS = 5 * 60 * 1000;
+const MFA_ENROLLMENT_MS = 30 * 60 * 1000;
 
 function canonicalOrigin(value) {
   let url;
@@ -100,10 +101,12 @@ function authErrorHandler(error, req, res, next) {
   };
   const temporaryCredentialMessage =
     "La contraseña temporal venció o ya fue utilizada. Pide a un administrador que restablezca tu acceso.";
+  const mfaEnrollmentExpiredMessage = "La configuración MFA venció. Genera una nueva.";
   const exposedCodes = {
     RECENT_AUTH_REQUIRED: 403,
     CXC_SCHEMA_UNAVAILABLE: 503,
     TEMPORARY_CREDENTIAL_EXPIRED: 401,
+    MFA_ENROLLMENT_EXPIRED: 403,
   };
   const knownStatus = Object.hasOwn(messages, error.status);
   const status = knownStatus ? Number(error.status) : 503;
@@ -153,7 +156,9 @@ function authErrorHandler(error, req, res, next) {
       message:
         code === "TEMPORARY_CREDENTIAL_EXPIRED"
           ? temporaryCredentialMessage
-          : messages[status] || "El servicio de acceso no está disponible.",
+          : code === "MFA_ENROLLMENT_EXPIRED"
+            ? mfaEnrollmentExpiredMessage
+            : messages[status] || "El servicio de acceso no está disponible.",
       ...(code ? { code } : {}),
     },
   });
@@ -166,6 +171,7 @@ module.exports = {
   ABSOLUTE_SESSION_MS,
   IDLE_SESSION_MS,
   RECENT_AUTH_MS,
+  MFA_ENROLLMENT_MS,
   createHttpSecurity,
   sessionOptions,
   trustLocalProxy,
