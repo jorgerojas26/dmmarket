@@ -167,6 +167,7 @@ test.each(["false", "true"])(
       compareInvoices: 1,
     });
     expect(dashboard.body.bestEmployee.name).toBe("Vendedor A");
+    expect(dashboard.body.routeSalesChart).toEqual([{ id: '"R"', name: "Ruta sintética", sales: amount }]);
     expect(JSON.stringify(dashboard.body)).not.toMatch(/netProfit|NetProfit|Margin|Costo|PRIVATE-/);
     expect(
       (await client.request(`/api/dashboard/sales?${query}&showNoe=${showNoe}&employeeId=B`)).body.kpis.totalInvoices,
@@ -194,6 +195,9 @@ test("agregados y comparaciones respetan la identidad comercial", async () => {
   );
   expect(own.body.kpis.totalNetProfit).toBe(39);
   expect(own.body.kpis.compareNetProfit).toBe(7);
+  expect(own.body.routeSalesChart).toEqual([
+    { id: '"R"', name: "Ruta sintética", sales: 100, profit: 39 },
+  ]);
 });
 
 test("catálogo básico permite solo capacidades aprobadas y comparaciones inválidas fallan", async () => {

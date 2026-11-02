@@ -8,6 +8,7 @@ import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
 import ParetoChart from './ParetoChart';
 import RankedList from './RankedList';
+import RouteSalesChart from './RouteSalesChart';
 
 const SALES_PARETO_CONFIG = { inventoryValueKey: 'inventoryValue' };
 
@@ -226,6 +227,7 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
                             </div>
                         ) : (
                             <ParetoChart
+                                compact
                                 products={paretoData?.products || []}
                                 newProducts={paretoData?.newProducts || []}
                                 newProductsTable={{
@@ -427,6 +429,8 @@ const SalesDashboard = ({ dateRange, showNoe }) => {
             </div>
 
             {paretoPanel}
+
+            {financial && <RouteSalesChart routes={data?.routeSalesChart} />}
 
             {financial && (
                 <div className="row g-3 mb-4">

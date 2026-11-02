@@ -251,7 +251,7 @@ const buildNewProductsPdf = (products, cfg, config, rate, rangeLabel) => {
     };
 };
 
-const NewProductsTable = ({ products, cfg, table, loading }) => {
+const NewProductsTable = ({ products, cfg, table, loading, compact = false }) => {
     const { currencyRate } = useContext(CurrencyRateContext);
     const handlePrint = useCallback(
         async (config) => {
@@ -302,7 +302,7 @@ const NewProductsTable = ({ products, cfg, table, loading }) => {
                 key={cfg.valueKey}
                 data={products}
                 columns={columns}
-                maxHeight="calc(100vh - 224px)"
+                maxHeight={compact ? 260 : 'calc(100vh - 224px)'}
                 loading={loading}
                 emptyMessage="Sin productos nuevos que coincidan con la búsqueda"
                 sorting={{ enabled: true, sortBy: [table.sort], onSort: table.onSort, resetOnDataChange: false }}
@@ -517,6 +517,7 @@ const ParetoChart = ({
     config = {},
     sorting,
     exportData,
+    compact = false,
 }) => {
     const cfg = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
     const { currencyRate } = useContext(CurrencyRateContext);
@@ -632,7 +633,13 @@ const ParetoChart = ({
                         : 'Sin datos para el periodo seleccionado'}
                 </div>
                 {newProductsTable && (
-                    <NewProductsTable products={newProducts} cfg={cfg} table={newProductsTable} loading={loading} />
+                    <NewProductsTable
+                        products={newProducts}
+                        cfg={cfg}
+                        table={newProductsTable}
+                        loading={loading}
+                        compact={compact}
+                    />
                 )}
             </div>
         );
@@ -673,7 +680,7 @@ const ParetoChart = ({
         <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
             {printError && <p role="alert">{printError}</p>}
             {/* ── Title ── */}
-            <div className="dashboard-inline-title" style={{ marginBottom: 16 }}>
+            <div className="dashboard-inline-title" style={{ marginBottom: compact ? 8 : 16 }}>
                 {cfg.title} &mdash; <span style={{ fontWeight: 400, color: '#9ca3af' }}>{cfg.subtitle}</span>
             </div>
 
@@ -682,8 +689,8 @@ const ParetoChart = ({
                 style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                    gap: 12,
-                    marginBottom: 20,
+                    gap: compact ? 8 : 12,
+                    marginBottom: compact ? 10 : 20,
                 }}
             >
                 {summaryCards.map((card) => (
@@ -720,7 +727,7 @@ const ParetoChart = ({
             </div>
 
             {/* ── Pareto Chart ── */}
-            <div style={{ height: 380, marginBottom: 12 }}>
+            <div style={{ height: compact ? 260 : 380, marginBottom: compact ? 6 : 12 }}>
                 <ResponsiveBar
                     data={chartData}
                     keys={['netProfit']}
@@ -796,7 +803,7 @@ const ParetoChart = ({
                     display: 'flex',
                     flexWrap: 'wrap',
                     gap: 18,
-                    marginBottom: 20,
+                    marginBottom: compact ? 10 : 20,
                     fontSize: 11,
                     color: '#9ca3af',
                 }}
@@ -853,6 +860,7 @@ const ParetoChart = ({
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                 {FILTER_TABS.map((tab) => (
                     <button
+                        type="button"
                         key={tab.key}
                         onClick={() => handleFilter(tab.key)}
                         style={{
@@ -887,7 +895,7 @@ const ParetoChart = ({
                 // el espacio del navbar + heading + toolbar (mismo offset que
                 // DespachoView). En pantallas altas crece hasta el offset, en
                 // laptops se comprime y scrollea internamente.
-                maxHeight="calc(100vh - 224px)"
+                maxHeight={compact ? 260 : 'calc(100vh - 224px)'}
                 loading={loading}
                 sorting={sorting}
                 pagination={{
@@ -905,7 +913,13 @@ const ParetoChart = ({
                 }}
             />
             {newProductsTable && (
-                <NewProductsTable products={newProducts} cfg={cfg} table={newProductsTable} loading={loading} />
+                <NewProductsTable
+                    products={newProducts}
+                    cfg={cfg}
+                    table={newProductsTable}
+                    loading={loading}
+                    compact={compact}
+                />
             )}
         </div>
     );

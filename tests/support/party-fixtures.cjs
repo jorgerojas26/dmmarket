@@ -4,14 +4,17 @@ async function seedParties(db) {
       throw new Error("El esquema no pertenece al fixture de directorios.");
     return;
   }
-  await db.schema.createTable("rutas", (table) => {
-    table.engine("InnoDB");
-    table.charset("utf8");
-    table.collate("utf8_bin");
-    table.string("Id_Ruta", 32).primary();
-    table.string("Nombre", 64);
-  });
-  await db("rutas").insert({ Id_Ruta: "R", Nombre: "Ruta sintética" });
+  if (!(await db.schema.hasTable("rutas"))) {
+    await db.schema.createTable("rutas", (table) => {
+      table.engine("InnoDB");
+      table.charset("utf8");
+      table.collate("utf8_bin");
+      table.string("Id_Ruta", 32).primary();
+      table.string("Nombre", 64);
+    });
+  }
+  if (!(await db("rutas").where("Id_Ruta", "R").first()))
+    await db("rutas").insert({ Id_Ruta: "R", Nombre: "Ruta sintética" });
   await db.schema.alterTable("vendedores", (table) => {
     table.string("Rif", 64);
     table.string("Ci", 64);

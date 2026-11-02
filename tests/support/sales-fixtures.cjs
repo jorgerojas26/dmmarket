@@ -73,6 +73,17 @@ async function seedSales(db) {
       define(table);
     });
   }
+  if (!(await db.schema.hasTable("rutas"))) {
+    await db.schema.createTable("rutas", (table) => {
+      table.engine("InnoDB");
+      table.charset("utf8");
+      table.collate("utf8_bin");
+      table.string("Id_Ruta", 32).primary();
+      table.string("Nombre", 64);
+    });
+  }
+  if (!(await db("rutas").where("Id_Ruta", "R").first()))
+    await db("rutas").insert({ Id_Ruta: "R", Nombre: "Ruta sintética" });
   for (const seller of [
     { idVend: "A", Empresa: "Vendedor A" },
     { idVend: "B", Empresa: "Vendedor B" },

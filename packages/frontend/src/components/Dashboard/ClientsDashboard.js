@@ -456,6 +456,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                             )}
                         </div>
                         <ParetoChart
+                            compact
                             key={paretoMode}
                             products={paretoDataset.clients}
                             summary={paretoDataset.summary}

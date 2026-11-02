@@ -226,6 +226,7 @@ const PurchasesDashboard = ({ dateRange }) => {
                 <div className="row g-3 mb-4">
                     <div className="col-12">
                         <ParetoChart
+                            compact
                             products={paretoData?.products || []}
                             summary={paretoData?.summary || null}
                             loading={paretoLoading}

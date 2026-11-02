@@ -530,6 +530,33 @@ async function dashboard(transaction, access, query) {
       ...(financial ? { netProfit: profit === null ? null : roundAmount(profit) } : {}),
     };
   });
+  const clientRoutes = await lookupNames(
+    transaction,
+    "clientes",
+    "IdCliente",
+    "Ruta",
+    invoices.map((row) => row.clientId),
+  );
+  const routeNames = await lookupNames(transaction, "rutas", "Id_Ruta", "Nombre", [...clientRoutes.values()]);
+  const routes = new Map();
+  for (const row of invoices) {
+    const routeId = clientRoutes.get(exactKey(row.clientId));
+    const name = routeNames.get(exactKey(routeId));
+    if (routeId == null || String(routeId).trim() === "" || !name) continue;
+    const key = exactKey(routeId);
+    const entry = routes.get(key) || { id: key, name, sales: 0, profit: 0 };
+    entry.sales += Number(row.amount || 0);
+    if (financial) entry.profit += Number(row.profit || 0);
+    routes.set(key, entry);
+  }
+  const routeSalesChart = [...routes.values()]
+    .sort((first, second) => second.sales - first.sales || first.name.localeCompare(second.name))
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      sales: roundAmount(row.sales),
+      ...(financial ? { profit: roundAmount(row.profit) } : {}),
+    }));
   const groups = groupRows(products, "groupId")
     .map((rows) => {
       const groupId = rows[0].groupId;
@@ -570,6 +597,7 @@ async function dashboard(transaction, access, query) {
       )
       .slice(0, 30),
     groupSalesChart: groups,
+    routeSalesChart,
   };
 }
 
