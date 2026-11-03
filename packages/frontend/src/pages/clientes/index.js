@@ -32,7 +32,7 @@ const ClientesPage = ({ onLogout, logoutError }) => {
     const initialView = urlView || availableViews[0];
 
     const [dateRange, setDateRange] = useState({
-        from: searchParams.get('from') || DateTime.now().startOf('month').toISODate(),
+        from: searchParams.get('from') || DateTime.now().startOf('year').toISODate(),
         to: searchParams.get('to') || DateTime.now().toISODate(),
     });
     const [desgloseDateRange, setDesgloseDateRange] = useState({

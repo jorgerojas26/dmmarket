@@ -17,9 +17,13 @@ function bounded(rows, limit) {
 }
 
 function abc(rows, field, percentKey) {
+  const contribution = (row) => {
+    const value = Number(row[field]);
+    return field === "utilidad" ? Math.max(value, 0) : value;
+  };
   const sorted = [...rows].sort((a, b) => b[field] - a[field] || key(a.clientId).localeCompare(key(b.clientId)));
-  const total = sum(sorted, field);
-  const valid = total > 0 && sorted.every((row) => row[field] >= 0);
+  const total = sorted.reduce((sum, row) => sum + contribution(row), 0);
+  const valid = total > 0 && sorted.every((row) => contribution(row) >= 0);
   let cumulative = 0;
   const classes = {
     A: { count: 0, [percentKey]: valid || !rows.length ? 0 : null },
@@ -27,12 +31,13 @@ function abc(rows, field, percentKey) {
     C: { count: 0, [percentKey]: valid || !rows.length ? 0 : null },
   };
   const clients = sorted.map((row, index) => {
-    cumulative += row[field];
-    const percentage = valid ? (cumulative / total) * 100 : null;
+    const value = contribution(row);
+    cumulative += value;
+    const percentage = valid ? Math.min((cumulative / total) * 100, 100) : null;
     const abcClass = valid ? (percentage <= 80 ? "A" : percentage <= 95 ? "B" : "C") : null;
     if (abcClass) {
       classes[abcClass].count++;
-      classes[abcClass][percentKey] += (row[field] / total) * 100;
+      classes[abcClass][percentKey] += (value / total) * 100;
     }
     return {
       clientId: reportId(row.clientId),

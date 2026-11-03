@@ -78,9 +78,15 @@ function sorted(rows, field, direction = "desc") {
 }
 
 function classify(rows, valueKey) {
-  const total = rows.reduce((sum, row) => sum + row[valueKey], 0);
-  const complete = rows.every((row) => typeof row[valueKey] === "number" && Number.isFinite(row[valueKey]));
-  const valid = complete && total > 0 && rows.every((row) => row[valueKey] >= 0);
+  const contribution = (row) => {
+    const value = row[valueKey];
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    return valueKey === "netProfit" ? Math.max(value, 0) : value;
+  };
+  const contributions = rows.map(contribution);
+  const complete = contributions.every((value) => value !== null);
+  const total = contributions.reduce((sum, value) => sum + (value ?? 0), 0);
+  const valid = complete && total > 0 && contributions.every((value) => value >= 0);
   const cumulativeKey =
     valueKey === "netProfit"
       ? "cumulativeProfit"
@@ -97,12 +103,13 @@ function classify(rows, valueKey) {
   };
   let cumulative = 0;
   const products = sorted(rows, valueKey).map((row, index) => {
-    cumulative += row[valueKey];
-    const percent = valid ? (cumulative / total) * 100 : null;
+    const value = contribution(row);
+    if (value !== null) cumulative += value;
+    const percent = valid ? Math.min((cumulative / total) * 100, 100) : null;
     const abcClass = valid ? (percent <= 80 ? "A" : percent <= 95 ? "B" : "C") : null;
     if (abcClass) {
       summary[`class${abcClass}`].count++;
-      summary[`class${abcClass}`][percentKey] += (row[valueKey] / total) * 100;
+      summary[`class${abcClass}`][percentKey] += ((value ?? 0) / total) * 100;
     }
     return {
       ...row,

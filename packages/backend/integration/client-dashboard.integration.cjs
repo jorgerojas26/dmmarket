@@ -200,6 +200,47 @@ test("collation insensible no amplía actividad ni retención o clasificación p
   expect(result.body.kpis.retention.prevPeriodRevenue).toBe(10);
 });
 
+test("la utilidad negativa entra en la clase C sin invalidar el Pareto de clientes", async () => {
+  await environment.db("clientes").insert([
+    { IdCliente: "CA", Empresa: "Cliente A", Ruta: "R" },
+    { IdCliente: "CZ", Empresa: "Cliente Z", Ruta: "R" },
+    { IdCliente: "CN", Empresa: "Cliente con pérdida", Ruta: "R" },
+  ]);
+  await environment.db("masterfact").insert([
+    { IdFactura: "abc-z", IdVend: "A", IdCliente: "CZ", Fecha: "2026-07-02", Anulada: false },
+    { IdFactura: "abc-a", IdVend: "A", IdCliente: "CA", Fecha: "2026-07-02", Anulada: false },
+    { IdFactura: "abc-c", IdVend: "A", IdCliente: "C", Fecha: "2026-07-02", Anulada: false },
+    { IdFactura: "abc-n", IdVend: "A", IdCliente: "CN", Fecha: "2026-07-02", Anulada: false },
+  ]);
+  await environment.db("slavefact").insert([
+    { IdFactura: "abc-z", IdProducto: "P", Precio: 900, Costo: 100, Cantidad: 1 },
+    { IdFactura: "abc-a", IdProducto: "P", Precio: 260, Costo: 60, Cantidad: 1 },
+    { IdFactura: "abc-c", IdProducto: "P", Precio: 120, Costo: 40, Cantidad: 1 },
+    { IdFactura: "abc-n", IdProducto: "P", Precio: 10, Costo: 30, Cantidad: 1 },
+  ]);
+  const client = await reader([
+    grant("clients.read"),
+    grant("sales.read", "assigned"),
+    grant("sales.financial", "assigned"),
+  ]);
+  const result = await client.request("/api/clients/dashboard?from=2026-07-01&to=2026-07-31");
+  expect(result.status).toBe(200);
+  expect(
+    result.body.abcUtility.clients.map((row) => [row.clientId, row.utilidad, row.cumulativePercent, row.abcClass]),
+  ).toEqual([
+    ["CZ", 800, 74.07, "A"],
+    ["CA", 200, 92.59, "B"],
+    ["C", 80, 100, "C"],
+    ["CN", -20, 100, "C"],
+  ]);
+  expect(result.body.abcUtility.summary).toMatchObject({
+    totalClients: 4,
+    classA: { count: 1, utilityPercent: 74.07 },
+    classB: { count: 1, utilityPercent: 18.52 },
+    classC: { count: 2, utilityPercent: 7.41 },
+  });
+});
+
 test("el catálogo excesivo no produce una clasificación truncada", async () => {
   await environment
     .db("clientes")

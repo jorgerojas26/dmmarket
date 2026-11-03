@@ -1,15 +1,15 @@
 import { ResponsiveBar } from '@nivo/bar';
 import ChartTooltip from 'components/ChartTooltip';
 import Table from 'components/Table';
-import PanelHelpTitle from './PanelHelpTitle';
 import { CurrencyRateContext } from 'context/currency_rate';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
 import Popover from 'react-bootstrap/Popover';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { formatCurrency as money, formatMoney as convertMoney, formatNumber, getReportCurrency } from 'utils/format';
+import { formatMoney as convertMoney, formatNumber, getReportCurrency, formatCurrency as money } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
+import PanelHelpTitle from './PanelHelpTitle';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
@@ -531,16 +531,21 @@ const ParetoChart = ({
     }, [products]);
 
     /* ---- chart data: top N + "Resto" bar ---- */
-    const chartData = useMemo(() => {
-        if (
-            !products.length ||
-            products.some(
-                (row) => row[cfg.valueKey] == null || Number(row[cfg.valueKey]) < 0 || row.cumulativePercent == null,
-            )
-        )
-            return [];
-        const topN = products.slice(0, CHART_TOP_N);
-        const rest = products.slice(CHART_TOP_N);
+    const { chartData, chartMessage } = useMemo(() => {
+        if (!products.length) return { chartData: [], chartMessage: '' };
+        if (products.some((row) => row[cfg.valueKey] == null || row.cumulativePercent == null))
+            return {
+                chartData: [],
+                chartMessage: 'Hay importes negativos o desconocidos en el periodo; el Pareto no está disponible.',
+            };
+        const positive = products.filter((row) => Number(row[cfg.valueKey]) > 0);
+        if (!positive.length)
+            return {
+                chartData: [],
+                chartMessage: `Sin valores positivos de ${cfg.valueLabel.toLowerCase()} en el periodo seleccionado.`,
+            };
+        const topN = positive.slice(0, CHART_TOP_N);
+        const rest = positive.slice(CHART_TOP_N);
         const restProfit = rest.reduce((s, p) => s + Number(p[cfg.valueKey] || 0), 0);
 
         const rows = topN.map((p) => ({
@@ -556,8 +561,8 @@ const ParetoChart = ({
                 cumulativePercent: 100,
             });
         }
-        return rows;
-    }, [products, cfg.nameKey, cfg.valueKey]);
+        return { chartData: rows, chartMessage: '' };
+    }, [products, cfg.nameKey, cfg.valueKey, cfg.valueLabel]);
 
     /* ---- filtered + paginated table data ---- */
     const filteredProducts = useMemo(() => {
@@ -565,6 +570,10 @@ const ParetoChart = ({
         return products.filter((p) => p.abcClass === abcFilter);
     }, [products, abcFilter]);
 
+    const negativeCount = products.filter((row) => row[cfg.valueKey] != null && Number(row[cfg.valueKey]) < 0).length;
+    const negativeNote = negativeCount
+        ? `${negativeCount} ${cfg.entityLabel.toLowerCase()}${negativeCount === 1 ? '' : 's'} con ${cfg.valueLabel.toLowerCase()} negativa${negativeCount === 1 ? '' : 's'} no suma${negativeCount === 1 ? '' : 'n'} al acumulado y queda${negativeCount === 1 ? '' : 'n'} en la clase C.`
+        : '';
     const inventoryTotal = cfg.inventoryValueKey ? inventorySum(filteredProducts, cfg.inventoryValueKey) : 0;
     const pageCount = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
     const tableData = useMemo(
@@ -728,73 +737,82 @@ const ParetoChart = ({
 
             {/* ── Pareto Chart ── */}
             <div style={{ height: compact ? 260 : 380, marginBottom: compact ? 6 : 12 }}>
-                <ResponsiveBar
-                    data={chartData}
-                    keys={['netProfit']}
-                    indexBy="product"
-                    margin={{ top: 10, right: 52, bottom: 90, left: 70 }}
-                    padding={0.15}
-                    valueScale={{ type: 'linear' }}
-                    colors={({ index }) => {
-                        const cp = chartData[index]?.cumulativePercent ?? 100;
-                        return cp <= 80 ? '#22c55e' : cp <= 95 ? '#f59e0b' : '#ef4444';
-                    }}
-                    borderRadius={2}
-                    axisBottom={{
-                        tickSize: 0,
-                        tickPadding: 6,
-                        tickRotation: -50,
-                        format: (v) => (v.length > 16 ? `${v.slice(0, 15)}…` : v),
-                        legend: cfg.axisLegend,
-                        legendPosition: 'middle',
-                        legendOffset: 78,
-                    }}
-                    axisLeft={{
-                        tickSize: 0,
-                        tickPadding: 8,
-                        format: (v) =>
-                            v >= 1000 ? `${getReportCurrency()} ${(v / 1000).toFixed(0)}k` : formatCurrency(v),
-                        legend: cfg.valueAxisLabel,
-                        legendPosition: 'middle',
-                        legendOffset: -55,
-                    }}
-                    enableGridY={true}
-                    gridYValues={5}
-                    labelSkipWidth={20}
-                    labelSkipHeight={20}
-                    layers={[
-                        'grid',
-                        'axes',
-                        'bars',
-                        (layerProps) => <CumulativeLine {...layerProps} data={chartData} />,
-                        'markers',
-                        'legends',
-                    ]}
-                    tooltip={({ indexValue, value }) => {
-                        const item = chartData.find((c) => c.product === indexValue);
-                        return (
-                            <ChartTooltip title={indexValue}>
-                                <span>{cfg.valueLabel}</span>
-                                <strong>{formatCurrency(value)}</strong>
-                                {item && (
-                                    <>
-                                        <span>% Acumulado</span>
-                                        <strong>{item.cumulativePercent}%</strong>
-                                    </>
-                                )}
-                            </ChartTooltip>
-                        );
-                    }}
-                    theme={{
-                        text: { fill: '#e4e6ea', fontSize: 11 },
-                        axis: {
-                            legend: {
-                                text: { fill: '#e4e6ea', fontSize: 12 },
+                {chartData.length ? (
+                    <ResponsiveBar
+                        data={chartData}
+                        keys={['netProfit']}
+                        indexBy="product"
+                        margin={{ top: 10, right: 52, bottom: 90, left: 70 }}
+                        padding={0.15}
+                        valueScale={{ type: 'linear' }}
+                        colors={({ index }) => {
+                            const cp = chartData[index]?.cumulativePercent ?? 100;
+                            return cp <= 80 ? '#22c55e' : cp <= 95 ? '#f59e0b' : '#ef4444';
+                        }}
+                        borderRadius={2}
+                        axisBottom={{
+                            tickSize: 0,
+                            tickPadding: 6,
+                            tickRotation: -50,
+                            format: (v) => (v.length > 16 ? `${v.slice(0, 15)}…` : v),
+                            legend: cfg.axisLegend,
+                            legendPosition: 'middle',
+                            legendOffset: 78,
+                        }}
+                        axisLeft={{
+                            tickSize: 0,
+                            tickPadding: 8,
+                            format: (v) =>
+                                v >= 1000 ? `${getReportCurrency()} ${(v / 1000).toFixed(0)}k` : formatCurrency(v),
+                            legend: cfg.valueAxisLabel,
+                            legendPosition: 'middle',
+                            legendOffset: -55,
+                        }}
+                        enableGridY={true}
+                        gridYValues={5}
+                        labelSkipWidth={20}
+                        labelSkipHeight={20}
+                        layers={[
+                            'grid',
+                            'axes',
+                            'bars',
+                            (layerProps) => <CumulativeLine {...layerProps} data={chartData} />,
+                            'markers',
+                            'legends',
+                        ]}
+                        tooltip={({ indexValue, value }) => {
+                            const item = chartData.find((c) => c.product === indexValue);
+                            return (
+                                <ChartTooltip title={indexValue}>
+                                    <span>{cfg.valueLabel}</span>
+                                    <strong>{formatCurrency(value)}</strong>
+                                    {item && (
+                                        <>
+                                            <span>% Acumulado</span>
+                                            <strong>{item.cumulativePercent}%</strong>
+                                        </>
+                                    )}
+                                </ChartTooltip>
+                            );
+                        }}
+                        theme={{
+                            text: { fill: '#e4e6ea', fontSize: 11 },
+                            axis: {
+                                legend: {
+                                    text: { fill: '#e4e6ea', fontSize: 12 },
+                                },
                             },
-                        },
-                        grid: { line: { stroke: 'rgba(255,255,255,0.06)' } },
-                    }}
-                />
+                            grid: { line: { stroke: 'rgba(255,255,255,0.06)' } },
+                        }}
+                    />
+                ) : (
+                    <div
+                        className="ranked-empty"
+                        style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center' }}
+                    >
+                        {chartMessage}
+                    </div>
+                )}
             </div>
 
             {/* ── Legend ── */}
@@ -855,6 +873,11 @@ const ParetoChart = ({
                     % Acumulado
                 </span>
             </div>
+            {chartData.length > 0 && negativeNote && (
+                <p className="text-muted small" style={{ margin: '0 0 12px', fontSize: 12 }}>
+                    {negativeNote}
+                </p>
+            )}
 
             {/* ── Filter tabs + Table ── */}
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>

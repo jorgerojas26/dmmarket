@@ -169,6 +169,46 @@ test("productos sin compra en el período no ingresan y ventas ajenas excluyen c
   ).toEqual(["S"]);
 });
 
+test("la ganancia negativa entra en la clase C sin invalidar el Pareto de ventas", async () => {
+  await environment.db("mastercomp").insert([
+    { IdFactura: "pareto-margin-old", Fecha: "2026-01-01", Anulada: false },
+    { IdFactura: "pareto-margin", Fecha: "2027-05-10", Anulada: false },
+  ]);
+  await environment.db("slavecomp").insert(
+    ["V1", "V2", "V3", "V4"].flatMap((IdProducto) => [
+      { IdFactura: "pareto-margin-old", IdProducto, Precio: 1, Cantidad: 1 },
+      { IdFactura: "pareto-margin", IdProducto, Precio: 1, Cantidad: 1 },
+    ]),
+  );
+  await environment
+    .db("masterfact")
+    .insert({ IdFactura: "pareto-margin", IdVend: "A", IdCliente: "C", Fecha: "2027-05-10", Anulada: false });
+  await environment.db("slavefact").insert([
+    { IdFactura: "pareto-margin", IdProducto: "V1", Precio: 61, Costo: 1, Cantidad: 1 },
+    { IdFactura: "pareto-margin", IdProducto: "V2", Precio: 31, Costo: 1, Cantidad: 1 },
+    { IdFactura: "pareto-margin", IdProducto: "V3", Precio: 11, Costo: 1, Cantidad: 1 },
+    { IdFactura: "pareto-margin", IdProducto: "V4", Precio: 5, Costo: 25, Cantidad: 1 },
+  ]);
+  const client = await reader([grant("sales.read"), grant("purchases.read"), grant("sales.financial")]);
+  const result = await client.request("/api/dashboard/pareto?from=2027-05-01&to=2027-05-31");
+  expect(result.status).toBe(200);
+  expect(result.body.valueKey).toBe("netProfit");
+  expect(
+    result.body.products.map((row) => [row.productId, row.netProfit, row.cumulativePercent, row.abcClass]),
+  ).toEqual([
+    ["V1", 60, 60, "A"],
+    ["V2", 30, 90, "B"],
+    ["V3", 10, 100, "C"],
+    ["V4", -20, 100, "C"],
+  ]);
+  expect(result.body.summary).toMatchObject({
+    totalProducts: 4,
+    classA: { count: 1, profitPercent: 60 },
+    classB: { count: 1, profitPercent: 30 },
+    classC: { count: 2, profitPercent: 10 },
+  });
+});
+
 test("importes desconocidos o negativos no inventan acumulados, porcentajes ni clases", async () => {
   for (const id of ["N", "M"])
     await environment.db("slavecomp").insert([
