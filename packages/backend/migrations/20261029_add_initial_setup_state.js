@@ -1,4 +1,4 @@
-exports.config = { transaction: false };
+exports.config = { transaction: false, scope: "dmmarket" };
 
 exports.up = async (db) => {
   if (!(await db.schema.hasTable("dmmarket_auth_control")))

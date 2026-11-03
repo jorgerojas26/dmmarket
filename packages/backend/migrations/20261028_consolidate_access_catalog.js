@@ -1,6 +1,6 @@
 const { randomUUID } = require("node:crypto");
 
-exports.config = { transaction: false };
+exports.config = { transaction: false, scope: "dmmarket" };
 
 const retired = ["sales.costs", "sales.profit", "providers.personal"];
 const tables = [

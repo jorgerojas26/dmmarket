@@ -1,4 +1,4 @@
-exports.config = { transaction: false };
+exports.config = { transaction: false, scope: "dmmarket" };
 
 const definitions = [
   [
