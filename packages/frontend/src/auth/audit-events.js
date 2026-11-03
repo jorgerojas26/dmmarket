@@ -40,6 +40,8 @@ export const auditActivities = [
             'auth.user_roles_changed': 'Roles del usuario actualizados',
             'auth.user_sellers_changed': 'Vendedores vinculados actualizados',
             'auth.commercial_profile_changed': 'Perfil comercial actualizado',
+            'auth.user_mfa_policy_changed': 'Exigencia de MFA de la cuenta actualizada',
+            'auth.user_mfa_reset': 'Autenticador MFA restablecido',
             'auth.commercial_identity_migrated': 'Identidades comerciales migradas',
         },
     },

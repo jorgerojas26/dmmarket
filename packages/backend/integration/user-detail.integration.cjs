@@ -18,6 +18,8 @@ test("el detalle obtiene una cuenta por ID sin exponer credenciales ni depender 
     "display_name",
     "enabled",
     "id",
+    "mfa_enabled",
+    "mfa_required",
     "must_change_password",
     "temporary_expires_ms",
     "username",

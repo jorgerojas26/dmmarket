@@ -318,6 +318,16 @@ function createAuthRouter({ sessions, accounts, administration, security }) {
       ),
     ),
   );
+  router.put(
+    "/users/:id/mfa",
+    handler(async (req, res) =>
+      res.json(await accounts.setMfaRequirement(req.sessionID, req.params.id, req.body.required)),
+    ),
+  );
+  router.post(
+    "/users/:id/mfa/reset",
+    handler(async (req, res) => res.json(await accounts.resetMfa(req.sessionID, req.params.id))),
+  );
   return router;
 }
 

@@ -223,6 +223,36 @@ async function createAccountService({ db, sessions, now = Date.now }) {
         reset(connection, await targetUser(connection, id), actorId, resetMfa, null),
       );
     },
+    async setMfaRequirement(sid, id, required) {
+      if (typeof required !== "boolean") fail(400, "La exigencia de MFA no es válida.");
+      return administrator(sid, "access.users.update", async (connection, actorId) => {
+        const user = await targetUser(connection, id);
+        if (id === actorId) fail(409, "Administra tu propio MFA desde Mi cuenta.");
+        if (Boolean(user.mfa_required) === required)
+          return { id, mfaRequired: required, mfaEnabled: Boolean(user.mfa_secret) };
+        await connection("dmmarket_auth_users").where("id", id).update({ mfa_required: required });
+        await invalidateUser(connection, id, time(), "mfa-policy-changed");
+        await audit(
+          connection,
+          actorId,
+          id,
+          "auth.user_mfa_policy_changed",
+          required ? "Se exigió MFA a la cuenta." : "Se dejó de exigir MFA a la cuenta.",
+        );
+        return { id, mfaRequired: required, mfaEnabled: Boolean(user.mfa_secret) };
+      });
+    },
+    async resetMfa(sid, id) {
+      return administrator(sid, "access.recovery.execute", async (connection, actorId) => {
+        const user = await targetUser(connection, id);
+        if (id === actorId) fail(409, "Administra tu propio MFA desde Mi cuenta.");
+        if (!user.mfa_secret) fail(409, "La cuenta no tiene un autenticador configurado.");
+        await connection("dmmarket_auth_users").where("id", id).update({ mfa_secret: null, mfa_last_step: null });
+        await invalidateUser(connection, id, time(), "mfa-reset");
+        await audit(connection, actorId, id, "auth.user_mfa_reset", "Se restableció el autenticador MFA de la cuenta.");
+        return { id, mfaRequired: Boolean(user.mfa_required), mfaEnabled: false };
+      });
+    },
     async recoverLocally({ mode, username, displayName, reason }) {
       if (!["bootstrap", "recover"].includes(mode)) fail(400, "El modo de recuperación no es válido.");
       const motive = validateReason(reason);

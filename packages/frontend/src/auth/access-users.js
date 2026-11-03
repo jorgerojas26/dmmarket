@@ -14,6 +14,7 @@ import { AccessDialog, LoadState, ManagementForm, Pagination, useDiscardChanges 
 import { CommercialIdentity, SellerSelect } from './commercial-profile';
 import { useAuth } from './context';
 import { Field } from './forms';
+import MfaConfiguration from './mfa-configuration';
 import { authRequest } from './transport';
 import UserTimeline from './user-timeline';
 
@@ -371,10 +372,11 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
     const heading = useRef(null);
     const [accessDirty, setAccessDirty] = useState(false);
     const [profileDirty, setProfileDirty] = useState(false);
+    const [mfaDirty, setMfaDirty] = useState(false);
     const [busy, setBusy] = useState(false);
     const [operation, setOperation] = useState(null);
     const [revision, setRevision] = useState(0);
-    const dirty = accessDirty || profileDirty;
+    const dirty = accessDirty || profileDirty || mfaDirty;
     const { requestClose, confirmation } = useDiscardChanges(dirty);
     const changeBusy = (value) => {
         setBusy(value);
@@ -385,6 +387,7 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
             setRevision((value) => value + 1);
             setAccessDirty(false);
             setProfileDirty(false);
+            setMfaDirty(false);
             setOperation(next);
         });
     useEffect(() => {
@@ -474,6 +477,12 @@ function UserDetail({ user, onClose, onDone, onDirtyChange, onBusyChange, messag
                     </p>
                 )}
                 {can('audit.read') && <UserTimeline user={user} />}
+                <MfaConfiguration
+                    key={user.id}
+                    user={user}
+                    disabled={busy || Boolean(operation)}
+                    onDirtyChange={setMfaDirty}
+                />
                 <fieldset disabled={busy || Boolean(operation)}>
                     <Assignments key={revision} id={user.id} onDirtyChange={setAccessDirty} onBusyChange={changeBusy} />
                 </fieldset>

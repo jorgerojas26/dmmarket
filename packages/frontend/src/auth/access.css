@@ -1792,6 +1792,193 @@
     overflow: hidden;
 }
 
+.access-user-mfa .access-section-head {
+    flex-wrap: wrap;
+}
+
+.access-user-mfa .access-section-head .access-status {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.access-user-mfa-form {
+    margin: 16px 22px 18px;
+}
+
+.access-user-mfa-panel {
+    border: 1px solid #2d3138;
+    border-radius: 10px;
+    background: #1b1e23;
+    overflow: hidden;
+}
+
+.access-user-mfa-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    padding: 15px 18px;
+}
+
+.access-user-mfa-row + .access-user-mfa-row {
+    border-top: 1px solid #262b33;
+}
+
+.access-user-mfa-copy {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+
+.access-user-mfa-label {
+    display: block;
+    color: #e4e6ea;
+    font-size: 14px;
+    font-weight: 550;
+}
+
+label.access-user-mfa-label {
+    cursor: pointer;
+}
+
+.access-user-mfa-row.is-readonly label.access-user-mfa-label {
+    cursor: default;
+}
+
+.access-user-mfa-copy p {
+    margin: 3px 0 0;
+    max-width: 62ch;
+    color: #a3adbb;
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.access-user-mfa-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    margin-left: auto;
+    cursor: pointer;
+}
+
+.access-user-mfa-switch input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 42px;
+    height: 24px;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.access-user-mfa-toggle {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    border: 1px solid #3a424d;
+    border-radius: 999px;
+    background: #262d36;
+    transition:
+        background 160ms ease,
+        border-color 160ms ease;
+}
+
+.access-user-mfa-toggle::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #8b95a4;
+    transition:
+        transform 160ms ease,
+        background 160ms ease;
+}
+
+.access-user-mfa-switch input:checked + .access-user-mfa-toggle {
+    border-color: #3b6fb4;
+    background: #1e3a5f;
+}
+
+.access-user-mfa-switch input:checked + .access-user-mfa-toggle::after {
+    transform: translateX(18px);
+    background: #9ec7fc;
+}
+
+.access-user-mfa-switch input:focus-visible + .access-user-mfa-toggle {
+    outline: 2px solid #8dbbfa;
+    outline-offset: 2px;
+}
+
+.access-user-mfa-switch input:disabled + .access-user-mfa-toggle {
+    opacity: 0.5;
+}
+
+.access-user-mfa-switch-label {
+    min-width: 52px;
+    color: #c2cbd8;
+    font-size: 12.5px;
+}
+
+.access-user-mfa-switch input:disabled ~ .access-user-mfa-switch-label {
+    color: #7c8695;
+}
+
+.access-user-mfa-form > .access-error,
+.access-user-mfa-form > .access-success {
+    margin: 12px 0 0;
+}
+
+.access-user-mfa-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #2d3138;
+}
+
+.access-user-mfa-row > .btn {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.access-user-mfa-note {
+    margin: 6px 22px 18px;
+}
+
+.access-user-mfa-readonly {
+    margin: 12px 0 0;
+}
+
+@media (max-width: 767.98px) {
+    .access-user-mfa-form {
+        margin: 14px 16px 16px;
+    }
+
+    .access-user-mfa-row {
+        padding: 14px;
+    }
+
+    .access-user-mfa-note {
+        margin: 6px 16px 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .access-user-mfa-toggle,
+    .access-user-mfa-toggle::after {
+        transition: none;
+    }
+}
+
 .access-timeline .access-section-head {
     padding-bottom: 14px;
 }

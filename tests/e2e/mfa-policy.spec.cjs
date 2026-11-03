@@ -60,3 +60,64 @@ test("Mi cuenta permite activar MFA voluntario sin imponerlo por rol", async ({ 
   await page.getByRole("button", { name: "Confirmar MFA", exact: true }).click();
   await expect(page.getByRole("button", { name: "Desactivar MFA", exact: true })).toBeVisible();
 });
+
+test("el detalle de usuario permite exigir MFA y restablecer el autenticador", async ({ page, environment }) => {
+  const owner = await environment.seedUser({ permissions: ownerPermissions });
+  const target = await environment.seedUser({ permissions: [], enrolled: true });
+  await login(page, environment, owner);
+  await page.goto(`${environment.origin}/acceso/usuarios/${target.id}`);
+  const screen = page.getByRole("region", { name: `Administrar ${target.username}`, exact: true });
+  const mfa = screen.getByRole("region", { name: "Segundo factor (MFA)", exact: true });
+  await expect(mfa.getByText("Protegido", { exact: true })).toBeVisible();
+  const checkbox = mfa.getByRole("checkbox", { name: "Exigir MFA a esta cuenta", exact: true });
+  await expect(checkbox).not.toBeChecked();
+  await checkbox.check();
+  await mfa.getByRole("button", { name: "Guardar MFA", exact: true }).click();
+  await expect(mfa.getByRole("status")).toContainText("exigirá MFA");
+  expect(Boolean((await environment.db("dmmarket_auth_users").where("id", target.id).first()).mfa_required)).toBe(true);
+  await expect(checkbox).toBeChecked();
+  await mfa.getByRole("button", { name: "Restablecer autenticador", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Restablecer autenticador MFA", exact: true });
+  await dialog.getByRole("button", { name: "Restablecer autenticador", exact: true }).click();
+  await expect(mfa.getByRole("status")).toContainText("Autenticador restablecido");
+  await expect(mfa.getByText("Pendiente de configurar", { exact: true })).toBeVisible();
+  const stored = await environment.db("dmmarket_auth_users").where("id", target.id).first();
+  expect(stored.mfa_secret).toBeNull();
+  expect(Boolean(stored.mfa_required)).toBe(true);
+});
+
+test("consultar usuarios sin modificarlos muestra el estado MFA sin controles", async ({ page, environment }) => {
+  const reader = await environment.seedUser({ permissions: [{ capability: "access.users.read" }] });
+  const target = await environment.seedUser({ permissions: [], enrolled: true, mfaRequired: true });
+  await login(page, environment, reader);
+  await page.goto(`${environment.origin}/acceso/usuarios/${target.id}`);
+  const mfa = page.getByRole("region", { name: "Segundo factor (MFA)", exact: true });
+  await expect(mfa.getByText("Protegido", { exact: true })).toBeVisible();
+  await expect(mfa.getByRole("checkbox", { name: "Exigir MFA a esta cuenta", exact: true })).toBeDisabled();
+  await expect(mfa.getByRole("button")).toHaveCount(0);
+  await expect(
+    mfa.getByText("No tienes permiso para modificar la configuración MFA de esta cuenta.", { exact: true }),
+  ).toBeVisible();
+});
+
+test("quien solo recupera cuentas restablece el autenticador sin cambiar la exigencia", async ({
+  page,
+  environment,
+}) => {
+  const recovery = await environment.seedUser({
+    permissions: [{ capability: "access.recovery.read" }, { capability: "access.recovery.execute" }],
+  });
+  const target = await environment.seedUser({ permissions: [], enrolled: true, mfaRequired: true });
+  await login(page, environment, recovery);
+  await page.goto(`${environment.origin}/acceso/usuarios/${target.id}`);
+  const mfa = page.getByRole("region", { name: "Segundo factor (MFA)", exact: true });
+  await expect(mfa.getByRole("checkbox", { name: "Exigir MFA a esta cuenta", exact: true })).toBeDisabled();
+  await expect(mfa.getByRole("button", { name: "Guardar MFA", exact: true })).toHaveCount(0);
+  const reset = mfa.getByRole("button", { name: "Restablecer autenticador", exact: true });
+  await expect(reset).toBeVisible();
+  await reset.click();
+  const dialog = page.getByRole("dialog", { name: "Restablecer autenticador MFA", exact: true });
+  await dialog.getByRole("button", { name: "Restablecer autenticador", exact: true }).click();
+  await expect(mfa.getByRole("status")).toContainText("Autenticador restablecido");
+  expect((await environment.db("dmmarket_auth_users").where("id", target.id).first()).mfa_secret).toBeNull();
+});

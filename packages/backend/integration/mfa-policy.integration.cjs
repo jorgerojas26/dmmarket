@@ -165,3 +165,116 @@ test("migración es idempotente, inicia sin obligación y conserva secretos y se
   expect(await environment.db("dmmarket_auth_users").where("id", user.id).first()).toEqual(before);
   expect(Boolean(before.mfa_required)).toBe(false);
 });
+
+test("el detalle de usuario informa la configuración MFA sin exponer el secreto", async () => {
+  const owner = await environment.seedUser({ permissions: [{ capability: "access.users.read" }] });
+  const client = await signIn(owner);
+  const enrolled = await environment.seedUser({ permissions: [], enrolled: true, mfaRequired: true });
+  const plain = await environment.seedUser({ permissions: [] });
+  const detail = await client.request(`/api/auth/users/${enrolled.id}`);
+  expect(detail.status).toBe(200);
+  expect(detail.body).toMatchObject({ mfa_required: true, mfa_enabled: true });
+  expect(detail.body.mfa_secret).toBeUndefined();
+  expect((await client.request(`/api/auth/users/${plain.id}`)).body).toMatchObject({
+    mfa_required: false,
+    mfa_enabled: false,
+  });
+});
+
+test("exigir MFA revoca las sesiones de la cuenta y el siguiente ingreso pide enrolamiento", async () => {
+  const owner = await environment.seedUser({
+    permissions: [{ capability: "access.users.read" }, { capability: "access.users.update" }],
+  });
+  const client = await signIn(owner);
+  const target = await environment.seedUser({ permissions: [] });
+  const before = await environment.db("dmmarket_auth_users").where("id", target.id).first();
+  const changed = await client.request(`/api/auth/users/${target.id}/mfa`, {
+    method: "PUT",
+    body: { required: true },
+  });
+  expect(changed.status).toBe(200);
+  expect(changed.body).toEqual({ id: target.id, mfaRequired: true, mfaEnabled: false });
+  const stored = await environment.db("dmmarket_auth_users").where("id", target.id).first();
+  expect(Boolean(stored.mfa_required)).toBe(true);
+  expect(stored.session_version).toBe(before.session_version + 1);
+  expect(
+    await environment.db("dmmarket_auth_events").where({
+      target_user_id: target.id,
+      action: "auth.user_mfa_policy_changed",
+    }),
+  ).toHaveLength(1);
+  const targetClient = environment.client();
+  expect((await targetClient.login(target)).body.stage).toBe("mfa-enrollment");
+});
+
+test("la política MFA rechaza valores inválidos y la propia cuenta", async () => {
+  const owner = await environment.seedUser({
+    permissions: [
+      { capability: "access.users.read" },
+      { capability: "access.users.update" },
+      { capability: "access.recovery.read" },
+      { capability: "access.recovery.execute" },
+    ],
+  });
+  const client = await signIn(owner);
+  const target = await environment.seedUser({ permissions: [] });
+  for (const required of ["true", 1, null]) {
+    expect(
+      (await client.request(`/api/auth/users/${target.id}/mfa`, { method: "PUT", body: { required } })).status,
+    ).toBe(400);
+  }
+  expect(
+    (await client.request(`/api/auth/users/${owner.id}/mfa`, { method: "PUT", body: { required: true } })).status,
+  ).toBe(409);
+  expect((await client.request(`/api/auth/users/${owner.id}/mfa/reset`, { method: "POST", body: {} })).status).toBe(
+    409,
+  );
+  expect(Boolean((await environment.db("dmmarket_auth_users").where("id", target.id).first()).mfa_required)).toBe(
+    false,
+  );
+});
+
+test("restablecer el autenticador exige recuperación y revoca las sesiones sin cambiar la contraseña", async () => {
+  const recovery = await environment.seedUser({
+    permissions: [{ capability: "access.recovery.read" }, { capability: "access.recovery.execute" }],
+  });
+  const client = await signIn(recovery);
+  const target = await environment.seedUser({ permissions: [], enrolled: true, mfaRequired: true });
+  const before = await environment.db("dmmarket_auth_users").where("id", target.id).first();
+  const reset = await client.request(`/api/auth/users/${target.id}/mfa/reset`, { method: "POST", body: {} });
+  expect(reset.status).toBe(200);
+  expect(reset.body).toEqual({ id: target.id, mfaRequired: true, mfaEnabled: false });
+  const stored = await environment.db("dmmarket_auth_users").where("id", target.id).first();
+  expect(stored.mfa_secret).toBeNull();
+  expect(stored.mfa_last_step).toBeNull();
+  expect(stored.password_hash).toBe(before.password_hash);
+  expect(stored.session_version).toBe(before.session_version + 1);
+  expect(
+    await environment.db("dmmarket_auth_events").where({ target_user_id: target.id, action: "auth.user_mfa_reset" }),
+  ).toHaveLength(1);
+  expect((await client.request(`/api/auth/users/${target.id}/mfa/reset`, { method: "POST", body: {} })).status).toBe(
+    409,
+  );
+});
+
+test("cambiar la configuración MFA exige el permiso de cada operación", async () => {
+  const reader = await environment.seedUser({
+    permissions: [{ capability: "access.users.read" }, { capability: "access.recovery.read" }],
+  });
+  const client = await signIn(reader);
+  const target = await environment.seedUser({ permissions: [], enrolled: true });
+  expect(
+    (await client.request(`/api/auth/users/${target.id}/mfa`, { method: "PUT", body: { required: true } })).status,
+  ).toBe(403);
+  expect((await client.request(`/api/auth/users/${target.id}/mfa/reset`, { method: "POST", body: {} })).status).toBe(
+    403,
+  );
+  expect((await environment.db("dmmarket_auth_users").where("id", target.id).first()).mfa_secret).not.toBeNull();
+  const updater = await environment.seedUser({
+    permissions: [{ capability: "access.users.read" }, { capability: "access.users.update" }],
+  });
+  const limited = await signIn(updater);
+  expect((await limited.request(`/api/auth/users/${target.id}/mfa/reset`, { method: "POST", body: {} })).status).toBe(
+    403,
+  );
+});

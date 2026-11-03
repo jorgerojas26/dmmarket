@@ -28,10 +28,20 @@ function createAccessDirectory(sessions) {
         if (!directoryCapabilities.some((key) => access.hasGlobal(key))) forbidden();
         const user = await transaction("dmmarket_auth_users")
           .where("id", id)
-          .select("id", "username", "display_name", "enabled", "must_change_password", "temporary_expires_ms")
+          .select(
+            "id",
+            "username",
+            "display_name",
+            "enabled",
+            "must_change_password",
+            "temporary_expires_ms",
+            "mfa_required",
+            "mfa_secret",
+          )
           .first();
         if (!user) throw Object.assign(new Error("La cuenta no está disponible."), { status: 404 });
-        return user;
+        const { mfa_secret: secret, ...account } = user;
+        return { ...account, mfa_required: Number(account.mfa_required) === 1, mfa_enabled: Boolean(secret) };
       });
     },
     users(sid, query) {
