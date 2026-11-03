@@ -1,3 +1,5 @@
+import { fetcher } from 'swr-config';
+
 const BASE_URL = '/api/sales';
 
 export const fetchFacturas = async ({
@@ -30,8 +32,7 @@ export const fetchFacturas = async ({
     if (proveedorId) params.append('proveedorId', proveedorId);
     if (search) params.append('search', search);
 
-    const response = await fetch(`${BASE_URL}/facturas?${params.toString()}`);
-    return response.json();
+    return fetcher(`${BASE_URL}/facturas?${params.toString()}`);
 };
 
 export const fetchProductos = async ({
@@ -64,6 +65,14 @@ export const fetchProductos = async ({
     if (proveedorId) params.append('proveedorId', proveedorId);
     if (search) params.append('search', search);
 
-    const response = await fetch(`${BASE_URL}/productos?${params.toString()}`);
-    return response.json();
+    return fetcher(`${BASE_URL}/productos?${params.toString()}`);
 };
+
+export const fetchSalesExport = (parameters) => {
+    const query = new URLSearchParams(
+        Object.entries(parameters).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+    );
+    return fetcher(`/api/exports/sales?${query}`);
+};
+export const fetchInvoiceExport = (id, showNoe) =>
+    fetcher(`/api/exports/sales/${encodeURIComponent(id)}?${new URLSearchParams({ showNoe: String(showNoe) })}`);

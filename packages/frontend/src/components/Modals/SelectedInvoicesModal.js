@@ -1,8 +1,9 @@
+import Modal from 'components/Modal';
 import Table from 'components/Table';
 import dayjs from 'dayjs';
 import { useMemo } from 'react';
-import Modal from 'components/Modal';
 import { Button } from 'react-bootstrap';
+import { formatCurrency } from 'utils/format';
 import './SelectedInvoicesModal.css';
 
 /**
@@ -15,11 +16,11 @@ const SelectedInvoicesModal = ({ show, invoices = [], totalSummary = 0, onRemove
         () => [
             { Header: 'ID', accessor: 'invoiceId' },
             { Header: 'Cliente', accessor: 'client' },
-            { Header: 'RIF', accessor: 'rif' },
+            ...(invoices.some((row) => Object.hasOwn(row, 'rif')) ? [{ Header: 'RIF', accessor: 'rif' }] : []),
             {
                 Header: 'Total',
                 accessor: 'total',
-                Cell: ({ value }) => (value != null ? `$${Number(value).toFixed(2)}` : ''),
+                Cell: ({ value }) => (value != null ? formatCurrency(value) : ''),
             },
             { Header: 'Fecha', accessor: 'createdAt', Cell: ({ value }) => dayjs(value).format('MMM DD, YYYY') },
             {
@@ -51,7 +52,7 @@ const SelectedInvoicesModal = ({ show, invoices = [], totalSummary = 0, onRemove
                 ),
             },
         ],
-        [onRemove],
+        [onRemove, invoices],
     );
     return (
         <Modal show={show} size="lg" onHide={onClose} centered className="selected-invoices-modal">
@@ -69,7 +70,9 @@ const SelectedInvoicesModal = ({ show, invoices = [], totalSummary = 0, onRemove
                 />
             </Modal.Body>
             <Modal.Footer>
-                <span className="si-total">Total: ${totalSummary.toFixed(2)}</span>
+                <span className="si-total">
+                    Total: {totalSummary == null ? 'No disponible' : `$${totalSummary.toFixed(2)}`}
+                </span>
                 {invoices.length > 0 && (
                     <Button variant="outline-danger" size="sm" onClick={onClear}>
                         Limpiar todo

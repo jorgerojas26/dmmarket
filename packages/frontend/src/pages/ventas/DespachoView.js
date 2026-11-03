@@ -2,7 +2,9 @@ import InvoicesTable from 'components/InvoicesTable';
 import SelectedInvoicesModal from 'components/Modals/SelectedInvoicesModal';
 import ProductsTable from 'components/ProductsTable';
 import RouteFilter from 'components/RouteFilter';
-import { fetchInvoiceList } from 'api/invoice';
+import { fetchInvoiceSelection, exportInvoiceSelection } from 'api/invoice';
+import { useAuth } from 'auth/context';
+import useSWR from 'swr';
 import { useInvoiceList } from 'hooks/useInvoice';
 import { useInvoiceDispatch } from 'hooks/useInvoiceDispatch';
 import useMediaQuery from 'hooks/useMediaQuery';
@@ -31,11 +33,25 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     // Independent selection state: accumulates invoices across pages, searches
     // and filter changes. Only explicit user actions ("Limpiar selección" or
     // removing one invoice from the modal) modify it.
-    const [selectedRows, setSelectedRows] = useState([]);
+    const { can } = useAuth();
+    const { data: selectedRows = EMPTY_INVOICES, mutate: mutateSelection } = useSWR(
+        ['dispatch-selection', showNoe],
+        null,
+        { revalidateOnFocus: false, revalidateOnReconnect: false },
+    );
+    const setSelectedRows = useCallback(
+        (value) =>
+            mutateSelection(
+                (current) => (typeof value === 'function' ? value(current || EMPTY_INVOICES) : value),
+                false,
+            ),
+        [mutateSelection],
+    );
+    const [selectionError, setSelectionError] = useState('');
 
     // Pagination / sorting / search state
     const [page, setPage] = useState(1);
-    const [sortBy, setSortBy] = useState('createdAt');
+    const [sortBy, setSortBy] = useState('invoiceId');
     const [sortDir, setSortDir] = useState('desc');
     const [search, setSearch] = useState('');
     const [selectedRuta, setSelectedRuta] = useState(null);
@@ -46,7 +62,11 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     //    Facturas, la tabla principal del despacho); en pantallas extra grandes
     //    (≥1400px) van lado a lado. ──
     const isWide = useMediaQuery('(min-width: 1400px)');
-    const [activeTab, setActiveTab] = useState('facturas');
+    const { data: activeTab = 'facturas', mutate: mutateActiveTab } = useSWR('dispatch-active-tab', null, {
+        revalidateOnFocus: false,
+        revalidateOnReconnect: false,
+    });
+    const setActiveTab = useCallback((value) => mutateActiveTab(value, false), [mutateActiveTab]);
 
     const { productsSummary, invoicesTotalSummary } = useInvoiceDispatch(selectedRows);
 
@@ -57,7 +77,11 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
     }, [dateRange.from, dateRange.to, selectedRuta]);
 
     // ── SWR hook ──
-    const { data: invoiceRes, isLoading } = useInvoiceList(
+    const {
+        data: invoiceRes,
+        isLoading,
+        mutate,
+    } = useInvoiceList(
         {
             from: dateRange.from,
             to: dateRange.to,
@@ -104,12 +128,10 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
         if (total === 0 || selectAllLoading) return;
         setSelectAllLoading(true);
         try {
-            const res = await fetchInvoiceList({
+            const res = await fetchInvoiceSelection({
                 from: dateRange.from,
                 to: dateRange.to,
                 showNoe,
-                page: 1,
-                limit: total,
                 sortBy,
                 sortDir,
                 search: search || undefined,
@@ -117,12 +139,13 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
             });
             const rows = res.data || [];
             setSelectedRows((prev) => unionSelection(prev, rows, (inv) => inv.invoiceId));
+            await mutate();
         } catch (error) {
-            console.error('Error al seleccionar todas las facturas:', error);
+            if (error.name !== 'AbortError') setSelectionError('No se pudo completar la selección autorizada.');
         } finally {
             setSelectAllLoading(false);
         }
-    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading]);
+    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading, mutate]);
 
     // "Deseleccionar todo": resta TODAS las facturas del filtro actual (todas las
     // páginas) de la selección acumulada; conserva las de otros filtros.
@@ -130,12 +153,10 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
         if (total === 0 || selectAllLoading) return;
         setSelectAllLoading(true);
         try {
-            const res = await fetchInvoiceList({
+            const res = await fetchInvoiceSelection({
                 from: dateRange.from,
                 to: dateRange.to,
                 showNoe,
-                page: 1,
-                limit: total,
                 sortBy,
                 sortDir,
                 search: search || undefined,
@@ -143,12 +164,13 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
             });
             const rows = res.data || [];
             setSelectedRows((prev) => diffSelection(prev, rows, (inv) => inv.invoiceId));
+            await mutate();
         } catch (error) {
-            console.error('Error al deseleccionar las facturas:', error);
+            if (error.name !== 'AbortError') setSelectionError('No se pudo completar la selección autorizada.');
         } finally {
             setSelectAllLoading(false);
         }
-    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading]);
+    }, [dateRange.from, dateRange.to, showNoe, total, sortBy, sortDir, search, selectedRuta, selectAllLoading, mutate]);
 
     const handleRemoveSelectedInvoice = useCallback((invoiceId) => {
         setSelectedRows((prev) => prev.filter((inv) => inv.invoiceId !== invoiceId));
@@ -199,6 +221,15 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
             data={productsSummary}
             totalSummary={invoicesTotalSummary}
             printStorageKey="despacho-productos"
+            exportData={
+                selectedRows.length && selectedRows.every((row) => row.exportAllowed)
+                    ? () =>
+                          exportInvoiceSelection(
+                              selectedRows.map((row) => row.invoiceId),
+                              showNoe,
+                          )
+                    : null
+            }
         />
     );
 
@@ -209,16 +240,19 @@ const DespachoView = ({ dateRange, showNoe, isActive }) => {
 
     return (
         <div className="report-page">
+            {selectionError && <p role="alert">{selectionError}</p>}
             <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
                 <div className="d-flex flex-wrap gap-3 mb-3">
                     <div style={{ minWidth: '220px' }}>
-                        <RouteFilter
-                            value={selectedRuta}
-                            onChange={setSelectedRuta}
-                            placeholder="Todas las rutas"
-                            showNoe={showNoe}
-                            enabled={isActive}
-                        />
+                        {can('clients.read') && (
+                            <RouteFilter
+                                value={selectedRuta}
+                                onChange={setSelectedRuta}
+                                placeholder="Todas las rutas"
+                                showNoe={showNoe}
+                                enabled={isActive}
+                            />
+                        )}
                     </div>
                     {selectedRows.length > 0 && (
                         <>

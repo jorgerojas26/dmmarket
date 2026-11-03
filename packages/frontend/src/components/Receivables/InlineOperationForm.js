@@ -1,22 +1,27 @@
 import { executeReceivableOperation, previewReceivableOperation } from 'api/receivables';
+import { useAuth } from 'auth/context';
 import { useEffect, useRef, useState } from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Spinner from 'react-bootstrap/Spinner';
+import { useReceivablesAccess } from './access';
 import { money, requestId } from './format';
 import './InlineOperationForm.css';
 
 export default function InlineOperationForm({
     client,
     action,
-    disabled,
+    disabled: parentDisabled,
     discarding = false,
     onCancel,
     onSuccess,
     onBusyChange,
     onDirtyChange,
 }) {
+    const { runPrivileged } = useAuth();
+    const { canOperate } = useReceivablesAccess();
+    const disabled = parentDisabled || !canOperate(action.type);
     const closing = action.type === 'close';
     const labels = closing
         ? {
@@ -68,11 +73,13 @@ export default function InlineOperationForm({
                 const reviewed = await previewReceivableOperation(client.id, payload);
                 if (mounted.current) setPreview(reviewed);
             } else {
-                const saved = await executeReceivableOperation(client.id, {
-                    ...payload,
-                    snapshot: preview.snapshot,
-                    requestId: id.current,
-                });
+                const saved = await runPrivileged(() =>
+                    executeReceivableOperation(client.id, {
+                        ...payload,
+                        snapshot: preview.snapshot,
+                        requestId: id.current,
+                    }),
+                );
                 onDirtyChange(false);
                 await onSuccess(saved);
             }

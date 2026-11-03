@@ -1,12 +1,15 @@
 import { fetchUpdateHistory } from 'api/update';
+import { useAuth } from 'auth/context';
+import AccessDenied from 'components/AccessDenied';
 import Sidebar from 'components/Sidebar';
 import { useUpdate } from 'context/update';
 import { DateTime } from 'luxon';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge, Button, Container, ProgressBar } from 'react-bootstrap';
 import ReactMarkdown from 'react-markdown';
 import { useHistory, useLocation } from 'react-router-dom';
 import BackupsPanel from './BackupsPanel';
+import PreferencesPanel from './PreferencesPanel';
 import RatesPanel from './RatesPanel';
 import './styles.css';
 
@@ -20,10 +23,32 @@ const MarkdownNotes = ({ children }) => (
 
 const sidebarItems = [
     {
+        eventKey: 'preferences',
+        label: 'Preferencias',
+        icon: (
+            <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+            >
+                <path d="M4 7h9m4 0h3M4 17h3m4 0h9" />
+                <circle cx="15" cy="7" r="2" />
+                <circle cx="9" cy="17" r="2" />
+            </svg>
+        ),
+    },
+    {
         eventKey: 'about',
         label: 'Acerca de',
         icon: (
             <svg
+                aria-hidden="true"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -45,6 +70,7 @@ const sidebarItems = [
         label: 'Respaldos',
         icon: (
             <svg
+                aria-hidden="true"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -65,6 +91,7 @@ const sidebarItems = [
         label: 'Tasas BCV',
         icon: (
             <svg
+                aria-hidden="true"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -82,19 +109,39 @@ const sidebarItems = [
     },
 ];
 
-const VIEWS = { '#acercade': 'about', '#respaldos': 'backups', '#tasas': 'rates' };
-const HASHES = { about: '#acercade', backups: '#respaldos', rates: '#tasas' };
+const VIEWS = {
+    '#reportes': 'preferences',
+    '#preferencias': 'preferences',
+    '#acercade': 'about',
+    '#respaldos': 'backups',
+    '#tasas': 'rates',
+};
+const HASHES = {
+    preferences: '#preferencias',
+    about: '#acercade',
+    backups: '#respaldos',
+    rates: '#tasas',
+};
 
 const ConfiguracionPage = () => {
+    const { can } = useAuth();
+    const availableViews = [
+        ...(can('settings.preferences.read') || can('settings.currency.read') ? ['preferences'] : []),
+        ...(can('updates.read') ? ['about'] : []),
+        ...(['backups.read', 'backups.create'].some(can) ? ['backups'] : []),
+        ...(['rates.read', 'rates.sync'].some(can) ? ['rates'] : []),
+    ];
     const historyRouter = useHistory();
     const location = useLocation();
-    const activeView = VIEWS[location.hash] || 'about';
+    const requestedView = VIEWS[location.hash];
+    const deniedView = requestedView && !availableViews.includes(requestedView);
+    const activeView = availableViews.includes(VIEWS[location.hash]) ? VIEWS[location.hash] : availableViews[0];
 
     useEffect(() => {
-        if (!VIEWS[location.hash]) {
-            historyRouter.replace({ ...location, hash: HASHES.about });
+        if (!requestedView && activeView) {
+            historyRouter.replace({ ...location, hash: HASHES[activeView] });
         }
-    }, [historyRouter, location]);
+    }, [historyRouter, location, activeView]);
 
     const selectView = (view) => {
         const hash = HASHES[view] || HASHES.about;
@@ -121,6 +168,7 @@ const ConfiguracionPage = () => {
     const [historyError, setHistoryError] = useState(null);
 
     useEffect(() => {
+        if (!can('updates.read')) return undefined;
         let cancelled = false;
         fetchUpdateHistory()
             .then(({ status: resStatus, data }) => {
@@ -139,13 +187,15 @@ const ConfiguracionPage = () => {
         };
     }, []);
 
-    const sidebarItemsMemo = useMemo(() => sidebarItems, []);
+    const sidebarItemsMemo = sidebarItems.filter((item) => availableViews.includes(item.eventKey));
 
+    if (deniedView || !availableViews.length) return <AccessDenied />;
     return (
-        <Container fluid className="clientes-layout p-0">
+        <Container as="section" aria-label="Configuración" fluid className="clientes-layout p-0">
             <div className="clientes-row">
                 <Sidebar activeKey={activeView} onSelect={selectView} items={sidebarItemsMemo} />
                 <div className="clientes-content p-4">
+                    {activeView === 'preferences' && <PreferencesPanel />}
                     {activeView === 'backups' && <BackupsPanel />}
                     {activeView === 'rates' && <RatesPanel />}
                     {activeView === 'about' && (
@@ -199,7 +249,11 @@ const ConfiguracionPage = () => {
                                                         </div>
                                                     )}
                                                     {!downloading && !downloaded && (
-                                                        <Button variant="success" onClick={handleDownload}>
+                                                        <Button
+                                                            variant="success"
+                                                            disabled={!can('updates.execute') || !status?.standalone}
+                                                            onClick={handleDownload}
+                                                        >
                                                             Descargar actualización
                                                         </Button>
                                                     )}
@@ -208,7 +262,13 @@ const ConfiguracionPage = () => {
                                                             <span className="text-info">
                                                                 Descargado — Reiniciar para actualizar
                                                             </span>
-                                                            <Button variant="primary" onClick={handleApply}>
+                                                            <Button
+                                                                variant="primary"
+                                                                disabled={
+                                                                    !can('updates.execute') || !status?.standalone
+                                                                }
+                                                                onClick={handleApply}
+                                                            >
                                                                 Reiniciar ahora
                                                             </Button>
                                                         </>

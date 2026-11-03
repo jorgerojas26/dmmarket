@@ -1,5 +1,6 @@
 const { reportId, missingName } = require("./utils/report-identity");
-const { createHash } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
+const { assertWritableReceivables } = require("./receivables-storage");
 const { Money, fail, decimal, fixed, total, allocate } = require("./utils/receivables-money");
 
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -61,6 +62,11 @@ function rateInput(value) {
 function input(body, today) {
   if (!Object.hasOwn(types, body.type)) fail("Operación de cobranza no válida.");
   const result = { type: body.type };
+  if (body.closeResidual !== undefined) {
+    if (body.type !== "payment" || typeof body.closeResidual !== "boolean")
+      fail("El cierre residual requiere una selección válida al registrar un abono.");
+    if (body.closeResidual) result.closeResidual = true;
+  }
   if (body.type === "payment") {
     result.amount = fixed(decimal(body.amount, 4, true));
     if (!["USD", "BsS"].includes(body.currency)) fail("Selecciona USD o bolívares.");
@@ -100,7 +106,15 @@ const eligible = (d) =>
   d.IdCliente != null &&
   d.saleClient === d.IdCliente;
 
-function createReceivablesService({ db, now = () => new Date() }) {
+function createReceivablesService({
+  db,
+  now = () => new Date(),
+  personal = true,
+  referenceRate = true,
+  actorId = null,
+  canReadSale = () => false,
+  onOperation = async () => {},
+}) {
   async function readiness() {
     const tables = await Promise.all(
       ["cxc_documentos", "cxc_movimientos", "cxc_cruces", "cxc_operaciones", "cxc_cierres"].map((table) =>
@@ -116,17 +130,30 @@ function createReceivablesService({ db, now = () => new Date() }) {
   async function requireSchema() {
     const status = await readiness();
     if (!status.available)
-      fail("Cuentas por cobrar requiere su esquema y migración. Consulta la guía de habilitación.", 503);
+      throw Object.assign(
+        new Error(
+          "La cobranza no está habilitada para esta base de datos: faltan las tablas necesarias para gestionar deudas y abonos.",
+        ),
+        { status: 503, code: "CXC_SCHEMA_UNAVAILABLE" },
+      );
     return status;
   }
 
   function documents(connection, clientId) {
     return connection("cxc_documentos as d")
-      .leftJoin("masterfact as f", "f.IdFactura", "d.IdFactura")
-      .where("d.IdCliente", clientId)
+      .leftJoin("masterfact as f", function () {
+        this.on("f.IdFactura", "d.IdFactura").andOn(connection.raw("BINARY f.IdFactura = BINARY d.IdFactura"));
+      })
+      .whereRaw("BINARY d.IdCliente <=> BINARY ?", [clientId])
       .where("d.TipoDoc", "FAC")
       .where("d.MonedaOriginal", "USD")
-      .select("d.*", "f.Anulada as saleCancelled", "f.IdCliente as saleClient")
+      .select(
+        "d.*",
+        "f.Anulada as saleCancelled",
+        "f.IdCliente as saleClient",
+        "f.IdVend as saleSeller",
+        "f.IdFactura as saleIdentity",
+      )
       .orderByRaw("CASE WHEN d.FechaVencimiento IS NULL OR d.FechaVencimiento = '0000-00-00' THEN 1 ELSE 0 END")
       .orderBy("d.FechaVencimiento")
       .orderBy("d.FechaEmision")
@@ -134,7 +161,10 @@ function createReceivablesService({ db, now = () => new Date() }) {
   }
 
   async function context(connection, clientId, lock = false, allowUnregistered = false) {
-    const clientQuery = connection("clientes").where("IdCliente", clientId).first();
+    const clientQuery = connection("clientes")
+      .whereRaw("BINARY IdCliente <=> BINARY ?", [clientId])
+      .select("IdCliente", "Empresa", "Ruta", ...(personal ? ["Rif"] : []))
+      .first();
     let client = await (lock ? clientQuery.forUpdate() : clientQuery);
     if (!client && !allowUnregistered) fail("Cliente no encontrado.", 404);
     const docsQuery = documents(connection, clientId);
@@ -151,7 +181,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
     }
     const closures = await connection("cxc_cierres as c")
       .join("cxc_documentos as d", "d.IdDocumento", "c.IdDocumento")
-      .where("d.IdCliente", clientId)
+      .whereRaw("BINARY d.IdCliente <=> BINARY ?", [clientId])
       .whereNull("c.Reapertura")
       .select("c.*")
       .orderBy("c.IdCierre");
@@ -202,6 +232,34 @@ function createReceivablesService({ db, now = () => new Date() }) {
       const base = decimal(new Money(payload.amount).div(rate).toFixed(4), 4, true);
       result = { ...payload, rate, rateSource, base: fixed(base), ...allocate(valid, base) };
       result.balanceAfter = fixed(balance.minus(result.applied));
+      const residualApplications = valid
+        .map((document) => ({
+          id: document.IdDocumento,
+          sale: document.IdFactura,
+          amount: fixed(
+            new Money(document.SaldoActual).minus(
+              result.applications.find((application) => application.id === document.IdDocumento)?.amount || 0,
+            ),
+          ),
+        }))
+        .filter((application) => new Money(application.amount).gt(0));
+      const residual = total(residualApplications.map((application) => application.amount));
+      if (residual.gt(0) && residual.lt("0.005") && residual.eq(result.balanceAfter)) {
+        result.residualAmount = fixed(residual);
+        if (payload.closeResidual) {
+          result.residualClosure = {
+            type: "close",
+            reason: "Cierre de saldo residual aceptado al registrar abono",
+            base: fixed(residual),
+            balanceBefore: fixed(residual),
+            balanceAfter: fixed(0),
+            applications: residualApplications,
+          };
+          result.balanceAfter = fixed(0);
+        }
+      } else if (payload.closeResidual) {
+        fail("Solo puedes cerrar un saldo residual positivo menor de USD 0,005.");
+      }
     } else if (payload.type === "close") {
       const selected = valid.filter(
         (d) => new Money(d.SaldoActual).gt(0) && (!payload.id || d.IdDocumento === payload.id),
@@ -230,7 +288,8 @@ function createReceivablesService({ db, now = () => new Date() }) {
       };
     } else {
       const movement = await connection("cxc_movimientos")
-        .where({ IdMov: payload.id, IdCliente: state.client.IdCliente })
+        .where("IdMov", payload.id)
+        .whereRaw("BINARY IdCliente = ?", [state.client.IdCliente])
         .first();
       const reversed = await connection("cxc_operaciones").where({ Tipo: "ANULACION", Referencia: payload.id }).first();
       if (!movement || reversed) fail("El abono no existe o ya fue anulado.", 409);
@@ -256,6 +315,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
         balanceAfter: fixed(balance.plus(restored)),
       };
     }
+    if (actorId) result.actorId = actorId;
     result.snapshot = hash({
       documents: state.docs.map((d) => [
         d.IdDocumento,
@@ -283,6 +343,9 @@ function createReceivablesService({ db, now = () => new Date() }) {
   }
 
   async function execute(clientId, body) {
+    if (typeof actorId !== "string" || !/^[a-f0-9-]{36}$/i.test(actorId))
+      fail("La operación requiere una cuenta autenticada atribuible.", 503);
+    const storage = await assertWritableReceivables(db);
     await requireSchema();
     if (
       typeof body.requestId !== "string" ||
@@ -292,8 +355,14 @@ function createReceivablesService({ db, now = () => new Date() }) {
     if (typeof body.snapshot !== "string" || !/^[a-f0-9]{64}$/.test(body.snapshot))
       fail("Revisa la previsualización antes de confirmar.");
     const payload = input(body, localDate(now()));
-    const fingerprint = hash({ clientId, payload, snapshot: body.snapshot });
+    const fingerprint = hash({ clientId, actorId, payload, snapshot: body.snapshot });
     return db.transaction(async (connection) => {
+      const lockKey = hash(clientId);
+      await connection.raw(
+        "INSERT INTO dmmarket_receivables_locks (ClientKey) VALUES (?) ON DUPLICATE KEY UPDATE ClientKey = VALUES(ClientKey)",
+        [lockKey],
+      );
+      await connection("dmmarket_receivables_locks").where("ClientKey", lockKey).forUpdate().first();
       const state = await context(connection, clientId, true);
       const previous = await connection("cxc_operaciones").where("IdOperacion", body.requestId).first();
       if (previous) {
@@ -306,9 +375,15 @@ function createReceivablesService({ db, now = () => new Date() }) {
         fail("La deuda o la tasa cambió. Vuelve a revisar la previsualización antes de confirmar.", 409);
       result.operationId = body.requestId;
       result.registeredAt = timestamp(now());
+      const registeredAt = storage.fractional ? result.registeredAt : result.registeredAt.slice(0, 19);
+      if (result.residualClosure) {
+        result.residualClosure.operationId = randomUUID();
+        result.residualClosure.paymentOperationId = result.operationId;
+        result.residualClosure.registeredAt = result.registeredAt;
+      }
       if (payload.type === "payment") {
         const [movementId] = await connection("cxc_movimientos").insert({
-          Fecha: payload.date === localDate(now()) ? result.registeredAt.slice(0, 19) : `${payload.date} 00:00:00`,
+          Fecha: payload.date === localDate(now()) ? registeredAt.slice(0, 19) : `${payload.date} 00:00:00`,
           IdCliente: clientId,
           MonedaPago: payload.currency,
           TasaCambio: result.rate,
@@ -326,20 +401,41 @@ function createReceivablesService({ db, now = () => new Date() }) {
               IdMovimiento: movementId,
               IdDocumento: a.id,
               MontoAplicado: a.amount,
-              FechaCruce: result.registeredAt,
+              FechaCruce: registeredAt,
             })),
           );
       }
       await connection("cxc_operaciones").insert({
         IdOperacion: body.requestId,
+        ActorId: actorId,
         IdCliente: clientId,
         Tipo: types[payload.type],
         Referencia: result.movementId || payload.id || null,
         Huella: fingerprint,
         Motivo: payload.reason || null,
         Datos: JSON.stringify(result),
-        FechaRegistro: result.registeredAt,
+        FechaRegistro: registeredAt,
       });
+      if (result.residualClosure) {
+        const closure = result.residualClosure;
+        await connection("cxc_operaciones").insert({
+          IdOperacion: closure.operationId,
+          IdCliente: clientId,
+          Tipo: types.close,
+          Referencia: null,
+          Huella: hash(closure),
+          Motivo: closure.reason,
+          Datos: JSON.stringify(closure),
+          FechaRegistro: result.registeredAt,
+        });
+        await connection("cxc_cierres").insert(
+          closure.applications.map((application) => ({
+            IdOperacion: closure.operationId,
+            IdDocumento: application.id,
+            Monto: application.amount,
+          })),
+        );
+      }
       if (payload.type === "close") {
         await connection("cxc_cierres").insert(
           result.applications.map((a) => ({ IdOperacion: body.requestId, IdDocumento: a.id, Monto: a.amount })),
@@ -348,29 +444,34 @@ function createReceivablesService({ db, now = () => new Date() }) {
       if (payload.type === "reopen") {
         await connection("cxc_cierres").whereIn("IdCierre", result.closureIds).update({ Reapertura: body.requestId });
       }
-      for (const application of result.applications) {
-        const document = state.docs.find((d) => d.IdDocumento === application.id);
+      const applications = [...result.applications, ...(result.residualClosure?.applications || [])];
+      for (const documentId of new Set(applications.map((application) => application.id))) {
+        const document = state.docs.find((d) => d.IdDocumento === documentId);
+        const applied = total(applications.filter((application) => application.id === documentId).map((a) => a.amount));
         const balanceAfter = ["payment", "close"].includes(payload.type)
-          ? new Money(document.SaldoActual).minus(application.amount)
-          : new Money(document.SaldoActual).plus(application.amount);
+          ? new Money(document.SaldoActual).minus(applied)
+          : new Money(document.SaldoActual).plus(applied);
         const status = balanceAfter.eq(0)
           ? "PAGADO"
           : balanceAfter.eq(document.MontoOriginal)
             ? "PENDIENTE"
             : "PARCIAL";
         await connection("cxc_documentos")
-          .where("IdDocumento", application.id)
+          .where("IdDocumento", documentId)
           .update({ SaldoActual: fixed(balanceAfter), Estatus: status });
       }
+      await onOperation(connection, result);
       return result;
     });
   }
 
   function clientQuery(today) {
     const valid =
-      "d.TipoDoc = 'FAC' AND d.MonedaOriginal = 'USD' AND d.Estatus <> 'ANULADO' AND f.Anulada = 0 AND f.IdCliente = d.IdCliente";
+      "d.TipoDoc = 'FAC' AND d.MonedaOriginal = 'USD' AND d.Estatus <> 'ANULADO' AND f.Anulada = 0 AND BINARY f.IdCliente = BINARY d.IdCliente";
     const aggregates = db("cxc_documentos as d")
-      .leftJoin("masterfact as f", "f.IdFactura", "d.IdFactura")
+      .leftJoin("masterfact as f", function () {
+        this.on("f.IdFactura", "d.IdFactura").andOn(db.raw("BINARY f.IdFactura = BINARY d.IdFactura"));
+      })
       .where("d.TipoDoc", "FAC")
       .where("d.MonedaOriginal", "USD")
       .select("d.IdCliente")
@@ -382,7 +483,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
         ),
       )
       .select(db.raw(`SUM(CASE WHEN ${valid} AND d.SaldoActual > 0 THEN 1 ELSE 0 END) as pendingCount`))
-      .groupBy("d.IdCliente");
+      .groupByRaw("BINARY d.IdCliente");
     const lastPayment = db("cxc_movimientos as m")
       .leftJoin("cxc_operaciones as v", function () {
         this.on("v.Referencia", "m.IdMov").andOnVal("v.Tipo", "ANULACION");
@@ -390,11 +491,15 @@ function createReceivablesService({ db, now = () => new Date() }) {
       .whereNull("v.IdOperacion")
       .select("m.IdCliente")
       .max("m.Fecha as lastPayment")
-      .groupBy("m.IdCliente");
+      .groupByRaw("BINARY m.IdCliente");
     return db
       .from(aggregates.as("a"))
-      .leftJoin("clientes as c", "c.IdCliente", "a.IdCliente")
-      .leftJoin(lastPayment.as("p"), "p.IdCliente", "a.IdCliente")
+      .leftJoin("clientes as c", function () {
+        this.on(db.raw("BINARY c.IdCliente = BINARY a.IdCliente"));
+      })
+      .leftJoin(lastPayment.as("p"), function () {
+        this.on(db.raw("BINARY p.IdCliente = BINARY a.IdCliente"));
+      })
       .select(
         db.raw(
           "CASE WHEN a.IdCliente IS NULL THEN '__none__' WHEN a.IdCliente = '' THEN '__empty__' ELSE a.IdCliente END as id",
@@ -410,10 +515,10 @@ function createReceivablesService({ db, now = () => new Date() }) {
       );
   }
 
-  async function list(filters = {}) {
+  async function list(filters = {}, reportLimit) {
     const status = await requireSchema();
     const page = integer(filters.page, 1);
-    const limit = integer(filters.limit, 20, 100);
+    const limit = reportLimit || integer(filters.limit, 20, 100);
     const search = text(filters.search, 100);
     const ruta = text(filters.ruta, 10);
     const state = filters.state || "debt";
@@ -430,7 +535,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
     if (typeof sort !== "string" || (filters.sortDir && !["asc", "desc"].includes(filters.sortDir)))
       fail("Orden de cartera no válido.");
     const scope = clientQuery(status.today);
-    if (ruta) scope.where("c.Ruta", ruta);
+    if (ruta) scope.whereRaw("BINARY c.Ruta = ?", [ruta]);
     const summaryRows = await db
       .from(scope.clone().as("s"))
       .sum("balance as balance")
@@ -438,14 +543,16 @@ function createReceivablesService({ db, now = () => new Date() }) {
       .select(db.raw("SUM(CASE WHEN balance > 0 THEN 1 ELSE 0 END) as debtors"))
       .first();
     const received = db("cxc_movimientos as m")
-      .leftJoin("clientes as c", "c.IdCliente", "m.IdCliente")
+      .leftJoin("clientes as c", function () {
+        this.on(db.raw("BINARY c.IdCliente = BINARY m.IdCliente"));
+      })
       .leftJoin("cxc_operaciones as v", function () {
         this.on("v.Referencia", "m.IdMov").andOnVal("v.Tipo", "ANULACION");
       })
       .whereNull("v.IdOperacion")
       .where("m.Fecha", ">=", `${status.today.slice(0, 7)}-01 00:00:00`)
       .where("m.Fecha", "<=", `${status.today} 23:59:59`);
-    if (ruta) received.where("c.Ruta", ruta);
+    if (ruta) received.whereRaw("BINARY c.Ruta = ?", [ruta]);
     const receivedRow = await received.sum("m.MontoBase as amount").first();
     const query = scope.clone();
     if (search)
@@ -456,9 +563,8 @@ function createReceivablesService({ db, now = () => new Date() }) {
           ),
           "like",
           `%${search}%`,
-        )
-          .orWhere("a.IdCliente", "like", `%${search}%`)
-          .orWhere("c.Rif", "like", `%${search}%`);
+        ).orWhere("a.IdCliente", "like", `%${search}%`);
+        if (personal) this.orWhere("c.Rif", "like", `%${search}%`);
       });
     if (state === "debt") query.where("a.balance", ">", 0);
     if (state === "settled") query.where("a.balance", "=", 0);
@@ -467,7 +573,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
     const count = await db.from(query.clone().as("s")).count("* as count").first();
     const data = await query
       .orderBy(sort, filters.sortDir || "desc")
-      .orderBy("a.balance", "desc")
+      .orderBy(sort === "name" ? "a.IdCliente" : "a.balance", sort === "name" ? "asc" : "desc")
       .orderBy("a.IdCliente")
       .limit(limit)
       .offset((page - 1) * limit);
@@ -497,12 +603,12 @@ function createReceivablesService({ db, now = () => new Date() }) {
     };
   }
 
-  async function detail(clientId, filters = {}) {
+  async function detail(clientId, filters = {}, reportLimit) {
     clientId = clientId === "__none__" ? null : clientId === "__empty__" ? "" : clientId;
     const status = await requireSchema();
     const page = integer(filters.page, 1);
     const timelinePage = integer(filters.timelinePage, 1);
-    const limit = 20;
+    const limit = reportLimit || 20;
     return db.transaction(async (connection) => {
       const state = await context(connection, clientId, false, true);
       const applied = await connection("cxc_cruces as x")
@@ -510,7 +616,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
         .leftJoin("cxc_operaciones as v", function () {
           this.on("v.Referencia", "m.IdMov").andOnVal("v.Tipo", "ANULACION");
         })
-        .where("m.IdCliente", clientId)
+        .whereRaw("BINARY m.IdCliente <=> BINARY ?", [clientId])
         .whereNull("v.IdOperacion")
         .groupBy("x.IdDocumento")
         .select("x.IdDocumento")
@@ -522,6 +628,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
           return {
             id: d.IdDocumento,
             sale: d.IdFactura,
+            canReadSale: d.saleIdentity != null && canReadSale(d.saleSeller),
             issued: dateOnly(d.FechaEmision),
             due: dateOnly(d.FechaVencimiento),
             original: fixed(d.MontoOriginal),
@@ -546,7 +653,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
         .leftJoin("cxc_operaciones as p", function () {
           this.on("p.Referencia", "m.IdMov").andOnVal("p.Tipo", "ABONO");
         })
-        .where("m.IdCliente", clientId)
+        .whereRaw("BINARY m.IdCliente <=> BINARY ?", [clientId])
         .select(
           connection.raw("CONCAT('m-', m.IdMov) as eventId"),
           connection.raw("'payment' as type"),
@@ -566,7 +673,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
           connection.raw("NULL as reason"),
         );
       const operations = connection("cxc_operaciones")
-        .where("IdCliente", clientId)
+        .whereRaw("BINARY IdCliente <=> BINARY ?", [clientId])
         .whereNot("Tipo", "ABONO")
         .select(
           "IdOperacion as eventId",
@@ -597,18 +704,20 @@ function createReceivablesService({ db, now = () => new Date() }) {
             .sum("x.MontoAplicado as amount")
             .groupBy("x.IdMovimiento", "x.IdDocumento", "d.IdFactura")
         : [];
-      const rateRow = await connection("divisas").where("Simbolo", "BsS").orderBy("IdDivisa").first();
+      const rateRow = referenceRate
+        ? await connection("divisas").where("Simbolo", "BsS").orderBy("IdDivisa").first()
+        : null;
       return {
         ...status,
         client: {
           id: reportId(state.client.IdCliente),
           name: state.client.Empresa,
-          rif: state.client.Rif,
+          ...(personal ? { rif: state.client.Rif } : {}),
           ruta: state.client.Ruta,
           unregistered: !!state.client.unregistered,
         },
         summary: summary(state.docs, status.today),
-        rate: rateRow?.Cambio ? String(rateRow.Cambio) : null,
+        ...(referenceRate ? { rate: rateRow?.Cambio ? String(rateRow.Cambio) : null } : {}),
         documents: { data: docs.slice((page - 1) * limit, page * limit), total: docs.length, page, limit },
         timeline: {
           data: timeline.map((event) => {
@@ -624,7 +733,15 @@ function createReceivablesService({ db, now = () => new Date() }) {
               registeredAt:
                 event.registeredAt instanceof Date ? dateOnly(event.registeredAt) : String(event.registeredAt),
               data,
-              applications: allocations,
+              applications: allocations.map((application) => ({
+                ...application,
+                canReadSale: state.docs.some(
+                  (document) =>
+                    String(document.IdFactura) === String(application.sale) &&
+                    document.saleIdentity != null &&
+                    canReadSale(document.saleSeller),
+                ),
+              })),
               excess: event.movementId
                 ? fixed(Money.max(new Money(event.base).minus(total(allocations.map((a) => a.amount))), 0))
                 : null,

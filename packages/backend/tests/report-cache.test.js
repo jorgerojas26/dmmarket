@@ -2,7 +2,7 @@ const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const express = require("express");
 const request = require("supertest");
-const { createReportCache, isReportPath } = require("../middlewares/report-cache");
+const { createReportCache } = require("../middlewares/report-cache");
 
 const deferred = () => {
   let resolve;
@@ -34,29 +34,72 @@ function setup(options = {}, handler) {
   };
 }
 
-it("covers all dashboard, modal and drill-down report families, but not exchange rates or updates", () => {
-  for (const path of [
-    "/dashboard/sales",
-    "/dashboard/pareto",
-    "/clients/dashboard",
-    "/clients/sin-facturar",
-    "/clients/list",
-    "/clients/routes",
-    "/clients/1/summary",
-    "/providers/list",
-    "/providers/1/summary",
-    "/providers/1/sales/2",
-    "/purchases/dashboard",
-    "/purchases/pareto",
-    "/sales/facturas",
-    "/products",
-    "/invoices/1/detail",
-    "/groups",
-    "/employees/sales/1",
-  ])
-    expect(isReportPath(path)).toBe(true);
-  for (const path of ["/currency_rates", "/update/progress", "/cache/clear", "/unknown", "/clients-other"])
-    expect(isReportPath(path)).toBe(false);
+it.each([
+  "/dashboard/sales",
+  "/dashboard/pareto",
+  "/clients/dashboard",
+  "/clients/sin-facturar",
+  "/purchases/dashboard",
+  "/purchases/pareto",
+  "/sellers/dashboard",
+  "/clients/dashboard/",
+  "/CLIENTS/DASHBOARD",
+])("caches dashboard endpoint %s over HTTP", async (path) => {
+  const app = express();
+  const cache = createReportCache();
+  let calls = 0;
+  app.use("/api", cache.middleware);
+  app.get(`/api${path}`, (_req, res) => res.json({ calls: ++calls }));
+  const first = await request(app).get(`/api${path}`);
+  const second = await request(app).get(`/api${path}`);
+  expect(first.headers["x-report-cache"]).toBe("MISS");
+  expect(second.headers["x-report-cache"]).toBe("HIT");
+  expect(second.body).toEqual(first.body);
+  expect(calls).toBe(1);
+});
+
+it.each([
+  "/clients",
+  "/clients/list",
+  "/clients/routes",
+  "/clients/1/summary",
+  "/clients/1/sales",
+  "/providers/list",
+  "/providers/1/summary",
+  "/providers/1/sales/2",
+  "/purchases/invoices",
+  "/purchases/products",
+  "/sales/facturas",
+  "/sales/productos",
+  "/products",
+  "/invoices",
+  "/invoices?all=true&limit=20",
+  "/invoices/1/detail",
+  "/groups",
+  "/employees/sales/1",
+  "/sellers/list",
+  "/sellers/1/summary",
+  "/sellers/1/sales",
+  "/currency_rates",
+  "/update/progress",
+  "/cache/clear",
+  "/unknown",
+  "/clients-other",
+  "/dashboard/unknown",
+  "/clients/dashboard/unknown",
+])("does not cache non-dashboard endpoint %s over HTTP", async (path) => {
+  const app = express();
+  const cache = createReportCache();
+  let calls = 0;
+  app.use("/api", cache.middleware);
+  app.get("/api/*", (_req, res) => res.json({ calls: ++calls }));
+  const first = await request(app).get(`/api${path}`);
+  const second = await request(app).get(`/api${path}`);
+  expect(first.headers["x-report-cache"]).toBeUndefined();
+  expect(second.headers["x-report-cache"]).toBeUndefined();
+  expect(first.body.calls).toBe(1);
+  expect(second.body.calls).toBe(2);
+  expect(calls).toBe(2);
 });
 
 it("serves identical JSON from memory without executing the handler again", async () => {

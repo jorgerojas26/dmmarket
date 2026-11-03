@@ -1,8 +1,9 @@
 import { fetchInvoiceDetail } from 'api/invoice';
+import { fetchReceivableInvoice } from 'api/receivables';
 import SaleDetailModal from 'components/ProviderDashboardModal/SaleDetailModal';
 import { useEffect, useState } from 'react';
 
-const InvoiceDetailModal = ({ invoiceId, onClose, showNoe = false, collapseProfit = true }) => {
+const InvoiceDetailModal = ({ invoiceId, clientId, onClose, showNoe = false, collapseProfit = true }) => {
     const [attempt, setAttempt] = useState(0);
     const [result, setResult] = useState({});
 
@@ -12,7 +13,9 @@ const InvoiceDetailModal = ({ invoiceId, onClose, showNoe = false, collapseProfi
 
         const load = async () => {
             try {
-                const sale = await fetchInvoiceDetail(invoiceId, showNoe);
+                const sale = clientId
+                    ? await fetchReceivableInvoice(clientId, invoiceId)
+                    : await fetchInvoiceDetail(invoiceId, showNoe);
                 if (!sale || sale.error || !Array.isArray(sale.productos)) {
                     throw new Error('La respuesta del detalle de factura no es válida.');
                 }
@@ -26,7 +29,7 @@ const InvoiceDetailModal = ({ invoiceId, onClose, showNoe = false, collapseProfi
         return () => {
             active = false;
         };
-    }, [invoiceId, showNoe, attempt]);
+    }, [invoiceId, clientId, showNoe, attempt]);
 
     const current = result.invoiceId === invoiceId ? result : {};
     return (

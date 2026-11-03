@@ -33,68 +33,55 @@ const EXT_MIME = {
   ".txt": "text/plain",
 };
 
-const clients_routes = require("./routes/clients");
-const receivables_routes = require("./routes/receivables");
-const groups_routes = require("./routes/groups");
-const invoices_routes = require("./routes/invoices");
-const products_routes = require("./routes/products");
-const employees_routes = require("./routes/employees");
-const sellers_routes = require("./routes/sellers");
-const currency_rates_routes = require("./routes/currency_rates");
-const providers_routes = require("./routes/providers");
-const dashboard_routes = require("./routes/dashboard");
-const sales_routes = require("./routes/sales");
-const purchases_routes = require("./routes/purchases");
-const update_routes = require("./routes/update");
-const backups_routes = require("./routes/backups");
 const { backupService } = require("./backups");
-const drive_backups_routes = require("./routes/drive-backups");
 const { driveBackupService } = require("./drive-backups");
 const { bcvRateService } = require("./bcv");
 
-//app.use(express.static(path.join(__dirname, "public")));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-const { reportCache } = require("./middlewares/report-cache");
-app.use("/api", reportCache.middleware);
-// External accounting imports do not pass through this server. Operators can
-// invalidate every report immediately instead of waiting for the one-hour TTL.
-app.post("/api/cache/clear", (_req, res) => {
-  reportCache.clear();
-  res.json({ cleared: true });
+let authRuntime = null;
+const { createAuthRuntime, validateAuthConfig } = require("./auth/runtime");
+const { trustLocalProxy, authErrorHandler } = require("./auth/http-security");
+const { createBusinessRouter } = require("./routes");
+app.set("trust proxy", trustLocalProxy);
+app.get("/api/health", (_req, res) =>
+  res
+    .set("Cache-Control", "no-store")
+    .status(authRuntime ? 200 : 503)
+    .json({ ok: Boolean(authRuntime), service: process.env.DMMARKET_SERVICE === "1" }),
+);
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  if (!authRuntime) return res.status(503).json({ error: { message: "El servicio de acceso no está disponible." } });
+  return authRuntime.middleware(req, res, next);
 });
 
-app.use("/api/clients", clients_routes);
-app.use("/api/receivables", receivables_routes);
-app.use("/api/groups", groups_routes);
-app.use("/api/invoices", invoices_routes);
-app.use("/api/products", products_routes);
-app.use("/api/employees", employees_routes);
-app.use("/api/sellers", sellers_routes);
-app.use("/api/currency_rates", currency_rates_routes);
-app.use("/api/providers", providers_routes);
-app.use("/api/dashboard", dashboard_routes);
-app.use("/api/sales", sales_routes);
-app.use("/api/purchases", purchases_routes);
-app.use("/api/update", update_routes);
-app.use("/api/backups/drive", drive_backups_routes);
-app.use("/api/backups", backups_routes);
+async function initializeAuth(env = process.env, services = {}) {
+  if (authRuntime) throw new Error("El servicio de acceso ya está iniciado.");
+  const db = require("./database");
+  const runtime = await createAuthRuntime({ db, env });
+  try {
+    const middleware = express.Router();
+    middleware.use(runtime.middleware);
+    middleware.use(createBusinessRouter({ sessions: runtime.sessions, security: runtime.security, db, services }));
+    middleware.use(authErrorHandler);
+    authRuntime = { ...runtime, middleware };
+  } catch (error) {
+    await runtime.close();
+    throw error;
+  }
+  return authRuntime;
+}
 
-app.use("/api/*", (req, res) => {
-  res.status(404).json({
-    error: {
-      message: `El servidor no encontró ningún recurso en la URL ${req.baseUrl}`,
-    },
-  });
-});
+async function closeAuth() {
+  const current = authRuntime;
+  authRuntime = null;
+  if (current) await current.close();
+}
 
 // En el binario compilado los assets viven embebidos en el ejecutable (ver scripts/generate-assets.js).
 // En dev se sirven desde disco como siempre.
 app.use((req, res, next) => {
   if (!ASSETS) return next();
-  const rel = "./client/build/" + req.path.replace(/^\/+/, "");
+  const rel = `./client/build/${req.path.replace(/^\/+/, "")}`;
   const file = ASSETS[rel];
   if (!file) return next();
   const type = EXT_MIME[path.extname(file)] || "application/octet-stream";
@@ -155,14 +142,19 @@ if (require.main === module) {
 // el server con la DB medio migrada), y después el server. En dev estos pasos no hacen nada.
 async function bootstrap() {
   const options = serverOptions();
+  validateAuthConfig(process.env);
   cleanupStartup();
   await runEmbeddedMigrations();
+  await initializeAuth();
   const server = await startServer(app, options, () => {
-    if (IS_STANDALONE && !options.service) openBrowser(`http://localhost:${options.port}`);
+    if (IS_STANDALONE && !options.service) openBrowser(authRuntime.publicOrigin);
   });
   backupService.start();
   driveBackupService.start();
   bcvRateService.start();
+  server.once("close", () => {
+    void closeAuth();
+  });
   server.once("close", backupService.stop);
   server.once("close", driveBackupService.stop);
   server.once("close", bcvRateService.stop);
@@ -185,3 +177,6 @@ function openBrowser(url) {
 module.exports = app;
 module.exports.bootstrap = bootstrap;
 module.exports.failStartup = failStartup;
+
+module.exports.initializeAuth = initializeAuth;
+module.exports.closeAuth = closeAuth;

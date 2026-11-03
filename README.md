@@ -42,11 +42,14 @@ DMMarket genera respaldos diarios de MySQL y muestra sus fechas y tamaños en **
 
 Para reproducir el motor MySQL 5.0.24 del respaldo de Windows en un contenedor Ubuntu, consulta [configuración y límites de compatibilidad](docs/mysql-5.0.md).
 
+Cada worktree utiliza MySQL, datos y puertos independientes. Requiere Docker Compose, Portless y mprocs instalados.
+
 ```sh
 bun install
 bun run dev
-bun run test:backend
 ```
+
+`bun run dev` prepara la base y abre mprocs. Consulta [la guía de desarrollo por worktree](docs/development.md) para configurar el dump, ver las URLs, detener el ambiente y conservar o reiniciar sus datos.
 
 Para generar el paquete de instalación de Ubuntu:
 

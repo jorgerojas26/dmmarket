@@ -1,156 +1,233 @@
+import { modulePermissions } from '@dmmarket/permissions';
+import AccessDenied from 'components/AccessDenied';
 import UpdateToast from 'components/UpdateToast';
-import { ShowNoeContext } from 'context/show_noe';
-import { UpdateProvider } from 'context/update';
+import UserMenu from 'components/UserMenu';
+import { CurrencyRateContext } from 'context/currency_rate';
+import { ReportCurrencyGate } from 'context/report_settings';
+import { useSidebar } from 'context/sidebar';
 import { useCurrencyRates } from 'hooks/useCurrencyRates';
-import ClientesPage from 'pages/clientes';
-import ComprasPage from 'pages/compras';
-import InventarioPage from 'pages/inventario';
-import VendedoresPage from 'pages/vendedores';
-import VentasPage from 'pages/ventas';
-import { useContext, useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
-import { Link, Redirect, Route, Switch, useLocation } from 'react-router-dom';
-import { CurrencyRateContext } from './context/currency_rate';
-import ConfiguracionPage from './pages/configuracion';
-import ProveedoresPage from './pages/proveedores';
+import { NavLink, Redirect, useLocation } from 'react-router-dom';
+import { useAuth } from './auth/context';
+import AccessWorkspace, { Account } from './auth/workspace';
+import Clients from './pages/clientes';
+import Purchases from './pages/compras';
+import Configuration from './pages/configuracion';
+import { DocumentPreferenceGate } from './pages/configuracion/PreferencesRecovery';
+import Inventory from './pages/inventario';
+import Providers from './pages/proveedores';
+import Sellers from './pages/vendedores';
+import Sales from './pages/ventas';
 
-const SIDEBAR_ROUTES = [
-    '/ventas',
-    '/compras',
-    '/clientes',
-    '/proveedores',
-    '/vendedores',
-    '/inventario',
-    '/configuracion',
-];
-
-function AppContent() {
-    const location = useLocation();
+export default function App({ onLogout, logoutError, pending = false }) {
+    const { session, can } = useAuth();
+    const { pathname } = useLocation();
+    const { collapsed } = useSidebar();
     const { currencyRate, setCurrencyRate } = useContext(CurrencyRateContext);
-    const { showNoe, setShowNoe } = useContext(ShowNoeContext);
-
-    const { data: currenciesRes } = useCurrencyRates();
-
+    const { data: currencies } = useCurrencyRates(can('rates.read'));
     useEffect(() => {
-        if (currenciesRes?.data) {
-            setCurrencyRate(currenciesRes.data.find((currency) => currency.Simbolo === 'BsS'));
-        }
-    }, [currenciesRes, setCurrencyRate]);
-
+        if (currencies?.status === 200) setCurrencyRate(currencies.data.find((currency) => currency.Simbolo === 'BsS'));
+    }, [currencies, setCurrencyRate]);
+    const [expanded, setExpanded] = useState(false);
+    const hasModule = (module) => !pending && modulePermissions(session?.permissions || [], module).length > 0;
+    const configuration =
+        can('preferences.read') ||
+        can('settings.currency.read') ||
+        can('updates.read') ||
+        can('backups.read') ||
+        can('backups.create') ||
+        can('rates.read') ||
+        can('rates.sync');
+    const access = hasModule('access') || hasModule('audit');
+    const modules = [
+        { path: '/ventas', label: 'Ventas', allowed: hasModule('sales') },
+        { path: '/compras', label: 'Compras', allowed: hasModule('purchases') },
+        { path: '/clientes', label: 'Clientes', allowed: hasModule('clients') },
+        { path: '/proveedores', label: 'Proveedores', allowed: hasModule('providers') },
+        { path: '/vendedores', label: 'Vendedores', allowed: hasModule('sellers') },
+        { path: '/inventario', label: 'Inventario', allowed: hasModule('inventory') },
+        { path: '/configuracion', label: 'Configuración', allowed: configuration },
+        { path: '/acceso', label: 'Acceso', allowed: access },
+    ].filter((module) => module.allowed);
+    const views = [
+        { path: '/ventas', allowed: hasModule('sales'), content: <Sales /> },
+        { path: '/compras', allowed: hasModule('purchases'), content: <Purchases /> },
+        { path: '/proveedores', allowed: hasModule('providers'), content: <Providers /> },
+        {
+            path: '/clientes',
+            allowed: hasModule('clients'),
+            content: <Clients onLogout={onLogout} logoutError={logoutError} />,
+        },
+        { path: '/vendedores', allowed: hasModule('sellers'), content: <Sellers /> },
+        { path: '/inventario', allowed: hasModule('inventory'), content: <Inventory /> },
+        { path: '/configuracion', allowed: configuration, content: <Configuration /> },
+        { path: '/auditoria', allowed: hasModule('audit'), content: <Redirect to="/acceso#auditoria" /> },
+        { path: '/acceso', allowed: access, content: <AccessWorkspace /> },
+        { path: '/cuenta', allowed: true, content: <Account /> },
+    ].filter((view) => view.allowed);
+    const path = /^\/acceso\/(?:usuarios|auditoria)\/[^/]+\/?$/.test(pathname)
+        ? '/acceso'
+        : pathname.replace(/\/+$/, '') || '/';
+    const view = views.find((item) => item.path === path);
+    const module = modules.find((item) => path === item.path || path.startsWith(`${item.path}/`));
     return (
         <div className="App bg-dark">
-            <UpdateToast />
+            {!pending && <UpdateToast />}
             <Container fluid id="main" className="m-0 p-0 vh-100 d-flex flex-column">
                 <Navbar
+                    aria-label="Módulos disponibles"
                     variant="dark"
+                    expand="xl"
+                    expanded={expanded}
+                    onToggle={setExpanded}
                     className={
                         'app-navbar' +
-                        (SIDEBAR_ROUTES.some((route) => location.pathname.includes(route))
+                        ([
+                            '/ventas',
+                            '/compras',
+                            '/clientes',
+                            '/proveedores',
+                            '/vendedores',
+                            '/inventario',
+                            '/configuracion',
+                            '/acceso',
+                        ].some((route) => pathname.includes(route))
                             ? ' has-clients-sidebar'
                             : '')
                     }
-                    expand="xl"
                 >
                     <Container fluid className="app-navbar-inner">
                         <Navbar.Brand className="app-navbar-brand">SISTEMA DE REPORTES</Navbar.Brand>
-
-                        <Navbar.Toggle aria-controls="basic-navbar-nav" />
-
-                        <Navbar.Collapse id="basic-navbar-nav">
-                            {/* En desktop: links a la izquierda (me-auto) y acciones a la
-                                derecha. En mobile el collapse se apila en columna: links con
-                                área táctil amplia y las acciones debajo, como panel. */}
-                            <Nav className="me-auto app-navbar-links">
-                                {['ventas', 'compras', 'clientes', 'proveedores', 'vendedores', 'inventario'].map(
-                                    (route) => (
-                                        <Link
-                                            key={route}
-                                            to={`/${route}`}
-                                            className={`text-decoration-none nav-link${
-                                                location.pathname.includes(route) ? ' active' : ''
-                                            }`}
-                                        >
-                                            {route}
-                                        </Link>
-                                    ),
-                                )}
-                            </Nav>
-
-                            <div className="app-navbar-actions">
-                                <Link
-                                    to="/configuracion"
-                                    title="Configuración"
-                                    className={`text-decoration-none nav-link app-navbar-icon${
-                                        location.pathname.includes('/configuracion') ? ' active' : ''
-                                    }`}
-                                >
-                                    <svg
-                                        width="20"
-                                        height="20"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <title>Configuración</title>
-                                        <circle cx="12" cy="12" r="3" />
-                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                                    </svg>
-                                </Link>
-
-                                <div className="app-navbar-switch">
-                                    <span className="text-light">Facturas</span>
-                                    <div>
-                                        <label className="switch">
-                                            <input
-                                                type="checkbox"
-                                                checked={showNoe}
-                                                onChange={(e) => setShowNoe(e.target.checked)}
+                        {!pending && (
+                            <>
+                                <Navbar.Toggle
+                                    aria-controls="basic-navbar-nav"
+                                    aria-expanded={expanded}
+                                    label="Abrir navegación"
+                                />
+                                <Navbar.Collapse id="basic-navbar-nav">
+                                    <Nav className="me-auto app-navbar-links">
+                                        {modules
+                                            .filter((item) => !['/configuracion', '/acceso'].includes(item.path))
+                                            .map((item) => (
+                                                <Nav.Link
+                                                    key={item.path}
+                                                    aria-label={item.label}
+                                                    as={NavLink}
+                                                    to={item.path}
+                                                    className="text-decoration-none"
+                                                    isActive={() =>
+                                                        path === item.path || path.startsWith(`${item.path}/`)
+                                                    }
+                                                    onClick={() => setExpanded(false)}
+                                                >
+                                                    {[
+                                                        '/ventas',
+                                                        '/compras',
+                                                        '/clientes',
+                                                        '/proveedores',
+                                                        '/vendedores',
+                                                        '/inventario',
+                                                    ].includes(item.path)
+                                                        ? item.label.toLowerCase()
+                                                        : item.label}
+                                                </Nav.Link>
+                                            ))}
+                                    </Nav>
+                                    <div className="app-navbar-actions">
+                                        {can('rates.read') && (
+                                            <div className="text-light app-navbar-ref" aria-busy={!currencies}>
+                                                <span>
+                                                    REF:{' '}
+                                                    <span className="fw-bold text-info">{currencyRate?.Cambio}</span>{' '}
+                                                    {currencyRate?.Simbolo}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div className="app-navbar-account-actions">
+                                            <UserMenu
+                                                configuration={configuration}
+                                                onLogout={onLogout}
+                                                onNavigate={() => setExpanded(false)}
+                                                administration={modules.filter((item) => item.path === '/acceso')}
                                             />
-                                            <span className="slider round"></span>
-                                        </label>
+                                        </div>
                                     </div>
-                                    <span className="text-light">Notas de entrega</span>
-                                </div>
-
-                                <div className="text-light app-navbar-ref">
-                                    <span>
-                                        REF: <span className="fw-bold text-info">{currencyRate?.Cambio}</span>{' '}
-                                        {currencyRate?.Simbolo}
-                                    </span>
-                                </div>
-                            </div>
-                        </Navbar.Collapse>
+                                </Navbar.Collapse>
+                            </>
+                        )}
                     </Container>
                 </Navbar>
-
+                {!pending && logoutError && (
+                    <p role="alert" className="text-warning px-4 mb-0">
+                        {logoutError}
+                    </p>
+                )}
                 <Container fluid className="d-flex flex-column flex-grow-1 overflow-hidden p-0">
-                    <Switch>
-                        <Redirect exact from="/" to="/ventas" />
-                        <Route path="/ventas" component={VentasPage} />
-                        <Route path="/compras" component={ComprasPage} />
-                        <Route path="/clientes" component={ClientesPage} />
-                        <Route path="/proveedores" component={ProveedoresPage} />
-                        <Route path="/vendedores" component={VendedoresPage} />
-                        <Route path="/inventario" component={InventarioPage} />
-                        <Route path="/configuracion" component={ConfiguracionPage} />
-                    </Switch>
+                    {pending ? (
+                        <main aria-label="Validando acceso" aria-busy="true" className="clientes-layout p-0">
+                            <div className="clientes-row">
+                                {[
+                                    '/ventas',
+                                    '/compras',
+                                    '/clientes',
+                                    '/proveedores',
+                                    '/vendedores',
+                                    '/inventario',
+                                    '/configuracion',
+                                    '/acceso',
+                                ].includes(path) && (
+                                    <aside
+                                        aria-hidden="true"
+                                        className={`clients-sidebar app-pending-sidebar${collapsed ? ' collapsed' : ''}`}
+                                    />
+                                )}
+                                <div className="clientes-content p-4" />
+                            </div>
+                        </main>
+                    ) : path === '/' ? (
+                        <Redirect to={modules[0]?.path || '/cuenta'} />
+                    ) : view &&
+                      [
+                          '/inventario',
+                          '/compras',
+                          '/ventas',
+                          '/clientes',
+                          '/vendedores',
+                          '/proveedores',
+                          '/configuracion',
+                          '/acceso',
+                          '/auditoria',
+                      ].includes(path) ? (
+                        ['/ventas', '/vendedores', '/proveedores'].includes(path) ? (
+                            <DocumentPreferenceGate key={pathname} onLeave={onLogout} logoutError={logoutError}>
+                                {view.content}
+                            </DocumentPreferenceGate>
+                        ) : ['/compras', '/inventario'].includes(path) ? (
+                            <ReportCurrencyGate>{view.content}</ReportCurrencyGate>
+                        ) : (
+                            view.content
+                        )
+                    ) : view ? (
+                        <section
+                            key={path}
+                            aria-label={module?.label || 'Mi cuenta'}
+                            className="flex-grow-1 overflow-auto p-4 text-light"
+                        >
+                            {module?.label && <h2 className="h4">{module.label}</h2>}
+                            {!modules.length && (
+                                <p>No tienes módulos habilitados. Consulta al responsable de acceso.</p>
+                            )}
+                            {view.content}
+                        </section>
+                    ) : (
+                        <AccessDenied key={path} />
+                    )}
                 </Container>
             </Container>
         </div>
     );
 }
-
-function App() {
-    return (
-        <UpdateProvider>
-            <AppContent />
-        </UpdateProvider>
-    );
-}
-
-export default App;

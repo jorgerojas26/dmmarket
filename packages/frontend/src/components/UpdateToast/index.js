@@ -1,9 +1,11 @@
+import { useAuth } from 'auth/context';
 import { useUpdate } from 'context/update';
 import { useState } from 'react';
 import { Button, ProgressBar, Spinner, Toast } from 'react-bootstrap';
 import './styles.css';
 
 const UpdateToast = () => {
+    const { can } = useAuth();
     const update = useUpdate();
     const [dismissedVersion, setDismissedVersion] = useState(null);
     const { status, checkResult, checking, downloading, downloaded, applying, applied, downloadError, applyError } =
@@ -55,7 +57,11 @@ const UpdateToast = () => {
                                 animated
                             />
                         )}
-                        <Button variant="light" disabled={busy || checking} onClick={handleUpdate}>
+                        <Button
+                            variant="light"
+                            disabled={!can('updates.execute') || busy || checking}
+                            onClick={handleUpdate}
+                        >
                             {busy && <Spinner animation="border" size="sm" className="me-2" aria-hidden="true" />}
                             {downloading
                                 ? 'Descargando…'

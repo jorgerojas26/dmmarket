@@ -19,12 +19,15 @@
     "package:installers": "bun scripts/package-installers.mjs",
     "prepare:caddy": "bun scripts/prepare-caddy.mjs",
     "test:caddy": "bun scripts/test-caddy.mjs",
+    "test:dev:https": "bun scripts/test-dev-https.mjs",
+    "test:dev:processes": "bun scripts/test-dev-processes.mjs",
+    "test:dev:proxy": "bun scripts/test-dev-proxy.mjs",
     "build:installer:linux": "bun run build:linux && bun run package:installers linux",
     "build:installer:windows": "bun run build:windows && bun run package:installers windows",
     "release": "bun scripts/release.mjs",
-    "test:backend": "bun --filter @dmmarket/backend test",
-    "test:frontend": "CI=true bun --filter @dmmarket/frontend test",
-    "test": "bun run --parallel test:backend test:frontend",
+    "test:backend": "bun scripts/test.mjs backend",
+    "test:frontend": "bun scripts/test.mjs frontend",
+    "test": "bun scripts/test.mjs all",
     "postinstall": "bun run scripts/dedupe-nivo.mjs",
     "check": "biome check",
     "check:write": "biome check --write",
@@ -32,11 +35,16 @@
     "format": "biome format --write",
     "lint": "biome lint",
     "lint:write": "biome lint --write",
+    "test:integration": "bun run test:backend",
+    "test:e2e": "bun run test:frontend",
+    "test:prepare": "bun tests/support/prepare.cjs",
     "dev:prepare": "bun scripts/dev.mjs prepare",
     "dev:status": "bun scripts/dev.mjs status",
     "dev:doctor": "bun scripts/dev.mjs doctor",
     "dev:down": "bun scripts/dev.mjs down",
-    "dev:reset": "bun scripts/dev.mjs reset"
+    "dev:reset": "bun scripts/dev.mjs reset",
+    "test:real": "bun scripts/test.mjs real",
+    "test:copy": "node scripts/test-copy.cjs"
   },
   "overrides": {
     "react-error-overlay": "6.0.9",
@@ -49,6 +57,7 @@
     "@nivo/tooltip": "0.74.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.6"
+    "@biomejs/biome": "^2.5.6",
+    "@playwright/test": "1.64.1"
   }
 }

@@ -1,24 +1,28 @@
+import { fetchProviderExport, fetchProviderPurchaseExport, fetchProviderSaleExport } from 'api/providers';
+import { useAuth } from 'auth/context';
 import DateRangePicker from 'components/DateRangePicker';
+import Modal from 'components/Modal';
 import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
-import { DateTime } from 'luxon';
-import { useCallback, useContext, useMemo, useState } from 'react';
-import Modal from 'components/Modal';
-import { Badge, Spinner } from 'react-bootstrap';
-import pdfMake from 'pdfmake/build/pdfmake';
-import pdfFonts from 'pdfmake/build/vfs_fonts';
+import usePrivateState from 'hooks/usePrivateState';
 import {
     fetchPurchaseDetail,
     fetchSaleDetail,
     useProviderClients,
     useProviderProducts,
-    useProviderSellers,
     useProviderPurchases,
     useProviderSales,
+    useProviderSellers,
     useProviderSummary,
 } from 'hooks/useProviders';
-import { formatCurrency, formatMoney, formatReportId } from 'utils/format';
+import { DateTime } from 'luxon';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Spinner } from 'react-bootstrap';
+import { useSWRConfig } from 'swr';
+import { formatCurrency as formatCurrencyValue, formatMoney, formatReportId } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 import ProductDetailModal from './ProductDetailModal';
 import PurchaseDetailModal from './PurchaseDetailModal';
@@ -28,14 +32,18 @@ import './styles.css';
 
 pdfMake.vfs = pdfFonts.pdfMake ? pdfFonts.pdfMake.vfs : pdfMake.vfs;
 
+const formatCurrency = (value) => (value == null ? 'No disponible' : formatCurrencyValue(value));
+
 const LIMIT = 50;
 
 const currencyFooter =
     (accessor) =>
     ({ data, summary }) =>
-        formatCurrency(
-            summary != null ? Number(summary) : data.reduce((sum, row) => sum + Number(row[accessor] || 0), 0),
-        );
+        summary === null || data.some((row) => row[accessor] == null)
+            ? 'No disponible'
+            : formatCurrency(
+                  summary != null ? Number(summary) : data.reduce((sum, row) => sum + Number(row[accessor] || 0), 0),
+              );
 
 const CLIENTS_COLUMNS = [
     { Header: 'Cliente', accessor: 'cliente' },
@@ -68,13 +76,21 @@ const SELLERS_COLUMNS = [
         Cell: ({ value }) => formatCurrency(value),
         Footer: currencyFooter('utilidad'),
     },
-    { Header: 'Unidades', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString() },
+    {
+        Header: 'Unidades',
+        accessor: 'cantidad',
+        Cell: ({ value }) => (value == null ? 'No disponible' : Number(value).toLocaleString()),
+    },
     { Header: 'Número de clientes', accessor: 'numClientes' },
 ];
 
 const PRODUCTS_COLUMNS = [
     { Header: 'Producto', accessor: 'producto' },
-    { Header: 'Cantidad', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString() },
+    {
+        Header: 'Cantidad',
+        accessor: 'cantidad',
+        Cell: ({ value }) => (value == null ? 'No disponible' : Number(value).toLocaleString()),
+    },
     {
         Header: 'Total Ventas',
         accessor: 'totalVentas',
@@ -96,16 +112,62 @@ const printCellValue = (col, row, currency, rate) => {
         case 'totalVentas':
         case 'monto':
         case 'utilidad':
-            return formatMoney(value, currency, rate);
+            return value == null ? 'No disponible' : formatMoney(value, currency, rate);
         case 'cantidad':
-            return Number(value).toLocaleString();
+            return value == null ? 'No disponible' : Number(value).toLocaleString();
         default:
             return value;
     }
 };
 
+const documentTable = (detail, format) => {
+    const fields = [
+        ['descripcion', 'Descripción'],
+        ['cantidad', 'Cantidad'],
+        ['precio', 'Precio'],
+        ['subtotal', 'Subtotal'],
+        ['utilidad', 'Utilidad'],
+    ].filter(
+        ([key]) =>
+            detail.productos.every((row) => Object.hasOwn(row, key)) &&
+            (detail.productos.length > 0 || ['descripcion', 'cantidad'].includes(key)),
+    );
+    const money = (value) => (value == null ? 'No disponible' : format(value));
+    return {
+        widths: fields.map(([key]) => (key === 'descripcion' ? '*' : 'auto')),
+        body: [
+            fields.map(([, label]) => label),
+            ...detail.productos.map((row) =>
+                fields.map(([key]) =>
+                    key === 'descripcion'
+                        ? row[key]
+                        : key === 'cantidad'
+                          ? row[key] == null
+                              ? 'No disponible'
+                              : String(Number(row[key]))
+                          : money(row[key]),
+                ),
+            ),
+            ...(Object.hasOwn(detail, 'total') && fields.some(([key]) => key === 'subtotal')
+                ? [
+                      fields.map(([key]) =>
+                          key === 'precio'
+                              ? { text: 'Total', bold: true }
+                              : key === 'subtotal'
+                                ? { text: money(detail.total), bold: true }
+                                : key === 'utilidad'
+                                  ? { text: money(detail.utilidad), bold: true }
+                                  : '',
+                      ),
+                  ]
+                : []),
+        ],
+    };
+};
+
 const IconSales = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -123,6 +185,7 @@ const IconSales = () => (
 
 const IconHash = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -141,6 +204,7 @@ const IconHash = () => (
 
 const IconTicket = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -175,6 +239,7 @@ const IconProfit = () => (
 
 const IconUserStar = () => (
     <svg
+        aria-hidden="true"
         width="38"
         height="38"
         viewBox="0 0 24 24"
@@ -201,37 +266,94 @@ const StatCard = ({ label, value, variant, icon: Icon, loading }) => (
 );
 
 const ProviderDashboardModal = ({ show, onClose, provider }) => {
+    const { mutate: mutateCache } = useSWRConfig();
+    const close = useCallback(() => {
+        mutateCache(
+            (key) =>
+                Array.isArray(key) &&
+                key[0] === 'private-ui' &&
+                typeof key[1] === 'string' &&
+                (key[1].endsWith(`:${provider.IdProveedor}`) ||
+                    key[1].startsWith(`provider-product:${provider.IdProveedor}:`) ||
+                    key[1].startsWith(`provider-seller:${provider.IdProveedor}:`)),
+            undefined,
+            { revalidate: false },
+        );
+        onClose();
+    }, [mutateCache, provider.IdProveedor, onClose]);
+    useEffect(
+        () => () => {
+            if (window.location.pathname !== '/proveedores') close();
+        },
+        [close],
+    );
+    const { can, has } = useAuth();
+
+    const canSales = has('providers.sales.read'),
+        canPurchases = has('providers.purchases.read'),
+        canClients = has('providers.clients.read'),
+        canSellers = has('providers.sellers.read');
+    const allowedTabs = [
+        ...(canSales ? ['ventas'] : []),
+        ...(canPurchases ? ['compras'] : []),
+        ...(canClients ? ['clientes'] : []),
+        ...(canSellers ? ['vendedores'] : []),
+        ...(has('providers.products.read') ? ['productos'] : []),
+    ];
+    const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
 
     const today = DateTime.now().toISODate();
     const oneMonthAgo = DateTime.now().minus({ months: 1 }).toISODate();
 
-    const [dateRange, setDateRange] = useState({ from: oneMonthAgo, to: today });
-    const [activeTab, setActiveTab] = useState('ventas');
-    const [selectedSeller, setSelectedSeller] = useState(null);
-    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [dateRange, setDateRange] = usePrivateState(`provider-range:${provider.IdProveedor}`, {
+        from: oneMonthAgo,
+        to: today,
+    });
+    const [activeTab, setActiveTab] = usePrivateState(`provider-tab:${provider.IdProveedor}`, allowedTabs[0]);
+    const [selectedSeller, setSelectedSeller] = usePrivateState(
+        `provider-selectedSeller:${provider.IdProveedor}`,
+        null,
+    );
+    const [selectedProduct, setSelectedProduct] = usePrivateState(
+        `provider-selectedProduct:${provider.IdProveedor}`,
+        null,
+    );
 
     // Pagination
-    const [purchasesPage, setPurchasesPage] = useState(1);
-    const [salesPage, setSalesPage] = useState(1);
-    const [clientsPage, setClientsPage] = useState(1);
-    const [sellersPage, setSellersPage] = useState(1);
-    const [productsPage, setProductsPage] = useState(1);
+    const [purchasesPage, setPurchasesPage] = usePrivateState(`provider-purchasesPage:${provider.IdProveedor}`, 1);
+    const [salesPage, setSalesPage] = usePrivateState(`provider-salesPage:${provider.IdProveedor}`, 1);
+    const [clientsPage, setClientsPage] = usePrivateState(`provider-clientsPage:${provider.IdProveedor}`, 1);
+    const [sellersPage, setSellersPage] = usePrivateState(`provider-sellersPage:${provider.IdProveedor}`, 1);
+    const [productsPage, setProductsPage] = usePrivateState(`provider-productsPage:${provider.IdProveedor}`, 1);
 
     // Search
-    const [purchasesSearch, setPurchasesSearch] = useState('');
-    const [salesSearch, setSalesSearch] = useState('');
-    const [clientsSearch, setClientsSearch] = useState('');
-    const [sellersSearch, setSellersSearch] = useState('');
-    const [productsSearch, setProductsSearch] = useState('');
+    const [purchasesSearch, setPurchasesSearch] = usePrivateState(
+        `provider-purchasesSearch:${provider.IdProveedor}`,
+        '',
+    );
+    const [salesSearch, setSalesSearch] = usePrivateState(`provider-salesSearch:${provider.IdProveedor}`, '');
+    const [clientsSearch, setClientsSearch] = usePrivateState(`provider-clientsSearch:${provider.IdProveedor}`, '');
+    const [sellersSearch, setSellersSearch] = usePrivateState(`provider-sellersSearch:${provider.IdProveedor}`, '');
+    const [productsSearch, setProductsSearch] = usePrivateState(`provider-productsSearch:${provider.IdProveedor}`, '');
 
     // Sort
-    const [purchasesSort, setPurchasesSort] = useState([{ id: 'fecha', desc: true }]);
-    const [salesSort, setSalesSort] = useState([{ id: 'fecha', desc: true }]);
-    const [clientsSort, setClientsSort] = useState([{ id: 'totalVentas', desc: true }]);
-    const [sellersSort, setSellersSort] = useState([{ id: 'totalVentas', desc: true }]);
-    const [productsSort, setProductsSort] = useState([{ id: 'totalVentas', desc: true }]);
+    const [purchasesSort, setPurchasesSort] = usePrivateState(`provider-purchasesSort:${provider.IdProveedor}`, [
+        { id: 'fecha', desc: true },
+    ]);
+    const [salesSort, setSalesSort] = usePrivateState(`provider-salesSort:${provider.IdProveedor}`, [
+        { id: 'fecha', desc: true },
+    ]);
+    const [clientsSort, setClientsSort] = usePrivateState(`provider-clientsSort:${provider.IdProveedor}`, [
+        { id: 'totalVentas', desc: true },
+    ]);
+    const [sellersSort, setSellersSort] = usePrivateState(`provider-sellersSort:${provider.IdProveedor}`, [
+        { id: 'totalVentas', desc: true },
+    ]);
+    const [productsSort, setProductsSort] = usePrivateState(`provider-productsSort:${provider.IdProveedor}`, [
+        { id: 'totalVentas', desc: true },
+    ]);
 
     // Sub-modals
     const [detailModalShow, setDetailModalShow] = useState(false);
@@ -245,7 +367,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const { data: summary, isLoading: summaryLoading } = useProviderSummary(
         provider?.IdProveedor,
         { from: dateRange.from, to: dateRange.to, showNoe },
-        enabled,
+        enabled && has('providers.details.read'),
     );
 
     const { data: purchasesData, isLoading: purchasesLoading } = useProviderPurchases(
@@ -259,7 +381,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             sortBy: purchasesSort[0]?.id,
             sortDir: purchasesSort[0]?.desc ? 'desc' : 'asc',
         },
-        enabled,
+        enabled && canPurchases && activeTab === 'compras',
     );
 
     const { data: salesData, isLoading: salesLoading } = useProviderSales(
@@ -274,7 +396,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             sortDir: salesSort[0]?.desc ? 'desc' : 'asc',
             showNoe,
         },
-        enabled,
+        enabled && canSales && activeTab === 'ventas',
     );
 
     const { data: clientsData, isLoading: clientsLoading } = useProviderClients(
@@ -289,7 +411,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             sortDir: clientsSort[0]?.desc ? 'desc' : 'asc',
             showNoe,
         },
-        enabled,
+        enabled && canClients && activeTab === 'clientes',
     );
 
     const {
@@ -308,7 +430,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             sortDir: sellersSort[0]?.desc ? 'desc' : 'asc',
             showNoe,
         },
-        enabled && activeTab === 'vendedores',
+        enabled && canSellers && activeTab === 'vendedores',
     );
 
     const { data: productsData, isLoading: productsLoading } = useProviderProducts(
@@ -323,7 +445,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             sortDir: productsSort[0]?.desc ? 'desc' : 'asc',
             showNoe,
         },
-        enabled,
+        enabled && has('providers.products.read') && activeTab === 'productos',
     );
 
     const handleDateRangeChange = ({ from, to }) => {
@@ -365,11 +487,15 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         setSalesPage(1);
     }, []);
     const handleClientsSort = useCallback((s) => {
-        setClientsSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
+        setClientsSort(
+            s.length ? s : [{ id: has('providers.clients.amounts') ? 'totalVentas' : 'cliente', desc: true }],
+        );
         setClientsPage(1);
     }, []);
     const handleSellersSort = useCallback((s) => {
-        setSellersSort(s.length ? s : [{ id: 'totalVentas', desc: true }]);
+        setSellersSort(
+            s.length ? s : [{ id: has('providers.sellers.amounts') ? 'totalVentas' : 'vendedor', desc: true }],
+        );
         setSellersPage(1);
     }, []);
     const handleProductsSort = useCallback((s) => {
@@ -384,7 +510,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 setSelectedPurchase(detail);
                 setDetailModalShow(true);
             } catch (err) {
-                console.error('Failed to fetch purchase detail:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [provider?.IdProveedor],
@@ -397,7 +524,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 setSelectedSale(detail);
                 setSaleDetailModalShow(true);
             } catch (err) {
-                console.error('Failed to fetch sale detail:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [provider?.IdProveedor, showNoe],
@@ -407,13 +535,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         async (purchase, e) => {
             if (e?.stopPropagation) e.stopPropagation();
             try {
-                const detail = await fetchPurchaseDetail(provider.IdProveedor, purchase.idFactura);
-                const rows = detail.productos.map((p) => [
-                    p.descripcion,
-                    String(Number(p.cantidad)),
-                    formatCurrency(p.precio),
-                    formatCurrency(p.subtotal),
-                ]);
+                const detail = await fetchProviderPurchaseExport(provider.IdProveedor, purchase.idFactura);
+                const table = documentTable(detail, formatCurrency);
                 pdfMake
                     .createPdf({
                         content: [
@@ -428,19 +551,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             { text: `Proveedor: ${provider.Empresa}`, style: 'subheader', margin: [0, 0, 0, 12] },
                             {
                                 style: 'table',
-                                table: {
-                                    widths: ['*', 'auto', 'auto', 'auto'],
-                                    body: [
-                                        ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
-                                        ...rows,
-                                        [
-                                            '',
-                                            '',
-                                            { text: 'Total', bold: true },
-                                            { text: formatCurrency(detail.total), bold: true },
-                                        ],
-                                    ],
-                                },
+                                table,
                             },
                         ],
                         styles: {
@@ -453,7 +564,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Failed to print purchase:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [provider?.IdProveedor, provider?.Empresa],
@@ -462,26 +574,20 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const handlePrintAllPurchases = useCallback(
         async (config) => {
             try {
-                const { fetchProviderPurchases } = await import('api/providers');
-                const result = await fetchProviderPurchases(provider.IdProveedor, {
+                const result = await fetchProviderExport(provider.IdProveedor, 'purchase-documents', {
                     from: dateRange.from,
                     to: dateRange.to,
-                    page: 1,
-                    limit: purchasesData?.total || 9999,
-                    search: purchasesSearch || undefined,
+                    search: config.search ?? purchasesSearch,
                 });
                 const invoices = sortRows(result.data || [], config?.sortBy);
                 const tables = [];
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
                 for (const inv of invoices) {
-                    const detail = await fetchPurchaseDetail(provider.IdProveedor, inv.idFactura);
-                    const rows = detail.productos.map((p) => [
-                        p.descripcion,
-                        String(Number(p.cantidad)),
-                        formatMoney(p.precio, currency, rate),
-                        formatMoney(p.subtotal, currency, rate),
-                    ]);
+                    const detail = inv.detail;
+                    const table = documentTable(detail, (value) => formatMoney(value, currency, rate));
                     tables.push(
                         {
                             text: `Factura: ${detail.idFactura} — ${DateTime.fromISO(detail.fecha).toFormat('dd/MM/yyyy')}`,
@@ -490,19 +596,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         },
                         {
                             style: 'table',
-                            table: {
-                                widths: ['*', 'auto', 'auto', 'auto'],
-                                body: [
-                                    ['Descripción', 'Cantidad', 'Precio', 'Subtotal'],
-                                    ...rows,
-                                    [
-                                        '',
-                                        '',
-                                        { text: 'Total', bold: true },
-                                        { text: formatMoney(detail.total, currency, rate), bold: true },
-                                    ],
-                                ],
-                            },
+                            table,
                         },
                     );
                 }
@@ -535,7 +629,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Failed to print all purchases:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [provider?.IdProveedor, provider?.Empresa, dateRange, purchasesSearch, purchasesData?.total, currencyRate],
@@ -544,28 +639,21 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const handlePrintAllSales = useCallback(
         async (config) => {
             try {
-                const { fetchProviderSales } = await import('api/providers');
-                const result = await fetchProviderSales(provider.IdProveedor, {
+                const result = await fetchProviderExport(provider.IdProveedor, 'sales-documents', {
                     from: dateRange.from,
                     to: dateRange.to,
-                    page: 1,
-                    limit: salesData?.total || 9999,
-                    search: salesSearch || undefined,
+                    search: config.search ?? salesSearch,
                     showNoe,
                 });
                 const invoices = sortRows(result.data || [], config?.sortBy);
                 const tables = [];
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
                 for (const inv of invoices) {
-                    const detail = await fetchSaleDetail(provider.IdProveedor, inv.idFactura, showNoe);
-                    const rows = detail.productos.map((p) => [
-                        p.descripcion,
-                        String(Number(p.cantidad)),
-                        formatMoney(p.precio, currency, rate),
-                        formatMoney(p.subtotal, currency, rate),
-                        formatMoney(p.utilidad, currency, rate),
-                    ]);
+                    const detail = inv.detail;
+                    const table = documentTable(detail, (value) => formatMoney(value, currency, rate));
                     tables.push(
                         {
                             text: `Factura: ${detail.idFactura} — ${DateTime.fromISO(detail.fecha).toFormat('dd/MM/yyyy')}`,
@@ -574,20 +662,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                         },
                         {
                             style: 'table',
-                            table: {
-                                widths: ['*', 'auto', 'auto', 'auto', 'auto'],
-                                body: [
-                                    ['Descripción', 'Cantidad', 'Precio', 'Subtotal', 'Utilidad'],
-                                    ...rows,
-                                    [
-                                        '',
-                                        '',
-                                        { text: 'Total', bold: true },
-                                        { text: formatMoney(detail.total, currency, rate), bold: true },
-                                        { text: formatMoney(detail.utilidad, currency, rate), bold: true },
-                                    ],
-                                ],
-                            },
+                            table,
                         },
                     );
                 }
@@ -620,7 +695,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Failed to print all sales:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [provider?.IdProveedor, provider?.Empresa, dateRange, salesSearch, salesData?.total, showNoe, currencyRate],
@@ -629,19 +705,21 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const handlePrintAllClients = useCallback(
         async (config) => {
             try {
-                const { fetchProviderClients } = await import('api/providers');
-                const result = await fetchProviderClients(provider.IdProveedor, {
+                const result = await fetchProviderExport(provider.IdProveedor, 'clients', {
                     from: dateRange.from,
                     to: dateRange.to,
-                    page: 1,
-                    limit: clientsData?.total || 9999,
-                    search: clientsSearch || undefined,
+                    search: config.search ?? clientsSearch,
                     showNoe,
                 });
                 const rows = sortRows(result.data || [], config?.sortBy);
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
-                const cols = config?.columns?.length ? config.columns : CLIENTS_COLUMNS;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
+                const cols = (config.columns || []).filter((column) =>
+                    result.columns.some((server) => server.key === column.accessor),
+                );
+                if (!cols.length) throw new Error('Selecciona columnas autorizadas.');
                 const body = [
                     cols.map((c) => c.Header),
                     ...rows.map((r) => cols.map((c) => printCellValue(c, r, currency, rate))),
@@ -680,7 +758,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Failed to print all clients:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [provider?.IdProveedor, provider?.Empresa, dateRange, clientsSearch, clientsData?.total, showNoe, currencyRate],
@@ -689,19 +768,21 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const handlePrintAllSellers = useCallback(
         async (config) => {
             try {
-                const { fetchProviderSellers } = await import('api/providers');
-                const result = await fetchProviderSellers(provider.IdProveedor, {
+                const result = await fetchProviderExport(provider.IdProveedor, 'sellers', {
                     from: dateRange.from,
                     to: dateRange.to,
-                    page: 1,
-                    limit: sellersData?.total || 9999,
-                    search: sellersSearch || undefined,
+                    search: config.search ?? sellersSearch,
                     showNoe,
                 });
                 const rows = sortRows(result.data || [], config?.sortBy);
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
-                const cols = config?.columns?.length ? config.columns : SELLERS_COLUMNS;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
+                const cols = (config.columns || []).filter((column) =>
+                    result.columns.some((server) => server.key === column.accessor),
+                );
+                if (!cols.length) throw new Error('Selecciona columnas autorizadas.');
                 const body = [
                     cols.map((c) => c.Header),
                     ...rows.map((r) => cols.map((c) => printCellValue(c, r, currency, rate))),
@@ -740,7 +821,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Failed to print all sellers:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [provider?.IdProveedor, provider?.Empresa, dateRange, sellersSearch, sellersData?.total, showNoe, currencyRate],
@@ -749,19 +831,21 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
     const handlePrintAllProducts = useCallback(
         async (config) => {
             try {
-                const { fetchProviderProducts } = await import('api/providers');
-                const result = await fetchProviderProducts(provider.IdProveedor, {
+                const result = await fetchProviderExport(provider.IdProveedor, 'products', {
                     from: dateRange.from,
                     to: dateRange.to,
-                    page: 1,
-                    limit: productsData?.total || 9999,
-                    search: productsSearch || undefined,
+                    search: config.search ?? productsSearch,
                     showNoe,
                 });
                 const rows = sortRows(result.data || [], config?.sortBy);
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
-                const cols = config?.columns?.length ? config.columns : PRODUCTS_COLUMNS;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
+                const cols = (config.columns || []).filter((column) =>
+                    result.columns.some((server) => server.key === column.accessor),
+                );
+                if (!cols.length) throw new Error('Selecciona columnas autorizadas.');
                 const body = [
                     cols.map((c) => c.Header),
                     ...rows.map((r) => cols.map((c) => printCellValue(c, r, currency, rate))),
@@ -800,7 +884,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Failed to print all products:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [
@@ -818,14 +903,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         async (sale, e) => {
             if (e?.stopPropagation) e.stopPropagation();
             try {
-                const detail = await fetchSaleDetail(provider.IdProveedor, sale.idFactura, showNoe);
-                const rows = detail.productos.map((p) => [
-                    p.descripcion,
-                    String(Number(p.cantidad)),
-                    formatCurrency(p.precio),
-                    formatCurrency(p.subtotal),
-                    formatCurrency(p.utilidad),
-                ]);
+                const detail = await fetchProviderSaleExport(provider.IdProveedor, sale.idFactura, showNoe);
+                const table = documentTable(detail, formatCurrency);
                 pdfMake
                     .createPdf({
                         content: [
@@ -840,20 +919,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             { text: `Proveedor: ${provider.Empresa}`, style: 'subheader', margin: [0, 0, 0, 12] },
                             {
                                 style: 'table',
-                                table: {
-                                    widths: ['*', 'auto', 'auto', 'auto', 'auto'],
-                                    body: [
-                                        ['Descripción', 'Cantidad', 'Precio', 'Subtotal', 'Utilidad'],
-                                        ...rows,
-                                        [
-                                            '',
-                                            '',
-                                            { text: 'Total', bold: true },
-                                            { text: formatCurrency(detail.total), bold: true },
-                                            { text: formatCurrency(detail.utilidad), bold: true },
-                                        ],
-                                    ],
-                                },
+                                table,
                             },
                         ],
                         styles: {
@@ -866,7 +932,8 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     })
                     .open();
             } catch (err) {
-                console.error('Failed to print sale:', err);
+                if (err.name !== 'AbortError')
+                    setPrintError('No se pudo completar la operación autorizada del proveedor.');
             }
         },
         [provider?.IdProveedor, provider?.Empresa, showNoe],
@@ -877,19 +944,19 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         () => [
             {
                 label: 'Total Compras',
-                value: formatCurrency(summary?.totalCompras ?? 0),
+                value: summary?.totalCompras == null ? 'No disponible' : formatCurrency(summary.totalCompras),
                 variant: 'primary',
                 icon: IconTicket,
             },
             {
                 label: 'Total Ventas',
-                value: formatCurrency(summary?.totalVentas ?? 0),
+                value: summary?.totalVentas == null ? 'No disponible' : formatCurrency(summary.totalVentas),
                 variant: 'info',
                 icon: IconSales,
             },
             {
                 label: 'Utilidad',
-                value: formatCurrency(summary?.utilidad ?? 0),
+                value: summary?.utilidad == null ? 'No disponible' : formatCurrency(summary.utilidad),
                 variant: 'success',
                 icon: IconProfit,
             },
@@ -898,6 +965,18 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             { label: 'Mejor Vendedor', value: summary?.bestSeller ?? '\u2014', variant: 'primary', icon: IconUserStar },
         ],
         [summary],
+    ).filter((stat) =>
+        Object.hasOwn(
+            summary || {},
+            {
+                'Total Compras': 'totalCompras',
+                'Total Ventas': 'totalVentas',
+                Utilidad: 'utilidad',
+                '# Compras': 'numCompras',
+                '# Ventas': 'numVentas',
+                'Mejor Vendedor': 'bestSeller',
+            }[stat.label],
+        ),
     );
 
     const avatarLetter = provider?.Empresa ? provider.Empresa.charAt(0).toUpperCase() : 'P';
@@ -909,7 +988,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         { key: 'clientes', label: 'Clientes' },
         { key: 'vendedores', label: 'Vendedores' },
         { key: 'productos', label: 'Productos' },
-    ];
+    ].filter((tab) => allowedTabs.includes(tab.key));
 
     // ── Render helpers ──
     const renderTable = (tab) => {
@@ -1025,16 +1104,28 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
         return (
             <Table
                 data={c.data?.data || []}
-                columns={c.columns}
+                columns={c.columns.filter(
+                    (column) =>
+                        !['utilidad', 'monto', 'totalVentas', 'cantidad', 'numClientes'].includes(column.accessor) ||
+                        c.data?.data?.some((row) => Object.hasOwn(row, column.accessor)) ||
+                        Object.hasOwn(c.data?.totals || {}, column.accessor),
+                )}
                 loading={c.loading}
                 showFooter={!!c.data?.totals}
                 summaries={c.data?.totals}
                 emptyMessage={c.emptyMessage}
-                onRowClick={c.onRowClick}
+                onRowClick={
+                    tab === 'vendedores' && !canClients
+                        ? undefined
+                        : tab === 'productos' && !canClients && !canSellers
+                          ? undefined
+                          : c.onRowClick
+                }
                 print={{
-                    enabled: true,
-                    onGlobalPrint: c.onGlobalPrint,
+                    enabled: c.data?.exportAllowed === true || (tab === 'ventas' && has('sales.export')),
+                    onGlobalPrint: c.data?.exportAllowed === true ? c.onGlobalPrint : undefined,
                     perRowPrint: Boolean(c.onRowPrint),
+                    canPrintRow: (row) => (tab === 'compras' ? can('purchases.export') : row.exportAllowed === true),
                     onRowPrint: c.onRowPrint,
                     defaultOrientation: 'portrait',
                     storageKey: `proveedor-${tab}`,
@@ -1050,6 +1141,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                 search={{
                     enabled: true,
                     onSearch: c.onSearch,
+                    initialValue: c.search,
                     placeholder: c.searchPlaceholder || `Buscar ${tab}...`,
                 }}
                 sorting={{ enabled: true, sortBy: c.sort, onSort: c.onSort }}
@@ -1062,7 +1154,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
             <Modal
                 show={show}
                 size="xl"
-                onHide={onClose}
+                onHide={close}
                 backdrop="static"
                 scrollable
                 className="provider-dashboard-modal"
@@ -1079,20 +1171,34 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                     </div>
                 </Modal.Header>
                 <Modal.Body>
-                    <div className="provider-date-picker-card">
-                        <div className="provider-date-picker-label">Rango de fechas</div>
-                        <DateRangePicker
-                            key={provider?.IdProveedor || 'picker'}
-                            initialFrom={oneMonthAgo}
-                            initialTo={today}
-                            onChange={handleDateRangeChange}
-                        />
-                    </div>
+                    {printError && (
+                        <div role="alert" className="alert alert-danger">
+                            {printError}
+                        </div>
+                    )}
+                    {(canSales || canPurchases) && (
+                        <div className="provider-date-picker-card">
+                            <div className="provider-date-picker-label">Rango de fechas</div>
+                            <DateRangePicker
+                                key={provider?.IdProveedor || 'picker'}
+                                initialFrom={dateRange.from}
+                                initialTo={dateRange.to}
+                                onChange={handleDateRangeChange}
+                            />
+                        </div>
+                    )}
 
                     <div className="provider-stats-row">
-                        {stats.map((stat) => (
-                            <StatCard key={stat.label} {...stat} loading={summaryLoading} />
-                        ))}
+                        {stats
+                            .filter(
+                                (stat) =>
+                                    has('providers.details.read') &&
+                                    (has('providers.details.amounts') ||
+                                        !['Total Compras', 'Total Ventas', 'Utilidad'].includes(stat.label)),
+                            )
+                            .map((stat) => (
+                                <StatCard key={stat.label} {...stat} loading={summaryLoading} />
+                            ))}
                     </div>
 
                     <div className="provider-tabs-container">
@@ -1100,6 +1206,7 @@ const ProviderDashboardModal = ({ show, onClose, provider }) => {
                             {tabs.map((t) => (
                                 <button
                                     key={t.key}
+                                    type="button"
                                     className={`provider-tab-button${activeTab === t.key ? ' active' : ''}`}
                                     onClick={() => setActiveTab(t.key)}
                                 >

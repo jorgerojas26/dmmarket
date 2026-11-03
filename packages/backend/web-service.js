@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const { createHash } = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const manifest = require("./caddy-manifest.json");
@@ -16,6 +17,10 @@ function webDirectory(platform = process.platform) {
   if (platform === "darwin") return "/Library/Application Support/DMMarket-web";
   if (platform === "win32") return path.win32.join(process.env.ProgramData || "C:\\ProgramData", "DMMarket-web");
   throw new Error("El proxy solo está disponible en Ubuntu, Windows y macOS.");
+}
+
+function rootCertificateFile(directory = webDirectory()) {
+  return path.join(directory, "data", "pki", "authorities", "local", "root.crt");
 }
 
 function managedWeb(directory = webDirectory()) {
@@ -57,20 +62,24 @@ function prepareWeb(configuration) {
   const bundled = path.join(path.dirname(process.execPath), "web", target, definition.binary);
   const source = verifiedCaddy(fs.existsSync(bundled) ? bundled : path.join(directory, definition.binary), target);
   if (process.platform !== "win32") fs.chmodSync(source, 0o755);
-  const result = spawnSync(source, ["validate", "--config", "-", "--adapter", "caddyfile"], {
-    encoding: "utf8",
-    input: caddyFile(configuration),
-    timeout: 15000,
-  });
-  if (result.error || result.status !== 0) {
-    throw new Error(`No se pudo validar Caddy: ${result.error?.message || result.stderr || result.stdout}`);
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "dmmarket-caddy-validate-"));
+  try {
+    const result = spawnSync(source, ["validate", "--config", "-", "--adapter", "caddyfile"], {
+      encoding: "utf8",
+      input: caddyFile(configuration, undefined, path.join(temporary, "data")),
+      timeout: 15000,
+    });
+    if (result.error || result.status !== 0) throw new Error("No se pudo validar la configuración HTTPS de Caddy.");
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
   }
+
   return { source, directory };
 }
 
 function webSystemdUnit(directory) {
   return `[Unit]
-Description=DMMarket HTTP proxy
+Description=DMMarket HTTPS proxy
 Wants=network-online.target
 After=network-online.target dmmarket.service
 StartLimitIntervalSec=0
@@ -88,7 +97,7 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=${directory}/logs
+ReadWritePaths=${directory}/logs ${directory}/data
 UMask=0027
 
 [Install]
@@ -138,11 +147,13 @@ function installWeb(configuration, plan) {
   const { directory, source } = plan;
   const binary = path.join(directory, process.platform === "win32" ? "caddy.exe" : "caddy");
   const logs = path.join(directory, "logs");
+  const data = path.join(directory, "data");
   fs.mkdirSync(directory, { recursive: true, mode: 0o755 });
   fs.mkdirSync(logs, { recursive: true, mode: 0o750 });
+  fs.mkdirSync(data, { recursive: true, mode: 0o700 });
   if (source !== binary) fs.copyFileSync(source, binary);
-  fs.writeFileSync(path.join(directory, "Caddyfile"), caddyFile(configuration, path.join(logs, "caddy.log")), {
-    mode: 0o644,
+  fs.writeFileSync(path.join(directory, "Caddyfile"), caddyFile(configuration, path.join(logs, "caddy.log"), data), {
+    mode: 0o600,
   });
   fs.writeFileSync(
     path.join(directory, "installation.json"),
@@ -161,6 +172,7 @@ function installWeb(configuration, plan) {
       "*S-1-5-19:(OI)(CI)RX",
     ]);
     run("icacls.exe", [logs, "/grant:r", "*S-1-5-19:(OI)(CI)M"]);
+    run("icacls.exe", [data, "/grant:r", "*S-1-5-19:(OI)(CI)M"]);
     const action = webServiceExists() ? "config" : "create";
     run("sc.exe", [
       action,
@@ -177,11 +189,12 @@ function installWeb(configuration, plan) {
     run("sc.exe", ["start", SERVICE]);
   } else {
     run("chown", ["-R", process.platform === "linux" ? "root:root" : "root:wheel", directory]);
-    fs.chmodSync(directory, 0o755);
+    fs.chmodSync(directory, process.platform === "linux" ? 0o750 : 0o700);
     fs.chmodSync(binary, 0o755);
-    fs.chmodSync(path.join(directory, "Caddyfile"), 0o644);
+    fs.chmodSync(path.join(directory, "Caddyfile"), process.platform === "linux" ? 0o640 : 0o600);
     if (process.platform === "linux") {
-      run("chown", ["-R", "dmmarket:dmmarket", logs]);
+      run("chown", ["root:dmmarket", directory, path.join(directory, "Caddyfile")]);
+      run("chown", ["-R", "dmmarket:dmmarket", logs, data]);
       fs.writeFileSync(UNIT, webSystemdUnit(directory), { mode: 0o644 });
       run("systemctl", ["daemon-reload"]);
       run("systemctl", ["enable", "--now", "dmmarket-web.service"]);
@@ -210,6 +223,7 @@ function uninstallWeb() {
 
 module.exports = {
   webDirectory,
+  rootCertificateFile,
   managedWeb,
   verifiedCaddy,
   prepareWeb,

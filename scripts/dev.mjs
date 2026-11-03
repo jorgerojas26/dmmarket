@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startDevelopmentHttps } from "./dev-https.mjs";
+import { acquireDevelopmentLock, run as runProcess } from "./dev-processes.mjs";
 
 const root = realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const directory = path.join(root, ".dev");
@@ -26,7 +28,7 @@ const command = process.argv[2] || "start";
 function environment(extra = {}) {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (/^(DATABASE_|BACKUP_|GOOGLE_DRIVE_|DMMARKET_|REACT_APP_|WDS_SOCKET_|PORTLESS_APP_PORT)/.test(key))
+    if (/^(DATABASE_|BACKUP_|GOOGLE_DRIVE_|DMMARKET_|REACT_APP_|WDS_SOCKET_|PORTLESS_APP_PORT|AUTH_|WEB_)/.test(key))
       delete env[key];
   }
   for (const key of ["PORT", "HOST", "PORTLESS", "PORTLESS_URL", "COMPOSE_FILE", "COMPOSE_PROJECT_NAME", "NODE_ENV"])
@@ -36,15 +38,18 @@ function environment(extra = {}) {
     DATABASE_HOST: "127.0.0.1",
     DATABASE_USER: "root",
     DATABASE_PASSWORD: "root",
-    DATABASE_NAME: "bdsolser_md_nieto",
+    DATABASE_NAME: settings.database || "bdsolser_md_nieto",
     BACKUP_DIRECTORY: path.join(directory, "backups"),
     BACKUP_DUMP_COMMAND: path.join(root, "scripts/dev-mysqldump.sh"),
     BACKUP_CONSISTENCY: "locked",
     GOOGLE_DRIVE_CLIENT_ID: "",
     GOOGLE_DRIVE_CLIENT_SECRET: "",
     DMMARKET_SERVICE: "0",
-    WEB_MODE: "direct",
+    WEB_MODE: "caddy",
     WEB_HOSTNAME: "",
+    AUTH_PUBLIC_ORIGIN: "",
+    AUTH_SESSION_SECRET: "",
+    AUTH_MFA_KEY: "",
     ...extra,
   };
 }
@@ -65,26 +70,7 @@ function capture(args, options = {}) {
 }
 
 async function run(args, options = {}) {
-  const child = Bun.spawn(args, {
-    cwd: root,
-    env: environment(),
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-    ...options,
-  });
-  const stop = (signal) => child.kill(signal);
-  const interrupt = () => stop("SIGINT");
-  const terminate = () => stop("SIGTERM");
-  process.on("SIGINT", interrupt);
-  process.on("SIGTERM", terminate);
-  try {
-    const code = await child.exited;
-    if (code !== 0) throw new Error(`${args.slice(0, 3).join(" ")} terminó con código ${code}.`);
-  } finally {
-    process.off("SIGINT", interrupt);
-    process.off("SIGTERM", terminate);
-  }
+  await runProcess(args, { cwd: root, env: environment(), ...options });
 }
 
 function dumpPath() {
@@ -159,7 +145,20 @@ function serviceUrl(name) {
 
 function showStatus() {
   console.log(`Worktree: ${root}\nIdentidad: ${id}\nCompose: ${project}\nVolumen: ${volume}`);
-  console.log(`Frontend: ${serviceUrl(frontend)}\nBackend: ${serviceUrl(backend)}`);
+  const stateFile = path.join(directory, "https.json");
+  let publicOrigin = "detenido; inicia el backend";
+  if (existsSync(stateFile)) {
+    const state = JSON.parse(readFileSync(stateFile, "utf8"));
+    try {
+      process.kill(state.pid, 0);
+      publicOrigin = state.origin;
+    } catch (error) {
+      if (error.code !== "ESRCH") throw error;
+    }
+  }
+  console.log(`Aplicación HTTPS: ${publicOrigin}`);
+  console.log(`Frontend interno: ${serviceUrl(frontend)}\nBackend interno: ${serviceUrl(backend)}`);
+  console.log(`CA local: ${path.join(directory, "caddy-data/pki/authorities/local/root.crt")}`);
   const env = databaseEnvironment();
   console.log(
     `MySQL: ${env.DATABASE_HOST}:${env.DATABASE_PORT}/${env.DATABASE_NAME}\nRespaldos: ${env.BACKUP_DIRECTORY}`,
@@ -167,29 +166,18 @@ function showStatus() {
 }
 
 function acquireSession() {
-  mkdirSync(directory, { recursive: true });
-  const lock = path.join(directory, "session.json");
-  if (existsSync(lock)) {
-    const previous = JSON.parse(readFileSync(lock, "utf8"));
-    let alive = true;
-    try {
-      process.kill(previous.pid, 0);
-    } catch (error) {
-      if (error.code === "ESRCH") alive = false;
-      else throw error;
-    }
-    if (alive) throw new Error(`Ya hay una sesión de desarrollo activa (PID ${previous.pid}).`);
-    rmSync(lock);
-  }
-  writeFileSync(lock, JSON.stringify({ pid: process.pid }), { flag: "wx" });
-  return () => rmSync(lock, { force: true });
+  return acquireDevelopmentLock(directory, "session");
 }
 
 async function main() {
   switch (command) {
     case "start": {
-      const release = acquireSession();
+      const release = await acquireSession();
       try {
+        for (const service of ["backend", "frontend"]) {
+          const releaseService = await acquireDevelopmentLock(directory, service);
+          releaseService();
+        }
         await prepare();
         await run(["mprocs", "--config", path.join(root, "mprocs.yaml")]);
       } finally {
@@ -198,7 +186,7 @@ async function main() {
       break;
     }
     case "prepare": {
-      const release = acquireSession();
+      const release = await acquireSession();
       try {
         await prepare();
       } finally {
@@ -206,24 +194,80 @@ async function main() {
       }
       break;
     }
-    case "backend":
-      await run(["portless", "--name", backend, "bun", "run", "start"], {
-        cwd: path.join(root, "packages/backend"),
-        env: databaseEnvironment(),
-      });
+    case "backend": {
+      const release = await acquireDevelopmentLock(directory, "backend");
+      try {
+        await run(["portless", "--name", backend, "bun", path.join(root, "scripts/dev.mjs"), "backend:serve"], {
+          env: databaseEnvironment(),
+          processGroup: true,
+          onSpawn: release.trackChild,
+        });
+      } finally {
+        release();
+      }
       break;
-    case "frontend": {
-      databaseEnvironment();
-      await run(["portless", "--name", frontend, "bun", "run", "start"], {
-        cwd: path.join(root, "packages/frontend"),
-        env: environment({ DMMARKET_API_URL: serviceUrl(backend), BROWSER: "none" }),
+    }
+    case "backend:serve": {
+      const proxy = await startDevelopmentHttps({
+        root,
+        env: process.env,
+        frontendUrl: serviceUrl(frontend),
       });
+      console.log(`Aplicación HTTPS: ${proxy.env.AUTH_PUBLIC_ORIGIN}`);
+      console.log(`Confía la CA local en tu sistema/navegador: ${proxy.certificate}`);
+      let child;
+      const stop = () => {
+        void proxy.close();
+      };
+      process.on("SIGINT", stop);
+      process.on("SIGTERM", stop);
+      try {
+        await Promise.race([
+          run(["bun", "run", "start"], {
+            cwd: path.join(root, "packages/backend"),
+            env: proxy.env,
+            processGroup: true,
+            onSpawn: (process) => {
+              child = process;
+            },
+          }),
+          proxy.exited.then(() => {
+            throw new Error("El proxy HTTPS se detuvo.");
+          }),
+        ]);
+      } finally {
+        if (child && child.exitCode === null) {
+          child.kill("SIGTERM");
+          await child.exited;
+        }
+        await proxy.close();
+        process.off("SIGINT", stop);
+        process.off("SIGTERM", stop);
+      }
+      break;
+    }
+    case "frontend": {
+      const release = await acquireDevelopmentLock(directory, "frontend");
+      try {
+        databaseEnvironment();
+        await run(["portless", "--name", frontend, "bun", "run", "start"], {
+          cwd: path.join(root, "packages/frontend"),
+          processGroup: true,
+          onSpawn: release.trackChild,
+          env: environment({
+            DMMARKET_API_URL: serviceUrl(backend),
+            BROWSER: "none",
+            HTTPS: "false",
+            WDS_SOCKET_PORT: "",
+          }),
+        });
+      } finally {
+        release();
+      }
       break;
     }
     case "test:backend":
-      await run(["bun", "--filter", "@dmmarket/backend", "test", "--runInBand", ...process.argv.slice(3)], {
-        env: databaseEnvironment(),
-      });
+      await run(["bun", "run", "test:backend", ...process.argv.slice(3)]);
       break;
     case "logs":
       await run(compose(["logs", "--follow", "--tail", "100", "mysql"]), { env: composeEnvironment() });
@@ -242,7 +286,7 @@ async function main() {
       break;
     case "down":
     case "reset": {
-      const release = acquireSession();
+      const release = await acquireSession();
       try {
         if (command === "reset") {
           if (process.argv[3] !== "--confirm" || process.argv[4] !== project)
@@ -256,7 +300,11 @@ async function main() {
               throw new Error("El volumen no pertenece a este worktree. No se borró nada.");
           }
         }
-        await run(compose(["down", ...(command === "reset" ? ["--volumes"] : [])]), { env: composeEnvironment() });
+        await run(compose(["rm", "--stop", "--force", "mysql"]), { env: composeEnvironment() });
+        if (command === "reset") {
+          const existing = capture(["docker", "volume", "ls", "--quiet", "--filter", `name=^${volume}$`]);
+          if (existing) await run(["docker", "volume", "rm", volume]);
+        }
       } finally {
         release();
       }

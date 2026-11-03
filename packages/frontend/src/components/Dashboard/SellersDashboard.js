@@ -6,7 +6,7 @@ import Table from 'components/Table';
 import { useSellersDashboard } from 'hooks/useSellers';
 import { DateTime } from 'luxon';
 import { useMemo } from 'react';
-import { computeComparison, formatCurrency, formatNumber, formatPercent } from 'utils/format';
+import { computeComparison, formatCurrency, formatNumber, formatPercent, getReportCurrency } from 'utils/format';
 import KpiCard from './KpiCard';
 import PanelHelpTitle from './PanelHelpTitle';
 
@@ -29,7 +29,7 @@ const nivoTheme = {
 };
 
 const axisMoney = (value) =>
-    Number(value) >= 1000 ? `$${(Number(value) / 1000).toFixed(0)}k` : `$${formatNumber(Number(value))}`;
+    Number(value) >= 1000 ? `${getReportCurrency()} ${(Number(value) / 1000).toFixed(0)}k` : formatCurrency(value);
 
 const INACTIVE_COLUMNS = [
     { Header: 'Vendedor', accessor: 'name' },
@@ -42,6 +42,7 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
     const kpis = data?.kpis;
     const ranking = useMemo(() => data?.ranking || [], [data?.ranking]);
 
+    const financial = Object.hasOwn(kpis || {}, 'marginPercent');
     const chartRanking = useMemo(
         () => [...ranking].reverse().map((row) => ({ ...row, Ventas: row.sales, Utilidad: row.profit })),
         [ranking],
@@ -197,7 +198,7 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
                                 accent="amber"
                                 help={{
                                     que: 'Qué parte de las ventas generan los 3 vendedores que más venden.',
-                                    leer: '60% = 3 vendedores explican 60 de cada 100 dólares vendidos.',
+                                    leer: '60% = 3 vendedores explican 60 de cada 100 unidades monetarias vendidas.',
                                     servir: 'Medir dependencia del equipo: si es muy alto, el negocio descansa en pocas personas.',
                                 }}
                             />
@@ -233,8 +234,16 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
                                         <strong>{formatCurrency(datum.value)}</strong>
                                         <span>Participación</span>
                                         <strong>{formatPercent(datum.data.sharePercent)}</strong>
-                                        <span>Utilidad</span>
-                                        <strong>{formatCurrency(datum.data.profit)}</strong>
+                                        {financial && (
+                                            <>
+                                                <span>Utilidad</span>
+                                                <strong>
+                                                    {datum.data.profit == null
+                                                        ? 'No disponible'
+                                                        : formatCurrency(datum.data.profit)}
+                                                </strong>
+                                            </>
+                                        )}
                                         <span>Facturas</span>
                                         <strong>{formatNumber(datum.data.invoiceCount)}</strong>
                                     </ChartTooltip>
@@ -262,7 +271,7 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
                                 <ResponsiveBar
                                     data={chartRanking}
                                     theme={nivoTheme}
-                                    keys={['Ventas', 'Utilidad']}
+                                    keys={financial ? ['Ventas', 'Utilidad'] : ['Ventas']}
                                     indexBy="name"
                                     layout="horizontal"
                                     margin={{ top: 10, right: 70, bottom: 40, left: 150 }}
@@ -380,7 +389,11 @@ const SellersDashboard = ({ dateRange, showNoe, onSellerSelect }) => {
                         />
                         <Table
                             data={data?.inactiveSellers || []}
-                            columns={INACTIVE_COLUMNS}
+                            columns={INACTIVE_COLUMNS.filter(
+                                (column) =>
+                                    column.accessor !== 'phone' ||
+                                    data?.inactiveSellers?.some((row) => Object.hasOwn(row, 'phone')),
+                            )}
                             maxHeight={300}
                             emptyMessage="Todos los vendedores vendieron en el período"
                             onRowClick={onSellerSelect}

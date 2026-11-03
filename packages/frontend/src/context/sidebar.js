@@ -1,5 +1,5 @@
 import useMediaQuery from 'hooks/useMediaQuery';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useLayoutEffect, useState } from 'react';
 
 // Crea el contexto con un valor inicial
 export const SidebarContext = createContext({
@@ -14,11 +14,15 @@ export const SidebarProvider = ({ children }) => {
     // cualquier tamaño de pantalla.
     const isLaptop = !useMediaQuery('(min-width: 1400px)');
     const [collapsed, setCollapsed] = useState(() => {
-        const stored = localStorage.getItem('sidebarCollapsed');
-        return stored != null ? stored === 'true' : isLaptop;
+        try {
+            const stored = localStorage.getItem('sidebarCollapsed');
+            return stored != null ? stored === 'true' : isLaptop;
+        } catch {
+            return isLaptop;
+        }
     });
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         document.body.classList.toggle('sidebar-collapsed', collapsed);
         return () => document.body.classList.remove('sidebar-collapsed');
     }, [collapsed]);
@@ -27,7 +31,9 @@ export const SidebarProvider = ({ children }) => {
         // Persistir la elección del usuario (deja de aplicarse el default por viewport).
         const next = !collapsed;
         setCollapsed(next);
-        localStorage.setItem('sidebarCollapsed', next.toString());
+        try {
+            localStorage.setItem('sidebarCollapsed', next.toString());
+        } catch {}
     };
 
     return <SidebarContext.Provider value={{ collapsed, toggleCollapsed }}>{children}</SidebarContext.Provider>;

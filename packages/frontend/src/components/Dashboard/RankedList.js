@@ -11,23 +11,32 @@ const barColors = [
     '#f97316',
 ];
 
-const RankedList = ({ data = [], valueKey, valueFormat, nameKey, secondary, emptyMessage = 'Sin datos' }) => {
+const RankedList = ({
+    data = [],
+    valueKey,
+    valueFormat,
+    nameKey,
+    secondary,
+    idKey = 'id',
+    emptyMessage = 'Sin datos',
+}) => {
     if (!data.length) {
         return <div className="ranked-empty">{emptyMessage}</div>;
     }
 
-    const maxVal = Math.max(...data.map((d) => d[valueKey] || 0), 1);
+    const known = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+    const maxVal = Math.max(...data.filter((row) => known(row[valueKey])).map((row) => Number(row[valueKey])), 1);
 
     return (
         <div className="ranked-list">
             {data.map((item, i) => {
-                const val = item[valueKey] || 0;
-                const pct = (val / maxVal) * 100;
+                const val = known(item[valueKey]) ? Number(item[valueKey]) : null;
+                const pct = val === null ? 0 : Math.max(0, (val / maxVal) * 100);
                 const secondaryText = secondary ? secondary.render(item) : null;
                 const color = barColors[i % barColors.length];
 
                 return (
-                    <div key={i} className="ranked-row">
+                    <div key={item[idKey] ?? item[nameKey]} className="ranked-row">
                         <div className="ranked-top">
                             <span className="ranked-pos" style={{ color }}>
                                 {i + 1}
@@ -39,7 +48,7 @@ const RankedList = ({ data = [], valueKey, valueFormat, nameKey, secondary, empt
                             <div className="ranked-bar">
                                 <div className="ranked-bar-fill" style={{ width: `${pct}%`, background: color }} />
                             </div>
-                            <span className="ranked-value">{valueFormat(val)}</span>
+                            <span className="ranked-value">{val === null ? 'No disponible' : valueFormat(val)}</span>
                         </div>
                     </div>
                 );

@@ -1,4 +1,5 @@
-import { fetchReceivables } from 'api/receivables';
+import { fetchReceivableExport } from 'api/receivables';
+import { useAuth } from 'auth/context';
 import RouteFilter from 'components/RouteFilter';
 import { darkSelectStyles } from 'components/selectStyles';
 import Table from 'components/Table';
@@ -11,10 +12,12 @@ import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
 import Select from 'react-select';
-import { formatMoney } from 'utils/format';
+import { formatUsdMoney as formatMoney } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
+import { useReceivablesAccess } from './access';
 import ClientModal from './ClientModal';
 import { dateLabel, money } from './format';
+import PaymentAvailability from './PaymentAvailability';
 import PaymentDrawer from './PaymentDrawer';
 import Summary from './Summary';
 import './styles.css';
@@ -36,6 +39,8 @@ const stateOptions = [
 const accountState = (client) => (Number(client.balance) > 0 ? 'Con deuda' : 'Sin deuda pendiente');
 
 export default function Receivables() {
+    const { can } = useAuth();
+    const { canOperate, canExport } = useReceivablesAccess();
     const [view, setView] = useState('debt');
     const [state, setState] = useState('all');
     const [search, setSearch] = useState('');
@@ -43,7 +48,7 @@ export default function Receivables() {
     const [ruta, setRuta] = useState('');
     const [due, setDue] = useState('all');
     const [page, setPage] = useState(1);
-    const [sort, setSort] = useState({ sortBy: 'overdue', sortDir: 'desc' });
+    const [sort, setSort] = useState({ sortBy: can('amounts') ? 'overdue' : 'name', sortDir: 'desc' });
     const [selected, setSelected] = useState(null);
     const [lastSummary, setLastSummary] = useState(null);
     const pageElement = useRef(null);
@@ -78,94 +83,101 @@ export default function Receivables() {
         setPayment({ client });
     }, []);
     const columns = useMemo(
-        () => [
-            {
-                Header: 'Cliente',
-                accessor: 'name',
-                Cell: ({ row }) => (
-                    <Button
-                        variant="link"
-                        className="cxc-client-link"
-                        id={`cxc-client-${encodeURIComponent(row.original.id)}`}
-                        title={row.original.name || row.original.id}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            openAccount(row.original);
-                        }}
-                    >
-                        {row.original.name || row.original.id}
-                    </Button>
-                ),
-            },
-            ...(isHistory
-                ? [
-                      {
-                          Header: 'Estado',
-                          accessor: 'accountState',
-                          disableSortBy: true,
-                          Cell: ({ row }) => (
-                              <span
-                                  className={`cxc-badge${Number(row.original.balance) > 0 ? ' cxc-badge-pending' : ''}`}
-                              >
-                                  {accountState(row.original)}
-                              </span>
-                          ),
-                      },
-                  ]
-                : []),
-            {
-                Header: isHistory ? 'Saldo actual' : 'Saldo pendiente',
-                accessor: 'balance',
-                Cell: ({ value }) => money(value),
-            },
-            ...(!isHistory
-                ? [
-                      {
-                          Header: 'Vencido',
-                          accessor: 'overdue',
-                          Cell: ({ value }) => (
-                              <span className={Number(value) > 0 ? 'cxc-overdue' : ''}>{money(value)}</span>
-                          ),
-                      },
-                      { Header: 'Facturas pendientes', accessor: 'pendingCount' },
-                  ]
-                : []),
-            { Header: 'Último abono', accessor: 'lastPayment', Cell: ({ value }) => dateLabel(value) },
-            {
-                Header: 'Acciones',
-                id: 'actions',
-                disableSortBy: true,
-                Cell: ({ row }) =>
-                    isHistory ? (
+        () =>
+            [
+                {
+                    Header: 'Cliente',
+                    accessor: 'name',
+                    Cell: ({ row }) => (
                         <Button
-                            size="sm"
-                            variant="outline-secondary"
-                            aria-label={`Ver historial de ${row.original.name || row.original.id}`}
+                            variant="link"
+                            className="cxc-client-link"
+                            id={`cxc-client-${encodeURIComponent(row.original.id)}`}
+                            title={row.original.name || row.original.id}
                             onClick={(event) => {
                                 event.stopPropagation();
                                 openAccount(row.original);
                             }}
                         >
-                            Ver historial
-                        </Button>
-                    ) : (
-                        <Button
-                            size="sm"
-                            variant="outline-primary"
-                            id={`cxc-pay-${encodeURIComponent(row.original.id)}`}
-                            aria-label={`Abonar a ${row.original.name || row.original.id}`}
-                            disabled={!data || !!error || isValidating || Number(row.original.balance) <= 0}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                openPayment(row.original, event.currentTarget.id);
-                            }}
-                        >
-                            Abonar
+                            {row.original.name || row.original.id}
                         </Button>
                     ),
-            },
-        ],
-        [isHistory, openAccount, openPayment, data, error, isValidating],
+                },
+                ...(isHistory
+                    ? [
+                          {
+                              Header: 'Estado',
+                              accessor: 'accountState',
+                              disableSortBy: true,
+                              Cell: ({ row }) => (
+                                  <span
+                                      className={`cxc-badge${Number(row.original.balance) > 0 ? ' cxc-badge-pending' : ''}`}
+                                  >
+                                      {accountState(row.original)}
+                                  </span>
+                              ),
+                          },
+                      ]
+                    : []),
+                {
+                    Header: isHistory ? 'Saldo actual' : 'Saldo pendiente',
+                    accessor: 'balance',
+                    Cell: ({ value }) => money(value),
+                },
+                ...(!isHistory
+                    ? [
+                          {
+                              Header: 'Vencido',
+                              accessor: 'overdue',
+                              Cell: ({ value }) => (
+                                  <span className={Number(value) > 0 ? 'cxc-overdue' : ''}>{money(value)}</span>
+                              ),
+                          },
+                          { Header: 'Facturas pendientes', accessor: 'pendingCount' },
+                      ]
+                    : []),
+                { Header: 'Último abono', accessor: 'lastPayment', Cell: ({ value }) => dateLabel(value) },
+                {
+                    Header: 'Acciones',
+                    id: 'actions',
+                    disableSortBy: true,
+                    Cell: ({ row }) =>
+                        isHistory ? (
+                            <Button
+                                size="sm"
+                                variant="outline-secondary"
+                                aria-label={`Ver historial de ${row.original.name || row.original.id}`}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    openAccount(row.original);
+                                }}
+                            >
+                                Ver historial
+                            </Button>
+                        ) : (
+                            <Button
+                                size="sm"
+                                variant="outline-primary"
+                                id={`cxc-pay-${encodeURIComponent(row.original.id)}`}
+                                aria-label={`Abonar a ${row.original.name || row.original.id}`}
+                                disabled={
+                                    !canOperate('payment') ||
+                                    !data ||
+                                    !!error ||
+                                    isValidating ||
+                                    Number(row.original.balance) <= 0
+                                }
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    openPayment(row.original, event.currentTarget.id);
+                                }}
+                            >
+                                Abonar
+                            </Button>
+                        ),
+                },
+            ].filter(({ id }) => id !== 'actions' || isHistory || can('receivables.payment')),
+        [isHistory, openAccount, openPayment, data, error, isValidating, canOperate, can],
     );
     const handlePrint = useCallback(
         async (config) => {
@@ -179,13 +191,10 @@ export default function Receivables() {
                     sortDir: sort.sortDir,
                     limit: 100,
                 };
-                const firstPage = await fetchReceivables({ ...filters, page: 1 });
-                const rows = [...(firstPage.data || [])];
-                for (let currentPage = 2; rows.length < firstPage.total; currentPage += 1) {
-                    const result = await fetchReceivables({ ...filters, page: currentPage });
-                    if (!result.data?.length) break;
-                    rows.push(...result.data);
-                }
+                delete filters.limit;
+                filters.search = config.search ?? search;
+                const report = await fetchReceivableExport(filters);
+                const rows = report.data;
                 const columnsByAccessor = {
                     name: { width: '*', render: (row) => row.name || row.id },
                     accountState: { width: 110, render: accountState },
@@ -221,10 +230,10 @@ export default function Receivables() {
                         },
                         ...(filtersLabel ? [{ text: filtersLabel, style: 'subtitle' }] : []),
                         {
-                            text: `Resumen de cartera${ruta ? ` · Ruta: ${ruta}` : ''}: Saldo pendiente: ${formatMoney(firstPage.summary.balance, config.currency, currencyRate?.Cambio)}  |  Saldo vencido: ${formatMoney(firstPage.summary.overdue, config.currency, currencyRate?.Cambio)}`,
+                            text: `Resumen de cartera${ruta ? ` · Ruta: ${ruta}` : ''}: Saldo pendiente: ${formatMoney(report.summary.balance, config.currency, currencyRate?.Cambio)}  |  Saldo vencido: ${formatMoney(report.summary.overdue, config.currency, currencyRate?.Cambio)}`,
                             style: 'summary',
                         },
-                        { text: `Clientes en la consulta: ${firstPage.total}`, style: 'summary' },
+                        { text: `Clientes en la consulta: ${report.total}`, style: 'summary' },
                         {
                             style: 'table',
                             table: {
@@ -262,17 +271,61 @@ export default function Receivables() {
         if (!next || next === view) return;
         setView(next);
         setPage(1);
-        setSort(next === 'history' ? { sortBy: 'name', sortDir: 'asc' } : { sortBy: 'overdue', sortDir: 'desc' });
+        setSort(
+            next === 'history' || !can('amounts')
+                ? { sortBy: 'name', sortDir: 'asc' }
+                : { sortBy: 'overdue', sortDir: 'desc' },
+        );
     };
+    if (error?.code === 'CXC_SCHEMA_UNAVAILABLE') {
+        return (
+            <section className="cxc-page cxc-page-unavailable" ref={pageElement}>
+                <header className="clients-content-wrapper report-page-header">
+                    <h4 className="m-0 text-light">Cuentas por cobrar</h4>
+                </header>
+                <div className="cxc-unavailable" role="status">
+                    <div className="cxc-unavailable__icon" aria-hidden="true">
+                        <svg
+                            aria-hidden="true"
+                            width="28"
+                            height="28"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                        >
+                            <title>Cobranza pendiente de habilitación</title>
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <path d="M14 2v6h6M8 12h8M8 16h4" />
+                        </svg>
+                    </div>
+                    <h2>Cobranza no habilitada</h2>
+                    <p>La cartera de este negocio necesita prepararse antes de gestionar deudas y abonos.</p>
+                    <span className="cxc-unavailable__note">Puedes seguir usando el resto del sistema.</span>
+                </div>
+            </section>
+        );
+    }
     return (
         <section className="cxc-page" ref={pageElement}>
             <header className="clients-content-wrapper report-page-header">
                 <div>
                     <h4 className="m-0 text-light">Cuentas por cobrar</h4>
                 </div>
-                <Button ref={paymentTrigger} disabled={!data || !!error} onClick={() => openPayment(null, null)}>
-                    Registrar abono
-                </Button>
+                {can('receivables.payment') && (
+                    <div className="cxc-payment-actions">
+                        <PaymentAvailability />
+                        <Button
+                            ref={paymentTrigger}
+                            disabled={!canOperate('payment') || !data || !!error}
+                            onClick={() => openPayment(null, null)}
+                        >
+                            Registrar abono
+                        </Button>
+                    </div>
+                )}
             </header>
             {error && (
                 <Alert variant="danger" role="alert">
@@ -288,6 +341,7 @@ export default function Receivables() {
             <div className="cxc-filters clients-content-wrapper">
                 <Form.Group className="cxc-filter cxc-route-filter">
                     <RouteFilter
+                        enabled={can('clients.read')}
                         inputId="cxc-route"
                         value={ruta ? { value: ruta, label: ruta } : null}
                         onChange={changeFilter(setRuta, '')}
@@ -410,8 +464,10 @@ export default function Receivables() {
                             },
                         }}
                         print={{
-                            enabled: true,
+                            enabled: canExport && Boolean(data) && !error,
                             onGlobalPrint: handlePrint,
+                            currencyConversion: true,
+                            baseCurrency: 'USD',
                             columns: columns.filter((column) => column.id !== 'actions'),
                             storageKey: isHistory ? 'cuentas-por-cobrar-historial' : 'cuentas-por-cobrar',
                             defaultOrientation: 'landscape',

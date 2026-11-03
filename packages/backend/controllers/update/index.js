@@ -55,159 +55,169 @@ const requireStandalone = (res) => {
 
 // Consulta GitHub Releases y compara semver contra la versión actual.
 // El fetch lo hace el server (no el browser) — mismo origin, sin CORS.
-const POST_CHECK = async (_req, res) => {
-  try {
-    const response = await fetchWithTimeout(GITHUB_API, {
-      headers: {
-        "User-Agent": "dmmarket-updater",
-        Accept: "application/vnd.github+json",
-      },
-    });
-
-    if (response.status === 404) {
-      return res.status(404).json({ error: { message: "No hay nuevas actualizaciones" } });
-    }
-    if (response.status === 403 || response.status === 429) {
-      return res.status(429).json({
-        error: { message: "Hubo un error. Intente de nuevo más tarde" },
-      });
-    }
-    if (!response.ok) {
-      return res.status(502).json({ error: { message: `HTTP error: ${response.status}` } });
-    }
-
-    const release = await response.json();
-    const assetsFor = ASSETS_BY_PLATFORM[process.platform];
-    if (!assetsFor) {
-      return res.status(400).json({
-        error: { message: "El auto-update no está disponible en esta plataforma" },
-      });
-    }
-    const binary = release.assets?.find((asset) => asset.name === assetsFor.binary);
-    const sha256 = release.assets?.find((asset) => asset.name === assetsFor.sha);
-    if (!binary || !sha256) {
-      return res.status(502).json({
-        error: {
-          message: "Release inválida. Por favor contacte a su administrador",
+function createUpdateReader(request = fetchWithTimeout) {
+  const POST_CHECK = async (_req, res) => {
+    try {
+      const response = await request(GITHUB_API, {
+        headers: {
+          "User-Agent": "dmmarket-updater",
+          Accept: "application/vnd.github+json",
         },
       });
+
+      if (response.status === 404) {
+        return res.status(404).json({ error: { message: "No hay nuevas actualizaciones" } });
+      }
+      if (response.status === 403 || response.status === 429) {
+        return res.status(429).json({
+          error: { message: "Hubo un error. Intente de nuevo más tarde" },
+        });
+      }
+      if (!response.ok) {
+        return res.status(502).json({ error: { message: `HTTP error: ${response.status}` } });
+      }
+
+      const release = await response.json();
+      const assetsFor = ASSETS_BY_PLATFORM[process.platform];
+      if (!assetsFor) {
+        return res.status(400).json({
+          error: { message: "El auto-update no está disponible en esta plataforma" },
+        });
+      }
+      const binary = release.assets?.find((asset) => asset.name === assetsFor.binary);
+      const sha256 = release.assets?.find((asset) => asset.name === assetsFor.sha);
+      if (!binary || !sha256) {
+        return res.status(502).json({
+          error: {
+            message: "Release inválida. Por favor contacte a su administrador",
+          },
+        });
+      }
+
+      const latestVersion = String(release.tag_name || "").replace(/^v/, "");
+      const comparison = compareSemver(latestVersion, version);
+      if (Number.isNaN(comparison)) {
+        return res.status(502).json({ error: { message: `Versión de la release inválida: ${release.tag_name}` } });
+      }
+
+      res.status(200).json({
+        updateAvailable: comparison > 0,
+        latestVersion,
+        notes: release.body || "",
+        publishedAt: release.published_at || null,
+        assetUrl: binary.browser_download_url,
+        sha256AssetUrl: sha256.browser_download_url,
+      });
+    } catch (_error) {
+      res.status(502).json({ error: { message: "No se pudo contactar al servidor. Revisá tu conexión a internet." } });
     }
+  };
 
-    const latestVersion = String(release.tag_name || "").replace(/^v/, "");
-    const comparison = compareSemver(latestVersion, version);
-    if (Number.isNaN(comparison)) {
-      return res.status(502).json({ error: { message: `Versión de la release inválida: ${release.tag_name}` } });
+  // Historial de versiones: las últimas releases publicadas (sin drafts ni
+  // prereleases) con sus notas. Para el panel "Acerca de" de Configuración.
+  const GET_HISTORY = async (_req, res) => {
+    try {
+      const response = await request(GITHUB_RELEASES_API, {
+        headers: {
+          "User-Agent": "dmmarket-updater",
+          Accept: "application/vnd.github+json",
+        },
+      });
+      if (!response.ok) {
+        return res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
+      }
+
+      const releases = await response.json();
+      const history = releases
+        .filter((r) => !r.draft && !r.prerelease)
+        .map((r) => ({
+          version: String(r.tag_name || "").replace(/^v/, ""),
+          publishedAt: r.published_at || null,
+          notes: r.body || "",
+        }));
+
+      res.status(200).json(history);
+    } catch (_error) {
+      res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
     }
+  };
 
-    res.status(200).json({
-      updateAvailable: comparison > 0,
-      latestVersion,
-      notes: release.body || "",
-      publishedAt: release.published_at || null,
-      assetUrl: binary.browser_download_url,
-      sha256AssetUrl: sha256.browser_download_url,
-    });
-  } catch (_error) {
-    res.status(502).json({ error: { message: "No se pudo contactar al servidor. Revisá tu conexión a internet." } });
-  }
-};
-
-// Historial de versiones: las últimas releases publicadas (sin drafts ni
-// prereleases) con sus notas. Para el panel "Acerca de" de Configuración.
-const GET_HISTORY = async (_req, res) => {
-  try {
-    const response = await fetchWithTimeout(GITHUB_RELEASES_API, {
-      headers: {
-        "User-Agent": "dmmarket-updater",
-        Accept: "application/vnd.github+json",
-      },
-    });
-    if (!response.ok) {
-      return res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
-    }
-
-    const releases = await response.json();
-    const history = releases
-      .filter((r) => !r.draft && !r.prerelease)
-      .map((r) => ({
-        version: String(r.tag_name || "").replace(/^v/, ""),
-        publishedAt: r.published_at || null,
-        notes: r.body || "",
-      }));
-
-    res.status(200).json(history);
-  } catch (_error) {
-    res.status(502).json({ error: { message: "No se pudo obtener el historial de versiones" } });
-  }
-};
+  return { POST_CHECK, GET_HISTORY };
+}
+const { POST_CHECK, GET_HISTORY } = createUpdateReader();
 
 // Descarga el binario a .dmmarket-update/new.exe y verifica sha256 contra el asset de la release.
 // Con hash que no coincide se borra todo y se responde error: nunca se aplica un binario corrupto.
-const POST_DOWNLOAD = async (req, res) => {
-  if (!requireStandalone(res)) return;
+function createUpdateInstaller(fetchAsset = fetch) {
+  const POST_DOWNLOAD = async (req, res) => {
+    if (!requireStandalone(res)) return;
 
-  const { assetUrl, sha256AssetUrl } = req.body || {};
-  if (!assetUrl || !sha256AssetUrl) {
-    return res
-      .status(400)
-      .json({ error: { message: "Faltan las URLs de descarga. Vuelve a buscar actualizaciones." } });
-  }
-  if (downloadState.active) {
-    return res.status(409).json({ error: { message: "Ya hay una descarga en curso" } });
-  }
-
-  downloadState.active = true;
-  downloadState.bytes = 0;
-  downloadState.total = 0;
-  fs.mkdirSync(UPDATE_DIR, { recursive: true });
-  const tmpPath = `${NEW_BINARY}.tmp`;
-  fs.rmSync(tmpPath, { force: true });
-
-  try {
-    // 1. Binario (streaming, con progreso).
-    const exeResponse = await fetch(assetUrl, { signal: AbortSignal.timeout(600_000) });
-    if (!exeResponse.ok) {
-      throw new Error(`La descarga del binario falló (HTTP ${exeResponse.status})`);
+    const { assetUrl, sha256AssetUrl } = req.body || {};
+    if (!assetUrl || !sha256AssetUrl) {
+      return res
+        .status(400)
+        .json({ error: { message: "Faltan las URLs de descarga. Vuelve a buscar actualizaciones." } });
     }
-    downloadState.total = Number(exeResponse.headers.get("content-length")) || 0;
-    const writer = fs.createWriteStream(tmpPath);
-    for await (const chunk of exeResponse.body) {
-      writer.write(chunk);
-      downloadState.bytes += chunk.length;
-    }
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-      writer.end();
-    });
-
-    // 2. Hash esperado (asset .sha256).
-    const shaResponse = await fetch(sha256AssetUrl, { signal: AbortSignal.timeout(30_000) });
-    if (!shaResponse.ok) {
-      throw new Error(`No se pudo descargar el hash de verificación (HTTP ${shaResponse.status})`);
-    }
-    const expected = (await shaResponse.text()).trim().toLowerCase();
-    if (!/^[0-9a-f]{64}$/.test(expected)) {
-      throw new Error("El hash esperado de la release es inválido");
+    if (downloadState.active) {
+      return res.status(409).json({ error: { message: "Ya hay una descarga en curso" } });
     }
 
-    // 3. Verificación.
-    const actual = await sha256File(tmpPath);
-    if (actual !== expected) {
-      throw new Error("La verificación sha256 falló: el binario descargado no coincide con la release");
-    }
-
-    fs.renameSync(tmpPath, NEW_BINARY);
-    res.status(200).json({ success: true, message: "Actualización descargada y verificada" });
-  } catch (error) {
+    downloadState.active = true;
+    downloadState.bytes = 0;
+    downloadState.total = 0;
+    fs.mkdirSync(UPDATE_DIR, { recursive: true });
+    const tmpPath = `${NEW_BINARY}.tmp`;
     fs.rmSync(tmpPath, { force: true });
-    if (!res.headersSent) {
-      res.status(500).json({ error: { message: error.message || "Error al descargar la actualización" } });
+
+    try {
+      // 1. Binario (streaming, con progreso).
+      const exeResponse = await fetchAsset(assetUrl, { signal: AbortSignal.timeout(600_000) });
+      if (!exeResponse.ok) {
+        throw new Error(`La descarga del binario falló (HTTP ${exeResponse.status})`);
+      }
+      downloadState.total = Number(exeResponse.headers.get("content-length")) || 0;
+      const writer = fs.createWriteStream(tmpPath);
+      for await (const chunk of exeResponse.body) {
+        writer.write(chunk);
+        downloadState.bytes += chunk.length;
+      }
+      await new Promise((resolve, reject) => {
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+        writer.end();
+      });
+
+      // 2. Hash esperado (asset .sha256).
+      const shaResponse = await fetchAsset(sha256AssetUrl, { signal: AbortSignal.timeout(30_000) });
+      if (!shaResponse.ok) {
+        throw new Error(`No se pudo descargar el hash de verificación (HTTP ${shaResponse.status})`);
+      }
+      const expected = (await shaResponse.text()).trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(expected)) {
+        throw new Error("El hash esperado de la release es inválido");
+      }
+
+      // 3. Verificación.
+      const actual = await sha256File(tmpPath);
+      if (actual !== expected) {
+        throw new Error("La verificación sha256 falló: el binario descargado no coincide con la release");
+      }
+
+      fs.renameSync(tmpPath, NEW_BINARY);
+      res.status(200).json({ success: true, message: "Actualización descargada y verificada" });
+    } catch (error) {
+      fs.rmSync(tmpPath, { force: true });
+      if (!res.headersSent) {
+        res.status(500).json({ error: { message: error.message || "Error al descargar la actualización" } });
+      }
+    } finally {
+      downloadState.active = false;
     }
-  } finally {
-    downloadState.active = false;
-  }
-};
+  };
+
+  return { POST_DOWNLOAD };
+}
+const { POST_DOWNLOAD } = createUpdateInstaller();
 
 const GET_PROGRESS = (_req, res) => {
   res.status(200).json({
@@ -327,6 +337,8 @@ const POST_APPLY = (_req, res) => {
 
 module.exports = {
   GET_STATUS,
+  createUpdateReader,
+  createUpdateInstaller,
   POST_CHECK,
   GET_HISTORY,
   POST_DOWNLOAD,

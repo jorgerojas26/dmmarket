@@ -196,7 +196,7 @@ function createBackupService({
     );
   }
 
-  async function run(manual = false) {
+  async function run(manual = false, request = {}) {
     const date = now();
     const slot = scheduledDate(date);
     if (running || (!manual && lastAttempt?.slot === slot && date.getTime() - lastAttempt.time < RETRY_MS)) return;
@@ -214,7 +214,7 @@ function createBackupService({
           .map((value) => String(value).padStart(2, "0"))
           .join("") + String(date.getMilliseconds()).padStart(3, "0");
       const name = manual
-        ? `dmmarket-${localDate(date)}-manual-${time}-${randomUUID()}.sql.gz`
+        ? `dmmarket-${localDate(date)}-manual-${time}-${request.operationId || randomUUID()}.sql.gz`
         : `dmmarket-${slot}.sql.gz`;
       const target = path.join(directory, name);
       temporary = `${target}.${process.pid}.partial`;
@@ -238,10 +238,12 @@ function createBackupService({
         };
         logger.error("No se pudo aplicar la retención de respaldos:", error.message);
       }
+      return { ok: true, name, sizeBytes: stat.size };
     } catch (error) {
       if (!manual) lastAttempt = { slot, time: now().getTime() };
       lastError = { message: error.message, occurredAt: now().toISOString() };
       logger.error("No se pudo completar el respaldo:", error.message);
+      return { ok: false };
     } finally {
       if (temporary) {
         try {
@@ -258,11 +260,11 @@ function createBackupService({
     return run();
   }
 
-  function createManual() {
+  function createManual(request = {}) {
     if (running) {
       throw Object.assign(new Error("Ya hay un respaldo en curso. Espera a que termine."), { code: "BACKUP_RUNNING" });
     }
-    void run(true);
+    return run(true, request);
   }
 
   async function status() {

@@ -1,12 +1,15 @@
 import { DateTime } from 'luxon';
+import { formatWeight } from 'utils/format';
 
 const formatPrice = (value) => {
+    if (value == null) return 'No disponible';
     const num = Number(value);
     if (Number.isNaN(num)) return '';
     return num.toFixed(2);
 };
 
 const formatStock = (value) => {
+    if (value == null) return 'No disponible';
     const num = Number(value);
     if (Number.isNaN(num)) return '';
     return num.toFixed(2);
@@ -31,6 +34,7 @@ const pdfschema = (productList, { stockTotal, valueTotal, currency }, config = {
             width: 'auto',
             render: (p) => (p.PrecioA != null ? formatPrice(p.PrecioA) : ''),
         },
+        { accessor: 'Peso', label: 'PESO', width: 'auto', render: (p) => formatWeight(p.Peso) },
         { accessor: 'Existencia', label: 'STOCK', width: 'auto', render: (p) => formatStock(p.Existencia) },
     ];
 
@@ -64,8 +68,8 @@ const pdfschema = (productList, { stockTotal, valueTotal, currency }, config = {
                 style: 'summary',
                 text: [
                     `Total de productos: ${productList.length}`,
-                    hasStock ? ` — Stock total: ${Number(stockTotal || 0).toFixed(2)}` : '',
-                    hasPrice ? ` — Valor total: ${currency} ${formatPrice(valueTotal || 0)}` : '',
+                    hasStock ? ` — Stock total: ${formatStock(stockTotal)}` : '',
+                    hasPrice ? ` — Valor total: ${currency} ${formatPrice(valueTotal)}` : '',
                 ].join(''),
             },
         ],

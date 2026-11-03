@@ -25,5 +25,7 @@ bdsolser_md_nieto.dump
 .atl/
 /.lazysql.toml
 
+test-results/
+playwright-report/
 .dev/
 .dev.local.json

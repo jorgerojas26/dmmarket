@@ -1,9 +1,11 @@
 const os = require("node:os");
 const net = require("node:net");
+const https = require("node:https");
+const fs = require("node:fs");
 const { spawnSync } = require("node:child_process");
 const { serverOptions } = require("./server");
 const { accessOptions, webEnabled, proxyIdentity } = require("./web-config");
-const { managedWeb } = require("./web-service");
+const { managedWeb, rootCertificateFile } = require("./web-service");
 
 function ipv4Number(address) {
   return address.split(".").reduce((value, octet) => (value * 256 + Number(octet)) >>> 0, 0);
@@ -67,41 +69,66 @@ function configureFirewall(settings, configuration, platform = process.platform)
 
 async function applicationReady(configuration) {
   try {
-    const response = await fetch(`http://127.0.0.1:${configuration.PORT}/api/update/status`, {
+    const response = await fetch(`http://127.0.0.1:${configuration.PORT}/api/health`, {
       signal: AbortSignal.timeout(1500),
     });
     const status = await response.json();
-    return response.ok && status.service === true;
+    return response.ok && status.ok === true && status.service === true;
   } catch {
     return false;
   }
 }
 
-function proxyResponse(configuration) {
-  return fetch("http://127.0.0.1:80/api/update/status", {
-    headers: { Host: configuration.WEB_HOSTNAME },
-    signal: AbortSignal.timeout(1500),
+async function proxyResponse(configuration, ca = fs.readFileSync(rootCertificateFile())) {
+  const url = new URL(configuration.AUTH_PUBLIC_ORIGIN);
+  return new Promise((resolve, reject) => {
+    const request = https.get(
+      {
+        host: "127.0.0.1",
+        port: Number(url.port || 443),
+        servername: configuration.WEB_HOSTNAME,
+        ca,
+        path: "/api/health",
+        headers: { Host: url.host },
+        timeout: 1500,
+      },
+      (response) => {
+        let body = "";
+        response.on("data", (chunk) => {
+          body += chunk;
+          if (body.length > 4096) response.destroy(new Error("Respuesta inesperada."));
+        });
+        response.on("error", reject);
+        response.on("end", () => {
+          try {
+            resolve({
+              ok: response.statusCode === 200,
+              owned: response.headers["x-dmmarket-web"] === proxyIdentity(configuration),
+              data: JSON.parse(body),
+            });
+          } catch (error) {
+            reject(error);
+          }
+        });
+      },
+    );
+    request.once("timeout", () => request.destroy(new Error("HTTPS no responde.")));
+    request.once("error", reject);
   });
 }
 
-async function proxyResponding(configuration) {
+async function proxyResponding(configuration, ca) {
   try {
-    const response = await proxyResponse(configuration);
-    const owned = response.headers.get("X-DMMarket-Web") === proxyIdentity(configuration);
-    await response.body?.cancel();
-    return owned;
+    return (await proxyResponse(configuration, ca)).owned;
   } catch {
     return false;
   }
 }
 
-async function proxyReady(configuration) {
+async function proxyReady(configuration, ca) {
   try {
-    const response = await proxyResponse(configuration);
-    const status = await response.json();
-    return (
-      response.ok && status.service === true && response.headers.get("X-DMMarket-Web") === proxyIdentity(configuration)
-    );
+    const response = await proxyResponse(configuration, ca);
+    return response.ok && response.owned && response.data.ok === true && response.data.service === true;
   } catch {
     return false;
   }
@@ -119,7 +146,7 @@ async function portAvailable(options) {
   });
 }
 
-async function checkApplicationPort(configuration, existing = {}, installed = false) {
+async function checkApplicationPort(configuration, existing = {}, installed = false, { ca, directory } = {}) {
   if (
     !(await portAvailable(serverOptions(configuration))) &&
     !(installed && (existing.PORT || "8000") === configuration.PORT && (await applicationReady(configuration)))
@@ -129,10 +156,10 @@ async function checkApplicationPort(configuration, existing = {}, installed = fa
   if (
     webEnabled(configuration) &&
     !(await portAvailable(accessOptions(configuration))) &&
-    !(installed && webEnabled(existing) && managedWeb() && (await proxyResponding(existing)))
+    !(installed && webEnabled(existing) && managedWeb(directory) && (await proxyResponding(existing, ca)))
   ) {
     throw new Error(
-      "El puerto 80 está ocupado por otro servicio. Libéralo antes de habilitar Caddy; no se modificó ese servicio.",
+      `El puerto HTTPS ${accessOptions(configuration).port} está ocupado por otro servicio. No se modificó ese servicio.`,
     );
   }
 }

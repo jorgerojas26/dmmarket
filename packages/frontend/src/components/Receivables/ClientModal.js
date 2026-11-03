@@ -1,4 +1,5 @@
-import { fetchReceivableClient } from 'api/receivables';
+import { fetchReceivableClientExport } from 'api/receivables';
+import { useAuth } from 'auth/context';
 import Modal from 'components/Modal';
 import { useReceivableClient } from 'hooks/useReceivables';
 import pdfMake from 'pdfmake/build/pdfmake';
@@ -8,12 +9,14 @@ import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Dropdown from 'react-bootstrap/Dropdown';
 import Spinner from 'react-bootstrap/Spinner';
+import { useReceivablesAccess } from './access';
 import DocumentList from './DocumentList';
 import { dateLabel, money } from './format';
 import InlineOperationForm from './InlineOperationForm';
 import InvoiceDetailModal from './InvoiceDetailModal';
 import OperationForm from './OperationForm';
 import Pager from './Pager';
+import PaymentAvailability from './PaymentAvailability';
 import PaymentDrawer from './PaymentDrawer';
 import Summary from './Summary';
 import Timeline from './Timeline';
@@ -32,6 +35,8 @@ export default function ClientModal({
     initialAction = null,
     initialDocuments = 'pending',
 }) {
+    const { can } = useAuth();
+    const { canOperate, canExport } = useReceivablesAccess();
     const [page, setPage] = useState(1);
     const [timelinePage, setTimelinePage] = useState(1);
     const [documents, setDocuments] = useState(initialDocuments);
@@ -58,7 +63,7 @@ export default function ClientModal({
     const { data, error, isValidating, mutate } = useReceivableClient(client.id, { page, timelinePage, documents });
     const allowed = !!data && !data.client.unregistered && !error && !busy && !isValidating;
     const hasDebt = Number(data?.summary.balance) > 0;
-    const canPay = allowed && hasDebt;
+    const canPay = allowed && hasDebt && canOperate('payment');
     const navigationLocked = busy || isValidating || !!action;
     const rowClosure = action?.type === 'close' && !!action.id;
     const clientClosure = action?.type === 'close' && !action.id;
@@ -98,6 +103,7 @@ export default function ClientModal({
     }, [action, data, isValidating, busy]);
     const start = useCallback(
         (next, trigger) => {
+            if (!canOperate(next.type)) return;
             if (!allowed) return;
             initialFocusSet.current = true;
             actionTrigger.current = trigger || primary.current;
@@ -105,7 +111,7 @@ export default function ClientModal({
             setDirty(false);
             setAction(next);
         },
-        [allowed],
+        [allowed, canOperate],
     );
     useEffect(() => {
         if (!pendingInitialAction.current || !data || error || isValidating) return;
@@ -196,27 +202,12 @@ export default function ClientModal({
     };
     const clientName = data?.client.name || client.name || client.id;
     const handlePrint = async () => {
-        if (!data || printing) return;
+        if (!data || printing || !canExport) return;
         setPrinting(true);
         try {
-            const filters = { page: 1, timelinePage: 1, documents };
-            const firstPage = await fetchReceivableClient(client.id, filters);
-            const allDocuments = [...firstPage.documents.data];
-            for (let currentPage = 2; allDocuments.length < firstPage.documents.total; currentPage += 1) {
-                const result = await fetchReceivableClient(client.id, { ...filters, page: currentPage });
-                if (!result.documents.data.length) break;
-                allDocuments.push(...result.documents.data);
-            }
-            const allEvents = [...firstPage.timeline.data];
-            for (let currentPage = 2; allEvents.length < firstPage.timeline.total; currentPage += 1) {
-                const result = await fetchReceivableClient(client.id, {
-                    ...filters,
-                    page: 1,
-                    timelinePage: currentPage,
-                });
-                if (!result.timeline.data.length) break;
-                allEvents.push(...result.timeline.data);
-            }
+            const firstPage = await fetchReceivableClientExport(client.id, documents);
+            const allDocuments = firstPage.documents.data;
+            const allEvents = firstPage.timeline.data;
             const eventTitles = {
                 payment: 'Abono',
                 ANULACION: 'Anulación',
@@ -415,7 +406,7 @@ export default function ClientModal({
                 )}
             </div>
         ) : null;
-    if (invoice) return <InvoiceDetailModal invoiceId={invoice.id} onClose={closeInvoice} />;
+    if (invoice) return <InvoiceDetailModal invoiceId={invoice.id} clientId={client.id} onClose={closeInvoice} />;
     return (
         <>
             <Modal
@@ -442,20 +433,27 @@ export default function ClientModal({
                                 </Modal.Title>
                                 <p className="modal-subtitle">
                                     <span>Cliente {client.id}</span>
-                                    <span>{data?.client.rif || client.rif || 'Sin RIF'}</span>
+                                    {can('clients.personal') && (
+                                        <span>{data?.client.rif || client.rif || 'Sin RIF'}</span>
+                                    )}
                                     <span>Ruta {data?.client.ruta || client.ruta || '—'}</span>
                                 </p>
                             </div>
                         </div>
                         <div className="cxc-account-header-actions">
-                            <Button
-                                ref={primary}
-                                className="cxc-payment-cta"
-                                disabled={!canPay || !!action}
-                                onClick={() => start({ type: 'payment' })}
-                            >
-                                <span aria-hidden="true">＋</span> Registrar abono
-                            </Button>
+                            {can('receivables.payment') && (
+                                <>
+                                    <PaymentAvailability />
+                                    <Button
+                                        ref={primary}
+                                        className="cxc-payment-cta"
+                                        disabled={!canPay || !!action}
+                                        onClick={() => start({ type: 'payment' })}
+                                    >
+                                        <span aria-hidden="true">＋</span> Registrar abono
+                                    </Button>
+                                </>
+                            )}
                             <Dropdown align="end">
                                 <Dropdown.Toggle
                                     ref={moreActions}
@@ -480,7 +478,15 @@ export default function ClientModal({
                                 <Dropdown.Menu variant="dark">
                                     <Dropdown.Item
                                         as="button"
-                                        disabled={!data || !!error || isValidating || busy || !!action || printing}
+                                        disabled={
+                                            !canExport ||
+                                            !data ||
+                                            !!error ||
+                                            isValidating ||
+                                            busy ||
+                                            !!action ||
+                                            printing
+                                        }
                                         onClick={handlePrint}
                                     >
                                         <svg
@@ -500,7 +506,7 @@ export default function ClientModal({
                                     </Dropdown.Item>
                                     <Dropdown.Item
                                         as="button"
-                                        disabled={!canPay || !!action}
+                                        disabled={!allowed || !hasDebt || !canOperate('close') || !!action}
                                         onClick={() =>
                                             start(
                                                 { type: 'close', scope: 'Todos los documentos pendientes del cliente' },
@@ -610,6 +616,7 @@ export default function ClientModal({
                                             documents={data.documents.data}
                                             asOf={data.today}
                                             allowed={allowed}
+                                            canOperate={canOperate}
                                             locked={navigationLocked}
                                             onInvoice={openInvoice}
                                             closedIds={closedIds}
@@ -700,6 +707,7 @@ export default function ClientModal({
                                                 }
                                                 onExpandedChange={setExpandedMovement}
                                                 allowed={allowed}
+                                                canOperate={canOperate}
                                                 onInvoice={openInvoice}
                                                 onVoid={(event, trigger) =>
                                                     start(

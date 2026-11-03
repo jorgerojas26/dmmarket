@@ -1,4 +1,4 @@
-import { formatQuantity } from 'utils/format';
+import { formatWeight, sumWeights } from 'utils/format';
 import columns from './columns';
 
 /**
@@ -11,13 +11,12 @@ const productosColumns = [
     {
         Header: 'Peso',
         accessor: 'peso',
-        Cell: ({ value }) => formatQuantity(value),
+        Cell: ({ value }) => formatWeight(value),
         Footer: ({ data, summary }) => {
             // `summary` es el total de todas las páginas (server-side); si no
             // viene, se reduce la página visible (fallback).
-            const total =
-                summary != null ? Number(summary) : data.reduce((acc, current) => acc + (current.peso || 0), 0);
-            return formatQuantity(total);
+            const total = summary !== undefined ? summary : sumWeights(data);
+            return formatWeight(total);
         },
     },
     ...columns.slice(2),

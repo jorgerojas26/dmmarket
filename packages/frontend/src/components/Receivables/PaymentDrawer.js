@@ -1,3 +1,4 @@
+import { useAuth } from 'auth/context';
 import { modalManager } from 'components/Modal';
 import { useReceivableClient } from 'hooks/useReceivables';
 import { useEffect, useRef, useState } from 'react';
@@ -5,12 +6,15 @@ import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
 import Offcanvas from 'react-bootstrap/Offcanvas';
 import Spinner from 'react-bootstrap/Spinner';
+import { useReceivablesAccess } from './access';
 import { money } from './format';
 import OperationForm from './OperationForm';
 import PaymentClientPicker from './PaymentClientPicker';
 import './PaymentDrawer.css';
 
 export default function PaymentDrawer({ client = null, onClose, onChanged }) {
+    const { can } = useAuth();
+    const { canOperate } = useReceivablesAccess();
     const [selected, setSelected] = useState(client);
     const [busy, setBusy] = useState(false);
     const [dirty, setDirty] = useState(false);
@@ -26,7 +30,12 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
     const data = selected ? account.data : null;
     const error = selected ? account.error : null;
     const allowed =
-        !!data && !data.client.unregistered && !error && !account.isValidating && Number(data.summary.balance) > 0;
+        canOperate('payment') &&
+        !!data &&
+        !data.client.unregistered &&
+        !error &&
+        !account.isValidating &&
+        Number(data.summary.balance) > 0;
     const identity = data?.client || selected;
     useEffect(() => {
         if (discard) safeChoice.current?.focus();
@@ -96,7 +105,8 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
                             <div>
                                 <h2>{identity.name || identity.id}</h2>
                                 <p>
-                                    {identity.id} · {identity.rif || 'Sin RIF'} · Ruta {identity.ruta || '—'}
+                                    {identity.id} {can('clients.personal') && <>· {identity.rif || 'Sin RIF'}</>} · Ruta{' '}
+                                    {identity.ruta || '—'}
                                 </p>
                             </div>
                             {!result && (
@@ -135,9 +145,22 @@ export default function PaymentDrawer({ client = null, onClose, onChanged }) {
                                 </div>
                                 <div>
                                     <dt>Saldo pendiente · USD</dt>
-                                    <dd>{money(result.balanceAfter)}</dd>
+                                    <dd>
+                                        {money(
+                                            result.balanceAfter,
+                                            'USD',
+                                            result.residualAmount && !result.residualClosure ? 4 : 2,
+                                        )}
+                                    </dd>
                                 </div>
                             </dl>
+                            {result.residualClosure && (
+                                <Alert variant="info">
+                                    Se cerró un saldo residual de {money(result.residualClosure.base, 'USD', 4)} USD. El
+                                    cierre quedó registrado por separado en el historial, sin registrar dinero recibido
+                                    adicional.
+                                </Alert>
+                            )}
                             {Number(result.excess) > 0 && (
                                 <Alert variant="warning">
                                     Excedente no aplicado: {money(result.excess)}. No genera saldo a favor ni

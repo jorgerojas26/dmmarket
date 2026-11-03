@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS `vendedor_comisiones` (
   PRIMARY KEY (`id`),
   FOREIGN KEY (`vendedorId`) REFERENCES `vendedores`(`IdVend`) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (`grupoId`) REFERENCES `grupos`(`IdGrupo`) ON DELETE CASCADE ON UPDATE CASCADE
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS `fact_vendedor_comisiones` (
   `id` INT NOT NULL AUTO_INCREMENT,
@@ -20,6 +20,6 @@ CREATE TABLE IF NOT EXISTS `fact_vendedor_comisiones` (
   PRIMARY KEY (`id`),
   FOREIGN KEY (`masterfactId`) REFERENCES `masterfact`(`IdFactura`) ON DELETE CASCADE ON UPDATE CASCADE,
   FOREIGN KEY (`grupoId`) REFERENCES `grupos`(`IdGrupo`) ON DELETE CASCADE ON UPDATE CASCADE
-);
+) ENGINE=InnoDB;
 
 COMMIT;

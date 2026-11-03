@@ -20,12 +20,23 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
+        <link rel="stylesheet" href="%PUBLIC_URL%/app-shell.css">
+        <script src="%PUBLIC_URL%/app-shell.js"></script>
         <title>Sistema de reportes</title>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="modal-root"></div>
-        <div id="root"></div>
+        <div id="root">
+            <div class="app-initial-frame" aria-busy="true" aria-label="Validando acceso">
+                <header class="app-initial-navbar">
+                    <span class="app-initial-brand">SISTEMA DE REPORTES</span>
+                </header>
+                <div class="app-initial-content">
+                    <aside class="app-initial-sidebar app-pending-sidebar" aria-hidden="true"></aside>
+                </div>
+            </div>
+        </div>
         <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.

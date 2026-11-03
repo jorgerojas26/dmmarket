@@ -15,6 +15,7 @@ export const fetchDashboardPareto = async ({
     to,
     showNoe,
     modo = 'ventas',
+    metric,
     sortBy,
     sortDir,
     newSearch,
@@ -24,6 +25,7 @@ export const fetchDashboardPareto = async ({
     newLimit,
 }) => {
     const params = new URLSearchParams({ from, to, showNoe, modo });
+    if (metric) params.set('metric', metric);
     if (sortBy && sortDir) {
         params.set('sortBy', sortBy);
         params.set('sortDir', sortDir);

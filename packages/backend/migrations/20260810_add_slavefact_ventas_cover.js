@@ -1,4 +1,6 @@
-exports.up = async (knex) => {
+exports.retired = {};
+
+exports.retired.up = async (knex) => {
   await knex.raw("SET SESSION sql_mode = ''");
 
   const [{ c }] = await knex("information_schema.statistics").count("* as c").where({
@@ -14,7 +16,7 @@ exports.up = async (knex) => {
   }
 };
 
-exports.down = async (knex) => {
+exports.retired.down = async (knex) => {
   const [previous] = await knex.raw("SHOW INDEX FROM slavefact WHERE Key_name = ?", ["idx_slavefact_ventas"]);
   if (previous.length === 0) {
     await knex.raw("ALTER TABLE slavefact ADD INDEX idx_slavefact_ventas (IdFactura, Precio, Cantidad, Costo)");
@@ -22,3 +24,6 @@ exports.down = async (knex) => {
   const [cover] = await knex.raw("SHOW INDEX FROM slavefact WHERE Key_name = ?", ["idx_slavefact_ventas_cover"]);
   if (cover.length > 0) await knex.raw("ALTER TABLE slavefact DROP INDEX idx_slavefact_ventas_cover");
 };
+
+exports.up = async () => {};
+exports.down = async () => {};

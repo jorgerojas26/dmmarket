@@ -1,3 +1,5 @@
+import { fetcher } from 'swr-config';
+
 const BASE_URL = '/api/purchases';
 
 export const fetchPurchasesDashboard = async ({ from, to, compareFrom, compareTo }) => {
@@ -69,4 +71,11 @@ export const fetchPurchasesProducts = async ({
     const response = await fetch(`${BASE_URL}/products?${params.toString()}`);
     if (!response.ok) throw new Error(`Purchases products API error: ${response.status}`);
     return response.json();
+};
+
+export const fetchPurchaseExport = (parameters) => {
+    const query = new URLSearchParams(
+        Object.entries(parameters).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+    );
+    return fetcher(`/api/exports/purchases?${query}`);
 };

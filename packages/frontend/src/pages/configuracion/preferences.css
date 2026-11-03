@@ -1,0 +1,27 @@
+.report-settings__row + .report-settings__note {
+    margin-top: 20px;
+}
+
+.report-settings__badge {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 4px 9px;
+    border: 1px solid #454e5a;
+    border-radius: 6px;
+    color: #bac4d2;
+    font-size: 11px;
+}
+
+.report-settings .report-settings__status,
+.report-settings .report-settings__success {
+    margin-top: 16px;
+}
+
+.report-settings .report-settings__success {
+    color: #a1d7b4;
+}
+
+.report-settings__currencies:disabled:not([aria-busy="true"]) .report-settings__option,
+.report-settings__currencies:disabled:not([aria-busy="true"]) .report-settings__option input + span {
+    cursor: default;
+}

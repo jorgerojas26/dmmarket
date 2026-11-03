@@ -10,6 +10,7 @@ import {
     fetchClientsSinFacturar,
     fetchMonthlyAverage,
 } from 'api/clients';
+import { useResource } from 'auth/resources';
 import useSWR from 'hooks/swr-wrapper';
 
 /**
@@ -30,8 +31,9 @@ export function useClientsList(
  * Client routes (for the route filter).
  */
 export function useClientRoutes(showNoe, enabled = true) {
-    const key = enabled ? ['client-routes', showNoe] : null;
-    return useSWR(key, () => fetchClientRoutes(showNoe));
+    const resource = useResource();
+    const key = enabled ? ['client-routes', resource, showNoe] : null;
+    return useSWR(key, () => fetchClientRoutes(showNoe, resource));
 }
 
 /**
@@ -119,6 +121,7 @@ export function useClientSummary(clientId, { from, to, showNoe }, enabled = true
  * Simple clients fetch (for dropdowns / autocomplete).
  */
 export function useClients(filter, enabled = true) {
-    const key = enabled ? ['clients', filter] : null;
-    return useSWR(key, () => fetchClients({ filter }));
+    const resource = useResource();
+    const key = enabled ? ['clients', resource, filter] : null;
+    return useSWR(key, () => fetchClients({ filter, accessResource: resource }));
 }

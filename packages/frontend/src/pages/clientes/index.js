@@ -1,34 +1,43 @@
+import { useAuth } from 'auth/context';
+import { ResourceBoundary } from 'auth/resources';
+import AccessDenied from 'components/AccessDenied';
 import ClientDashboardModal from 'components/ClientDashboardModal';
 import ClientsTable from 'components/ClientsTable';
 import ClientsDashboard from 'components/Dashboard/ClientsDashboard';
 import DateRangePicker from 'components/DateRangePicker';
 import Receivables from 'components/Receivables';
-import Sidebar from 'components/Sidebar';
 import RouteFilter from 'components/RouteFilter';
+import Sidebar from 'components/Sidebar';
 import { ShowNoeContext } from 'context/show_noe';
 import { DateTime } from 'luxon';
+import { DocumentPreferenceGate } from 'pages/configuracion/PreferencesRecovery';
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Container from 'react-bootstrap/Container';
 import { useHistory, useLocation } from 'react-router-dom';
 
-const VALID_VIEWS = ['dashboard', 'clients', 'receivables'];
-
-const ClientesPage = () => {
+const ClientesPage = ({ onLogout, logoutError }) => {
+    const { has } = useAuth();
+    const analytics = has('clients.dashboard.read');
+    const availableViews = [
+        ...(analytics ? ['dashboard'] : []),
+        ...(has('clients.directory.read') ? ['clients'] : []),
+        ...(has('clients.receivables.read') ? ['receivables'] : []),
+    ];
     const history = useHistory();
     const location = useLocation();
 
     // --- Parse active view from URL query params ---
     const searchParams = new URLSearchParams(location.search);
     const urlView = searchParams.get('view');
-    const initialView = VALID_VIEWS.includes(urlView) ? urlView : 'dashboard';
+    const initialView = urlView || availableViews[0];
 
     const [dateRange, setDateRange] = useState({
-        from: DateTime.now().startOf('month').toISODate(),
-        to: DateTime.now().toISODate(),
+        from: searchParams.get('from') || DateTime.now().startOf('year').toISODate(),
+        to: searchParams.get('to') || DateTime.now().toISODate(),
     });
     const [desgloseDateRange, setDesgloseDateRange] = useState({
-        from: DateTime.now().startOf('year').toISODate(),
-        to: DateTime.now().toISODate(),
+        from: searchParams.get('dFrom') || DateTime.now().startOf('year').toISODate(),
+        to: searchParams.get('dTo') || DateTime.now().toISODate(),
     });
     const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
     const [selectedClient, setSelectedClient] = useState(null);
@@ -37,14 +46,22 @@ const ClientesPage = () => {
     const [activeView, setActiveView] = useState(initialView);
     const [selectedRuta, setSelectedRuta] = useState(null);
 
-    const { showNoe } = useContext(ShowNoeContext);
+    const { showNoe, preferences } = useContext(ShowNoeContext);
+
+    useEffect(() => {
+        setShowModal(false);
+    }, [preferences?.revision]);
 
     // --- Sync active view back to URL ---
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         params.set('view', activeView);
-        history.replace({ search: params.toString() });
-    }, [activeView, history]);
+        params.set('from', dateRange.from);
+        params.set('to', dateRange.to);
+        params.set('dFrom', desgloseDateRange.from);
+        params.set('dTo', desgloseDateRange.to);
+        if (availableViews.includes(activeView)) history.replace({ search: params.toString() });
+    }, [activeView, dateRange, desgloseDateRange, history]);
 
     const handleRutaChange = useCallback((option) => {
         setSelectedRuta(option);
@@ -72,6 +89,7 @@ const ClientesPage = () => {
                 label: 'Dashboard',
                 icon: (
                     <svg
+                        aria-hidden="true"
                         width="18"
                         height="18"
                         viewBox="0 0 24 24"
@@ -94,6 +112,7 @@ const ClientesPage = () => {
                 label: 'Desglose',
                 icon: (
                     <svg
+                        aria-hidden="true"
                         width="18"
                         height="18"
                         viewBox="0 0 24 24"
@@ -122,86 +141,108 @@ const ClientesPage = () => {
         [],
     );
 
+    if (urlView && !availableViews.includes(urlView)) return <AccessDenied />;
+
     return (
-        <Container fluid className="clientes-layout p-0">
-            <div className="clientes-row">
-                <Sidebar activeKey={activeView} onSelect={setActiveView} items={sidebarItems} />
-                <div className="clientes-content p-4">
-                    {activeView === 'receivables' && <Receivables />}
-                    {activeView === 'clients' && (
-                        <div className="report-page">
-                            <div className="clients-content-wrapper report-page-header mb-3">
-                                <h4 className="m-0 text-light">Desglose de Clientes</h4>
-                                <div className="report-page-filters">
-                                    <div className="clients-page-route-filter">
-                                        <RouteFilter
-                                            value={selectedRuta}
-                                            onChange={handleRutaChange}
-                                            placeholder="Todas las rutas"
-                                            showNoe={showNoe}
-                                        />
-                                    </div>
-                                    <DateRangePicker
-                                        initialFrom={desgloseDateRange.from}
-                                        initialTo={desgloseDateRange.to}
-                                        onChange={handleDesgloseDateRangeChange}
-                                    />
-                                </div>
-                            </div>
-                            {/* La tabla absorbe el alto restante (flex) y scrollea
+        <ResourceBoundary
+            resource={`clients.${{ dashboard: 'dashboard', clients: 'directory', receivables: 'receivables' }[activeView]}`}
+        >
+            <Container as="section" aria-label="Clientes" fluid className="clientes-layout p-0">
+                <div className="clientes-row">
+                    <Sidebar
+                        activeKey={activeView}
+                        onSelect={setActiveView}
+                        items={sidebarItems.filter((item) => availableViews.includes(item.eventKey))}
+                    />
+                    <div className="clientes-content p-4">
+                        {activeView === 'receivables' ? (
+                            <Receivables />
+                        ) : (
+                            <DocumentPreferenceGate onLeave={onLogout} logoutError={logoutError}>
+                                {activeView === 'clients' && (
+                                    <div className="report-page">
+                                        <div className="clients-content-wrapper report-page-header mb-3">
+                                            <h4 className="m-0 text-light">Desglose de Clientes</h4>
+                                            <div className="report-page-filters">
+                                                <div className="clients-page-route-filter">
+                                                    <RouteFilter
+                                                        value={selectedRuta}
+                                                        onChange={handleRutaChange}
+                                                        placeholder="Todas las rutas"
+                                                        showNoe={showNoe}
+                                                    />
+                                                </div>
+                                                {analytics && (
+                                                    <DateRangePicker
+                                                        initialFrom={desgloseDateRange.from}
+                                                        initialTo={desgloseDateRange.to}
+                                                        onChange={handleDesgloseDateRangeChange}
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+                                        {/* La tabla absorbe el alto restante (flex) y scrollea
                                 internamente; la página nunca saca scrollbar. */}
-                            <div
-                                className="clients-content-wrapper"
-                                style={{ flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}
-                            >
-                                <ClientsTable
-                                    onRowSelect={handleRowSelect}
-                                    ruta={selectedRuta?.value}
-                                    dateRange={desgloseDateRange}
-                                />
-                            </div>
-                        </div>
-                    )}
-                    {activeView === 'dashboard' && (
-                        <section className="d-flex flex-column gap-3">
-                            <div className="clients-content-wrapper report-page-header">
-                                <h4 className="m-0 text-light">Dashboard de Clientes</h4>
-                                <div className="report-page-filters">
-                                    <div className="clients-page-route-filter">
-                                        <RouteFilter
-                                            value={selectedRuta}
-                                            onChange={handleRutaChange}
-                                            placeholder="Todas las rutas"
-                                            showNoe={showNoe}
-                                        />
+                                        <div
+                                            className="clients-content-wrapper"
+                                            style={{
+                                                flex: '1 1 auto',
+                                                minHeight: 0,
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                            }}
+                                        >
+                                            <ClientsTable
+                                                onRowSelect={handleRowSelect}
+                                                ruta={selectedRuta?.value}
+                                                dateRange={desgloseDateRange}
+                                            />
+                                        </div>
                                     </div>
-                                    <DateRangePicker
-                                        initialFrom={dateRange.from}
-                                        initialTo={dateRange.to}
-                                        onChange={handleDateRangeChange}
+                                )}
+                                {activeView === 'dashboard' && (
+                                    <section className="d-flex flex-column gap-3">
+                                        <div className="clients-content-wrapper report-page-header">
+                                            <h4 className="m-0 text-light">Dashboard de Clientes</h4>
+                                            <div className="report-page-filters">
+                                                <div className="clients-page-route-filter">
+                                                    <RouteFilter
+                                                        value={selectedRuta}
+                                                        onChange={handleRutaChange}
+                                                        placeholder="Todas las rutas"
+                                                        showNoe={showNoe}
+                                                    />
+                                                </div>
+                                                <DateRangePicker
+                                                    initialFrom={dateRange.from}
+                                                    initialTo={dateRange.to}
+                                                    onChange={handleDateRangeChange}
+                                                />
+                                            </div>
+                                        </div>
+                                        <ClientsDashboard
+                                            key={dashboardRefreshKey}
+                                            dateRange={dateRange}
+                                            showNoe={showNoe}
+                                            ruta={selectedRuta?.value}
+                                            onClientSelect={handleRowSelect}
+                                        />
+                                    </section>
+                                )}
+                                {showModal && (
+                                    <ClientDashboardModal
+                                        key={modalKey}
+                                        show={showModal}
+                                        onClose={() => setShowModal(false)}
+                                        client={selectedClient}
                                     />
-                                </div>
-                            </div>
-                            <ClientsDashboard
-                                key={dashboardRefreshKey}
-                                dateRange={dateRange}
-                                showNoe={showNoe}
-                                ruta={selectedRuta?.value}
-                                onClientSelect={handleRowSelect}
-                            />
-                        </section>
-                    )}
+                                )}
+                            </DocumentPreferenceGate>
+                        )}
+                    </div>
                 </div>
-            </div>
-            {showModal && (
-                <ClientDashboardModal
-                    key={modalKey}
-                    show={showModal}
-                    onClose={() => setShowModal(false)}
-                    client={selectedClient}
-                />
-            )}
-        </Container>
+            </Container>
+        </ResourceBoundary>
     );
 };
 

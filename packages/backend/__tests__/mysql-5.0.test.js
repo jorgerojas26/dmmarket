@@ -1,7 +1,7 @@
 const integrationTest = process.env.MYSQL_50_TEST === "1" ? test : test.skip;
 
 test("uses a MySQL 5.0 compatible client charset for migrations", () => {
-  expect(require("../knexfile").connection.charset).toBe("UTF8_GENERAL_CI");
+  expect(require("../knexfile").connection.charset).toBe("utf8");
 });
 
 integrationTest("preserves accented input and results through the application connection on MySQL 5.0.24", async () => {

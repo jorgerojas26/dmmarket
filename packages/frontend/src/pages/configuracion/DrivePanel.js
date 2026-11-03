@@ -1,11 +1,4 @@
-import {
-    connectDrive,
-    disconnectDrive,
-    enableDrive,
-    exportDriveKey,
-    fetchDriveStatus,
-    testDriveUpload,
-} from 'api/google_drive';
+import { fetchDriveStatus } from 'api/google_drive';
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Form, Spinner } from 'react-bootstrap';
 import BackupIcon from './BackupIcon';
@@ -13,14 +6,7 @@ import './backups.css';
 
 const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
     const [status, setStatus] = useState(null);
-    const [error, setError] = useState(null);
     const [readError, setReadError] = useState(null);
-    const [notice, setNotice] = useState(null);
-    const [busy, setBusy] = useState(false);
-    const [refresh, setRefresh] = useState(0);
-    const [authorizationUrl, setAuthorizationUrl] = useState(null);
-    const [downloaded, setDownloaded] = useState(false);
-    const [confirmed, setConfirmed] = useState(false);
     const polling = status?.connecting || status?.running ? 3000 : 60000;
 
     useEffect(() => {
@@ -36,7 +22,10 @@ const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
                     onStatus?.(response.data);
                 }
             } catch (failure) {
-                if (!cancelled) setReadError(failure.message);
+                if (!cancelled) {
+                    setStatus(null);
+                    setReadError(failure.message);
+                }
             }
         };
         void load();
@@ -45,70 +34,7 @@ const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
             cancelled = true;
             clearInterval(timer);
         };
-    }, [refresh, refreshKey, polling, onStatus]);
-
-    const perform = async (operation, success) => {
-        setBusy(true);
-        setError(null);
-        setNotice(null);
-        try {
-            const response = await operation(status.controlToken);
-            if (response.status < 200 || response.status >= 300)
-                throw new Error(response.data?.error?.message || 'No se pudo completar la operación de Google Drive.');
-            await success?.(response.data);
-            setRefresh((value) => value + 1);
-        } catch (failure) {
-            setError(failure.message || 'No se pudo completar la operación de Google Drive.');
-            throw failure;
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const connect = async () => {
-        let popup;
-        try {
-            popup = window.open('about:blank', '_blank');
-            if (popup) popup.opener = null;
-        } catch {
-            popup = null;
-        }
-        try {
-            await perform(connectDrive, (data) => {
-                const url = new URL(data.authorizationUrl);
-                if (url.origin !== 'https://accounts.google.com')
-                    throw new Error('El enlace de autorización no es válido.');
-                setAuthorizationUrl(url.toString());
-                if (popup && !popup.closed) popup.location.href = url.toString();
-            });
-        } catch {
-            popup?.close();
-        }
-    };
-
-    const download = () =>
-        perform(exportDriveKey, (blob) => {
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'DMMarket-clave-recuperacion.txt';
-            link.click();
-            URL.revokeObjectURL(url);
-            setDownloaded(true);
-            setNotice(
-                'Descarga iniciada. Guarda la clave en un gestor de contraseñas o en otro dispositivo, fuera del servidor.',
-            );
-        }).catch(() => {});
-
-    const disconnect = () =>
-        perform(disconnectDrive, (data) => {
-            setAuthorizationUrl(null);
-            setDownloaded(false);
-            setConfirmed(false);
-            setNotice(data.warning || 'Google Drive está desconectado. Los respaldos locales siguen funcionando.');
-        }).catch(() => {});
-
-    const disabled = busy || Boolean(readError) || !status?.localAccess || status?.running;
+    }, [refreshKey, polling, onStatus]);
 
     const connectionLabel = readError
         ? 'Sin conexión'
@@ -149,14 +75,7 @@ const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
             </div>
             {!status && !readError && <p role="status">Cargando conexión de Google Drive…</p>}
             {readError && <Alert variant="warning">{readError}</Alert>}
-            {error && <Alert variant="danger">{error}</Alert>}
-            {notice && <Alert variant="info">{notice}</Alert>}
             {status?.lastError && <Alert variant="warning">{status.lastError}</Alert>}
-            {busy && (
-                <div className="backups-loading" role="status">
-                    <Spinner animation="border" size="sm" aria-hidden="true" /> Procesando solicitud…
-                </div>
-            )}
             {status && (
                 <>
                     {!status.configured && (
@@ -170,26 +89,22 @@ const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
                     )}
                     {!status.localAccess && (status.configured || status.connected) && (
                         <div className="backups-drive-note">
-                            <strong>Configura la cuenta desde el servidor</strong>
-                            <p>Para conectar o desconectar una cuenta, abre esta pantalla en el servidor:</p>
-                            <code>{status.localSetupUrl}</code>
+                            <strong>Configuración no autorizada</strong>
+                            <p>
+                                El acceso de lectura no permite cambiar la conexión ni descargar claves de recuperación.
+                            </p>
                         </div>
                     )}
                     {!status.connected && !status.connecting && (
-                        <Button className="backups-connect" disabled={disabled || !status.configured} onClick={connect}>
+                        <Button className="backups-connect" disabled>
                             Conectar con Google
                         </Button>
                     )}
                     {status.connecting && (
                         <div className="backups-drive-note">
-                            <p>Esperando autorización de Google. Completa el acceso en la nueva pestaña.</p>
+                            <p>Hay una autorización de Google en curso.</p>
                             <div className="backups-actions">
-                                {authorizationUrl && (
-                                    <a href={authorizationUrl} target="_blank" rel="noreferrer">
-                                        Autorizar en Google
-                                    </a>
-                                )}
-                                <Button variant="outline-light" disabled={disabled} onClick={disconnect}>
+                                <Button variant="outline-light" disabled>
                                     Cancelar conexión
                                 </Button>
                             </div>
@@ -221,7 +136,7 @@ const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
                                                 Guárdala en otro dispositivo o en un gestor de contraseñas, fuera del
                                                 servidor.
                                             </p>
-                                            <Button variant="outline-light" disabled={disabled} onClick={download}>
+                                            <Button variant="outline-light" disabled>
                                                 Descargar clave de recuperación
                                             </Button>
                                         </li>
@@ -230,20 +145,10 @@ const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
                                             <Form.Check
                                                 id="drive-recovery-confirmed"
                                                 label="Guardé la clave de recuperación fuera del servidor"
-                                                checked={confirmed}
-                                                disabled={!downloaded || disabled}
-                                                onChange={(event) => setConfirmed(event.target.checked)}
+                                                checked={false}
+                                                disabled
                                             />
-                                            <Button
-                                                disabled={disabled || !status.configured || !downloaded || !confirmed}
-                                                onClick={() =>
-                                                    perform(enableDrive, () =>
-                                                        setNotice('Cargas automáticas habilitadas.'),
-                                                    ).catch(() => {})
-                                                }
-                                            >
-                                                Habilitar cargas automáticas
-                                            </Button>
+                                            <Button disabled>Habilitar cargas automáticas</Button>
                                         </li>
                                     </ol>
                                     <p className="backups-fine-print">
@@ -253,18 +158,10 @@ const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
                                 </div>
                             ) : (
                                 <div className="backups-actions">
-                                    <Button variant="outline-light" disabled={disabled} onClick={download}>
+                                    <Button variant="outline-light" disabled>
                                         Descargar clave de recuperación
                                     </Button>
-                                    <Button
-                                        variant="outline-light"
-                                        disabled={disabled || !status.configured}
-                                        onClick={() =>
-                                            perform(testDriveUpload, () =>
-                                                setNotice('Prueba de subida iniciada con el respaldo más reciente.'),
-                                            ).catch(() => {})
-                                        }
-                                    >
+                                    <Button variant="outline-light" disabled>
                                         Probar subida
                                     </Button>
                                 </div>
@@ -279,11 +176,7 @@ const DrivePanel = ({ onStatus, refreshKey = 0 }) => {
                             )}
                             <div className="backups-disconnect">
                                 <span>Los respaldos locales seguirán funcionando.</span>
-                                <Button
-                                    variant="outline-danger"
-                                    disabled={busy || Boolean(readError) || !status.localAccess}
-                                    onClick={disconnect}
-                                >
+                                <Button variant="outline-danger" disabled>
                                     Desconectar
                                 </Button>
                             </div>

@@ -1,6 +1,6 @@
 .update-toast {
     position: fixed;
-    top: 1rem;
+    bottom: 1rem;
     right: 1rem;
     z-index: 1080;
     width: min(350px, calc(100vw - 2rem));

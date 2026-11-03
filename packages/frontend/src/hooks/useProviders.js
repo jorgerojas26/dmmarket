@@ -1,12 +1,11 @@
 import {
-    fetchProvidersList,
-    fetchBestProviders,
-    fetchProviderSummary,
-    fetchProviderSales,
     fetchProviderClients,
-    fetchProviderSellers,
     fetchProviderProducts,
     fetchProviderPurchases,
+    fetchProviderSales,
+    fetchProviderSellers,
+    fetchProviderSummary,
+    fetchProvidersList,
     fetchPurchaseDetail,
     fetchSaleDetail,
 } from 'api/providers';
@@ -23,17 +22,6 @@ export function useProvidersList(
     return useSWR(key, () => fetchProvidersList({ search, from, to, page, limit, sortBy, sortDir, showNoe }), {
         keepPreviousData: true,
     });
-}
-
-/**
- * Best providers report.
- */
-export function useBestProviders(dateRange, showNoe, mode, enabled = true) {
-    const key =
-        enabled && dateRange?.from && dateRange?.to
-            ? ['best-providers', dateRange.from, dateRange.to, showNoe, mode]
-            : null;
-    return useSWR(key, () => fetchBestProviders(dateRange, showNoe, mode));
 }
 
 /**

@@ -1,6 +1,8 @@
 import { ResponsiveBar } from '@nivo/bar';
 import { ResponsiveLine } from '@nivo/line';
 import { ResponsivePie } from '@nivo/pie';
+import { fetchClientExport } from 'api/clients';
+import { useAuth } from 'auth/context';
 import ChartTooltip from 'components/ChartTooltip';
 import Table from 'components/Table';
 import { useClientsDashboard } from 'hooks/useClients';
@@ -24,11 +26,11 @@ const SEGMENT_COLUMNS = [
 ];
 
 const SEGMENT_DESCRIPTIONS = {
-    'A: >100K': 'Clientes que compraron más de $100K en el periodo',
-    'B: 20K-100K': 'Clientes que compraron entre $20K y $100K',
-    'C: 5K-20K': 'Clientes que compraron entre $5K y $20K',
-    'D: 1K-5K': 'Clientes que compraron entre $1K y $5K',
-    'E: <1K': 'Clientes que compraron menos de $1K',
+    'A: >100K': 'Clientes que compraron más de 100K en el periodo',
+    'B: 20K-100K': 'Clientes que compraron entre 20K y 100K',
+    'C: 5K-20K': 'Clientes que compraron entre 5K y 20K',
+    'D: 1K-5K': 'Clientes que compraron entre 1K y 5K',
+    'E: <1K': 'Clientes que compraron menos de 1K',
 };
 
 const nivoTheme = {
@@ -158,8 +160,10 @@ const WaterfallBar = ({ bar, barHeight }) => {
 };
 
 const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
+    const { has } = useAuth();
     const { data, error, isLoading } = useClientsDashboard(dateRange, showNoe, ruta);
-    const [paretoMode, setParetoMode] = useState('utilidad');
+    const [requestedMode, setParetoMode] = useState('utilidad');
+    const paretoMode = requestedMode === 'utilidad' && data?.abcUtility ? 'utilidad' : 'ventas';
     const paretoConfig = paretoMode === 'utilidad' ? CLIENT_UTILITY_PARETO_CONFIG : CLIENT_PARETO_CONFIG;
     const paretoDataset = paretoMode === 'utilidad' ? data?.abcUtility : data?.abc;
 
@@ -265,6 +269,18 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
         );
     };
 
+    const inactiveClients = has('clients.inactive.read') ? (
+        <section className="dashboard-panel mb-4" aria-label="Clientes Sin Facturar" style={{ padding: '16px 20px' }}>
+            <PanelHelpTitle
+                title="Clientes Sin Facturar"
+                help={{
+                    que: 'Clientes sin facturas en el periodo seleccionado.',
+                    servir: 'Identificar a quién contactar para retomar la venta.',
+                }}
+            />
+            <SinFacturarTable from={dateRange.from} to={dateRange.to} ruta={ruta} onRowSelect={onClientSelect} />
+        </section>
+    ) : null;
     return (
         <div style={{ position: 'relative' }}>
             {isLoading && (
@@ -356,14 +372,14 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                                 accent="orange"
                                 help={{
                                     que: 'Qué porcentaje de las ventas del periodo viene de los 5 clientes que más compran.',
-                                    leer: '40% = 5 clientes generan 40 de cada 100 dólares vendidos.',
+                                    leer: '40% = 5 clientes generan 40 de cada 100 unidades monetarias vendidas.',
                                     servir: 'Mide la dependencia: número alto = la empresa depende de pocos clientes (frágil); número bajo = cartera más repartida y sana.',
                                 }}
                             />
                         </div>
                         <div>
                             <KpiCard
-                                label="Retención ($)"
+                                label="Retención monetaria"
                                 value={formatPercent(kpis?.retention?.rate)}
                                 icon="percent"
                                 accent="purple"
@@ -412,36 +428,53 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                 <div className="row g-3 mb-4">
                     <div className="col-12">
                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginBottom: 12 }}>
-                            {CLIENT_PARETO_MODES.map(({ key, label, color }) => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    aria-pressed={paretoMode === key}
-                                    onClick={() => setParetoMode(key)}
-                                    style={{
-                                        padding: '6px 16px',
-                                        borderRadius: 6,
-                                        border:
-                                            paretoMode === key
-                                                ? `1.5px solid ${color}`
-                                                : '1px solid rgba(255,255,255,0.1)',
-                                        background: paretoMode === key ? `${color}18` : 'transparent',
-                                        color: paretoMode === key ? color : '#9ca3af',
-                                        fontSize: 12,
-                                        fontWeight: paretoMode === key ? 600 : 400,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s',
-                                    }}
-                                >
-                                    {label}
-                                </button>
-                            ))}
+                            {CLIENT_PARETO_MODES.filter((mode) => mode.key !== 'utilidad' || data?.abcUtility).map(
+                                ({ key, label, color }) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        aria-pressed={paretoMode === key}
+                                        onClick={() => setParetoMode(key)}
+                                        style={{
+                                            padding: '6px 16px',
+                                            borderRadius: 6,
+                                            border:
+                                                paretoMode === key
+                                                    ? `1.5px solid ${color}`
+                                                    : '1px solid rgba(255,255,255,0.1)',
+                                            background: paretoMode === key ? `${color}18` : 'transparent',
+                                            color: paretoMode === key ? color : '#9ca3af',
+                                            fontSize: 12,
+                                            fontWeight: paretoMode === key ? 600 : 400,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s',
+                                        }}
+                                    >
+                                        {label}
+                                    </button>
+                                ),
+                            )}
                         </div>
                         <ParetoChart
+                            compact
                             key={paretoMode}
                             products={paretoDataset.clients}
                             summary={paretoDataset.summary}
                             config={paretoConfig}
+                            exportData={
+                                data?.exportAllowed === true
+                                    ? async () =>
+                                          (
+                                              await fetchClientExport({
+                                                  ...dateRange,
+                                                  showNoe,
+                                                  ruta,
+                                                  kind: 'pareto',
+                                                  mode: paretoMode,
+                                              })
+                                          ).data
+                                    : null
+                            }
                         />
                     </div>
                 </div>
@@ -507,8 +540,8 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                         <PanelHelpTitle
                             title="Revenue por Segmento"
                             help={{
-                                que: 'Reparte las ventas del periodo según el tamaño de cada cliente: A (>$100K), B ($20K-$100K), C ($5K-$20K), D ($1K-$5K), E (<$1K).',
-                                leer: 'Cada porción es un segmento; cuanto más grande, más dinero aporta. Una porción del 60% = ese segmento genera 60 de cada 100 dólares vendidos. Pasa el cursor por una porción para ver cuántos clientes tiene y cuánto vende en promedio cada uno.',
+                                que: 'Reparte las ventas del periodo según el tamaño de cada cliente: A (>100K), B (20K-100K), C (5K-20K), D (1K-5K), E (<1K).',
+                                leer: 'Cada porción es un segmento; cuanto más grande, más dinero aporta. Una porción del 60% = ese segmento genera 60 de cada 100 unidades monetarias vendidas. Pasa el cursor por una porción para ver cuántos clientes tiene y cuánto vende en promedio cada uno.',
                                 servir: 'Ver de dónde viene el dinero: si la torta depende de un solo segmento, la cartera es frágil.',
                             }}
                         />
@@ -657,28 +690,7 @@ const ClientsDashboard = ({ dateRange, showNoe, ruta, onClientSelect }) => {
                 </div>
             </div>
 
-            {/* Clientes sin facturar en el periodo */}
-            <div className="row g-3 mb-4">
-                <div className="col-12">
-                    <div className="dashboard-panel" style={{ padding: '16px 20px' }}>
-                        <PanelHelpTitle
-                            title="Clientes Sin Facturar"
-                            help={{
-                                que: 'Clientes sin ninguna factura dentro del periodo elegido (o de la ruta seleccionada).',
-                                leer: 'Ordenados por su venta histórica: los que más dinero han movido aparecen primero. "Nunca" = jamás han facturado.',
-                                servir: 'Es la lista de acción: a quién llamar o visitar para recuperar venta.',
-                                accion: 'Haz clic en una fila para abrir el dashboard del cliente y retomarlo.',
-                            }}
-                        />
-                        <SinFacturarTable
-                            from={dateRange.from}
-                            to={dateRange.to}
-                            ruta={ruta}
-                            onRowSelect={onClientSelect}
-                        />
-                    </div>
-                </div>
-            </div>
+            {inactiveClients}
 
             {/* Top 50 Treemap + Segment Table */}
             <div className="row g-3 mb-4">

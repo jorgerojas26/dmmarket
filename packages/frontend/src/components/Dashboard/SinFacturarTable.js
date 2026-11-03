@@ -1,4 +1,5 @@
-import { fetchClientsSinFacturar } from 'api/clients';
+import { fetchClientExport } from 'api/clients';
+import { useAuth } from 'auth/context';
 import Table from 'components/Table';
 import { CurrencyRateContext } from 'context/currency_rate';
 import { ShowNoeContext } from 'context/show_noe';
@@ -7,7 +8,7 @@ import { DateTime } from 'luxon';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 import { useCallback, useContext, useMemo, useState } from 'react';
-import { formatMoney, formatNumber } from 'utils/format';
+import { formatCurrency, formatMoney, formatNumber } from 'utils/format';
 import { sortRows } from 'utils/sortRows';
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;
@@ -20,11 +21,16 @@ const LIMIT = 50;
  * fetches all matching rows and exports them via pdfMake.
  */
 const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
+    const { has } = useAuth('clients.inactive');
+    const [printError, setPrintError] = useState('');
     const { showNoe } = useContext(ShowNoeContext);
     const { currencyRate } = useContext(CurrencyRateContext);
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
-    const [sort, setSort] = useState({ sortBy: 'revenue_historico', sortDir: 'desc' });
+    const [sort, setSort] = useState({
+        sortBy: has('amounts') ? 'revenue_historico' : 'Empresa',
+        sortDir: has('amounts') ? 'desc' : 'asc',
+    });
 
     const { data: result, isLoading } = useClientsSinFacturar({
         from,
@@ -56,13 +62,12 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
     const handlePrintAll = useCallback(
         async (config) => {
             try {
-                const allResult = await fetchClientsSinFacturar({
+                const allResult = await fetchClientExport({
+                    kind: 'inactive',
                     from,
                     to,
-                    search,
+                    search: config.search ?? search,
                     ruta,
-                    page: 1,
-                    limit: total || 9999,
                     sortBy: sort.sortBy,
                     sortDir: sort.sortDir,
                     showNoe,
@@ -70,16 +75,17 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
                 // Column metadata for the PDF, keyed by accessor (order defines layout).
                 const currency = config?.currency;
                 const rate = currencyRate?.Cambio;
+                if (currency === 'BsS' && !(Number(rate) > 0 && Number.isFinite(Number(rate))))
+                    throw new Error('Tasa no disponible.');
                 const pdfColumns = [
                     { accessor: 'IdCliente', Header: 'ID', width: 'auto', render: (c) => String(c.IdCliente ?? '') },
                     { accessor: 'Empresa', Header: 'Empresa', width: '*', render: (c) => c.Empresa ?? '' },
-                    { accessor: 'ruta', Header: 'Ruta', width: 'auto', render: (c) => c.ruta_nombre ?? '' },
+                    { accessor: 'ruta', Header: 'Ruta', width: 'auto', render: (c) => c.ruta ?? '' },
                     {
                         accessor: 'last_factura',
                         Header: 'Última Factura',
                         width: 'auto',
-                        render: (c) =>
-                            c.last_factura ? DateTime.fromISO(c.last_factura).toFormat('dd/MM/yyyy') : 'Nunca',
+                        render: (c) => (c.last_factura ? DateTime.fromISO(c.last_factura).toFormat('dd/MM/yyyy') : '—'),
                     },
                     {
                         accessor: 'dias_inactivo',
@@ -94,11 +100,12 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
                         render: (c) => formatMoney(c.revenue_historico ?? 0, currency, rate),
                     },
                 ];
+                const serverColumns = new Set(allResult.columns.map((column) => column.key));
                 const selectedAccessors = new Set((config?.columns || []).map((col) => col.accessor));
-                const selected =
-                    selectedAccessors.size > 0
-                        ? pdfColumns.filter((col) => selectedAccessors.has(col.accessor))
-                        : pdfColumns;
+                const selected = pdfColumns.filter(
+                    (col) => selectedAccessors.has(col.accessor) && serverColumns.has(col.accessor),
+                );
+                if (!selected.length) throw new Error('Selecciona columnas autorizadas.');
                 const rows = sortRows(allResult.data || [], config?.sortBy).map((c) =>
                     selected.map((col) => col.render(c)),
                 );
@@ -142,7 +149,7 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
 
                 pdfMake.createPdf(docDef).open();
             } catch (err) {
-                console.error('Failed to print clients sin facturar:', err);
+                if (err.name !== 'AbortError') setPrintError('No se pudo imprimir el reporte autorizado.');
             }
         },
         [from, to, search, ruta, total, sort, showNoe, currencyRate],
@@ -162,7 +169,7 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
             {
                 Header: 'Última Factura',
                 accessor: 'last_factura',
-                Cell: ({ value }) => (value ? DateTime.fromISO(value).toFormat('dd/MM/yyyy') : 'Nunca'),
+                Cell: ({ value }) => (value ? DateTime.fromISO(value).toFormat('dd/MM/yyyy') : '—'),
             },
             {
                 Header: 'Días Inactivo',
@@ -172,7 +179,7 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
             {
                 Header: 'Revenue Histórico',
                 accessor: 'revenue_historico',
-                Cell: ({ value }) => `$${Number(value).toFixed(2)}`,
+                Cell: ({ value }) => formatCurrency(value),
             },
         ],
         [],
@@ -180,6 +187,7 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
 
     return (
         <div className="dashboard-panel-body">
+            {printError && <p role="alert">{printError}</p>}
             <Table
                 data={dataArr}
                 columns={columns}
@@ -205,7 +213,7 @@ const SinFacturarTable = ({ from, to, ruta, onRowSelect }) => {
                     onPageChange: setPage,
                 }}
                 print={{
-                    enabled: true,
+                    enabled: result?.exportAllowed === true,
                     onGlobalPrint: handlePrintAll,
                     storageKey: 'sin-facturar',
                 }}

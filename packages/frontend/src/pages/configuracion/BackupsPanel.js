@@ -1,8 +1,9 @@
 import { createBackup, fetchBackups } from 'api/backups';
+import { useAuth } from 'auth/context';
+import Modal from 'components/Modal';
 import Table from 'components/Table';
 import { DateTime } from 'luxon';
 import { useEffect, useMemo, useState } from 'react';
-import Modal from 'components/Modal';
 import { Alert, Badge, Button, Spinner } from 'react-bootstrap';
 import BackupIcon from './BackupIcon';
 import DrivePanel from './DrivePanel';
@@ -18,6 +19,9 @@ export const formatSize = (bytes) => {
 const formatDate = (value) => DateTime.fromISO(value).toFormat('dd/MM/yyyy HH:mm');
 
 const BackupsPanel = () => {
+    const { can, runPrivileged } = useAuth();
+    const readable = can('backups.read');
+    const [requested, setRequested] = useState(false);
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -100,6 +104,10 @@ const BackupsPanel = () => {
     );
 
     useEffect(() => {
+        if (!readable) {
+            setLoading(false);
+            return undefined;
+        }
         let cancelled = false;
         const load = async () => {
             try {
@@ -112,7 +120,10 @@ const BackupsPanel = () => {
                     setError(null);
                 }
             } catch (failure) {
-                if (!cancelled) setError(failure.message || 'No se pudieron cargar los respaldos.');
+                if (!cancelled) {
+                    setStatus(null);
+                    setError(failure.message || 'No se pudieron cargar los respaldos.');
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -124,17 +135,18 @@ const BackupsPanel = () => {
             cancelled = true;
             clearInterval(timer);
         };
-    }, [refresh, polling]);
+    }, [refresh, polling, readable]);
 
     const create = async () => {
         setCreating(true);
         setCreateError(null);
         try {
-            const response = await createBackup(status.controlToken);
+            const response = await runPrivileged(() => createBackup());
             if (response.status !== 202) {
                 throw new Error(response.data?.error?.message || 'No se pudo iniciar el respaldo.');
             }
-            setStatus((current) => ({ ...current, running: true }));
+            setRequested(true);
+            if (readable) setStatus((current) => ({ ...current, running: true }));
         } catch (failure) {
             setCreateError(failure.message || 'No se pudo iniciar el respaldo.');
         } finally {
@@ -144,7 +156,7 @@ const BackupsPanel = () => {
         }
     };
 
-    const createDisabled = loading || creating || status?.running || !status?.controlToken || Boolean(error);
+    const createDisabled = !can('backups.create') || loading || creating || status?.running || Boolean(error);
 
     return (
         <div className="backups-panel">
@@ -156,7 +168,7 @@ const BackupsPanel = () => {
                 <Button
                     className="backups-refresh"
                     variant="outline-light"
-                    disabled={loading}
+                    disabled={!readable || loading}
                     onClick={() => setRefresh((value) => value + 1)}
                 >
                     {loading ? (
@@ -168,6 +180,11 @@ const BackupsPanel = () => {
                 </Button>
             </header>
 
+            {requested && !readable && (
+                <Alert variant="info" role="status">
+                    Respaldo solicitado.
+                </Alert>
+            )}
             {loading && (
                 <div className="backups-loading" role="status">
                     Cargando respaldos…
@@ -287,10 +304,12 @@ const BackupsPanel = () => {
                                 </Alert>
                             )}
                             {status.retentionError && <Alert variant="warning">{status.retentionError.message}</Alert>}
-                            <div className="backups-directory">
-                                <span>Carpeta en el servidor</span>
-                                <code>{status.directory}</code>
-                            </div>
+                            {status.directory && (
+                                <div className="backups-directory">
+                                    <span>Carpeta en el servidor</span>
+                                    <code>{status.directory}</code>
+                                </div>
+                            )}
                             <div className="backups-history-heading">
                                 <h5>Historial de respaldos</h5>
                                 <span>Más recientes primero</span>
@@ -324,7 +343,7 @@ const BackupsPanel = () => {
                         </p>
                     </details>
                 </section>
-                <DrivePanel onStatus={setDrive} refreshKey={refresh} />
+                {readable && <DrivePanel onStatus={setDrive} refreshKey={refresh} />}
             </div>
         </div>
     );

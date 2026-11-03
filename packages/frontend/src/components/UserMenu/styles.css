@@ -1,0 +1,221 @@
+.user-menu {
+    min-width: 0;
+}
+
+.user-menu-trigger.btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 230px;
+    padding: 5px 8px;
+    color: #e4e6ea;
+    text-align: left;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-radius: 8px;
+}
+
+.user-menu-trigger.dropdown-toggle::after {
+    display: none;
+}
+
+.user-menu-trigger.btn:hover,
+.user-menu-trigger.btn[aria-expanded="true"] {
+    color: #fff;
+    background: #252b33;
+    border-color: #373e48;
+}
+
+.user-menu-avatar {
+    display: grid;
+    place-items: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #40516a;
+    border-radius: 50%;
+    background: #2d3748;
+    color: #b7d7ff;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.user-menu-meta {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    line-height: 1.35;
+}
+
+.user-menu-name,
+.user-menu-role {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.user-menu-name {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.user-menu-role {
+    color: #a3adbb;
+    font-size: 11px;
+}
+
+.user-menu-chevron {
+    flex-shrink: 0;
+    color: #a3adbb;
+}
+
+.user-menu-dropdown.dropdown-menu {
+    width: 288px;
+    max-width: calc(100vw - 24px);
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #373e48;
+    border-radius: 10px;
+    background: #1e2126;
+    box-shadow: 0 12px 36px rgb(0 0 0 / 30%);
+}
+
+.user-menu-profile.dropdown-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px;
+    color: #e4e6ea;
+    white-space: normal;
+}
+
+.user-menu-profile > div:not(.user-menu-roles) {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.user-menu-profile strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.user-menu-username {
+    display: block;
+    margin-top: 3px;
+    color: #a3adbb;
+    font-size: 12px;
+}
+
+.user-menu-roles {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.user-menu-roles > span {
+    padding: 3px 8px;
+    border-radius: 5px;
+    background: #282e37;
+    color: #c5d3e6;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.user-menu-dropdown .dropdown-divider {
+    margin: 6px 4px;
+    border-color: #373e48;
+}
+
+.user-menu-dropdown .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    color: #d6dce5;
+    font-size: 13px;
+}
+
+.user-menu-dropdown .dropdown-item svg {
+    flex-shrink: 0;
+    color: #a3adbb;
+}
+
+.user-menu-dropdown .dropdown-item:hover,
+.user-menu-dropdown .dropdown-item:focus,
+.user-menu-dropdown .dropdown-item.active {
+    background: #2a3342;
+    color: #e4e6ea;
+}
+
+.user-menu-dropdown .user-menu-logout,
+.user-menu-dropdown .user-menu-logout svg {
+    color: #f2a4a4;
+}
+
+.user-menu-dropdown .user-menu-logout:hover,
+.user-menu-dropdown .user-menu-logout:focus {
+    background: #38272c;
+    color: #ffc5bf;
+}
+
+.user-menu-retry {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #93c5fd;
+    font-size: 12px;
+}
+
+.user-menu :is(button, a):focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+@media (min-width: 1200px) and (max-width: 1399.98px) {
+    .app-navbar .app-navbar-links .nav-link {
+        padding-right: 8px;
+        padding-left: 8px;
+    }
+
+    .app-navbar .app-navbar-brand {
+        margin-right: 8px;
+        font-size: 1rem;
+    }
+
+    .app-navbar .app-navbar-actions {
+        gap: 8px;
+    }
+
+    .user-menu-trigger.btn {
+        gap: 7px;
+        max-width: 170px;
+        padding-right: 4px;
+        padding-left: 4px;
+    }
+}
+
+@media (max-width: 1199.98px) {
+    .app-navbar-account-actions,
+    .app-navbar-account-actions .user-menu {
+        width: 100%;
+    }
+
+    .user-menu-trigger.btn {
+        max-width: 100%;
+    }
+
+    .user-menu-dropdown.dropdown-menu {
+        margin-top: 6px;
+    }
+}

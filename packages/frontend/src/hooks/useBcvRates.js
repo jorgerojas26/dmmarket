@@ -14,13 +14,13 @@ export function useBcvStatus(enabled = true) {
     return useSWR(enabled ? 'bcv-status' : null, fetchBcvStatus, {
         dedupingInterval: 10_000,
         revalidateOnFocus: false,
-        refreshInterval: (data) => (data?.sincronizando ? 3000 : 0),
+        refreshInterval: (data) => (data?.sincronizando || data?.lastRequest?.outcome === 'running' ? 3000 : 0),
     });
 }
 
 // La tasa de una fecha es un dato cerrado: no se revalida al enfocar.
-export function useBcvRateByDate(fecha) {
-    return useSWR(fecha ? ['bcv-rate', fecha] : null, () => fetchBcvRateByDate(fecha), {
+export function useBcvRateByDate(fecha, enabled = true) {
+    return useSWR(enabled && fecha ? ['bcv-rate', fecha] : null, () => fetchBcvRateByDate(fecha), {
         dedupingInterval: 300_000,
         revalidateOnFocus: false,
     });

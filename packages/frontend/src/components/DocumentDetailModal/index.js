@@ -1,3 +1,4 @@
+import { formatCurrency as formatReportCurrency } from 'utils/format';
 import Table from 'components/Table';
 import { DateTime } from 'luxon';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -8,11 +9,8 @@ import './styles.css';
 const EMPTY_PRODUCTS = [];
 const SEARCH_THRESHOLD = 15;
 const formatCurrency = (value) => {
-    const amount = Number(value);
-    return `$${(Number.isFinite(amount) ? amount : 0).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    })}`;
+    if (value == null) return 'No disponible';
+    return formatReportCurrency(Number.isFinite(Number(value)) ? value : 0, 'en-US');
 };
 
 const DocumentDetailModal = ({
@@ -34,7 +32,9 @@ const DocumentDetailModal = ({
     const title = documentId != null ? `${documentLabel} #${documentId}` : 'Cargando...';
     const ready = !!record && !error;
     const products = ready && Array.isArray(record.productos) ? record.productos : EMPTY_PRODUCTS;
-    const profitVisible = showProfit && (!collapseProfit || profitExpanded);
+    const profitAllowed = showProfit && Object.hasOwn(record || {}, 'utilidad');
+    const profitVisible = profitAllowed && (!collapseProfit || profitExpanded);
+    const monetary = Object.hasOwn(record || {}, 'total');
     const query = search.trim().toLocaleLowerCase('es');
     const filtered = useMemo(
         () =>
@@ -53,13 +53,15 @@ const DocumentDetailModal = ({
                 accessor: 'cantidad',
                 Cell: ({ value }) => Number(value).toLocaleString('en-US'),
             },
-            { Header: 'Precio', accessor: 'precio', Cell: ({ value }) => formatCurrency(value) },
-            { Header: 'Subtotal', accessor: 'subtotal', Cell: ({ value }) => formatCurrency(value) },
+            ...(monetary ? [{ Header: 'Precio', accessor: 'precio', Cell: ({ value }) => formatCurrency(value) }] : []),
+            ...(monetary
+                ? [{ Header: 'Subtotal', accessor: 'subtotal', Cell: ({ value }) => formatCurrency(value) }]
+                : []),
             ...(profitVisible
                 ? [{ Header: 'Utilidad', accessor: 'utilidad', Cell: ({ value }) => formatCurrency(value) }]
                 : []),
         ],
-        [profitVisible],
+        [profitVisible, monetary],
     );
     useEffect(() => {
         setSearch('');
@@ -139,7 +141,7 @@ const DocumentDetailModal = ({
                     <>
                         <div className="document-detail-meta">
                             <span aria-live="polite">{countLabel}</span>
-                            {showProfit && collapseProfit && (
+                            {profitAllowed && collapseProfit && (
                                 <Button
                                     variant="link"
                                     aria-expanded={profitExpanded}
@@ -157,10 +159,12 @@ const DocumentDetailModal = ({
                                     <dd>{formatCurrency(record.utilidad)}</dd>
                                 </div>
                             )}
-                            <div className="document-detail-total">
-                                <dt>Total</dt>
-                                <dd>{formatCurrency(record.total)}</dd>
-                            </div>
+                            {monetary && (
+                                <div className="document-detail-total">
+                                    <dt>Total</dt>
+                                    <dd>{formatCurrency(record.total)}</dd>
+                                </div>
+                            )}
                         </dl>
                     </>
                 )}

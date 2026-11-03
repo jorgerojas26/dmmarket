@@ -1,3 +1,6 @@
+import { useAuth } from 'auth/context';
+import { ResourceBoundary } from 'auth/resources';
+import AccessDenied from 'components/AccessDenied';
 import SalesDashboard from 'components/Dashboard/SalesDashboard';
 import DateRangePicker from 'components/DateRangePicker';
 import Sidebar from 'components/Sidebar';
@@ -19,6 +22,9 @@ const getDefaultDateRange = (view) => {
 };
 
 const VentasPage = () => {
+    const { has } = useAuth();
+    const resources = { dashboard: 'sales.dashboard', desglose: 'sales.breakdown', despacho: 'sales.dispatch' };
+    const availableViews = VALID_VIEWS.filter((view) => has(`${resources[view]}.read`));
     const { showNoe } = useContext(ShowNoeContext);
     const history = useHistory();
     const location = useLocation();
@@ -29,7 +35,7 @@ const VentasPage = () => {
     const urlFrom = searchParams.get('from');
     const urlTo = searchParams.get('to');
 
-    const initialView = VALID_VIEWS.includes(urlView) ? urlView : 'dashboard';
+    const initialView = urlView && VALID_VIEWS.includes(urlView) ? urlView : availableViews[0];
     const defaultDateRange = getDefaultDateRange(initialView);
     const initialDateRange = {
         from: urlFrom || defaultDateRange.from,
@@ -45,7 +51,7 @@ const VentasPage = () => {
         params.set('view', activeView);
         params.set('from', dateRange.from);
         params.set('to', dateRange.to);
-        history.replace({ search: params.toString() });
+        if (availableViews.includes(activeView)) history.replace({ search: params.toString() });
     }, [activeView, dateRange, history]);
 
     const handleViewChange = useCallback((view) => {
@@ -63,6 +69,7 @@ const VentasPage = () => {
         () => ({
             dashboard: (
                 <svg
+                    aria-hidden="true"
                     width="18"
                     height="18"
                     viewBox="0 0 24 24"
@@ -80,6 +87,7 @@ const VentasPage = () => {
             ),
             despacho: (
                 <svg
+                    aria-hidden="true"
                     width="18"
                     height="18"
                     viewBox="0 0 24 24"
@@ -97,6 +105,7 @@ const VentasPage = () => {
             ),
             desglose: (
                 <svg
+                    aria-hidden="true"
                     width="18"
                     height="18"
                     viewBox="0 0 24 24"
@@ -148,31 +157,38 @@ const VentasPage = () => {
     );
 
     const currentView = VIEWS[activeView];
+    if (!availableViews.includes(activeView)) return <AccessDenied />;
 
     return (
-        <Container fluid className="clientes-layout p-0">
-            <div className="clientes-row">
-                {/* Sidebar */}
-                <Sidebar activeKey={activeView} onSelect={handleViewChange} items={sidebarItems} />
+        <ResourceBoundary resource={resources[activeView]}>
+            <Container as="section" aria-label="Ventas" fluid className="clientes-layout p-0">
+                <div className="clientes-row">
+                    {/* Sidebar */}
+                    <Sidebar
+                        activeKey={activeView}
+                        onSelect={handleViewChange}
+                        items={sidebarItems.filter((item) => availableViews.includes(item.eventKey))}
+                    />
 
-                {/* Content area */}
-                <div className="clientes-content p-4 w-0">
-                    {activeView !== 'desglose' && (
-                        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
-                            <h4 className="m-0 p-0 bg-red text-light">{currentView.heading}</h4>
-                            <DateRangePicker
-                                key={activeView}
-                                initialFrom={dateRange.from}
-                                initialTo={dateRange.to}
-                                onChange={handleDateRangeChange}
-                            />
-                        </div>
-                    )}
+                    {/* Content area */}
+                    <div className="clientes-content p-4 w-0">
+                        {activeView !== 'desglose' && (
+                            <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+                                <h4 className="m-0 p-0 bg-red text-light">{currentView.heading}</h4>
+                                <DateRangePicker
+                                    key={activeView}
+                                    initialFrom={dateRange.from}
+                                    initialTo={dateRange.to}
+                                    onChange={handleDateRangeChange}
+                                />
+                            </div>
+                        )}
 
-                    {currentView.render()}
+                        {currentView.render()}
+                    </div>
                 </div>
-            </div>
-        </Container>
+            </Container>
+        </ResourceBoundary>
     );
 };
 

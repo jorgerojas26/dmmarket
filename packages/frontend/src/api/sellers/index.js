@@ -1,3 +1,5 @@
+import { fetcher } from 'swr-config';
+
 const BASE_URL = '/api/sellers';
 
 export const fetchSellersDashboard = async (dateRange, showNoe) => {
@@ -48,3 +50,8 @@ export const fetchSellerSales = async (
     if (!response.ok) throw new Error('Error al cargar las ventas del vendedor');
     return response.json();
 };
+
+export const fetchSellersExport = (parameters) =>
+    fetcher(
+        `/api/exports/sellers?${new URLSearchParams(Object.entries(parameters).filter(([, value]) => value !== undefined && value !== null && value !== ''))}`,
+    );
