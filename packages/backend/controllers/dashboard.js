@@ -22,8 +22,7 @@ const invoicesQuery = `
     mf.IdCliente AS clientId,
     SUM(sf.Precio * sf.Cantidad) AS rawProfit,
     SUM((sf.Precio - sf.Costo) * sf.Cantidad) AS netProfit,
-    SUM(sf.Cantidad) AS quantity,
-    AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100) AS profitPercent
+    SUM(sf.Cantidad) AS quantity
   FROM ${"${slaveTable}"} sf
   INNER JOIN ${"${masterTable}"} mf
     ON mf.${"${idInvoice}"} = sf.${"${idInvoice}"} AND mf.Anulada = 0
@@ -38,8 +37,7 @@ const productsQuery = `
     productos.Grupo AS grupoId,
     SUM(sf.Cantidad) AS quantity,
     SUM(sf.Precio * sf.Cantidad) AS rawProfit,
-    SUM((sf.Precio - sf.Costo) * sf.Cantidad) AS netProfit,
-    AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100) AS profitPercent
+    SUM((sf.Precio - sf.Costo) * sf.Cantidad) AS netProfit
   FROM ${"${slaveTable}"} sf
   INNER JOIN ${"${masterTable}"} mf
     ON mf.${"${idInvoice}"} = sf.${"${idInvoice}"} AND mf.Anulada = 0
@@ -111,8 +109,7 @@ const computeKpis = (invoices) => {
   const totalQuantity = invoices.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
   const totalInvoices = invoices.length;
   const avgTicket = totalInvoices > 0 ? totalRawProfit / totalInvoices : 0;
-  const marginSum = invoices.reduce((sum, r) => sum + Number(r.profitPercent || 0), 0);
-  const avgMarginPercent = totalInvoices > 0 ? marginSum / totalInvoices : 0;
+  const avgMarginPercent = totalRawProfit !== 0 ? (totalNetProfit / totalRawProfit) * 100 : 0;
 
   return {
     totalRawProfit: round2(totalRawProfit),
@@ -182,7 +179,7 @@ const computeTopProducts = (products) =>
       quantity: round2(p.quantity),
       rawProfit: round2(p.rawProfit),
       netProfit: round2(p.netProfit),
-      averageProfitPercent: round2(p.profitPercent),
+      averageProfitPercent: round2(Number(p.rawProfit) !== 0 ? (Number(p.netProfit) / Number(p.rawProfit)) * 100 : 0),
     }));
 
 const computeGroupSales = (products, nameLookups) => {

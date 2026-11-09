@@ -1,11 +1,82 @@
 const request = require("supertest");
 const app = require("../index");
+const knex = require("../database");
 
 // Los tests corren contra la DB local real; bajo carga paralela de suites cada request
 // multi-statement puede superar los 5000ms por defecto (flaky) — se amplía el margen.
 jest.setTimeout(30000);
 
 describe("GET /api/dashboard/sales", () => {
+  it.each(["false", "true"])("el margen coincide con utilidad / ventas para showNoe=%s", async (showNoe) => {
+    const res = await request(app).get("/api/dashboard/sales").query({ from: "2021-01-01", to: "2026-12-31", showNoe });
+
+    expect(res.status).toBe(200);
+    const { totalRawProfit, totalNetProfit, avgMarginPercent, avgTicket, totalInvoices } = res.body.kpis;
+    expect(totalRawProfit).toBeGreaterThan(0);
+    expect(avgMarginPercent).toBeCloseTo((totalNetProfit / totalRawProfit) * 100, 2);
+    expect(avgTicket).toBeCloseTo(totalRawProfit / totalInvoices, 2);
+  });
+
+  it.each(["false", "true"])(
+    "los totales y comparativos coinciden con las líneas vigentes para showNoe=%s",
+    async (showNoe) => {
+      const master = showNoe === "true" ? "masternoe" : "masterfact";
+      const slave = showNoe === "true" ? "slavenoe" : "slavefact";
+      const id = showNoe === "true" ? "IdNoe" : "IdFactura";
+      const from = "2021-01-01";
+      const to = "2026-12-31";
+      const [rows] = await knex.raw(
+        `
+      SELECT ROUND(SUM(s.Precio * s.Cantidad), 2) AS sales,
+        ROUND(SUM((s.Precio - s.Costo) * s.Cantidad), 2) AS profit,
+        ROUND(SUM(s.Cantidad), 3) AS quantity,
+        COUNT(DISTINCT m.${id}) AS invoices
+      FROM ${slave} s
+      INNER JOIN ${master} m ON m.${id} = s.${id}
+      WHERE m.Anulada = 0 AND m.Fecha BETWEEN ? AND ?`,
+        [from, to],
+      );
+      const res = await request(app)
+        .get("/api/dashboard/sales")
+        .query({ from, to, compareFrom: from, compareTo: to, showNoe });
+
+      expect(res.status).toBe(200);
+      const kpis = res.body.kpis;
+      expect(Math.abs(kpis.totalRawProfit - Number(rows[0].sales))).toBeLessThanOrEqual(0.011);
+      expect(Math.abs(kpis.totalNetProfit - Number(rows[0].profit))).toBeLessThanOrEqual(0.011);
+      expect(kpis.totalQuantity).toBe(Number(rows[0].quantity));
+      expect(kpis.totalInvoices).toBe(Number(rows[0].invoices));
+      expect(Math.abs(kpis.compareRawProfit - kpis.totalRawProfit)).toBeLessThanOrEqual(0.011);
+      expect(Math.abs(kpis.compareNetProfit - kpis.totalNetProfit)).toBeLessThanOrEqual(0.011);
+      expect(kpis.compareQuantity).toBe(kpis.totalQuantity);
+      expect(kpis.compareInvoices).toBe(kpis.totalInvoices);
+      expect(res.body.groupSalesChart.reduce((sum, group) => sum + group.rawProfit, 0)).toBeCloseTo(
+        kpis.totalRawProfit,
+        1,
+      );
+      expect(res.body.groupSalesChart.reduce((sum, group) => sum + group.netProfit, 0)).toBeCloseTo(
+        kpis.totalNetProfit,
+        1,
+      );
+    },
+  );
+
+  it.each(["false", "true"])(
+    "el margen de cada producto coincide con utilidad / ventas para showNoe=%s",
+    async (showNoe) => {
+      const res = await request(app)
+        .get("/api/dashboard/sales")
+        .query({ from: "2021-01-01", to: "2026-12-31", showNoe });
+
+      expect(res.status).toBe(200);
+      expect(res.body.topProducts.length).toBeGreaterThan(0);
+      for (const product of res.body.topProducts) {
+        const margin = product.rawProfit !== 0 ? (product.netProfit / product.rawProfit) * 100 : 0;
+        expect(product.averageProfitPercent).toBeCloseTo(margin, 2);
+      }
+    },
+  );
+
   // 1. Estructura de respuesta con datos
   it("responde 200 con la estructura completa cuando hay datos", async () => {
     const res = await request(app)
@@ -34,6 +105,9 @@ describe("GET /api/dashboard/sales", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.kpis.totalRawProfit).toBe(0);
+    expect(res.body.kpis.totalNetProfit).toBe(0);
+    expect(res.body.kpis.avgMarginPercent).toBe(0);
+    expect(res.body.kpis.avgTicket).toBe(0);
     expect(res.body.topProducts).toEqual([]);
     expect(res.body.groupSalesChart).toEqual([]);
   });
@@ -280,23 +354,39 @@ describe("GET /api/dashboard/pareto", () => {
 
   it("busca, ordena y pagina nuevos sin alterar el ABC; sin límite devuelve todos para imprimir", async () => {
     const range = { from: "2026-07-01", to: "2026-08-05", showNoe: "false", modo: "compras-sin-vender" };
-    const paged = await request(app).get("/api/dashboard/pareto").query({
-      ...range, newLimit: 2, newPage: 1, newSortBy: "inventoryValue", newSortDir: "asc",
-    });
+    const paged = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({
+        ...range,
+        newLimit: 2,
+        newPage: 1,
+        newSortBy: "inventoryValue",
+        newSortDir: "asc",
+      });
     expect(paged.status).toBe(200);
     expect(paged.body.newProductsCount).toBeGreaterThan(2);
     expect(paged.body.newProductsTotal).toBe(paged.body.newProductsCount);
     expect(paged.body.newProducts).toHaveLength(2);
 
-    const all = await request(app).get("/api/dashboard/pareto").query({
-      ...range, newSortBy: "inventoryValue", newSortDir: "asc",
-    });
+    const all = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({
+        ...range,
+        newSortBy: "inventoryValue",
+        newSortDir: "asc",
+      });
     expect(all.status).toBe(200);
     expect(all.body.newProducts).toHaveLength(all.body.newProductsTotal);
     expect(paged.body.newProducts).toEqual(all.body.newProducts.slice(0, 2));
-    const secondPage = await request(app).get("/api/dashboard/pareto").query({
-      ...range, newLimit: 2, newPage: 2, newSortBy: "inventoryValue", newSortDir: "asc",
-    });
+    const secondPage = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({
+        ...range,
+        newLimit: 2,
+        newPage: 2,
+        newSortBy: "inventoryValue",
+        newSortDir: "asc",
+      });
     expect(secondPage.body.newProducts).toEqual(all.body.newProducts.slice(2, 4));
     expect(all.body.newProducts.map((p) => Number(p.inventoryValue))).toEqual(
       all.body.newProducts.map((p) => Number(p.inventoryValue)).sort((a, b) => a - b),
@@ -306,13 +396,19 @@ describe("GET /api/dashboard/pareto", () => {
     );
     expect(paged.body.summary.totalProducts).toBe(all.body.summary.totalProducts);
     expect(all.body.newProductsInventoryTotal).toBeCloseTo(
-      all.body.newProducts.reduce((sum, p) => sum + Number(p.inventoryValue), 0), 2,
+      all.body.newProducts.reduce((sum, p) => sum + Number(p.inventoryValue), 0),
+      2,
     );
 
     const search = all.body.newProducts[0].product;
-    const filtered = await request(app).get("/api/dashboard/pareto").query({
-      ...range, newSearch: search, newLimit: 1, newPage: 1,
-    });
+    const filtered = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({
+        ...range,
+        newSearch: search,
+        newLimit: 1,
+        newPage: 1,
+      });
     expect(filtered.status).toBe(200);
     expect(filtered.body.newProductsTotal).toBeGreaterThan(0);
     expect(filtered.body.newProductsTotal).toBeLessThanOrEqual(all.body.newProductsTotal);
@@ -321,9 +417,13 @@ describe("GET /api/dashboard/pareto", () => {
       all.body.products.map((p) => p.productId).sort(),
     );
 
-    const empty = await request(app).get("/api/dashboard/pareto").query({
-      ...range, newSearch: "__producto_inexistente__", newLimit: 20,
-    });
+    const empty = await request(app)
+      .get("/api/dashboard/pareto")
+      .query({
+        ...range,
+        newSearch: "__producto_inexistente__",
+        newLimit: 20,
+      });
     expect(empty.body.newProductsCount).toBe(all.body.newProductsCount);
     expect(empty.body.newProductsTotal).toBe(0);
     expect(empty.body.newProducts).toEqual([]);
