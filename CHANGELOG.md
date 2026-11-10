@@ -7,6 +7,16 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.16.0] - 2026-11-09
+
+### Nuevas funciones
+
+- **Bancos y métodos de pago configurables**: desde Configuración → Cobranza puedes crear, editar, desactivar y reactivar las opciones de cobro sin perder el historial. También puedes ordenarlas arrastrando sus filas; ese orden se conserva y se utiliza al registrar abonos.
+
+### Correcciones
+
+- **Margen de ventas coherente con la utilidad**: el margen del tablero de Ventas y de sus productos ahora se calcula sobre los importes vendidos, para que coincida con la relación entre ventas totales y utilidad.
+
 ## [v1.15.0] - 2026-10-29
 
 ### Nuevas funciones
