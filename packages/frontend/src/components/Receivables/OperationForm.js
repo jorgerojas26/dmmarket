@@ -1,5 +1,6 @@
 import { executeReceivableOperation, previewReceivableOperation } from 'api/receivables';
 import { useBcvRateByDate } from 'hooks/useBcvRates';
+import { useReceivableMethods } from 'hooks/useReceivables';
 import { useEffect, useRef, useState } from 'react';
 import Alert from 'react-bootstrap/Alert';
 import Button from 'react-bootstrap/Button';
@@ -32,13 +33,6 @@ const confirmations = {
     reopen: 'Confirmar reapertura',
     void: 'Confirmar anulación',
 };
-const methods = {
-    TRANSFERENCIA: 'Transferencia',
-    'PAGO MOVIL': 'Pago móvil',
-    EFECTIVO: 'Efectivo',
-    TARJETA: 'Tarjeta',
-    OTRO: 'Otro',
-};
 
 export default function OperationForm({
     action,
@@ -57,7 +51,7 @@ export default function OperationForm({
         currency: 'BsS',
         rate: '',
         date: today(),
-        method: 'TRANSFERENCIA',
+        method: '',
         reference: '',
         bank: '',
         notes: '',
@@ -83,6 +77,25 @@ export default function OperationForm({
     const rateEdit = useRef(null);
     const ratePanel = useRef(null);
     const payment = action.type === 'payment';
+    const {
+        data: methodRows,
+        error: methodError,
+        mutate: reloadMethods,
+        isValidating: loadingMethods,
+    } = useReceivableMethods(payment);
+    const methods = Object.fromEntries((methodRows || []).map((row) => [row.id, row.name]));
+    const methodReady = !!methodRows?.some((row) => row.id === fields.method) && !methodError;
+    useEffect(() => {
+        if (!payment || !methodRows?.length) return;
+        setFields((current) =>
+            current.method
+                ? current
+                : {
+                      ...current,
+                      method: methodRows.find((row) => row.id === 'TRANSFERENCIA')?.id || methodRows[0].id,
+                  },
+        );
+    }, [payment, methodRows]);
     const clientClosure = action.type === 'close' && !action.id;
     const rateAvailable = Number.isFinite(Number(rate)) && Number(rate) > 0;
     const sameDay = fields.date === today();
@@ -254,7 +267,8 @@ export default function OperationForm({
     };
     const submit = async (event) => {
         event.preventDefault();
-        if (inFlight.current || disabled || (clientClosure && !fields.reason.trim())) return;
+        if (inFlight.current || disabled || (payment && !methodReady) || (clientClosure && !fields.reason.trim()))
+            return;
         inFlight.current = true;
         setBusy(true);
         onBusyChange(true);
@@ -443,13 +457,40 @@ export default function OperationForm({
     const methodField = (
         <Form.Group controlId="cxc-method">
             <Form.Label>Método</Form.Label>
-            <Form.Select value={fields.method} onChange={(event) => change('method', event.target.value)}>
-                {Object.entries(methods).map(([value, label]) => (
-                    <option key={value} value={value}>
-                        {label}
+            <Form.Select
+                value={fields.method}
+                disabled={!methodRows?.length || !!methodError}
+                onChange={(event) => change('method', event.target.value)}
+            >
+                {!methodReady && (
+                    <option value={fields.method}>
+                        {methodError
+                            ? 'Métodos no disponibles'
+                            : !methodRows
+                              ? 'Cargando métodos…'
+                              : 'Seleccionar método activo'}
+                    </option>
+                )}
+                {(methodRows || []).map((row) => (
+                    <option key={row.id} value={row.id}>
+                        {row.name}
                     </option>
                 ))}
             </Form.Select>
+            {methodError && (
+                <div role="alert">
+                    No se pudo cargar el catálogo de métodos.{' '}
+                    <Button variant="link" size="sm" disabled={loadingMethods} onClick={() => reloadMethods()}>
+                        Reintentar métodos
+                    </Button>
+                </div>
+            )}
+            {methodRows?.length === 0 && !methodError && (
+                <p className="cxc-muted">No hay métodos activos. Activa uno en Configuración → Cobranza.</p>
+            )}
+            {methodRows?.length > 0 && fields.method && !methodReady && !methodError && (
+                <p role="alert">El método seleccionado ya no está disponible. Selecciona otro.</p>
+            )}
         </Form.Group>
     );
     const referenceField = (
@@ -886,7 +927,7 @@ export default function OperationForm({
                                 busy ||
                                 disabled ||
                                 (clientClosure && !fields.reason.trim()) ||
-                                (payment && fields.currency === 'BsS' && !rateReady)
+                                (payment && (!methodReady || (fields.currency === 'BsS' && !rateReady)))
                             }
                         >
                             {busy ? (

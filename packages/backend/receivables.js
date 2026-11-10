@@ -1,6 +1,7 @@
 const { reportId, missingName } = require("./utils/report-identity");
 const { createHash, randomUUID } = require("node:crypto");
 const { Money, fail, decimal, fixed, total, allocate } = require("./utils/receivables-money");
+const { createCollectionCatalogs } = require("./collection-catalogs");
 
 const hash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const parseJson = (value) => (typeof value === "string" ? JSON.parse(value) : value);
@@ -82,9 +83,8 @@ function input(body, today) {
       fail("Indica una fecha de pago válida, no posterior a hoy.");
     }
     result.date = body.date;
-    if (!["EFECTIVO", "TRANSFERENCIA", "PAGO MOVIL", "TARJETA", "OTRO"].includes(body.method))
-      fail("Selecciona un método de pago.");
-    result.method = body.method;
+    result.method = text(body.method, 50);
+    if (!result.method) fail("Selecciona un método de pago.");
     result.reference = text(body.reference, 50);
     result.bank = text(body.bank, 50);
     result.notes = text(body.notes);
@@ -106,6 +106,7 @@ const eligible = (d) =>
   d.saleClient === d.IdCliente;
 
 function createReceivablesService({ db, now = () => new Date() }) {
+  const catalogs = createCollectionCatalogs(db);
   async function readiness() {
     const tables = await Promise.all(
       ["cxc_documentos", "cxc_movimientos", "cxc_cruces", "cxc_operaciones", "cxc_cierres"].map((table) =>
@@ -190,6 +191,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
     let rate = null;
     let rateSource = null;
     if (payload.type === "payment") {
+      await catalogs.validatePayment(connection, payload, lock);
       if (balance.lte(0)) fail("El cliente no tiene deuda pendiente para aplicar un abono.");
       rate = "1.000000";
       if (payload.currency === "BsS") {
@@ -703,11 +705,21 @@ function createReceivablesService({ db, now = () => new Date() }) {
     });
   }
 
-  async function banks() {
-    return db("bancos").select("Id_Banco as id", "Nombre as name").orderBy("Nombre");
+  async function activeCatalog(type) {
+    return (await catalogs.list(type)).filter((row) => row.active).map(({ id, name }) => ({ id, name }));
   }
 
-  return { readiness, list, detail, preview, execute, banks };
+  return {
+    readiness,
+    list,
+    detail,
+    preview,
+    execute,
+    banks: () => activeCatalog("banks"),
+    methods: () => activeCatalog("methods"),
+    catalog: catalogs.list,
+    saveCatalog: catalogs.save,
+  };
 }
 
 module.exports = { createReceivablesService, localDate, input };

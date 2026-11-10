@@ -24,6 +24,14 @@ const params = (filters) => {
 };
 
 export const fetchReceivableBanks = () => request('/banks');
+export const fetchReceivableMethods = () => request('/methods');
+export const fetchCollectionCatalog = (type) => request(`/catalogs/${type}`);
+export const saveCollectionCatalog = (type, id, body) =>
+    request(`/catalogs/${type}${id === null ? '' : `/${encodeURIComponent(id)}`}`, {
+        method: id === null ? 'POST' : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
 export const fetchReceivables = (filters) => request(`?${params(filters)}`);
 export const fetchReceivableClient = (id, filters) => request(`/${encodeURIComponent(id)}?${params(filters)}`);
 const post = (id, endpoint, body) =>

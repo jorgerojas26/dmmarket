@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UpdateProvider } from 'context/update';
 import { createMemoryHistory } from 'history';
@@ -237,3 +237,169 @@ it('updates the URL when selecting a section and supports back and forward', asy
     userEvent.click(screen.getByText('Acerca de', { selector: 'span.nav-label' }));
     expect(history.location.hash).toBe('#acercade');
 });
+
+it('gestiona bancos y métodos desde Cobranza sin perder la sección al navegar', async () => {
+    let banks = [{ id: 'BV', name: 'Banco inicial', active: true }];
+    let methods = [{ id: 'EFECTIVO', name: 'Efectivo', active: true }];
+    fetchMock.mockImplementation(async (url, options = {}) => {
+        if (String(url).includes('/catalogs/banks')) {
+            if (options.method === 'POST') banks = [...banks, { ...JSON.parse(options.body), active: true }];
+            if (options.method === 'PUT') {
+                const id = decodeURIComponent(String(url).split('/').pop());
+                banks = banks.map((bank) => (bank.id === id ? { ...bank, ...JSON.parse(options.body) } : bank));
+            }
+            return jsonResponse(options.method ? { saved: true } : banks);
+        }
+        if (String(url).includes('/catalogs/methods')) {
+            if (options.method === 'POST') methods = [...methods, { ...JSON.parse(options.body), active: true }];
+            return jsonResponse(options.method ? { saved: true } : methods);
+        }
+        if (String(url).includes('/api/receivables/banks')) return jsonResponse(banks.filter((bank) => bank.active));
+        if (String(url).includes('/api/receivables/methods')) return jsonResponse(methods);
+        if (String(url).includes('/history')) return jsonResponse(HISTORY);
+        if (String(url).includes('/status')) return jsonResponse(STATUS);
+        return jsonResponse({}, 404);
+    });
+    const { history } = renderPage();
+    userEvent.click(screen.getByText('Cobranza', { selector: 'span.nav-label' }));
+    expect(history.location.hash).toBe('#cobranza');
+    expect(await screen.findByText('Banco inicial')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Cobranza' })).toHaveClass('report-settings');
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(await screen.findByText('Efectivo')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Bancos' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Métodos de pago' })).toBeInTheDocument();
+    const bankTable = screen.getByRole('table', { name: 'Bancos configurados' });
+    const methodTable = screen.getByRole('table', { name: 'Métodos configurados' });
+    for (const table of [bankTable, methodTable]) {
+        expect(
+            within(table)
+                .getAllByRole('columnheader')
+                .map((cell) => cell.textContent),
+        ).toEqual(['Código', 'Nombre', 'Estado', 'Acciones']);
+        for (const button of within(table).getAllByRole('button')) {
+            expect(button.textContent).toBe('');
+            expect(button.querySelector('svg')).not.toBeNull();
+            expect(button).toHaveAttribute('title', button.getAttribute('aria-label'));
+        }
+    }
+    expect(within(bankTable).getAllByRole('row')[1].children).toHaveLength(4);
+    expect([...within(bankTable).getAllByRole('row')[1].children].map((cell) => cell.textContent)).toEqual([
+        'BV',
+        'Banco inicial',
+        'Activo',
+        '',
+    ]);
+    expect(within(methodTable).getByRole('cell', { name: 'EFECTIVO' })).toBeInTheDocument();
+    expect(within(bankTable).getByText('Activo')).toHaveClass('collection-settings__state--active');
+    expect(within(methodTable).getByText('Activo')).toHaveClass('collection-settings__state--active');
+    expect(screen.queryByText(/El catálogo de bancos se comparte/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Los métodos inactivos dejan de estar disponibles/)).not.toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Nuevo banco' }));
+    expect(await screen.findByRole('dialog', { name: 'Nuevo banco' })).toBeInTheDocument();
+    userEvent.type(screen.getByLabelText('Código'), 'TEST');
+    userEvent.type(screen.getByLabelText('Nombre'), 'Banco nuevo');
+    userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(await screen.findByText('Banco nuevo')).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Editar Banco nuevo' }));
+    expect(await screen.findByRole('dialog', { name: 'Editar banco' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Código')).toBeDisabled();
+    userEvent.clear(screen.getByLabelText('Nombre'));
+    userEvent.type(screen.getByLabelText('Nombre'), 'Banco editado');
+    userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(await screen.findByText('Banco editado')).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Desactivar Banco editado' }));
+    let confirmation = await screen.findByRole('dialog', { name: 'Desactivar Banco editado' });
+    expect(within(confirmation).getByText(/Los abonos anteriores se conservan/)).toBeInTheDocument();
+    expect(banks.find((bank) => bank.id === 'TEST').active).toBe(true);
+    userEvent.click(within(confirmation).getByRole('button', { name: 'Cancelar' }));
+    expect(banks.find((bank) => bank.id === 'TEST').active).toBe(true);
+    userEvent.click(screen.getByRole('button', { name: 'Desactivar Banco editado' }));
+    confirmation = await screen.findByRole('dialog', { name: 'Desactivar Banco editado' });
+    userEvent.click(within(confirmation).getByRole('button', { name: 'Confirmar desactivación' }));
+    expect(await screen.findByRole('button', { name: 'Reactivar Banco editado' })).toBeInTheDocument();
+    expect(screen.getByText('Inactivo')).toHaveClass('collection-settings__state--inactive');
+    userEvent.click(screen.getByRole('button', { name: 'Reactivar Banco editado' }));
+    expect(await screen.findByRole('button', { name: 'Desactivar Banco editado' })).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Editar Banco editado' }));
+    const bankEditor = await screen.findByRole('dialog', { name: 'Editar banco' });
+    const bankForm = within(bankEditor).getByRole('form', { name: 'Editar registro' });
+    userEvent.clear(within(bankForm).getByLabelText('Nombre'));
+    userEvent.type(within(bankForm).getByLabelText('Nombre'), 'Borrador de banco');
+    userEvent.click(within(bankEditor).getByRole('button', { name: 'Cancelar' }));
+    expect(banks.find((bank) => bank.id === 'TEST').name).toBe('Banco editado');
+    userEvent.click(screen.getByRole('button', { name: 'Nuevo método' }));
+    const methodDialog = await screen.findByRole('dialog', { name: 'Nuevo método' });
+    const methodForm = within(methodDialog).getByRole('form', { name: 'Nuevo método' });
+    userEvent.type(within(methodForm).getByLabelText('Código'), 'ZELLE');
+    userEvent.type(within(methodForm).getByLabelText('Nombre'), 'Zelle');
+    userEvent.click(within(methodForm).getByRole('button', { name: 'Guardar' }));
+    expect(await screen.findByText('Zelle')).toBeInTheDocument();
+    userEvent.click(screen.getByRole('button', { name: 'Editar Zelle' }));
+    const methodEditor = await screen.findByRole('dialog', { name: 'Editar método' });
+    expect(within(methodEditor).getByLabelText('Código')).toBeDisabled();
+    expect(within(methodEditor).getByLabelText('Nombre')).toHaveValue('Zelle');
+    userEvent.clear(within(methodEditor).getByLabelText('Nombre'));
+    userEvent.type(within(methodEditor).getByLabelText('Nombre'), 'Borrador de método');
+    userEvent.click(within(methodEditor).getByRole('button', { name: 'Cancelar' }));
+    expect(methods.find((method) => method.id === 'ZELLE').name).toBe('Zelle');
+    userEvent.click(screen.getByRole('button', { name: 'Desactivar Zelle' }));
+    const methodConfirmation = await screen.findByRole('dialog', { name: 'Desactivar Zelle' });
+    expect(within(methodConfirmation).getByRole('button', { name: 'Confirmar desactivación' })).toBeInTheDocument();
+    expect(methods.find((method) => method.id === 'ZELLE').active).toBe(true);
+    userEvent.click(within(methodConfirmation).getByRole('button', { name: 'Cancelar' }));
+});
+
+it('muestra errores de carga de Cobranza y permite reintentar', async () => {
+    mockRoutes(
+        baseRoutes({
+            '/catalogs/banks': jsonResponse({ error: { message: 'Catálogo no disponible' } }, 503),
+            '/catalogs/methods': jsonResponse([{ id: 'EFECTIVO', name: 'Efectivo', active: true }]),
+        }),
+    );
+    renderPage(createMemoryHistory({ initialEntries: ['/configuracion#cobranza'] }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Catálogo no disponible');
+    expect(await screen.findByText('Efectivo')).toBeInTheDocument();
+    mockRoutes(baseRoutes({ '/catalogs/banks': jsonResponse([]), '/catalogs/methods': jsonResponse([]) }));
+    userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByText('No hay bancos configurados.')).toBeInTheDocument();
+});
+
+it.each([
+    ['banks', 'Bancos', 'Bancos configurados', 'Editar banco'],
+    ['methods', 'Métodos de pago', 'Métodos configurados', 'Editar método'],
+])(
+    'mantiene la tabla de %s al guardar y muestra el aviso dentro del encabezado',
+    async (type, sectionName, tableName, dialogName) => {
+        const rows = [{ id: 'TEST', name: 'Registro de prueba', active: true }];
+        let reads = 0;
+        let finishReload;
+        fetchMock.mockImplementation(async (url, options = {}) => {
+            if (String(url).includes(`/catalogs/${type}`)) {
+                if (options.method === 'PUT') return jsonResponse({ saved: true });
+                if (reads++ === 0) return jsonResponse(rows);
+                return new Promise((resolve) => {
+                    finishReload = () => resolve(jsonResponse(rows));
+                });
+            }
+            if (String(url).includes('/catalogs/')) return jsonResponse([]);
+            if (String(url).includes('/history')) return jsonResponse(HISTORY);
+            if (String(url).includes('/status')) return jsonResponse(STATUS);
+            return jsonResponse([]);
+        });
+        renderPage(createMemoryHistory({ initialEntries: ['/configuracion#cobranza'] }));
+        const table = await screen.findByRole('table', { name: tableName });
+        const section = screen.getByRole('region', { name: sectionName });
+        userEvent.click(within(table).getByRole('button', { name: 'Editar Registro de prueba' }));
+        const dialog = await screen.findByRole('dialog', { name: dialogName });
+        userEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+        const notice = await within(section).findByText('Cambios guardados.');
+        expect(table).toBeInTheDocument();
+        expect(notice.parentElement).toHaveClass('collection-settings__toolbar');
+        await act(async () => {
+            finishReload();
+        });
+        expect(within(section).getByRole('table', { name: tableName })).toBe(table);
+    },
+);

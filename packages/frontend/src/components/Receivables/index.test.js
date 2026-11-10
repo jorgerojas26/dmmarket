@@ -8,7 +8,7 @@ import {
     previewReceivableOperation,
 } from 'api/receivables';
 import { useClientRoutes } from 'hooks/useClients';
-import { useReceivableBanks, useReceivableClient, useReceivables } from 'hooks/useReceivables';
+import { useReceivableBanks, useReceivableClient, useReceivableMethods, useReceivables } from 'hooks/useReceivables';
 import pdfMake from 'pdfmake/build/pdfmake';
 import ClientModal from './ClientModal';
 import { dateLabel, money, today } from './format';
@@ -20,6 +20,7 @@ jest.mock('hooks/useReceivables', () => ({
     useReceivables: jest.fn(),
     useReceivableClient: jest.fn(),
     useReceivableBanks: jest.fn(),
+    useReceivableMethods: jest.fn(),
 }));
 jest.mock('hooks/useClients', () => ({ useClientRoutes: jest.fn() }));
 jest.mock('api/invoice', () => ({ fetchInvoiceDetail: jest.fn() }));
@@ -81,6 +82,16 @@ beforeEach(() => {
     jest.clearAllMocks();
     useClientRoutes.mockReturnValue({ data: [{ Id_Ruta: 'R1', Nombre: 'R1' }], isLoading: false });
     useReceivableBanks.mockReturnValue({ data: [{ id: 'BA', name: 'Banco Uno' }], mutate: refresh });
+    useReceivableMethods.mockReturnValue({
+        data: [
+            { id: 'TRANSFERENCIA', name: 'Transferencia' },
+            { id: 'PAGO MOVIL', name: 'Pago móvil' },
+            { id: 'EFECTIVO', name: 'Efectivo' },
+            { id: 'TARJETA', name: 'Tarjeta' },
+            { id: 'OTRO', name: 'Otro' },
+        ],
+        mutate: refresh,
+    });
     pdfMake.createPdf.mockReturnValue({ open: jest.fn() });
     useReceivables.mockReturnValue({ data: portfolio, mutate: refresh, isValidating: false });
     useReceivableClient.mockReturnValue({ data: detail, mutate: refresh, isValidating: false });
@@ -1298,4 +1309,23 @@ it('returns focus to the amount when editing a reviewed drawer payment', async (
     userEvent.click(screen.getByRole('button', { name: 'Editar datos' }));
     expect(screen.getByLabelText('Importe recibido')).toHaveFocus();
     expect(screen.getByLabelText('Importe recibido')).toHaveValue(3500);
+});
+
+it('usa métodos del catálogo y envía métodos nuevos al revisar un abono', async () => {
+    useReceivableMethods.mockReturnValue({ data: [{ id: 'ZELLE', name: 'Zelle' }], mutate: refresh });
+    renderForm();
+    expect(screen.getByLabelText('Método')).toHaveValue('ZELLE');
+    expect(screen.queryByRole('option', { name: 'Transferencia' })).not.toBeInTheDocument();
+    userEvent.type(screen.getByLabelText('Importe recibido'), '10');
+    userEvent.click(screen.getByRole('button', { name: 'Revisar operación' }));
+    await waitFor(() =>
+        expect(previewReceivableOperation).toHaveBeenCalledWith('C1', expect.objectContaining({ method: 'ZELLE' })),
+    );
+});
+
+it('bloquea la revisión de abonos si no hay métodos disponibles', () => {
+    useReceivableMethods.mockReturnValue({ data: [], mutate: refresh });
+    renderForm();
+    expect(screen.getByRole('button', { name: 'Revisar operación' })).toBeDisabled();
+    expect(screen.getByText('No hay métodos activos. Activa uno en Configuración → Cobranza.')).toBeInTheDocument();
 });

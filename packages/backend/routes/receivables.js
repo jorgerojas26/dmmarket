@@ -11,6 +11,15 @@ function createReceivablesRouter(service) {
     try {
       res.json(await action(req));
     } catch (error) {
+      if (error.code === "ER_NO_SUCH_TABLE" && /dmmarket_(payment_methods|bank_settings)/.test(error.message)) {
+        return res.status(503).json({
+          error: {
+            code: "CXC_CATALOGS_UNAVAILABLE",
+            message:
+              "Falta preparar los catálogos de cobranza. Aplica la migración pendiente de DMMarket y vuelve a intentar.",
+          },
+        });
+      }
       if (!error.status) console.error("Cuentas por cobrar:", error.message);
       res.status(error.status || 500).json({
         error: {
@@ -35,6 +44,14 @@ function createReceivablesRouter(service) {
     handler(() => service.banks()),
   );
   router.get(
+    "/methods",
+    handler(() => service.methods()),
+  );
+  router.get(
+    "/catalogs/:type",
+    handler((req) => service.catalog(req.params.type)),
+  );
+  router.get(
     "/:clientId",
     handler((req) => service.detail(req.params.clientId, req.query)),
   );
@@ -45,6 +62,14 @@ function createReceivablesRouter(service) {
       return res.status(403).json({ error: { message: "La operación debe iniciarse desde DMMarket." } });
     next();
   });
+  router.post(
+    "/catalogs/:type",
+    handler((req) => service.saveCatalog(req.params.type, null, req.body || {})),
+  );
+  router.put(
+    "/catalogs/:type/:id",
+    handler((req) => service.saveCatalog(req.params.type, req.params.id, req.body || {})),
+  );
   router.post(
     "/:clientId/preview",
     handler((req) => service.preview(req.params.clientId, req.body || {})),
