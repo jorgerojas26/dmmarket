@@ -59,6 +59,7 @@ const DEFINITIONS = [
     [
       ["preferences", "Tipo de documento", [], ["update"]],
       ["currency", "Moneda del negocio", [], ["update"]],
+      ["collections", "Bancos y métodos de pago", [], ["update"]],
       ["rates", "Tasas BCV", [], ["sync"]],
       ["backups", "Respaldos", [], ["create"]],
       ["updates", "Actualizaciones", [], ["execute"]],

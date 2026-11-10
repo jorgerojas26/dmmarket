@@ -93,7 +93,14 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
       t.string("Simbolo");
       t.decimal("Cambio", 18, 6);
     });
+    await db.schema.createTable("bancos", (t) => {
+      t.string("Id_Banco", 10).primary();
+      t.string("Nombre", 50);
+    });
+    await db("bancos").insert({ Id_Banco: "BV", Nombre: "Banco inicial" });
     await require("../migrations/20261011_add_receivables_operations").up(db);
+    await require("../migrations/20261029_add_collection_catalogs").up(db);
+    await require("../migrations/20261030_add_collection_order").up(db);
     service = createReceivablesService({ db, now });
   });
 
@@ -190,10 +197,138 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
     ...overrides,
   });
   const run = async (body, clientId = "C1") => {
-    clock += 10;
+    clock += 1000;
     const preview = await service.preview(clientId, body);
     return service.execute(clientId, { ...body, snapshot: preview.snapshot, requestId: randomUUID() });
   };
+
+  it("administra catálogos por HTTP, conserva bancos compartidos y valida los abonos", async () => {
+    const express = require("express");
+    const request = require("supertest");
+    const { createReceivablesRouter } = require("../routes/receivables");
+    const app = express();
+    app.use(express.json());
+    app.use("/api/receivables", createReceivablesRouter(service));
+    const api = request(app);
+    const base = "/api/receivables/catalogs";
+
+    const initial = await api.get(`${base}/banks`);
+    expect(initial.status).toBe(200);
+    expect(initial.headers["cache-control"]).toBe("no-store");
+    expect(initial.body).toContainEqual({ id: "BV", name: "Banco inicial", active: true });
+    expect((await api.get("/api/receivables/methods")).body).toContainEqual({ id: "EFECTIVO", name: "Efectivo" });
+    expect((await api.post(`${base}/banks`).type("form").send({ id: "T", name: "Test" })).status).toBe(415);
+    expect(
+      (await api.post(`${base}/banks`).set("Sec-Fetch-Site", "cross-site").send({ id: "T", name: "Test" })).status,
+    ).toBe(403);
+    expect((await api.post(`${base}/banks`).send({ id: "", name: "Test" })).status).toBe(400);
+    expect((await api.post(`${base}/banks`).send({ id: "TOO-LONG-ID", name: "" })).status).toBe(400);
+    expect((await api.post(`${base}/banks`).send({ id: "TEST", name: "Banco de prueba" })).status).toBe(200);
+    expect((await db("bancos").where("Id_Banco", "TEST").first()).Nombre).toBe("Banco de prueba");
+    expect((await api.post(`${base}/banks`).send({ id: "TEST", name: "Duplicado" })).status).toBe(409);
+    expect((await api.post(`${base}/banks`).send({ id: "SECOND", name: "Banco de prueba" })).status).toBe(409);
+    expect((await api.put(`${base}/banks/TEST`).send({ name: "Banco editado", active: true })).status).toBe(200);
+    expect((await db("bancos").where("Id_Banco", "TEST").first()).Nombre).toBe("Banco editado");
+    expect((await api.put(`${base}/banks/missing`).send({ name: "No existe", active: false })).status).toBe(404);
+    expect((await api.put(`${base}/banks/TEST`).send({ name: "Banco editado", active: "false" })).status).toBe(400);
+
+    expect((await api.post(`${base}/methods`).send({ id: "ZELLE", name: "Zelle" })).status).toBe(200);
+    const body = payment("10", { method: "ZELLE", bank: "Banco editado" });
+    const result = await run(body);
+    expect(result.method).toBe("ZELLE");
+    expect((await db("cxc_movimientos").where("IdMov", result.movementId).first()).Banco).toBe("Banco editado");
+    const preview = await service.preview("C1", body);
+    expect((await api.put(`${base}/methods/ZELLE`).send({ name: "Zelle", active: false })).status).toBe(200);
+    expect((await api.get("/api/receivables/methods")).body.some((row) => row.id === "ZELLE")).toBe(false);
+    await expect(
+      service.execute("C1", { ...body, snapshot: preview.snapshot, requestId: randomUUID() }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect((await api.put(`${base}/methods/ZELLE`).send({ name: "Zelle", active: true })).status).toBe(200);
+    expect((await api.put(`${base}/banks/TEST`).send({ name: "Banco editado", active: false })).status).toBe(200);
+    expect((await api.get("/api/receivables/banks")).body.some((row) => row.id === "TEST")).toBe(false);
+    expect(await db("bancos").where("Id_Banco", "TEST").first()).toBeTruthy();
+    await expect(service.preview("C1", body)).rejects.toMatchObject({ status: 400 });
+    await expect(service.preview("C1", payment("10", { method: "INVENTADO" }))).rejects.toMatchObject({ status: 400 });
+    const history = await db("cxc_movimientos").where("IdMov", result.movementId).first();
+    expect(history.FormaPago).toBe("ZELLE");
+    expect(history.Banco).toBe("Banco editado");
+    expect((await api.put(`${base}/banks/TEST`).send({ name: "Banco editado", active: true })).status).toBe(200);
+    await expect(service.preview("C1", body)).resolves.toHaveProperty("snapshot");
+    await require("../migrations/20261029_add_collection_catalogs").up(db);
+    expect((await api.get(`${base}/methods`)).body.filter((row) => row.id === "ZELLE")).toHaveLength(1);
+  });
+
+  it("explica la preparación pendiente de catálogos sin devolver un error genérico de cartera", async () => {
+    const express = require("express");
+    const request = require("supertest");
+    const { createReceivablesRouter } = require("../routes/receivables");
+    const app = express();
+    app.use("/api/receivables", createReceivablesRouter(service));
+    await db.schema.dropTable("dmmarket_payment_methods");
+    await db.schema.dropTable("dmmarket_bank_settings");
+    try {
+      for (const type of ["banks", "methods"]) {
+        const response = await request(app).get(`/api/receivables/catalogs/${type}`);
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe("CXC_CATALOGS_UNAVAILABLE");
+        expect(response.body.error.message).toContain("catálogos de cobranza");
+        expect(response.body.error.message).toContain("migración");
+      }
+    } finally {
+      await require("../migrations/20261029_add_collection_catalogs").up(db);
+      await require("../migrations/20261030_add_collection_order").up(db);
+    }
+  });
+
+  it.each(["banks", "methods"])(
+    "persiste el orden de %s y lo aplica a los selectores sin modificar el catálogo compartido",
+    async (type) => {
+      const express = require("express");
+      const request = require("supertest");
+      const { createReceivablesRouter } = require("../routes/receivables");
+      const app = express();
+      app.use(express.json());
+      app.use("/api/receivables", createReceivablesRouter(service));
+      const api = request(app);
+      const base = `/api/receivables/catalogs/${type}`;
+      expect((await api.post(base).send({ id: "ORDER_A", name: "Orden A" })).status).toBe(200);
+      expect((await api.post(base).send({ id: "ORDER_B", name: "Orden B" })).status).toBe(200);
+      const shared = await db("bancos").orderBy("Id_Banco");
+      const initial = (await api.get(base)).body;
+      const ids = initial.map((row) => row.id).reverse();
+      expect(ids.length).toBeGreaterThan(1);
+      expect((await api.post(`${base}/reorder`).type("form").send({ ids })).status).toBe(415);
+      expect((await api.post(`${base}/reorder`).set("Sec-Fetch-Site", "cross-site").send({ ids })).status).toBe(403);
+      expect((await api.post(`${base}/reorder`).send({ ids: [ids[0], ids[0]] })).status).toBe(400);
+      expect((await api.post(`${base}/reorder`).send({ ids: "invalid" })).status).toBe(400);
+      expect((await api.post(`${base}/reorder`).send({ ids: ids.slice(1) })).status).toBe(409);
+      expect((await api.post(`${base}/reorder`).send({ ids: ["NO_EXISTE", ...ids.slice(1)] })).status).toBe(409);
+      expect((await api.get(base)).body.map((row) => row.id)).toEqual(initial.map((row) => row.id));
+      const reordered = await api.post(`${base}/reorder`).send({ ids });
+      expect(reordered.status).toBe(200);
+      expect(reordered.body.map((row) => row.id)).toEqual(ids);
+      const freshService = createReceivablesService({ db, now });
+      expect((await freshService.catalog(type)).map((row) => row.id)).toEqual(ids);
+      const selected = reordered.body[0];
+      expect(
+        (await api.put(`${base}/${encodeURIComponent(selected.id)}`).send({ name: selected.name, active: false }))
+          .status,
+      ).toBe(200);
+      expect((await api.get(`/api/receivables/${type}`)).body.map((row) => row.id)).toEqual(ids.slice(1));
+      expect(
+        (await api.put(`${base}/${encodeURIComponent(selected.id)}`).send({ name: selected.name, active: true }))
+          .status,
+      ).toBe(200);
+      expect((await api.get(`/api/receivables/${type}`)).body.map((row) => row.id)).toEqual(ids);
+      expect((await api.post(base).send({ id: "APPENDED", name: "A nuevo registro" })).status).toBe(200);
+      expect((await api.get(base)).body.map((row) => row.id)).toEqual([...ids, "APPENDED"]);
+      await require("../migrations/20261030_add_collection_order").up(db);
+      expect((await api.get(base)).body.map((row) => row.id)).toEqual([...ids, "APPENDED"]);
+      if (type === "banks") {
+        expect(await db("bancos").whereNot("Id_Banco", "APPENDED").orderBy("Id_Banco")).toEqual(shared);
+      }
+    },
+  );
 
   it("lists live balances, scopes KPIs by route and paginates filtered clients", async () => {
     const result = await service.list({ ruta: "R1", search: "missing" });
@@ -360,15 +495,4 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
     await expect(service.preview("C1", { type: "close", id: 3, reason: "Cerrar" })).rejects.toThrow("No hay deuda");
     await expect(service.preview("C1", { type: "close", id: 4, reason: "Cerrar" })).rejects.toThrow("No hay deuda");
   });
-});
-
-it("reads the bank catalog from the existing bancos table in name order", async () => {
-  const rows = [{ id: "BV", name: "BANCO DE VENEZUELA" }];
-  const query = { select: jest.fn().mockReturnThis(), orderBy: jest.fn().mockResolvedValue(rows) };
-  const db = jest.fn().mockReturnValue(query);
-  const service = createReceivablesService({ db });
-  expect(await service.banks()).toEqual(rows);
-  expect(db).toHaveBeenCalledWith("bancos");
-  expect(query.select).toHaveBeenCalledWith("Id_Banco as id", "Nombre as name");
-  expect(query.orderBy).toHaveBeenCalledWith("Nombre");
 });

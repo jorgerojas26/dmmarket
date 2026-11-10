@@ -1,14 +1,17 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { executeReceivableOperation, previewReceivableOperation } from 'api/receivables';
-import { useReceivableClient } from 'hooks/useReceivables';
+import { useReceivableClient, useReceivableMethods } from 'hooks/useReceivables';
 import ClientModal from './ClientModal';
 
 jest.mock('api/receivables', () => ({
     executeReceivableOperation: jest.fn(),
     previewReceivableOperation: jest.fn(),
 }));
-jest.mock('hooks/useReceivables', () => ({ useReceivableClient: jest.fn() }));
+jest.mock('hooks/useReceivables', () => ({
+    useReceivableClient: jest.fn(),
+    useReceivableMethods: jest.fn(),
+}));
 jest.mock('pdfmake/build/pdfmake', () => ({ createPdf: jest.fn() }));
 jest.mock('pdfmake/build/vfs_fonts', () => ({ pdfMake: { vfs: {} } }));
 
@@ -75,6 +78,7 @@ const portfolioRefresh = jest.fn();
 let current;
 
 beforeEach(() => {
+    useReceivableMethods.mockReturnValue({});
     jest.clearAllMocks();
     current = detail;
     refresh.mockImplementation(async () => {
