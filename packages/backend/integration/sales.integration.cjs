@@ -190,14 +190,14 @@ test("agregados y comparaciones respetan la identidad comercial", async () => {
   expect(result.body.kpis.compareNetProfit).toBe(7);
   expect(Number(result.body.topClients[0].netProfit)).toBe(39);
   expect(Number(result.body.topProducts[0].netProfit)).toBe(39);
+  expect(result.body.kpis.avgMarginPercent).toBe(39);
+  expect(Number(result.body.topProducts[0].averageProfitPercent)).toBe(39);
   const own = await client.request(
     `/api/dashboard/sales?${query}&employeeId=A&compareFrom=2025-12-01&compareTo=2025-12-31`,
   );
   expect(own.body.kpis.totalNetProfit).toBe(39);
   expect(own.body.kpis.compareNetProfit).toBe(7);
-  expect(own.body.routeSalesChart).toEqual([
-    { id: '"R"', name: "Ruta sintética", sales: 100, profit: 39 },
-  ]);
+  expect(own.body.routeSalesChart).toEqual([{ id: '"R"', name: "Ruta sintética", sales: 100, profit: 39 }]);
 });
 
 test("catálogo básico permite solo capacidades aprobadas y comparaciones inválidas fallan", async () => {
@@ -276,7 +276,7 @@ test("dashboard conserva redondeo global y datos incompletos al reutilizar agreg
     totalRawProfit: 0.01,
     totalNetProfit: 0.01,
     totalInvoices: 3,
-    avgMarginPercent: 66.67,
+    avgMarginPercent: 100,
   });
   expect(result.body.topProducts[0]).toMatchObject({ rawProfit: null, netProfit: null, averageProfitPercent: null });
   expect(Number(result.body.topProducts[0].quantity)).toBe(3);

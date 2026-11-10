@@ -24,6 +24,20 @@ const params = (filters) => {
 };
 
 export const fetchReceivableBanks = () => request('/banks');
+export const fetchReceivableMethods = () => request('/methods');
+export const fetchCollectionCatalog = (type) => request(`/catalogs/${type}`);
+export const saveCollectionCatalog = (type, id, body) =>
+    request(`/catalogs/${type}${id === null ? '' : `/${encodeURIComponent(id)}`}`, {
+        method: id === null ? 'POST' : 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+export const reorderCollectionCatalog = (type, ids) =>
+    request(`/catalogs/${type}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+    });
 export const fetchReceivables = (filters) => request(`?${params(filters)}`);
 export const fetchReceivableClient = (id, filters) => request(`/${encodeURIComponent(id)}?${params(filters)}`);
 export const fetchReceivableInvoice = (clientId, invoiceId) =>

@@ -1,4 +1,5 @@
 const { requestSession } = require("../auth/resource-policy");
+const { forbidden } = require("../auth/router");
 const express = require("express");
 const { createReceivablesService } = require("../receivables");
 const { requireReceivables, requireReceivablesOperation } = require("../controllers/receivables-policy");
@@ -48,6 +49,48 @@ function createReceivablesRoutes({ sessions, security }) {
       next(error);
     }
   };
+  const catalog =
+    (work, write = false) =>
+    async (req, res, next) => {
+      try {
+        if (write && !req.is("application/json")) throw Object.assign(new Error("Envía JSON."), { status: 415 });
+        options(req.query, []);
+        res.json(
+          await sessions.withSession(
+            req.sessionID,
+            { readOnly: !write, recent: write },
+            async ({ transaction, access, user }) => {
+              if (
+                !access.hasGlobal("settings.collections.read") ||
+                (write && !access.hasGlobal("settings.collections.update"))
+              )
+                forbidden();
+              const service = createReceivablesService({ db: transaction });
+              const result = await work(service, req);
+              if (write)
+                await appendEvent(transaction, {
+                  actorId: user.id,
+                  action: "collections.updated",
+                  reason: JSON.stringify({ type: req.params.type, id: req.params.id ?? null }),
+                  occurredMs: Date.now(),
+                });
+              return result;
+            },
+          ),
+        );
+      } catch (error) {
+        if (
+          (error.code === "ER_NO_SUCH_TABLE" && /dmmarket_(payment_methods|bank_settings)/.test(error.message)) ||
+          (error.code === "ER_BAD_FIELD_ERROR" && /\bposition\b/.test(error.message))
+        ) {
+          error.status = 503;
+          error.code = "CXC_CATALOGS_UNAVAILABLE";
+          error.message =
+            "Falta preparar los catálogos de cobranza. Aplica la migración pendiente de DMMarket y vuelve a intentar.";
+        }
+        next(error);
+      }
+    };
   router.get(
     "/receivables/status",
     handle(async (service, _req, _query, transaction) => {
@@ -64,6 +107,14 @@ function createReceivablesRoutes({ sessions, security }) {
   router.get(
     "/receivables/banks",
     handle((service) => service.banks(), []),
+  );
+  router.get(
+    "/receivables/methods",
+    handle((service) => service.methods(), []),
+  );
+  router.get(
+    "/receivables/catalogs/:type",
+    catalog((service, req) => service.catalog(req.params.type)),
   );
   router.get(
     "/receivables",
@@ -96,6 +147,18 @@ function createReceivablesRoutes({ sessions, security }) {
     }, []),
   );
   router.use("/receivables", security.csrfProtection);
+  router.post(
+    "/receivables/catalogs/:type/reorder",
+    catalog((service, req) => service.reorderCatalog(req.params.type, req.body?.ids), true),
+  );
+  router.post(
+    "/receivables/catalogs/:type",
+    catalog((service, req) => service.saveCatalog(req.params.type, null, req.body || {}), true),
+  );
+  router.put(
+    "/receivables/catalogs/:type/:id",
+    catalog((service, req) => service.saveCatalog(req.params.type, req.params.id, req.body || {}), true),
+  );
   for (const [endpoint, commit] of [
     ["preview", false],
     ["operations", true],

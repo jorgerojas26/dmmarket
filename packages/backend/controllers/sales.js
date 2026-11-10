@@ -387,7 +387,6 @@ async function kpis(transaction, access, query) {
       ...(financial
         ? {
             profit: transaction.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)"),
-            margin: transaction.raw("AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100)"),
           }
         : {}),
     })
@@ -402,9 +401,7 @@ async function kpis(transaction, access, query) {
       ...(financial
         ? {
             totalNetProfit: transaction.raw("ROUND(COALESCE(SUM(s.profit), 0), 2)"),
-            avgMarginPercent: transaction.raw(
-              "ROUND(COALESCE(SUM(COALESCE(s.margin, 0)) / NULLIF(COUNT(*), 0), 0), 2)",
-            ),
+            avgMarginPercent: transaction.raw("ROUND(COALESCE(SUM(s.profit) / NULLIF(SUM(s.amount), 0) * 100, 0), 2)"),
           }
         : {}),
     })
@@ -435,13 +432,12 @@ async function dashboard(transaction, access, query) {
       ...(financial
         ? {
             profit: transaction.raw("SUM((sf.Precio - sf.Costo) * sf.Cantidad)"),
-            margin: transaction.raw("AVG((sf.Precio - sf.Costo) / NULLIF(sf.Precio, 0) * 100)"),
           }
         : {}),
     })
     .groupBy(`mf.${invoice}`);
   const amount = sumValues(invoices, "amount");
-  const margin = financial ? sumValues(invoices, "margin") : null;
+  const profit = financial ? sumValues(invoices, "profit") : null;
   const summary = {
     totalRawProfit: roundAmount(amount),
     totalQuantity: roundAmount(sumValues(invoices, "quantity"), 3),
@@ -449,8 +445,8 @@ async function dashboard(transaction, access, query) {
     avgTicket: amount && invoices.length ? roundAmount(amount.div(invoices.length)) : 0,
     ...(financial
       ? {
-          totalNetProfit: roundAmount(sumValues(invoices, "profit")),
-          avgMarginPercent: margin && invoices.length ? roundAmount(margin.div(invoices.length)) : 0,
+          totalNetProfit: roundAmount(profit),
+          avgMarginPercent: amount && !amount.isZero() && profit ? roundAmount(profit.div(amount).times(100)) : 0,
         }
       : {}),
   };
@@ -485,7 +481,7 @@ async function dashboard(transaction, access, query) {
               "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)*sf.Cantidad) THEN ROUND(COALESCE(SUM((sf.Precio-sf.Costo)*sf.Cantidad),0),2) END",
             ),
             averageProfitPercent: transaction.raw(
-              "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)/NULLIF(sf.Precio,0)) THEN ROUND(AVG((sf.Precio-sf.Costo)/NULLIF(sf.Precio,0)*100),2) END",
+              "CASE WHEN COUNT(*)=COUNT((sf.Precio-sf.Costo)*sf.Cantidad) AND COUNT(*)=COUNT(sf.Precio*sf.Cantidad) THEN ROUND(COALESCE(SUM((sf.Precio-sf.Costo)*sf.Cantidad)/NULLIF(SUM(sf.Precio*sf.Cantidad),0)*100,0),2) END",
             ),
           }
         : {}),
