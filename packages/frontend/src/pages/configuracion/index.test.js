@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { UpdateProvider } from 'context/update';
 import { createMemoryHistory } from 'history';
@@ -277,15 +277,16 @@ it('gestiona bancos y métodos desde Cobranza sin perder la sección al navegar'
             within(table)
                 .getAllByRole('columnheader')
                 .map((cell) => cell.textContent),
-        ).toEqual(['Código', 'Nombre', 'Estado', 'Acciones']);
+        ).toEqual(['Orden', 'Código', 'Nombre', 'Estado', 'Acciones']);
         for (const button of within(table).getAllByRole('button')) {
             expect(button.textContent).toBe('');
             expect(button.querySelector('svg')).not.toBeNull();
             expect(button).toHaveAttribute('title', button.getAttribute('aria-label'));
         }
     }
-    expect(within(bankTable).getAllByRole('row')[1].children).toHaveLength(4);
+    expect(within(bankTable).getAllByRole('row')[1].children).toHaveLength(5);
     expect([...within(bankTable).getAllByRole('row')[1].children].map((cell) => cell.textContent)).toEqual([
+        '',
         'BV',
         'Banco inicial',
         'Activo',
@@ -403,3 +404,132 @@ it.each([
         expect(within(section).getByRole('table', { name: tableName })).toBe(table);
     },
 );
+
+it.each([
+    ['banks', 'Bancos configurados', false],
+    ['methods', 'Métodos configurados', false],
+    ['banks', 'Bancos configurados', true],
+])('reordena %s con el tirador y conserva el orden si falla el guardado (%s, %s)', async (type, tableName, fails) => {
+    let rows = [
+        { id: 'A', name: 'Primero', active: true },
+        { id: 'B', name: 'Segundo', active: true },
+        { id: 'C', name: 'Tercero', active: false },
+    ];
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+        if (this.tagName === 'TBODY') {
+            const height = this.children.length * 40;
+            return {
+                x: 0,
+                y: 100,
+                top: 100,
+                left: 0,
+                right: 700,
+                bottom: 100 + height,
+                width: 700,
+                height,
+                toJSON: () => ({}),
+            };
+        }
+        const row = this.closest('tbody tr');
+        if (!row) return rect.call(this);
+        const top = 100 + row.sectionRowIndex * 40;
+        return { x: 0, y: top, top, left: 0, right: 700, bottom: top + 40, width: 700, height: 40, toJSON: () => ({}) };
+    });
+    fetchMock.mockImplementation(async (url, options = {}) => {
+        if (String(url).includes(`/catalogs/${type}/reorder`)) {
+            if (fails) return jsonResponse({ error: { message: 'No se pudo guardar el orden.' } }, 500);
+            const { ids } = JSON.parse(options.body);
+            rows = ids.map((id) => rows.find((row) => row.id === id));
+            return jsonResponse(rows);
+        }
+        if (String(url).includes(`/catalogs/${type}`)) return jsonResponse(rows);
+        if (String(url).includes('/catalogs/')) return jsonResponse([]);
+        if (String(url).includes('/history')) return jsonResponse(HISTORY);
+        if (String(url).includes('/status')) return jsonResponse(STATUS);
+        return jsonResponse([]);
+    });
+    const view = renderPage(createMemoryHistory({ initialEntries: ['/configuracion#cobranza'] }));
+    const table = await screen.findByRole('table', { name: tableName });
+    const handle = within(table).getByRole('button', { name: 'Mover Primero' });
+    act(() => handle.focus());
+    fireEvent.keyDown(handle, { key: ' ', code: 'Space', keyCode: 32 });
+    await waitFor(() => expect(handle).toHaveAttribute('aria-pressed', 'true'));
+    fireEvent.keyDown(document, { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 });
+    await waitFor(() => expect(handle.closest('tr').style.transform).toContain('40px'));
+    fireEvent.keyDown(document, { key: ' ', code: 'Space', keyCode: 32 });
+    await waitFor(() =>
+        expect(fetchMock).toHaveBeenCalledWith(
+            `/api/receivables/catalogs/${type}/reorder`,
+            expect.objectContaining({ method: 'POST', body: JSON.stringify({ ids: ['B', 'A', 'C'] }) }),
+        ),
+    );
+    if (fails) expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo guardar el orden.');
+    else expect(await screen.findByText('Orden guardado.')).toBeInTheDocument();
+    const order = () =>
+        within(screen.getByRole('table', { name: tableName }))
+            .getAllByRole('row')
+            .slice(1)
+            .map((row) => row.children[1].textContent);
+    expect(order()).toEqual(fails ? ['A', 'B', 'C'] : ['B', 'A', 'C']);
+    view.unmount();
+    renderPage(createMemoryHistory({ initialEntries: ['/configuracion#cobranza'] }));
+    await screen.findByRole('table', { name: tableName });
+    expect(order()).toEqual(fails ? ['A', 'B', 'C'] : ['B', 'A', 'C']);
+});
+
+it.each([
+    ['banks', 'Bancos configurados'],
+    ['methods', 'Métodos configurados'],
+])('limita el arrastre de %s al eje vertical y al cuerpo de su tabla', async (type, tableName) => {
+    const rows = [
+        { id: 'A', name: 'Primero', active: true },
+        { id: 'B', name: 'Segundo', active: true },
+        { id: 'C', name: 'Tercero', active: true },
+    ];
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+        if (this.tagName === 'TBODY') {
+            return {
+                x: 0,
+                y: 100,
+                top: 100,
+                left: 0,
+                right: 700,
+                bottom: 220,
+                width: 700,
+                height: 120,
+                toJSON: () => ({}),
+            };
+        }
+        const row = this.closest('tbody tr');
+        if (!row) return rect.call(this);
+        const top = 100 + row.sectionRowIndex * 40;
+        return { x: 0, y: top, top, left: 0, right: 700, bottom: top + 40, width: 700, height: 40, toJSON: () => ({}) };
+    });
+    fetchMock.mockImplementation(async (url) => {
+        if (String(url).includes(`/catalogs/${type}`)) return jsonResponse(rows);
+        if (String(url).includes('/catalogs/')) return jsonResponse([]);
+        if (String(url).includes('/history')) return jsonResponse(HISTORY);
+        if (String(url).includes('/status')) return jsonResponse(STATUS);
+        return jsonResponse([]);
+    });
+    const pointer = (target, name, x, y) => {
+        const event = new MouseEvent(name, { bubbles: true, button: 0, buttons: 1, clientX: x, clientY: y });
+        Object.defineProperty(event, 'isPrimary', { value: true });
+        fireEvent(target, event);
+    };
+    renderPage(createMemoryHistory({ initialEntries: ['/configuracion#cobranza'] }));
+    const table = await screen.findByRole('table', { name: tableName });
+    const handle = within(table).getByRole('button', { name: 'Mover Primero' });
+    pointer(handle, 'pointerdown', 10, 120);
+    pointer(document, 'pointermove', 20, 130);
+    await waitFor(() => expect(handle).toHaveAttribute('aria-pressed', 'true'));
+    pointer(document, 'pointermove', 600, 2000);
+    await waitFor(() => expect(handle.closest('tr').style.transform).toBe('translate3d(0px, 80px, 0)'));
+    pointer(document, 'pointermove', -600, -2000);
+    await waitFor(() => expect(handle.closest('tr').style.transform).toBe('translate3d(0px, 0px, 0)'));
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape', keyCode: 27 });
+    await waitFor(() => expect(handle).not.toHaveAttribute('aria-pressed', 'true'));
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/reorder'))).toBe(false);
+});

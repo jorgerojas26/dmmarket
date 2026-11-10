@@ -406,7 +406,7 @@
 
 .collection-settings__table {
     width: 100%;
-    min-width: 480px;
+    min-width: 520px;
     table-layout: fixed;
     border-collapse: collapse;
     color: #cfd3da;
@@ -431,10 +431,14 @@
 }
 
 .collection-settings__table th:first-child {
+    width: 36px;
+}
+
+.collection-settings__table th:nth-child(2) {
     width: 24%;
 }
 
-.collection-settings__table th:nth-child(3) {
+.collection-settings__table th:nth-child(4) {
     width: 82px;
 }
 
@@ -442,13 +446,55 @@
     width: 88px;
 }
 
-.collection-settings__table td:first-child {
+.collection-settings__table td:nth-child(2) {
     color: #9aa2ad;
     font-variant-numeric: tabular-nums;
 }
 
+.collection-settings__table tbody tr {
+    transition: var(--collection-row-transition, none);
+}
+
 .collection-settings__table tbody tr:hover {
     background: #ffffff03;
+}
+
+.collection-settings .collection-settings__drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 30px;
+    padding: 0;
+    color: #9aa2ad;
+    cursor: grab;
+    touch-action: none;
+}
+
+.collection-settings .collection-settings__drag-handle:disabled {
+    cursor: default;
+}
+
+.collection-settings .collection-settings__drag-handle:active {
+    cursor: grabbing;
+}
+
+.collection-settings .collection-settings__drag-handle:focus-visible {
+    outline: 2px solid #60a5fa;
+    outline-offset: 1px;
+}
+
+.collection-settings__table .collection-settings__dragging {
+    position: relative;
+    z-index: 1;
+    background: #20242b;
+    box-shadow: 0 3px 12px #00000033;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .collection-settings__table tbody tr {
+        transition: none;
+    }
 }
 
 .collection-settings__state--active {

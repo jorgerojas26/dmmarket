@@ -1,7 +1,62 @@
-import { fetchCollectionCatalog, saveCollectionCatalog } from 'api/receivables';
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { fetchCollectionCatalog, reorderCollectionCatalog, saveCollectionCatalog } from 'api/receivables';
 import { useEffect, useRef, useState } from 'react';
 import { Button, Form, Modal, Spinner } from 'react-bootstrap';
 import { mutate } from 'swr';
+
+function SortableCatalogRow({ row, disabled, children }) {
+    const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+        id: row.id,
+        disabled,
+    });
+    return (
+        <tr
+            ref={setNodeRef}
+            style={{ transform: CSS.Translate.toString(transform), '--collection-row-transition': transition }}
+            className={isDragging ? 'collection-settings__dragging' : undefined}
+        >
+            <td>
+                <Button
+                    ref={setActivatorNodeRef}
+                    variant="link"
+                    size="sm"
+                    className="collection-settings__drag-handle"
+                    disabled={disabled}
+                    {...attributes}
+                    {...listeners}
+                    aria-label={`Mover ${row.name}`}
+                    title={`Mover ${row.name}`}
+                >
+                    <svg
+                        width="14"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        aria-hidden="true"
+                        focusable="false"
+                    >
+                        <circle cx="8" cy="5" r="1.5" />
+                        <circle cx="16" cy="5" r="1.5" />
+                        <circle cx="8" cy="12" r="1.5" />
+                        <circle cx="16" cy="12" r="1.5" />
+                        <circle cx="8" cy="19" r="1.5" />
+                        <circle cx="16" cy="19" r="1.5" />
+                    </svg>
+                </Button>
+            </td>
+            {children}
+        </tr>
+    );
+}
 
 function CatalogSection({ type }) {
     const [rows, setRows] = useState(null);
@@ -15,6 +70,10 @@ function CatalogSection({ type }) {
     const firstInput = useRef(null);
     const cancelConfirmation = useRef(null);
     const banks = type === 'banks';
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -47,6 +106,33 @@ function CatalogSection({ type }) {
         } catch (failure) {
             if (editor || retiring) setFormError(failure.message);
             else setError(failure.message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const reorder = async ({ active, over }) => {
+        if (busy || !over || active.id === over.id) return;
+        const previous = rows;
+        const from = rows.findIndex((row) => row.id === active.id);
+        const to = rows.findIndex((row) => row.id === over.id);
+        if (from < 0 || to < 0) return;
+        const next = arrayMove(rows, from, to);
+        setRows(next);
+        setBusy(true);
+        setError('');
+        setNotice('');
+        try {
+            const saved = await reorderCollectionCatalog(
+                type,
+                next.map((row) => row.id),
+            );
+            setRows(saved);
+            setNotice('Orden guardado.');
+            void mutate(banks ? 'receivable-banks' : 'receivable-methods');
+        } catch (failure) {
+            setRows(previous);
+            setError(failure.message);
         } finally {
             setBusy(false);
         }
@@ -221,108 +307,131 @@ function CatalogSection({ type }) {
                 </Modal.Body>
             </Modal>
             {rows && (
-                <div className="collection-settings__table-scroll">
-                    <table
-                        className="collection-settings__table"
-                        aria-label={banks ? 'Bancos configurados' : 'Métodos configurados'}
-                    >
-                        <thead>
-                            <tr>
-                                <th scope="col">Código</th>
-                                <th scope="col">Nombre</th>
-                                <th scope="col">Estado</th>
-                                <th scope="col">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((row) => (
-                                <tr key={row.id}>
-                                    <td>{row.id}</td>
-                                    <td>{row.name || '—'}</td>
-                                    <td>
-                                        <span
-                                            className={
-                                                row.active
-                                                    ? 'collection-settings__state--active'
-                                                    : 'collection-settings__state--inactive'
-                                            }
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    modifiers={[restrictToParentElement, restrictToVerticalAxis]}
+                    autoScroll={false}
+                    onDragEnd={reorder}
+                    accessibility={{
+                        screenReaderInstructions: {
+                            draggable:
+                                'Para mover una fila, pulsa Espacio. Usa las flechas para cambiar su posición y pulsa Espacio para guardar o Escape para cancelar.',
+                        },
+                    }}
+                >
+                    <SortableContext items={rows.map((row) => row.id)} strategy={verticalListSortingStrategy}>
+                        <div className="collection-settings__table-scroll">
+                            <table
+                                className="collection-settings__table"
+                                aria-label={banks ? 'Bancos configurados' : 'Métodos configurados'}
+                            >
+                                <thead>
+                                    <tr>
+                                        <th scope="col">
+                                            <span className="visually-hidden">Orden</span>
+                                        </th>
+                                        <th scope="col">Código</th>
+                                        <th scope="col">Nombre</th>
+                                        <th scope="col">Estado</th>
+                                        <th scope="col">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rows.map((row) => (
+                                        <SortableCatalogRow
+                                            key={row.id}
+                                            row={row}
+                                            disabled={busy || !!editor || !!retiring || rows.length < 2}
                                         >
-                                            {row.active ? 'Activo' : 'Inactivo'}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="collection-settings__actions">
-                                            <Button
-                                                variant="link"
-                                                size="sm"
-                                                disabled={busy}
-                                                aria-label={`Editar ${row.name}`}
-                                                title={`Editar ${row.name}`}
-                                                onClick={() => openEditor(row)}
-                                            >
-                                                <svg
-                                                    width="16"
-                                                    height="16"
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.7"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    aria-hidden="true"
-                                                    focusable="false"
+                                            <td>{row.id}</td>
+                                            <td>{row.name || '—'}</td>
+                                            <td>
+                                                <span
+                                                    className={
+                                                        row.active
+                                                            ? 'collection-settings__state--active'
+                                                            : 'collection-settings__state--inactive'
+                                                    }
                                                 >
-                                                    <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                                                </svg>
-                                            </Button>
-                                            <Button
-                                                variant="link"
-                                                size="sm"
-                                                disabled={busy}
-                                                className={
-                                                    row.active
-                                                        ? 'collection-settings__deactivate'
-                                                        : 'collection-settings__reactivate'
-                                                }
-                                                aria-label={`${row.active ? 'Desactivar' : 'Reactivar'} ${row.name}`}
-                                                title={`${row.active ? 'Desactivar' : 'Reactivar'} ${row.name}`}
-                                                onClick={() => {
-                                                    if (row.active) {
-                                                        setNotice('');
-                                                        setFormError('');
-                                                        setRetiring(row);
-                                                    } else void save(row.id, { name: row.name, active: true });
-                                                }}
-                                            >
-                                                <svg
-                                                    width="16"
-                                                    height="16"
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="1.7"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    aria-hidden="true"
-                                                    focusable="false"
-                                                >
-                                                    {row.active ? (
-                                                        <>
-                                                            <circle cx="12" cy="12" r="9" />
-                                                            <path d="m6 6 12 12" />
-                                                        </>
-                                                    ) : (
-                                                        <path d="M3 11a9 9 0 1 1 2.6 7.4M3 4v7h7" />
-                                                    )}
-                                                </svg>
-                                            </Button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                                    {row.active ? 'Activo' : 'Inactivo'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div className="collection-settings__actions">
+                                                    <Button
+                                                        variant="link"
+                                                        size="sm"
+                                                        disabled={busy}
+                                                        aria-label={`Editar ${row.name}`}
+                                                        title={`Editar ${row.name}`}
+                                                        onClick={() => openEditor(row)}
+                                                    >
+                                                        <svg
+                                                            width="16"
+                                                            height="16"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="1.7"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            aria-hidden="true"
+                                                            focusable="false"
+                                                        >
+                                                            <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                                        </svg>
+                                                    </Button>
+                                                    <Button
+                                                        variant="link"
+                                                        size="sm"
+                                                        disabled={busy}
+                                                        className={
+                                                            row.active
+                                                                ? 'collection-settings__deactivate'
+                                                                : 'collection-settings__reactivate'
+                                                        }
+                                                        aria-label={`${row.active ? 'Desactivar' : 'Reactivar'} ${row.name}`}
+                                                        title={`${row.active ? 'Desactivar' : 'Reactivar'} ${row.name}`}
+                                                        onClick={() => {
+                                                            if (row.active) {
+                                                                setNotice('');
+                                                                setFormError('');
+                                                                setRetiring(row);
+                                                            } else void save(row.id, { name: row.name, active: true });
+                                                        }}
+                                                    >
+                                                        <svg
+                                                            width="16"
+                                                            height="16"
+                                                            viewBox="0 0 24 24"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            strokeWidth="1.7"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            aria-hidden="true"
+                                                            focusable="false"
+                                                        >
+                                                            {row.active ? (
+                                                                <>
+                                                                    <circle cx="12" cy="12" r="9" />
+                                                                    <path d="m6 6 12 12" />
+                                                                </>
+                                                            ) : (
+                                                                <path d="M3 11a9 9 0 1 1 2.6 7.4M3 4v7h7" />
+                                                            )}
+                                                        </svg>
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </SortableCatalogRow>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </SortableContext>
+                </DndContext>
             )}
             {rows?.length === 0 && !editor && (
                 <p className="collection-settings__empty">

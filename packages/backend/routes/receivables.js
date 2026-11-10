@@ -11,7 +11,10 @@ function createReceivablesRouter(service) {
     try {
       res.json(await action(req));
     } catch (error) {
-      if (error.code === "ER_NO_SUCH_TABLE" && /dmmarket_(payment_methods|bank_settings)/.test(error.message)) {
+      if (
+        (error.code === "ER_NO_SUCH_TABLE" && /dmmarket_(payment_methods|bank_settings)/.test(error.message)) ||
+        (error.code === "ER_BAD_FIELD_ERROR" && /\bposition\b/.test(error.message))
+      ) {
         return res.status(503).json({
           error: {
             code: "CXC_CATALOGS_UNAVAILABLE",
@@ -62,6 +65,10 @@ function createReceivablesRouter(service) {
       return res.status(403).json({ error: { message: "La operación debe iniciarse desde DMMarket." } });
     next();
   });
+  router.post(
+    "/catalogs/:type/reorder",
+    handler((req) => service.reorderCatalog(req.params.type, req.body?.ids)),
+  );
   router.post(
     "/catalogs/:type",
     handler((req) => service.saveCatalog(req.params.type, null, req.body || {})),

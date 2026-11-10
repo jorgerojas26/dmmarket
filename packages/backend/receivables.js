@@ -719,6 +719,7 @@ function createReceivablesService({ db, now = () => new Date() }) {
     methods: () => activeCatalog("methods"),
     catalog: catalogs.list,
     saveCatalog: catalogs.save,
+    reorderCatalog: catalogs.reorder,
   };
 }
 

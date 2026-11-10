@@ -9,15 +9,23 @@ function createCollectionCatalogs(db) {
   async function list(type, connection = db) {
     kind(type);
     if (type === "methods") {
-      const rows = await connection("dmmarket_payment_methods").select("id", "name", "active").orderBy("name");
+      const rows = await connection("dmmarket_payment_methods")
+        .select("id", "name", "active")
+        .orderByRaw("?? IS NULL", ["position"])
+        .orderBy("position")
+        .orderBy("name")
+        .orderBy("id");
       return rows.map((row) => ({ ...row, active: Boolean(Number(row.active)) }));
     }
     const [banks, settings] = await Promise.all([
-      connection("bancos").select("Id_Banco as id", "Nombre as name").orderBy("Nombre"),
-      connection("dmmarket_bank_settings").select("id", "active"),
+      connection("bancos").select("Id_Banco as id", "Nombre as name").orderBy("Nombre").orderBy("Id_Banco"),
+      connection("dmmarket_bank_settings").select("id", "active", "position"),
     ]);
-    const disabled = new Set(settings.filter((row) => !Number(row.active)).map((row) => row.id.toUpperCase()));
-    return banks.map((row) => ({ ...row, active: !disabled.has(row.id.toUpperCase()) }));
+    const byId = new Map(settings.map((row) => [row.id.toUpperCase(), row]));
+    const position = (row) => byId.get(row.id.toUpperCase())?.position ?? Number.MAX_SAFE_INTEGER;
+    return banks
+      .sort((a, b) => position(a) - position(b))
+      .map((row) => ({ ...row, active: Number(byId.get(row.id.toUpperCase())?.active ?? 1) !== 0 }));
   }
 
   async function save(type, id, body) {
@@ -64,6 +72,31 @@ function createCollectionCatalogs(db) {
     }
   }
 
+  async function reorder(type, ids) {
+    kind(type);
+    if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || !id) || new Set(ids).size !== ids.length)
+      fail("Envía la lista de códigos sin duplicados para guardar el orden.");
+    const table = type === "banks" ? "bancos" : "dmmarket_payment_methods";
+    const idColumn = type === "banks" ? "Id_Banco" : "id";
+    return db.transaction(async (connection) => {
+      const current = await connection(table).select(`${idColumn} as id`).orderBy(idColumn).forUpdate();
+      const known = new Set(current.map((row) => row.id));
+      if (current.length !== ids.length || ids.some((id) => !known.has(id)))
+        fail("El catálogo cambió. Actualiza la lista antes de volver a ordenar.", 409);
+      for (const [position, id] of ids.entries()) {
+        if (type === "banks") {
+          await connection.raw(
+            "INSERT INTO dmmarket_bank_settings (id, position) VALUES (?, ?) ON DUPLICATE KEY UPDATE position = ?",
+            [id, position, position],
+          );
+        } else {
+          await connection(table).where(idColumn, id).update({ position });
+        }
+      }
+      return list(type, connection);
+    });
+  }
+
   async function validatePayment(connection, payload, lock) {
     const methodQuery = connection("dmmarket_payment_methods").where({ id: payload.method, active: true }).first();
     const method = await (lock ? methodQuery.forUpdate() : methodQuery);
@@ -77,7 +110,7 @@ function createCollectionCatalogs(db) {
     if (setting && !Number(setting.active)) fail("El banco está inactivo. Selecciona otro banco.");
   }
 
-  return { list, save, validatePayment };
+  return { list, save, reorder, validatePayment };
 }
 
 module.exports = { createCollectionCatalogs };

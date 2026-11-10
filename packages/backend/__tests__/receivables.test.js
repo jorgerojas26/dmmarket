@@ -100,6 +100,7 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
     await db("bancos").insert({ Id_Banco: "BV", Nombre: "Banco inicial" });
     await require("../migrations/20261011_add_receivables_operations").up(db);
     await require("../migrations/20261029_add_collection_catalogs").up(db);
+    await require("../migrations/20261030_add_collection_order").up(db);
     service = createReceivablesService({ db, now });
   });
 
@@ -275,8 +276,59 @@ describeMysql("receivables transactions (isolated MySQL database)", () => {
       }
     } finally {
       await require("../migrations/20261029_add_collection_catalogs").up(db);
+      await require("../migrations/20261030_add_collection_order").up(db);
     }
   });
+
+  it.each(["banks", "methods"])(
+    "persiste el orden de %s y lo aplica a los selectores sin modificar el catálogo compartido",
+    async (type) => {
+      const express = require("express");
+      const request = require("supertest");
+      const { createReceivablesRouter } = require("../routes/receivables");
+      const app = express();
+      app.use(express.json());
+      app.use("/api/receivables", createReceivablesRouter(service));
+      const api = request(app);
+      const base = `/api/receivables/catalogs/${type}`;
+      expect((await api.post(base).send({ id: "ORDER_A", name: "Orden A" })).status).toBe(200);
+      expect((await api.post(base).send({ id: "ORDER_B", name: "Orden B" })).status).toBe(200);
+      const shared = await db("bancos").orderBy("Id_Banco");
+      const initial = (await api.get(base)).body;
+      const ids = initial.map((row) => row.id).reverse();
+      expect(ids.length).toBeGreaterThan(1);
+      expect((await api.post(`${base}/reorder`).type("form").send({ ids })).status).toBe(415);
+      expect((await api.post(`${base}/reorder`).set("Sec-Fetch-Site", "cross-site").send({ ids })).status).toBe(403);
+      expect((await api.post(`${base}/reorder`).send({ ids: [ids[0], ids[0]] })).status).toBe(400);
+      expect((await api.post(`${base}/reorder`).send({ ids: "invalid" })).status).toBe(400);
+      expect((await api.post(`${base}/reorder`).send({ ids: ids.slice(1) })).status).toBe(409);
+      expect((await api.post(`${base}/reorder`).send({ ids: ["NO_EXISTE", ...ids.slice(1)] })).status).toBe(409);
+      expect((await api.get(base)).body.map((row) => row.id)).toEqual(initial.map((row) => row.id));
+      const reordered = await api.post(`${base}/reorder`).send({ ids });
+      expect(reordered.status).toBe(200);
+      expect(reordered.body.map((row) => row.id)).toEqual(ids);
+      const freshService = createReceivablesService({ db, now });
+      expect((await freshService.catalog(type)).map((row) => row.id)).toEqual(ids);
+      const selected = reordered.body[0];
+      expect(
+        (await api.put(`${base}/${encodeURIComponent(selected.id)}`).send({ name: selected.name, active: false }))
+          .status,
+      ).toBe(200);
+      expect((await api.get(`/api/receivables/${type}`)).body.map((row) => row.id)).toEqual(ids.slice(1));
+      expect(
+        (await api.put(`${base}/${encodeURIComponent(selected.id)}`).send({ name: selected.name, active: true }))
+          .status,
+      ).toBe(200);
+      expect((await api.get(`/api/receivables/${type}`)).body.map((row) => row.id)).toEqual(ids);
+      expect((await api.post(base).send({ id: "APPENDED", name: "A nuevo registro" })).status).toBe(200);
+      expect((await api.get(base)).body.map((row) => row.id)).toEqual([...ids, "APPENDED"]);
+      await require("../migrations/20261030_add_collection_order").up(db);
+      expect((await api.get(base)).body.map((row) => row.id)).toEqual([...ids, "APPENDED"]);
+      if (type === "banks") {
+        expect(await db("bancos").whereNot("Id_Banco", "APPENDED").orderBy("Id_Banco")).toEqual(shared);
+      }
+    },
+  );
 
   it("lists live balances, scopes KPIs by route and paginates filtered clients", async () => {
     const result = await service.list({ ruta: "R1", search: "missing" });

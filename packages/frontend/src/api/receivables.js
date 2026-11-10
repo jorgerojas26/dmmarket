@@ -32,6 +32,12 @@ export const saveCollectionCatalog = (type, id, body) =>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     });
+export const reorderCollectionCatalog = (type, ids) =>
+    request(`/catalogs/${type}/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+    });
 export const fetchReceivables = (filters) => request(`?${params(filters)}`);
 export const fetchReceivableClient = (id, filters) => request(`/${encodeURIComponent(id)}?${params(filters)}`);
 const post = (id, endpoint, body) =>
