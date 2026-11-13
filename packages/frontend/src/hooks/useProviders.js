@@ -154,12 +154,12 @@ export function useProviderSellers(
  */
 export function useProviderProducts(
     providerId,
-    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe },
+    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe, sellerId },
     enabled = true,
 ) {
     const key =
         enabled && providerId && from && to
-            ? ['provider-products', providerId, from, to, page, limit, search, sortBy, sortDir, showNoe]
+            ? ['provider-products', providerId, from, to, page, limit, search, sortBy, sortDir, showNoe, sellerId]
             : null;
     return useSWR(
         key,
@@ -173,6 +173,7 @@ export function useProviderProducts(
                 sortBy,
                 sortDir,
                 showNoe,
+                sellerId,
             }),
         { keepPreviousData: true },
     );
