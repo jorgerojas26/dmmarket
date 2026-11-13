@@ -90,6 +90,7 @@ const PRODUCTS_COLUMNS = [
         Header: 'Cantidad',
         accessor: 'cantidad',
         Cell: ({ value }) => (value == null ? 'No disponible' : Number(value).toLocaleString()),
+        Footer: ({ summary }) => (summary == null ? 'No disponible' : Number(summary).toLocaleString()),
     },
     {
         Header: 'Total Ventas',
