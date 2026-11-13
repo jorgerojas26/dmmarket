@@ -74,7 +74,12 @@ const SELLERS_COLUMNS = [
 
 const PRODUCTS_COLUMNS = [
     { Header: 'Producto', accessor: 'producto' },
-    { Header: 'Cantidad', accessor: 'cantidad', Cell: ({ value }) => Number(value).toLocaleString() },
+    {
+        Header: 'Cantidad',
+        accessor: 'cantidad',
+        Cell: ({ value }) => Number(value).toLocaleString(),
+        Footer: ({ summary }) => Number(summary ?? 0).toLocaleString(),
+    },
     {
         Header: 'Total Ventas',
         accessor: 'totalVentas',

@@ -746,6 +746,7 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
 
     const totalsQuery = knex
       .select(
+        knex.raw(`ROUND(COALESCE(SUM(${slaveTable}.Cantidad), 0), 2) as cantidad`),
         knex.raw(`ROUND(COALESCE(SUM(${slaveTable}.Precio * ${slaveTable}.Cantidad), 0), 2) as totalVentas`),
         knex.raw(
           `ROUND(COALESCE(SUM((${slaveTable}.Precio - ${slaveTable}.Costo) * ${slaveTable}.Cantidad), 0), 2) as utilidad`,
@@ -759,6 +760,12 @@ const GET_PROVIDER_PRODUCTS = async (req, res) => {
       .modify((query) => filterIdentity(query, "productos.Proveedor", providerId))
       .andWhereBetween(`${masterTable}.Fecha`, [from, to]);
     if (search) totalsQuery.where("productos.Descripcion", "like", `%${search}%`);
+
+    if (req.query.sellerId != null) {
+      for (const query of [countQuery, dataQuery, totalsQuery]) {
+        filterIdentity(query, `${masterTable}.IdVend`, req.query.sellerId);
+      }
+    }
 
     const [{ count }] = await countQuery;
     const data = await dataQuery;

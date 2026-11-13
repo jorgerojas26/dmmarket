@@ -107,7 +107,7 @@ export const fetchProviderSellers = async (
 
 export const fetchProviderProducts = async (
     providerId,
-    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe },
+    { from, to, page = 1, limit = 20, search, sortBy, sortDir, showNoe, sellerId },
 ) => {
     const params = new URLSearchParams();
     params.append('from', from);
@@ -115,6 +115,7 @@ export const fetchProviderProducts = async (
     params.append('page', page);
     params.append('limit', limit);
     params.append('showNoe', showNoe);
+    if (sellerId != null) params.append('sellerId', sellerId);
     if (search) params.append('search', search);
     if (sortBy) params.append('sortBy', sortBy);
     if (sortDir) params.append('sortDir', sortDir);
