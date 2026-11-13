@@ -7,6 +7,12 @@ El formato sigue la convención: `## [vX.Y.Z] - AAAA-MM-DD` con las categorías
 Este archivo es la fuente única del resumen de producto que aparece al inicio de cada
 release en GitHub. Después, `scripts/release.mjs` agrega la lista de commits incluidos.
 
+## [v1.17.0] - 2026-11-13
+
+### Nuevas funciones
+
+- **Productos vendidos por cada vendedor de un proveedor**: al abrir el detalle de un vendedor en Proveedores encontrarás dos pestañas, Clientes y Productos. La pestaña Productos muestra qué productos vendió ese vendedor en el período, con unidades, total de ventas y utilidad, y se puede buscar, ordenar, paginar e imprimir igual que el resto de las tablas. El pie de la tabla totaliza las unidades, además de ventas y utilidad.
+
 ## [v1.16.0] - 2026-11-09
 
 ### Nuevas funciones
